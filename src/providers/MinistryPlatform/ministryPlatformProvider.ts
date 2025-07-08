@@ -22,20 +22,46 @@ import {
     QueryParams
 } from "./Interfaces/mpProviderInterfaces";
 
+/**
+ * ministryPlatformProvider - Core Provider Singleton
+ * 
+ * Central orchestrator for all Ministry Platform operations using the Singleton pattern.
+ * Manages service instances and provides a unified interface for:
+ * - Table operations (CRUD)
+ * - Stored procedure execution
+ * - Communication/messaging
+ * - File management
+ * - Metadata operations
+ * - Domain configuration
+ * 
+ * All services share a single MinistryPlatformClient instance for consistent
+ * authentication and configuration management.
+ */
 export class ministryPlatformProvider {
     
+    // Singleton instance storage
     private static instance: ministryPlatformProvider;
 
+    // Core client for HTTP operations and authentication
     private client: MinistryPlatformClient;
-    private tableService: TableService;
-    private procedureService: ProcedureService;
-    private communicationService: CommunicationService;
-    private metadataService: MetadataService;
-    private domainService: DomainService;
-    private fileService: FileService;
+    
+    // Specialized service instances for different domains of functionality
+    private tableService: TableService;           // CRUD operations for all tables
+    private procedureService: ProcedureService;   // Stored procedure execution
+    private communicationService: CommunicationService; // Email/SMS communications
+    private metadataService: MetadataService;     // Schema and metadata operations
+    private domainService: DomainService;         // Domain configuration and filters
+    private fileService: FileService;             // File upload/download operations
 
+    /**
+     * Private constructor for Singleton pattern
+     * Initializes the core client and all specialized service instances
+     */
     private constructor() {
+        // Create the core HTTP client with authentication management
         this.client = new MinistryPlatformClient();
+        
+        // Initialize all service instances with shared client
         this.tableService = new TableService(this.client);
         this.procedureService = new ProcedureService(this.client);
         this.communicationService = new CommunicationService(this.client);
@@ -44,7 +70,13 @@ export class ministryPlatformProvider {
         this.fileService = new FileService(this.client);
     }    
     
+    /**
+     * Returns the singleton instance of the Ministry Platform provider
+     * Creates the instance on first call, returns existing instance on subsequent calls
+     * @returns The singleton ministryPlatformProvider instance
+     */
     public static getInstance(): ministryPlatformProvider {
+        // Create instance if it doesn't exist (lazy initialization)
         if (!this.instance) {
             this.instance = new ministryPlatformProvider();
         }
