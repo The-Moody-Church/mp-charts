@@ -1,6 +1,8 @@
 import NextAuth from "next-auth"
 import { JWT } from "next-auth/jwt"
 import { MinistryPlatformAuthProvider } from "@/lib/providers/ministry-platform/auth"
+import { MPHelper } from "@/lib/providers/ministry-platform"
+import { MPUserProfile } from "@/lib/providers/ministry-platform/types"
 
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
@@ -38,6 +40,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (account && profile) {
         console.log('JWT Callback - Setting initial token from account')
 
+        const mp = new MPHelper();
+        let userProfile: MPUserProfile | null = null;
+        
+        try {
+          const records = await mp.getTableRecords<MPUserProfile>({
+            table: "dp_Users",
+            filter: `User_GUID = '${profile.sub}'`,
+            select: "User_GUID, Contact_ID_TABLE.First_Name,Contact_ID_TABLE.Nickname,Contact_ID_TABLE.Last_Name,Contact_ID_TABLE.Email_Address,Contact_ID_TABLE.Mobile_Phone,Contact_ID_TABLE.dp_fileUniqueId AS Image_GUID",
+            top: 1
+          });
+          userProfile = records[0] || null;
+          console.log('JWT Callback - Fetched user profile:', !!userProfile);
+        } catch (error) {
+          console.error('JWT Callback - Error fetching user profile:', error);
+        }
+
         return {
           ...token,
           accessToken: account.access_token,
@@ -50,6 +68,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           name: profile.name,
           firstName: profile.given_name,
           lastName: profile.family_name,
+          userProfile,
         } as JWT
       }
     
@@ -109,12 +128,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     console.log('Token sub:', token?.sub)
     
     if (token && session.user) {
-      session.user.id = token.sub as string // Use sub as the user ID
+      session.user.id = token.sub as string
       session.accessToken = token.accessToken as string
       session.firstName = token.firstName as string
       session.lastName = token.lastName as string
       session.email = token.email as string
       session.sub = token.sub as string
+      session.userProfile = token.userProfile as MPUserProfile | null
     }
     
     console.log('Final session user ID:', session.user?.id)
