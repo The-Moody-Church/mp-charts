@@ -2,13 +2,13 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { contactSearch } from '@/providers/MinistryPlatform/Interfaces/contactInterfaces';
+import { ContactSearch } from '@/lib/providers/ministry-platform/models';
 
 interface ContactLookupResultsProps {
-  results: contactSearch[];
+  results: ContactSearch[];
   loading?: boolean;
   error?: string;
-  onContactSelect?: (contact: contactSearch) => void;
+  onContactSelect?: (contact: ContactSearch) => void;
 }
 
 export const ContactLookupResults: React.FC<ContactLookupResultsProps> = ({
@@ -19,7 +19,7 @@ export const ContactLookupResults: React.FC<ContactLookupResultsProps> = ({
 }) => {
   const router = useRouter();
 
-  const handleContactClick = (contact: contactSearch) => {
+  const handleContactClick = (contact: ContactSearch) => {
     // Call the optional callback first
     onContactSelect?.(contact);
     

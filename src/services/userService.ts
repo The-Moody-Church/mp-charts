@@ -1,5 +1,5 @@
-import { mpUserProfile } from "@/providers/MinistryPlatform/Interfaces/mpUserProfile";
-import { MPHelper } from "@/providers/MinistryPlatform/mpHelper";
+import { MPUserProfile } from "@/lib/providers/ministry-platform/types";
+import { MPHelper } from "@/lib/providers/ministry-platform";
 
 /**
  * UserService - Singleton service for managing user-related operations
@@ -54,11 +54,11 @@ export class UserService {
    * - Profile Image GUID
    * 
    * @param id - The User GUID to search for
-   * @returns Promise<mpUserProfile> - The user profile data from Ministry Platform
+   * @returns Promise<MPUserProfile> - The user profile data from Ministry Platform
    * @throws Will throw an error if the Ministry Platform query fails
    */
-  public async getUserProfile(id: string): Promise<mpUserProfile> {
-    const records = await this.mp!.getTableRecords<mpUserProfile>({
+  public async getUserProfile(id: string): Promise<MPUserProfile> {
+    const records = await this.mp!.getTableRecords<MPUserProfile>({
       table: "dp_Users",
       filter: `User_GUID = '${id}'`,
       select: "User_GUID, Contact_ID_TABLE.First_Name,Contact_ID_TABLE.Nickname,Contact_ID_TABLE.Last_Name,Contact_ID_TABLE.Email_Address,Contact_ID_TABLE.Mobile_Phone,Contact_ID_TABLE.dp_fileUniqueId AS Image_GUID",

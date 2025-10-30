@@ -1,9 +1,9 @@
 'use server';
 
 import { ContactService } from '@/services/contactService';
-import { contactSearch } from '@/providers/MinistryPlatform/Interfaces/contactInterfaces';
+import { ContactSearch } from '@/lib/providers/ministry-platform/models';
 
-export async function searchContacts(searchTerm: string): Promise<contactSearch[]> {
+export async function searchContacts(searchTerm: string): Promise<ContactSearch[]> {
   try {
     if (!searchTerm || searchTerm.trim().length === 0) {
       return [];

@@ -1,7 +1,7 @@
 'use client';
 
 import { ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline';
-import { mpUserProfile } from '@/providers/MinistryPlatform/Interfaces/mpUserProfile';
+import { MPUserProfile } from '@/lib/providers/ministry-platform/types';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,7 +13,7 @@ import {
 
 interface UserMenuProps {
   onClose?: () => void;
-  userProfile: mpUserProfile;
+  userProfile: MPUserProfile;
   children: React.ReactNode; // This will be the trigger element (e.g., user avatar/button)
 }
 

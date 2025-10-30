@@ -2,14 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { getContactDetails } from './actions';
-import { contactLookupDetails } from '@/providers/MinistryPlatform/Interfaces/contactInterfaces';
+import { ContactLookupDetails as ContactLookupDetailsType } from '@/lib/providers/ministry-platform/models';
 
 interface ContactLookupDetailsProps {
   guid: string;
 }
 
 export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({ guid }) => {
-  const [contact, setContact] = useState<contactLookupDetails | null>(null);
+  const [contact, setContact] = useState<ContactLookupDetailsType | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 

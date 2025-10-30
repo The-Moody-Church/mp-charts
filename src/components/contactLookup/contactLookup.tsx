@@ -3,12 +3,12 @@
 import React, { useState } from 'react';
 import { ContactLookupSearch } from './contactLookupSearch';
 import { ContactLookupResults } from './contactLookupResults';
-import { contactSearch } from '@/providers/MinistryPlatform/Interfaces/contactInterfaces';
+import { ContactSearch } from '@/lib/providers/ministry-platform/models';
 
 interface ContactLookupProps {
   placeholder?: string;
   disabled?: boolean;
-  onContactSelect?: (contact: contactSearch) => void;
+  onContactSelect?: (contact: ContactSearch) => void;
   showResultsImmediately?: boolean;
 }
 
@@ -18,12 +18,12 @@ export const ContactLookup: React.FC<ContactLookupProps> = ({
   onContactSelect,
   showResultsImmediately = true
 }) => {
-  const [searchResults, setSearchResults] = useState<contactSearch[]>([]);
+  const [searchResults, setSearchResults] = useState<ContactSearch[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string>('');
   const [hasSearched, setHasSearched] = useState(false);
 
-  const handleSearchResults = (results: contactSearch[]) => {
+  const handleSearchResults = (results: ContactSearch[]) => {
     setSearchResults(results);
     setIsSearching(false);
     setSearchError('');
@@ -43,7 +43,7 @@ export const ContactLookup: React.FC<ContactLookupProps> = ({
     setHasSearched(false);
   };
 
-  const handleContactSelect = (contact: contactSearch) => {
+  const handleContactSelect = (contact: ContactSearch) => {
     onContactSelect?.(contact);
     // Optionally clear results after selection
     // setSearchResults([]);

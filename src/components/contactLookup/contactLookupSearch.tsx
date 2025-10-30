@@ -4,12 +4,12 @@ import React, { useState, useTransition } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { searchContacts } from './actions';
-import { contactSearch } from '@/providers/MinistryPlatform/Interfaces/contactInterfaces';
+import { ContactSearch } from '@/lib/providers/ministry-platform/models';
 
 interface ContactLookupSearchProps {
   placeholder?: string;
   disabled?: boolean;
-  onSearchResults?: (results: contactSearch[]) => void;
+  onSearchResults?: (results: ContactSearch[]) => void;
   onSearchError?: (error: string) => void;
   onSearchStart?: () => void;
 }

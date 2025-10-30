@@ -7,11 +7,11 @@ import Sidebar from '@/components/Sidebar';
 import UserMenu from '@/components/UserMenu/UserMenu';
 import { useSession } from '@/components/SessionProvider';
 import { getCurrentUserProfile } from '@/components/UserMenu/actions';
-import { mpUserProfile } from '@/providers/MinistryPlatform/Interfaces/mpUserProfile';
+import { MPUserProfile } from '@/lib/providers/ministry-platform/types';
 
 export default function Header() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [userProfile, setUserProfile] = useState<mpUserProfile | null>(null);
+  const [userProfile, setUserProfile] = useState<MPUserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const session = useSession();
 

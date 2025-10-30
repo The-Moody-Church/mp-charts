@@ -1,9 +1,9 @@
 'use server';
 
-import { contactLookupDetails } from '@/providers/MinistryPlatform/Interfaces/contactInterfaces';
+import { ContactLookupDetails } from '@/lib/providers/ministry-platform/models';
 import { ContactService } from '@/services/contactService';
 
-export async function getContactDetails(guid: string): Promise<contactLookupDetails> {
+export async function getContactDetails(guid: string): Promise<ContactLookupDetails> {
   try {
     if (!guid || guid.trim().length === 0) {
       throw new Error('GUID is required');
