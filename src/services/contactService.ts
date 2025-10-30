@@ -1,5 +1,5 @@
-import { contactSearch } from "@/providers/MinistryPlatform/Interfaces/contactInterfaces";
-import { MPHelper } from "@/providers/MinistryPlatform/mpHelper";
+import { ContactSearch } from "@/lib/dto";
+import { MPHelper } from "@/lib/providers/ministry-platform";
 
 /**
  * ContactService - Singleton service for managing contact-related operations
@@ -49,10 +49,10 @@ export class ContactService {
    * Performs a fuzzy search across multiple contact fields including name, email, and phone
    * 
    * @param search - The search term to match against contact fields
-   * @returns Promise<contactSearch[]> - Array of matching contacts (limited to 20 results)
+   * @returns Promise<ContactSearch[]> - Array of matching contacts (limited to 20 results)
    */
-  public async contactSearch(search: string): Promise<contactSearch[]> {
-    const records = await this.mp!.getTableRecords<contactSearch>({
+  public async contactSearch(search: string): Promise<ContactSearch[]> {
+    const records = await this.mp!.getTableRecords<ContactSearch>({
       table: "Contacts",
       filter: `First_Name LIKE '%${search}%' OR Last_Name LIKE '%${search}%' OR Nickname LIKE '%${search}%' OR Email_Address LIKE '%${search}%' OR Mobile_Phone LIKE '%${search}%'`,
       select: "Contact_ID, Contact_GUID,First_Name,Nickname,Last_Name,Email_Address,Mobile_Phone,dp_fileUniqueId AS Image_GUID",
@@ -66,10 +66,10 @@ export class ContactService {
    * Retrieves a specific contact by their GUID
    * 
    * @param contactGuid - The unique GUID identifier for the contact
-   * @returns Promise<contactSearch | null> - The matching contact record or null if not found
+   * @returns Promise<ContactSearch | null> - The matching contact record or null if not found
    */
-  public async getContactByGuid(contactGuid: string): Promise<contactSearch | null> {
-    const records = await this.mp!.getTableRecords<contactSearch>({
+  public async getContactByGuid(contactGuid: string): Promise<ContactSearch | null> {
+    const records = await this.mp!.getTableRecords<ContactSearch>({
       table: "Contacts",
       filter: `Contact_GUID = '${contactGuid}'`,
       select: "Contact_ID, Contact_GUID,First_Name,Nickname,Last_Name,Email_Address,Mobile_Phone,dp_fileUniqueId AS Image_GUID",
