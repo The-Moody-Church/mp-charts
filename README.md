@@ -46,8 +46,8 @@ NextAuth v5 (beta) with custom Ministry Platform OAuth provider (`src/auth.ts`)
 ## Prerequisites
 
 - **Node.js**: v18 or higher
-- **Package Manager**: pnpm (recommended)
-- **Ministry Platform**: Active instance with API credentials
+- **Package Manager**: npm (comes with Node.js)
+- **Ministry Platform**: Active instance with API credentials and OAuth client configured
 
 ## Getting Started
 
@@ -61,10 +61,8 @@ cd MPNext
 ### 2. Install Dependencies
 
 ```bash
-pnpm install
+npm install
 ```
-
-> **Note**: This project uses pnpm as the package manager. If you don't have it installed, run `npm install -g pnpm`.
 
 ### 3. Environment Configuration
 
@@ -101,10 +99,57 @@ NEXT_PUBLIC_MINISTRY_PLATFORM_FILE_URL=https://your-instance.ministryplatform.co
 NEXT_PUBLIC_APP_NAME=App
 ```
 
-### 4. Run the Development Server
+### 4. Generate Ministry Platform Types
+
+Before running the application, generate TypeScript types from your Ministry Platform database schema:
 
 ```bash
-pnpm dev
+npm run mp:generate:models
+```
+
+This will:
+- Connect to your Ministry Platform API
+- Fetch all table metadata (301+ tables)
+- Generate TypeScript interfaces for each table
+- Generate Zod validation schemas for runtime validation
+- Clean up any previously generated files
+- Output to `src/lib/providers/ministry-platform/models/`
+
+**Expected output:**
+```
+🚀 Generating TypeScript types from Ministry Platform schema...
+📡 Fetching table metadata from Ministry Platform...
+✅ Found 301 tables
+🧹 Cleaning output directory: src/lib/providers/ministry-platform/models
+   Removed 605 existing type files
+🔧 Generating type definitions...
+  ✓ Contacts.ts (Contacts) [51 columns]
+  ✓ Events.ts (Events) [57 columns]
+  ...
+🎉 Successfully generated 301 table types + 301 Zod schemas (602 total files)
+```
+
+**Advanced options:**
+```bash
+# Generate types for specific tables only
+npx tsx src/lib/providers/ministry-platform/scripts/generate-types.ts -s "Contact"
+
+# Generate without Zod schemas
+npx tsx src/lib/providers/ministry-platform/scripts/generate-types.ts -o ./types
+
+# Generate with detailed mode (samples records for better type inference)
+npx tsx src/lib/providers/ministry-platform/scripts/generate-types.ts -d --sample-size 10
+
+# See all options
+npx tsx src/lib/providers/ministry-platform/scripts/generate-types.ts --help
+```
+
+> **Note**: Field names containing special characters (like `Allow_Check-in`) are automatically quoted in the generated types for valid TypeScript syntax.
+
+### 5. Run the Development Server
+
+```bash
+npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
@@ -208,15 +253,26 @@ await mp.createTableRecords('Contact_Log', [{
 Generate TypeScript interfaces and Zod schemas from your Ministry Platform database schema:
 
 ```bash
-# Generate types for all tables with Zod schemas
-pnpm mp:generate:models
+# Generate types for all tables with Zod schemas (recommended)
+npm run mp:generate:models
 
 # Generate types for specific tables
 npx tsx src/lib/providers/ministry-platform/scripts/generate-types.ts --search "Contact"
 
+# Generate without cleaning old files
+npx tsx src/lib/providers/ministry-platform/scripts/generate-types.ts -o ./types --zod
+
 # See all options
 npx tsx src/lib/providers/ministry-platform/scripts/generate-types.ts --help
 ```
+
+**CLI Options:**
+- `-o, --output <dir>` - Output directory (default: ./generated-types)
+- `-s, --search <term>` - Filter tables by search term
+- `-z, --zod` - Generate Zod schemas for runtime validation
+- `-c, --clean` - Remove existing files before generating (recommended)
+- `-d, --detailed` - Sample records for better type inference (slower)
+- `--sample-size <num>` - Number of records to sample in detailed mode
 
 See [Ministry Platform Type Generator documentation](src/lib/providers/ministry-platform/scripts/README.md) for details.
 
@@ -245,30 +301,32 @@ All components follow kebab-case naming and use named exports for consistency.
 
 ```bash
 # Start development server
-pnpm dev
+npm run dev
 
 # Build for production (includes type checking)
-pnpm build
+npm run build
 
 # Start production server
-pnpm start
+npm start
 
 # Run ESLint
-pnpm lint
+npm run lint
 
-# Generate MP types
-pnpm mp:generate
+# Generate MP types (basic, to custom location)
+npm run mp:generate
 
-# Generate MP types to models directory with Zod schemas
-pnpm mp:generate:models
+# Generate MP types to models directory with Zod schemas (recommended)
+npm run mp:generate:models
 ```
 
 ### Building for Production
 
 ```bash
-pnpm build
-pnpm start
+npm run build
+npm start
 ```
+
+> **Note**: The build process includes TypeScript type checking. Ensure all generated types are up to date by running `npm run mp:generate:models` before building.
 
 ## Documentation
 
@@ -344,13 +402,15 @@ import { sharedAction } from '@/components/actions/shared';
 - Leverage TypeScript generics for type safety
 
 ### Best Practices
-1. Always use TypeScript generics for type-safe API calls
-2. Handle errors with try-catch blocks
-3. Use Zod schemas for runtime validation
-4. Keep Ministry Platform structure organized:
-   - Generated database models: `src/lib/providers/ministry-platform/models/`
-   - Application-level DTOs/ViewModels: `src/lib/dto/`
+1. **Regenerate types** after Ministry Platform schema changes: `npm run mp:generate:models`
+2. Always use TypeScript generics for type-safe API calls
+3. Handle errors with try-catch blocks
+4. Use Zod schemas for runtime validation
+5. Keep Ministry Platform structure organized:
+   - Generated database models: `src/lib/providers/ministry-platform/models/` (auto-generated, don't edit manually)
+   - Application-level DTOs/ViewModels: `src/lib/dto/` (hand-written)
    - Export all from respective `index.ts` files
+6. Access fields with special characters using bracket notation: `event["Allow_Check-in"]`
 
 ## Contributing
 
