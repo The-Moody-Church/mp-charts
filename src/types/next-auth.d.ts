@@ -1,4 +1,5 @@
 import { DefaultSession } from "next-auth"
+import { MPUserProfile } from "@/lib/providers/ministry-platform/types"
 
 declare module "next-auth" {
   interface Session {
@@ -10,6 +11,7 @@ declare module "next-auth" {
     lastName?: string
     email?: string
     sub?: string
+    userProfile?: MPUserProfile | null
   }
 
   interface JWT {
@@ -19,5 +21,6 @@ declare module "next-auth" {
     userId?: string
     firstName?: string
     lastName?: string
+    userProfile?: MPUserProfile | null
   }
 }

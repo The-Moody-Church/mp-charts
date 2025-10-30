@@ -31,6 +31,12 @@ export function UserProvider({ children }: UserProviderProps) {
       return;
     }
 
+    if (session.userProfile) {
+      setUserProfile(session.userProfile);
+      setIsLoading(false);
+      return;
+    }
+
     try {
       setIsLoading(true);
       setError(null);
@@ -51,7 +57,7 @@ export function UserProvider({ children }: UserProviderProps) {
       setUserProfile(null);
       setIsLoading(false);
     }
-  }, [session?.user?.id, status]);
+  }, [session?.user?.id, session?.userProfile, status]);
 
   const refreshUserProfile = async () => {
     await loadUserProfile();
