@@ -1,41 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Bars3Icon } from "@heroicons/react/24/outline";
 import { UserCircleIcon } from "@heroicons/react/24/solid";
 import { Sidebar } from "@/components/sidebar";
 import { UserMenu } from "@/components/user-menu/user-menu";
 import { useSession } from "@/components/session-provider";
-import { getCurrentUserProfile } from "@/components/user-menu/actions";
-import { MPUserProfile } from "@/lib/providers/ministry-platform/types";
+import { useUser } from "@/contexts/user-context";
 
 export function Header() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [userProfile, setUserProfile] = useState<MPUserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { userProfile, isLoading } = useUser();
   const session = useSession();
 
   console.log("Header rendered session: ", session);
-
-  useEffect(() => {
-    async function fetchProfile() {
-      if (!session?.user?.id) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const profile = await getCurrentUserProfile(session.user.id);
-        setUserProfile(profile);
-      } catch (error) {
-        console.error("Failed to fetch user profile:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchProfile();
-  }, [session?.user?.id]);
 
   return (
     <>
@@ -57,7 +35,7 @@ export function Header() {
 
           {/* Right side - User avatar */}
           <div className="relative">
-            {!loading && userProfile ? (
+            {!isLoading && userProfile ? (
               <UserMenu userProfile={userProfile}>
                 <button
                   className="p-1 rounded-full text-white hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-300"
@@ -89,7 +67,7 @@ export function Header() {
               <button
                 className="p-1 rounded-full text-white hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-300"
                 aria-label="User menu"
-                disabled={loading}
+                disabled={isLoading}
               >
                 <UserCircleIcon className="h-8 w-8 text-white" />
               </button>
