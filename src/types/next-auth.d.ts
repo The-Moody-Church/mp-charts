@@ -11,6 +11,7 @@ declare module "next-auth" {
     lastName?: string
     email?: string
     sub?: string
+    idToken?: string
     userProfile?: MPUserProfile | null
   }
 
@@ -21,6 +22,7 @@ declare module "next-auth" {
     userId?: string
     firstName?: string
     lastName?: string
+    idToken?: string
     userProfile?: MPUserProfile | null
   }
 }

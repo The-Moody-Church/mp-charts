@@ -2,7 +2,8 @@
 
 import { MPUserProfile } from "@/lib/providers/ministry-platform/types";
 import { UserService } from '@/services/userService';
-import { signOut } from "@/auth";
+import { signOut, auth } from "@/auth";
+import { redirect } from "next/navigation";
 
 export async function getCurrentUserProfile(id:string): Promise<MPUserProfile> {
   console.log('getCurrentUserProfile');
@@ -14,5 +15,18 @@ export async function getCurrentUserProfile(id:string): Promise<MPUserProfile> {
 }
 
 export async function handleSignOut() {
-  await signOut();
+  const session = await auth();
+  
+  await signOut({ redirect: false });
+  
+  const endSessionUrl = new URL('/oauth/connect/endsession', process.env.MINISTRY_PLATFORM_BASE_URL);
+  const params = new URLSearchParams({
+    post_logout_redirect_uri: process.env.NEXTAUTH_URL || 'http://localhost:3000',
+  });
+  
+  if (session?.idToken) {
+    params.append('id_token_hint', session.idToken as string);
+  }
+  
+  redirect(`${endSessionUrl}?${params.toString()}`);
 }

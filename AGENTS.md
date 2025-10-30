@@ -16,6 +16,9 @@
 - **Framework**: Next.js 15 (App Router) with React 19, TypeScript strict mode
 - **Ministry Platform Integration**: Custom provider at `src/lib/providers/ministry-platform/` with REST API client, auth, and type-safe models
 - **Auth**: NextAuth v5 (beta) with Ministry Platform OAuth provider (`src/auth.ts`)
+  - **OIDC Logout**: Implements RP-initiated logout flow to properly end Ministry Platform OAuth sessions
+  - **Required Environment Variables**: `MINISTRY_PLATFORM_BASE_URL`, `NEXTAUTH_URL`
+  - **MP OAuth Setup**: Requires Post-Logout Redirect URIs configured in Ministry Platform OAuth client (see README.md)
 - **UI**: Radix UI primitives + shadcn/ui components in `src/components/ui/`, Tailwind CSS v4
 - **Path Alias**: `@/*` maps to `src/*`
 

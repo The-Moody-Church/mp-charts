@@ -192,7 +192,7 @@ https://yourdomain.com/api/auth/callback/ministryplatform
 
 > **Important**: The redirect URI must match exactly (including protocol, domain, port, and path). Ministry Platform will reject any OAuth requests with mismatched redirect URIs.
 
-#### Post-Logout Redirect URIs (Optional but Recommended)
+#### Post-Logout Redirect URIs (Required)
 Add these URIs where users will be redirected after signing out:
 
 **Development:**
@@ -207,7 +207,7 @@ https://yourdomain.com/
 https://yourdomain.com/signin
 ```
 
-> **Note**: Post-logout redirect URIs enable proper OIDC RP-initiated logout. Without these, users remain authenticated at Ministry Platform and will be auto-logged back in (SSO behavior). See [OAUTH_LOGOUT_SETUP.md](OAUTH_LOGOUT_SETUP.md) for details.
+> **Important**: Post-logout redirect URIs are **required** for proper logout functionality. The application implements OIDC RP-initiated logout to properly end Ministry Platform OAuth sessions. Without these configured, users will be auto-logged back in after clicking "Sign out" (SSO behavior). See [OAUTH_LOGOUT_SETUP.md](OAUTH_LOGOUT_SETUP.md) for technical details.
 
 #### Scopes (Required)
 Ensure these scopes are enabled for your client:
@@ -286,7 +286,7 @@ npm run dev
 - **"Redirect URI mismatch"**: Verify redirect URI in MP matches exactly
 - **"Invalid client"**: Check client ID and secret are correct
 - **"Unauthorized scope"**: Ensure all required scopes are enabled
-- **Auto-login after logout**: Add post-logout redirect URIs (see [OAUTH_LOGOUT_SETUP.md](OAUTH_LOGOUT_SETUP.md))
+- **Auto-login after logout**: Verify post-logout redirect URIs are configured in Ministry Platform OAuth client. The application requires these for proper OIDC logout (see [OAUTH_LOGOUT_SETUP.md](OAUTH_LOGOUT_SETUP.md))
 
 ### OAuth Security Considerations
 

@@ -134,6 +134,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       session.lastName = token.lastName as string
       session.email = token.email as string
       session.sub = token.sub as string
+      session.idToken = token.idToken as string
       session.userProfile = token.userProfile as MPUserProfile | null
     }
     
