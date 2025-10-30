@@ -1,11 +1,11 @@
 import NextAuth from "next-auth"
 import { JWT } from "next-auth/jwt"
-import MinistryPlatform from "@/lib/providers/ministry-platform/auth"
+import { MinistryPlatformAuthProvider } from "@/lib/providers/ministry-platform/auth"
 
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
-    MinistryPlatform({
+    MinistryPlatformAuthProvider({
       clientId: process.env.MINISTRY_PLATFORM_CLIENT_ID!,
       clientSecret: process.env.MINISTRY_PLATFORM_CLIENT_SECRET!,
     }),

@@ -1,4 +1,4 @@
-import { QueryParams, RequestBody } from "../Interfaces/mpProviderInterfaces";
+import { QueryParams, RequestBody } from "../types/provider.types";
 
 export class HttpClient {
     private baseUrl: string;

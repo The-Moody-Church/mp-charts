@@ -249,7 +249,7 @@ function mapDataTypeToZod(col: ColumnMetadata): string {
 }
 
 function generateZodSchema(table: TableMetadata): string {
-  const typeName = sanitizeTypeName(table.Name);
+  const typeName = sanitizeTypeName(table.Table_Name);
   const schemaName = `${typeName}Schema`;
   
   if (!table.Columns || table.Columns.length === 0) {
@@ -300,7 +300,7 @@ function generateDetailedTypeDefinition(
   table: TableMetadata, 
   sampleRecords?: Record<string, unknown>[]
 ): string {
-  const typeName = sanitizeTypeName(table.Name);
+  const typeName = sanitizeTypeName(table.Table_Name);
   const interfaceName = `${typeName}Record`;
   
   let fieldsDefinition = "";
@@ -361,7 +361,7 @@ function generateDetailedTypeDefinition(
     fieldsDefinition = fields.join("\n");
   } else {
     // Basic fallback
-    fieldsDefinition = `  ${table.Name}_ID?: number; // Primary key (assuming standard naming convention)
+    fieldsDefinition = `  ${table.Table_Name}_ID?: number; // Primary key (assuming standard naming convention)
   [key: string]: unknown; // Allow for additional fields`;
   }
   
@@ -369,8 +369,8 @@ function generateDetailedTypeDefinition(
   const accessLevel = `Access Level: ${table.AccessLevel}`;
   
   return `/**
- * Interface for ${table.Name}
- * Table: ${table.Name}
+ * Interface for ${table.Table_Name}
+* Table: ${table.Table_Name}
  * ${accessLevel}
  * ${permissions}
  * ${sampleRecords ? `Generated from ${sampleRecords.length} sample records` : "Generated from column metadata"}
@@ -390,14 +390,14 @@ function generateTypeDefinition(table: TableMetadata): string {
 function generateIndexFile(tables: TableMetadata[], generatedFiles: string[]): string {
   // Filter tables to only include those that were successfully generated
   const validTables = tables.filter(table => 
-    table.Name && 
-    typeof table.Name === 'string' &&
-    generatedFiles.includes(`${sanitizeTypeName(table.Name)}.ts`)
+    table.Table_Name && 
+typeof table.Table_Name === 'string' &&
+generatedFiles.includes(`${sanitizeTypeName(table.Table_Name)}.ts`)
   );
 
   const exports = validTables
     .map(table => {
-      const typeName = sanitizeTypeName(table.Name);
+      const typeName = sanitizeTypeName(table.Table_Name);
       return `export * from "./${typeName}";`;
     })
     .join("\n");
@@ -456,7 +456,7 @@ async function main() {
     }
 
     // Debug: Check for tables with invalid names
-    const invalidTables = tables.filter(table => !table.Name || typeof table.Name !== 'string');
+    const invalidTables = tables.filter(table => !table.Table_Name || typeof table.Table_Name !== 'string');
     if (invalidTables.length > 0) {
       console.log(`⚠ Found ${invalidTables.length} tables with invalid names (will be skipped)`);
     }
@@ -478,12 +478,12 @@ async function main() {
     
     for (const table of tables) {
       // Skip tables with invalid names
-      if (!table.Name || typeof table.Name !== 'string') {
+      if (!table.Table_Name || typeof table.Table_Name !== 'string') {
         console.log(`  ⚠ Skipping table with invalid name:`, table);
         continue;
       }
       
-      const typeName = sanitizeTypeName(table.Name);
+      const typeName = sanitizeTypeName(table.Table_Name);
       const fileName = `${typeName}.ts`;
       const filePath = path.join(options.outputDir, fileName);
       
@@ -494,15 +494,15 @@ async function main() {
           try {
             // Only fetch sample records if we don't have column metadata
             const sampleRecords = await mpHelper.getTableRecords<Record<string, unknown>>({
-              table: table.Name,
+              table: table.Table_Name,
               top: options.sampleSize,
-              orderBy: `${table.Name}_ID DESC` // Get most recent records
+              orderBy: `${table.Table_Name}_ID DESC` // Get most recent records
             });
             
             typeDefinition = generateDetailedTypeDefinition(table, sampleRecords);
-            console.log(`  ✓ ${fileName} (${table.Name}) [${sampleRecords.length} samples]`);
-          } catch (error) {
-            console.log(`  ⚠ ${fileName} (${table.Name}) [error sampling - using column metadata]`);
+            console.log(`  ✓ ${fileName} (${table.Table_Name}) [${sampleRecords.length} samples]`);
+          } catch {
+            console.log(`  ⚠ ${fileName} (${table.Table_Name}) [error sampling - using column metadata]`);
             typeDefinition = generateTypeDefinition(table);
           }
         } else {
@@ -510,7 +510,7 @@ async function main() {
           const sourceInfo = table.Columns && table.Columns.length > 0 ? 
             `[${table.Columns.length} columns]` : 
             "[basic]";
-          console.log(`  ✓ ${fileName} (${table.Name}) ${sourceInfo}`);
+          console.log(`  ✓ ${fileName} (${table.Table_Name}) ${sourceInfo}`);
         }
         
         fs.writeFileSync(filePath, typeDefinition);

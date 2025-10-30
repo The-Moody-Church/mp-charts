@@ -193,5 +193,20 @@ export interface TableMetadata {
   Table_Name: string;
   Display_Name: string;
   Description?: string;
+  Columns?: ColumnMetadata[];
   [key: string]: unknown;
+}
+
+export interface ColumnMetadata {
+  Name: string;
+  DataType: ParameterDataType;
+  IsRequired: boolean;
+  Size: number;
+  IsPrimaryKey?: boolean;
+  IsForeignKey?: boolean;
+  ReferencedTable?: string;
+  ReferencedColumn?: string;
+  IsReadOnly?: boolean;
+  IsComputed?: boolean;
+  HasDefault?: boolean;
 }
