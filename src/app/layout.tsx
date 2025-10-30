@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Pastor App",
   description: "Ministry Platform Pastor Application",
+  icons: {
+    icon: "/assets/icons/favicon.ico",
+  },
 };
 
 export const viewport: Viewport = {
