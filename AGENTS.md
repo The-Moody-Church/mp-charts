@@ -1,11 +1,16 @@
 # AGENTS.md - MPNext Development Guide
 
 ## Commands
-- **Dev**: `pnpm dev` (Next.js dev server)
-- **Build**: `pnpm build` (production build, runs type checking)
-- **Lint**: `pnpm lint` (ESLint)
-- **Generate MP Types**: `pnpm mp:generate:models` (generates Zod schemas and types from Ministry Platform API)
+- **Dev**: `npm run dev` (Next.js dev server)
+- **Build**: `npm run build` (production build, runs type checking)
+- **Lint**: `npm run lint` (ESLint)
+- **Generate MP Types**: `npm run mp:generate:models` (generates TypeScript types + Zod schemas from Ministry Platform API, cleans output directory first)
 - **Tests**: No test framework configured yet
+
+### Type Generation Notes
+- Generated types automatically quote field names with special characters (e.g., `"Allow_Check-in"`)
+- The `mp:generate:models` script uses `--clean` flag to remove old files before regenerating
+- Manual generation with options: `tsx src/lib/providers/ministry-platform/scripts/generate-types.ts --help`
 
 ## Architecture
 - **Framework**: Next.js 15 (App Router) with React 19, TypeScript strict mode
