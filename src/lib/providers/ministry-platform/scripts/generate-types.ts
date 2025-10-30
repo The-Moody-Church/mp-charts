@@ -519,6 +519,7 @@ async function main() {
     }
     
     const generatedFiles: string[] = [];
+    let successfulTables = 0;
     
     for (const table of tables) {
       // Skip tables with invalid names
@@ -560,6 +561,7 @@ async function main() {
         
         fs.writeFileSync(filePath, typeDefinition);
         generatedFiles.push(fileName);
+        successfulTables++;
         
         // Generate Zod schema if requested
         if (options.zodSchemas && table.Columns && table.Columns.length > 0) {
@@ -582,10 +584,11 @@ async function main() {
     
     console.log(`  ✓ index.ts (barrel export)`);
 
-    console.log(`\n🎉 Successfully generated ${generatedFiles.length} type files in ${options.outputDir}`);
+    const zodSchemaCount = options.zodSchemas ? successfulTables : 0;
+    console.log(`\n🎉 Successfully generated ${successfulTables} table types${zodSchemaCount > 0 ? ` + ${zodSchemaCount} Zod schemas` : ''} (${generatedFiles.length} total files) in ${options.outputDir}`);
     
-    if (generatedFiles.length !== tables.length) {
-      console.log(`ℹ ${tables.length - generatedFiles.length} tables were skipped due to errors or invalid names`);
+    if (successfulTables !== tables.length) {
+      console.log(`ℹ ${tables.length - successfulTables} tables were skipped due to errors or invalid names`);
     }
     
     // Show usage instructions
