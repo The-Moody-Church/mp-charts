@@ -19,7 +19,12 @@ export async function handleSignOut() {
   
   await signOut({ redirect: false });
   
-  const endSessionUrl = new URL('/oauth/connect/endsession', process.env.MINISTRY_PLATFORM_BASE_URL);
+  const baseUrl = process.env.MINISTRY_PLATFORM_BASE_URL;
+  if (!baseUrl) {
+    throw new Error('MINISTRY_PLATFORM_BASE_URL is not configured');
+  }
+  
+  const endSessionUrl = `${baseUrl}/oauth/connect/endsession`;
   const params = new URLSearchParams({
     post_logout_redirect_uri: process.env.NEXTAUTH_URL || 'http://localhost:3000',
   });
