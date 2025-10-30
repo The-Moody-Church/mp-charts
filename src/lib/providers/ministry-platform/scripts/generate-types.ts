@@ -43,6 +43,7 @@ interface CLIOptions {
   detailed?: boolean;
   sampleSize?: number;
   zodSchemas?: boolean;
+  clean?: boolean;
 }
 
 function parseArguments(): CLIOptions {
@@ -74,6 +75,10 @@ function parseArguments(): CLIOptions {
       case "-z":
       case "--zod":
         options.zodSchemas = true;
+        break;
+      case "-c":
+      case "--clean":
+        options.clean = true;
         break;
       case "-h":
       case "--help":
@@ -109,6 +114,7 @@ Options:
   -d, --detailed         Generate detailed types by sampling records (slower)
   --sample-size <num>    Number of records to sample for detailed mode (default: 5)
   -z, --zod              Generate Zod schemas for runtime validation
+  -c, --clean            Remove all existing files in output directory before generating
   -h, --help             Show this help message
 
 Examples:
@@ -492,6 +498,17 @@ async function main() {
     if (!fs.existsSync(options.outputDir)) {
       fs.mkdirSync(options.outputDir, { recursive: true });
       console.log(`📁 Created output directory: ${options.outputDir}`);
+    } else if (options.clean) {
+      // Clean existing files if --clean flag is set
+      console.log(`🧹 Cleaning output directory: ${options.outputDir}`);
+      const existingFiles = fs.readdirSync(options.outputDir);
+      const removedCount = existingFiles.filter(file => file.endsWith('.ts')).length;
+      existingFiles.forEach(file => {
+        if (file.endsWith('.ts')) {
+          fs.unlinkSync(path.join(options.outputDir, file));
+        }
+      });
+      console.log(`   Removed ${removedCount} existing type files`);
     }
 
     // Generate type files

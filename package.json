@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "mp:generate": "tsx src/lib/providers/ministry-platform/scripts/generate-types.ts",
-    "mp:generate:models": "tsx src/lib/providers/ministry-platform/scripts/generate-types.ts -o src/lib/providers/ministry-platform/models --zod"
+    "mp:generate:models": "tsx src/lib/providers/ministry-platform/scripts/generate-types.ts -o src/lib/providers/ministry-platform/models --zod --clean"
   },
   "dependencies": {
     "@auth/core": "^0.34.2",
