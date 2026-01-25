@@ -12,37 +12,47 @@ A modern Next.js application integrated with Ministry Platform authentication an
 - [Project Structure](#project-structure)
 - [Ministry Platform Integration](#ministry-platform-integration)
 - [Components](#components)
+- [Services](#services)
+- [Testing](#testing)
 - [Development](#development)
 - [Documentation](#documentation)
 - [Code Style & Conventions](#code-style--conventions)
 
 ## Features
 
-- 🔐 **Authentication**: NextAuth v5 with Ministry Platform OAuth provider
-- 🎨 **Modern UI**: Radix UI primitives + shadcn/ui components with Tailwind CSS v4
-- 📊 **Type-Safe API**: Full TypeScript support with auto-generated types from Ministry Platform schema
-- ⚡ **Next.js 15**: App Router with React Server Components
-- 🔄 **REST API Client**: Comprehensive Ministry Platform REST API integration
-- 🛠️ **Type Generation**: CLI tool to generate TypeScript interfaces and Zod schemas from MP database
-- ✅ **Validation**: Optional Zod schema validation in MPHelper for runtime data validation before API calls
+- **Authentication**: NextAuth v5 with Ministry Platform OAuth provider and OIDC RP-initiated logout
+- **Modern UI**: Radix UI primitives + shadcn/ui components with Tailwind CSS v4
+- **Type-Safe API**: Full TypeScript support with auto-generated types from Ministry Platform schema
+- **Next.js 15**: App Router with React Server Components
+- **REST API Client**: Comprehensive Ministry Platform REST API integration
+- **Type Generation**: CLI tool to generate TypeScript interfaces and Zod schemas from MP database
+- **Schema Documentation**: Auto-generated markdown documentation with type file links
+- **Validation**: Optional Zod schema validation in MPHelper for runtime data validation before API calls
+- **Testing**: Vitest test framework with comprehensive coverage for auth, middleware, and API services
+- **Tools Framework**: Reusable tool components for building Ministry Platform page tools
 
 ## Architecture
 
 ### Framework
-- **Next.js 15** with App Router
+- **Next.js 15.5.6** with App Router
 - **React 19** with Server Components by default
 - **TypeScript** in strict mode
 - **Tailwind CSS v4** for styling
+- **Vitest 4.0** for testing
 
 ### Ministry Platform Integration
 Custom provider located at `src/lib/providers/ministry-platform/` featuring:
 - REST API client with OAuth2 authentication
 - Service-oriented architecture for domain-specific logic
-- Type-safe models and Zod validation schemas
-- Automatic token management
+- Type-safe models and Zod validation schemas (603 generated files)
+- Automatic token management with refresh
+- Six specialized services: Table, Procedure, Communication, File, Metadata, Domain
 
 ### Authentication
 NextAuth v5 (beta) with custom Ministry Platform OAuth provider (`src/auth.ts`)
+- JWT session strategy with automatic token refresh
+- OIDC RP-initiated logout for proper session termination
+- Middleware-based route protection
 
 ## Prerequisites
 
@@ -173,21 +183,22 @@ This will:
 - Fetch all table metadata (301+ tables)
 - Generate TypeScript interfaces for each table
 - Generate Zod validation schemas for runtime validation
+- Generate schema documentation with type file links
 - Clean up any previously generated files
 - Output to `src/lib/providers/ministry-platform/models/`
 
 **Expected output:**
 ```
-🚀 Generating TypeScript types from Ministry Platform schema...
-📡 Fetching table metadata from Ministry Platform...
-✅ Found 301 tables
-🧹 Cleaning output directory: src/lib/providers/ministry-platform/models
+Generating TypeScript types from Ministry Platform schema...
+Fetching table metadata from Ministry Platform...
+Found 301 tables
+Cleaning output directory: src/lib/providers/ministry-platform/models
    Removed 605 existing type files
-🔧 Generating type definitions...
-  ✓ Contacts.ts (Contacts) [51 columns]
-  ✓ Events.ts (Events) [57 columns]
+Generating type definitions...
+  Contacts.ts (Contacts) [51 columns]
+  Events.ts (Events) [57 columns]
   ...
-🎉 Successfully generated 301 table types + 301 Zod schemas (602 total files)
+Successfully generated 301 table types + 301 Zod schemas (602 total files)
 ```
 
 **Advanced options:**
@@ -225,7 +236,7 @@ npm run dev
 - **"Redirect URI mismatch"**: Verify redirect URI in MP matches exactly
 - **"Invalid client"**: Check client ID and secret are correct
 - **"Unauthorized scope"**: Ensure all required scopes are enabled
-- **Auto-login after logout**: Verify post-logout redirect URIs are configured in Ministry Platform OAuth client. The application requires these for proper OIDC logout (see [OAUTH_LOGOUT_SETUP.md](OAUTH_LOGOUT_SETUP.md))
+- **Auto-login after logout**: Verify post-logout redirect URIs are configured in Ministry Platform OAuth client. The application requires these for proper OIDC logout (see [OAUTH_LOGOUT_SETUP.md](docs/OAUTH_LOGOUT_SETUP.md))
 
 
 ### Production Deployment
@@ -244,57 +255,124 @@ When deploying to production:
 ```
 MPNext/
 ├── src/
-│   ├── app/                          # Next.js App Router pages
-│   ├── components/                   # React components
-│   │   ├── actions/                  # Shared server actions
-│   │   │   └── README.md             # Actions organization guide
-│   │   ├── ui/                       # shadcn/ui components
-│   │   ├── contact-lookup/           # Contact lookup feature
+│   ├── app/                              # Next.js App Router pages
+│   │   ├── (web)/                        # Protected route group
+│   │   │   ├── contactlookup/            # Contact lookup demo
+│   │   │   │   └── [guid]/               # Dynamic contact detail page
+│   │   │   ├── home/                     # Home redirect
+│   │   │   ├── tools/                    # Tools framework
+│   │   │   │   └── template/             # Template tool example
+│   │   │   ├── layout.tsx                # Web layout with auth
+│   │   │   └── page.tsx                  # Dashboard/home page
+│   │   ├── api/auth/[...nextauth]/       # NextAuth API routes
+│   │   ├── signin/                       # Sign-in page
+│   │   ├── layout.tsx                    # Root layout
+│   │   └── providers.tsx                 # App providers wrapper
+│   │
+│   ├── components/                       # React components
+│   │   ├── contact-logs/                 # Contact logs feature (CRUD)
+│   │   │   ├── contact-logs.tsx
+│   │   │   ├── actions.ts
+│   │   │   └── index.ts
+│   │   ├── contact-lookup/               # Contact lookup feature
 │   │   │   ├── contact-lookup.tsx
 │   │   │   ├── contact-lookup-search.tsx
 │   │   │   ├── contact-lookup-results.tsx
-│   │   │   ├── actions.ts            # Feature-specific actions
-│   │   │   └── index.ts              # Barrel exports
-│   │   ├── contact-lookup-details/   # Contact details feature
+│   │   │   ├── actions.ts
+│   │   │   └── index.ts
+│   │   ├── contact-lookup-details/       # Contact details feature
 │   │   │   ├── contact-lookup-details.tsx
-│   │   │   ├── actions.ts            # Feature-specific actions
-│   │   │   └── index.ts              # Barrel exports
-│   │   ├── user-menu/                # User menu component
+│   │   │   ├── actions.ts
+│   │   │   └── index.ts
+│   │   ├── layout/                       # Layout components
+│   │   │   ├── auth-wrapper.tsx
+│   │   │   ├── dynamic-breadcrumb.tsx
+│   │   │   ├── header.tsx
+│   │   │   ├── sidebar.tsx
+│   │   │   └── index.ts
+│   │   ├── tool/                         # Tool framework components
+│   │   │   ├── tool-container.tsx
+│   │   │   ├── tool-header.tsx
+│   │   │   ├── tool-footer.tsx
+│   │   │   ├── tool-params-debug.tsx
+│   │   │   └── index.ts
+│   │   ├── user-menu/                    # User menu feature
 │   │   │   ├── user-menu.tsx
-│   │   │   ├── actions.ts            # Feature-specific actions
-│   │   │   └── index.ts              # Barrel exports
-│   │   ├── auth-wrapper.tsx          # Authentication wrapper
-│   │   ├── dynamic-breadcrumb.tsx    # Breadcrumb navigation
-│   │   ├── header.tsx                # App header
-│   │   ├── session-provider.tsx      # NextAuth session provider
-│   │   └── sidebar.tsx               # App sidebar
-│   ├── lib/                          # Shared libraries
-│   │   ├── dto/                      # Data Transfer Objects / ViewModels (application-level)
+│   │   │   ├── actions.ts
+│   │   │   └── index.ts
+│   │   ├── user-tools-debug/             # Development debug helper
+│   │   │   ├── user-tools-debug.tsx
+│   │   │   ├── actions.ts
+│   │   │   └── index.ts
+│   │   ├── shared-actions/               # Cross-feature server actions
+│   │   │   └── user.ts
+│   │   └── ui/                           # shadcn/ui components (19 components)
+│   │
+│   ├── contexts/                         # React Context providers
+│   │   ├── session-context.tsx
+│   │   ├── user-context.tsx
+│   │   └── index.ts
+│   │
+│   ├── lib/                              # Shared libraries
+│   │   ├── dto/                          # Application DTOs/ViewModels
+│   │   │   ├── contacts.ts
+│   │   │   ├── contact-logs.ts
+│   │   │   └── index.ts
+│   │   ├── tool-params.ts                # Tool parameter utilities
+│   │   ├── utils.ts                      # General utilities
 │   │   └── providers/
-│   │       └── ministry-platform/    # Ministry Platform provider
-│   │           ├── auth/             # Authentication logic
-│   │           ├── services/         # API services (tables, procedures, files, etc.)
-│   │           ├── models/           # Generated type-safe models (auto-generated from DBMS)
-│   │           ├── types/            # Type definitions
-│   │           ├── utils/            # Utility functions
-│   │           ├── scripts/          # CLI tools (type generator)
-│   │           ├── docs/             # Provider documentation
-│   │           ├── client.ts         # Core MP client
-│   │           ├── provider.ts       # Main provider class
-│   │           ├── helper.ts         # Public API helper
-│   │           └── index.ts          # Barrel export
-│   ├── services/                     # Application services
-│   ├── types/                        # Application-wide types
-│   ├── auth.ts                       # NextAuth configuration
-│   └── middleware.ts                 # Next.js middleware
-├── public/                           # Static assets
-├── .env.example                      # Environment variables template
-├── AGENTS.md                         # Development guide for AI agents
-├── components.json                   # shadcn/ui configuration
-├── next.config.ts                    # Next.js configuration
-├── tailwind.config.js                # Tailwind CSS configuration
-├── tsconfig.json                     # TypeScript configuration
-└── package.json                      # Dependencies and scripts
+│   │       └── ministry-platform/        # Ministry Platform provider
+│   │           ├── auth/                 # OAuth authentication
+│   │           │   ├── auth-provider.ts
+│   │           │   ├── client-credentials.ts
+│   │           │   └── types.ts
+│   │           ├── services/             # API services
+│   │           │   ├── table.service.ts
+│   │           │   ├── procedure.service.ts
+│   │           │   ├── communication.service.ts
+│   │           │   ├── file.service.ts
+│   │           │   ├── metadata.service.ts
+│   │           │   └── domain.service.ts
+│   │           ├── models/               # Generated types (603 files)
+│   │           ├── types/                # Type definitions
+│   │           ├── utils/                # HTTP client utilities
+│   │           ├── scripts/              # Type generation CLI
+│   │           ├── docs/                 # Provider documentation
+│   │           ├── client.ts             # Core MP client
+│   │           ├── provider.ts           # Singleton provider
+│   │           ├── helper.ts             # Public API (MPHelper)
+│   │           └── index.ts              # Barrel export
+│   │
+│   ├── services/                         # Application services
+│   │   ├── contactService.ts
+│   │   ├── contactLogService.ts
+│   │   ├── userService.ts
+│   │   └── toolService.ts
+│   │
+│   ├── types/                            # Application-wide types
+│   │   └── next-auth.d.ts                # NextAuth type extensions
+│   │
+│   ├── auth.ts                           # NextAuth configuration
+│   ├── auth.test.ts                      # Auth tests
+│   ├── middleware.ts                     # Next.js middleware
+│   ├── middleware.test.ts                # Middleware tests
+│   └── test-setup.ts                     # Vitest setup
+│
+├── .claude/                              # Claude AI configuration
+│   ├── commands/                         # Claude Code skills
+│   └── references/                       # Documentation references
+├── docs/                                 # Documentation
+│   └── OAUTH_LOGOUT_SETUP.md
+├── public/                               # Static assets
+├── coverage/                             # Test coverage reports
+├── .env.example                          # Environment template
+├── CLAUDE.md                             # Development guide
+├── vitest.config.ts                      # Vitest configuration
+├── components.json                       # shadcn/ui configuration
+├── next.config.ts                        # Next.js configuration
+├── tailwind.config.js                    # Tailwind CSS configuration
+├── tsconfig.json                         # TypeScript configuration
+└── package.json                          # Dependencies and scripts
 ```
 
 ## Ministry Platform Integration
@@ -309,11 +387,13 @@ import { ContactLogSchema } from '@/lib/providers/ministry-platform/models';
 
 const mp = new MPHelper();
 
-// Get contacts
+// Get contacts with query parameters
 const contacts = await mp.getTableRecords({
   table: 'Contacts',
   filter: 'Contact_Status_ID=1',
-  select: 'Contact_ID,Display_Name,Email_Address'
+  select: 'Contact_ID,Display_Name,Email_Address',
+  orderBy: 'Last_Name',
+  top: 50
 });
 
 // Create records (without validation - backward compatible)
@@ -334,16 +414,35 @@ await mp.createTableRecords('Contact_Log', [{
   schema: ContactLogSchema,  // Validates data before API call
   $userId: 1
 });
+
+// Update with partial validation (default)
+await mp.updateTableRecords('Contact_Log', records, {
+  schema: ContactLogSchema,
+  partial: true  // Allow partial updates
+});
+
+// Execute stored procedures
+const results = await mp.executeProcedureWithBody('api_Custom_Procedure', {
+  '@ContactID': 12345
+});
+
+// File operations
+const files = await mp.getFilesByRecord({
+  tableName: 'Contacts',
+  recordId: 12345
+});
 ```
 
 ### Available Services
 
-- **Table Service**: Read, Create, Update, and Delete operations for MP tables
-- **Procedure Service**: Execute stored procedures
-- **Communication Service**: Send emails and messages
-- **Metadata Service**: Get table schema and domain info
-- **File Service**: Upload, download, and manage files
-- **Domain Service**: Domain-specific operations
+| Service | Purpose | Key Methods |
+|---------|---------|-------------|
+| **Table Service** | CRUD operations | `getTableRecords`, `createTableRecords`, `updateTableRecords`, `deleteTableRecords` |
+| **Procedure Service** | Stored procedures | `getProcedures`, `executeProcedure`, `executeProcedureWithBody` |
+| **Communication Service** | Email/SMS | `createCommunication`, `sendMessage` |
+| **File Service** | File management | `getFilesByRecord`, `uploadFiles`, `updateFile`, `deleteFile` |
+| **Metadata Service** | Schema info | `getTables`, `refreshMetadata` |
+| **Domain Service** | Domain config | `getDomainInfo`, `getGlobalFilters` |
 
 ### Type Generation
 
@@ -371,34 +470,59 @@ npx tsx src/lib/providers/ministry-platform/scripts/generate-types.ts --help
 - `-d, --detailed` - Sample records for better type inference (slower)
 - `--sample-size <num>` - Number of records to sample in detailed mode
 
+**Generated Output:**
+- 301 TypeScript interfaces (one per table)
+- 301 Zod validation schemas
+- Schema documentation with type file links (`.claude/references/ministryplatform.schema.md`)
+
 See [Ministry Platform Type Generator documentation](src/lib/providers/ministry-platform/scripts/README.md) for details.
 
 ## Components
 
 ### UI Components
 Built with Radix UI primitives and styled with Tailwind CSS. Located in `src/components/ui/`:
-- Alert Dialog, Avatar, Checkbox, Dialog, Dropdown Menu
-- Label, Radio Group, Select, Switch, Tooltip
-- And more...
+- Alert, Alert Dialog, Avatar, Breadcrumb, Button, Card
+- Checkbox, Dialog, Drawer, Dropdown Menu, Form, Input
+- Label, Radio Group, Select, Skeleton, Switch, Textarea, Tooltip
 
-### Application Components
-- **auth-wrapper**: Protects routes requiring authentication
-- **header**: Application header with navigation
-- **sidebar**: Application sidebar navigation
-- **user-menu**: User profile and logout menu
-- **dynamic-breadcrumb**: Automatic breadcrumb generation
-- **session-provider**: NextAuth session context provider
-- **contact-lookup**: Contact search and selection
-- **contact-lookup-details**: Detailed contact information
-- **contact-logs**: Contact log management
+### Layout Components (`src/components/layout/`)
+- **AuthWrapper**: Server component for route protection with session validation
+- **Header**: Application header with sidebar toggle and user menu
+- **Sidebar**: Navigation sidebar with route links
+- **DynamicBreadcrumb**: Auto-generated breadcrumbs from URL path
+
+### Feature Components
+- **contact-lookup**: Contact search with fuzzy matching
+- **contact-lookup-details**: Detailed contact view with logs
+- **contact-logs**: Full CRUD for contact interaction history
+- **user-menu**: User profile dropdown with sign-out
+
+### Tool Components (`src/components/tool/`)
+- **ToolContainer**: Main wrapper for tool pages
+- **ToolHeader**: Tool title bar with optional info tooltip
+- **ToolFooter**: Save/Close action buttons
+- **ToolParamsDebug**: Development helper for debugging URL parameters
 
 All components follow kebab-case naming and use named exports for consistency.
+
+## Services
+
+Application services provide business logic abstraction over the Ministry Platform API:
+
+| Service | File | Purpose |
+|---------|------|---------|
+| **ContactService** | `contactService.ts` | Contact search and updates |
+| **ContactLogService** | `contactLogService.ts` | Contact log CRUD with validation |
+| **UserService** | `userService.ts` | User profile retrieval |
+| **ToolService** | `toolService.ts` | Tool page data and user permissions |
+
+All services follow the singleton pattern and use `MPHelper` for API communication.
 
 ## Building Custom Tools
 
 ### Template Tool
 
-The project includes a template tool (`src/app/tools/template/`) that demonstrates best practices for building Ministry Platform tools that can be launched from within MP pages.
+The project includes a template tool (`src/app/(web)/tools/template/`) that demonstrates best practices for building Ministry Platform tools that can be launched from within MP pages.
 
 **Key features:**
 - URL parameter parsing for MP page context (`pageID`, record selection, etc.)
@@ -409,7 +533,7 @@ The project includes a template tool (`src/app/tools/template/`) that demonstrat
 
 **Structure:**
 ```
-src/app/tools/template/
+src/app/(web)/tools/template/
 ├── page.tsx           # Server component that parses URL params
 └── template-tool.tsx  # Client component with tool UI
 ```
@@ -423,7 +547,50 @@ src/app/tools/template/
 **URL Parameters:**
 Tools receive standard MP parameters like `pageID`, `s` (selection), and `recordDescription`. Use `parseToolParams()` to handle them consistently.
 
-See the [template tool](src/app/tools/template/) for implementation details.
+See the [template tool](src/app/(web)/tools/template/) for implementation details.
+
+## Testing
+
+The project uses **Vitest 4.0** with comprehensive test coverage for critical functionality.
+
+### Test Infrastructure
+
+- **Framework**: Vitest with jsdom environment
+- **Libraries**: @testing-library/react, @testing-library/jest-dom
+- **Coverage**: v8 provider with HTML reports
+
+### Running Tests
+
+```bash
+# Run tests in watch mode
+npm test
+
+# Single test run
+npm run test:run
+
+# Generate coverage report
+npm run test:coverage
+```
+
+### Test Coverage
+
+| Area | Files | Coverage |
+|------|-------|----------|
+| Authentication | `auth.test.ts` | JWT callbacks, token refresh, session handling |
+| Middleware | `middleware.test.ts` | Route protection, token validation |
+| MP Client | `client.test.ts` | OAuth token management |
+| MPHelper | `helper.test.ts` | All CRUD operations, validation |
+| Table Service | `table.service.test.ts` | Table operations |
+| HTTP Client | `http-client.test.ts` | HTTP methods, URL building |
+
+**Total**: ~190+ test cases across 6 test files
+
+### Test Configuration
+
+Tests are configured in `vitest.config.ts`:
+- Environment variables stubbed in `src/test-setup.ts`
+- Auto-generated models excluded from coverage
+- Supports TypeScript path aliases
 
 ## Development
 
@@ -441,6 +608,11 @@ npm start
 
 # Run ESLint
 npm run lint
+
+# Run tests
+npm test              # Watch mode
+npm run test:run      # Single run
+npm run test:coverage # With coverage report
 
 # Generate MP types (basic, to custom location)
 npm run mp:generate
@@ -460,10 +632,12 @@ npm start
 
 ## Documentation
 
-- **[AGENTS.md](AGENTS.md)** - Development guide with commands, architecture, and code style conventions
-- **[OAUTH_LOGOUT_SETUP.md](OAUTH_LOGOUT_SETUP.md)** - OAuth logout configuration and OIDC RP-initiated logout details
+- **[CLAUDE.md](CLAUDE.md)** - Development guide with commands, architecture, and code style conventions
+- **[OAUTH_LOGOUT_SETUP.md](docs/OAUTH_LOGOUT_SETUP.md)** - OAuth logout configuration and OIDC RP-initiated logout details
 - **[Ministry Platform Provider](src/lib/providers/ministry-platform/docs/README.md)** - Complete provider documentation
 - **[Type Generator](src/lib/providers/ministry-platform/scripts/README.md)** - CLI tool documentation
+- **[Components Reference](.claude/references/components.md)** - Detailed component inventory
+- **[MP Schema Reference](.claude/references/ministryplatform.schema.md)** - Auto-generated database schema
 
 ## Code Style & Conventions
 
@@ -473,6 +647,8 @@ Use the `@/*` path alias for all internal imports:
 import { MPHelper } from '@/lib/providers/ministry-platform';
 import { Button } from '@/components/ui/button';
 import { ContactSearch } from '@/lib/dto';
+import { Header, Sidebar } from '@/components/layout';
+import { ToolContainer } from '@/components/tool';
 ```
 
 ### Component Style
@@ -492,13 +668,15 @@ import { ContactSearch } from '@/lib/dto';
 ### Component Organization
 ```
 src/components/
-├── actions/              # Shared actions (cross-feature)
+├── shared-actions/       # Cross-feature server actions
 ├── ui/                   # shadcn/ui components
+├── layout/               # Layout components (header, sidebar, etc.)
+├── tool/                 # Tool framework components
 ├── feature-name/         # Feature folder (kebab-case)
 │   ├── feature-name.tsx  # Main component
 │   ├── actions.ts        # Feature-specific server actions
 │   └── index.ts          # Barrel exports
-└── shared-component.tsx  # Shared/layout components
+└── shared-component.tsx  # Shared standalone components
 ```
 
 ### Import Examples
@@ -507,23 +685,26 @@ src/components/
 import { ContactLookup } from '@/components/contact-lookup';
 import { UserMenu } from '@/components/user-menu';
 
+// Import layout components
+import { Header, Sidebar, AuthWrapper } from '@/components/layout';
+
+// Import tool components
+import { ToolContainer, ToolParamsDebug } from '@/components/tool';
+
 // Import application DTOs
 import { ContactSearch, ContactLookupDetails } from '@/lib/dto';
 
 // Import Ministry Platform models (generated)
 import { ContactLog, Congregation } from '@/lib/providers/ministry-platform/models';
 
+// Import Ministry Platform Zod schemas
+import { ContactLogSchema } from '@/lib/providers/ministry-platform/models';
+
 // Import Ministry Platform helper
 import { MPHelper } from '@/lib/providers/ministry-platform';
 
-// Import feature-specific actions (within same folder)
-import { searchContacts } from './actions';
-
-// Import cross-feature actions
-import { getCurrentUserProfile } from '@/components/user-menu/actions';
-
 // Import shared actions
-import { sharedAction } from '@/components/actions/shared';
+import { getCurrentUserProfile } from '@/components/shared-actions/user';
 ```
 
 ### TypeScript
@@ -539,7 +720,7 @@ import { sharedAction } from '@/components/actions/shared';
 4. **Use Zod schemas for runtime validation** - Pass the optional `schema` parameter to `createTableRecords()` and `updateTableRecords()` to validate data before API calls:
    ```typescript
    import { ContactLogSchema } from '@/lib/providers/ministry-platform/models';
-   
+
    await mp.createTableRecords('Contact_Log', records, {
      schema: ContactLogSchema,  // Catch validation errors before API call
      $userId: 1
@@ -550,10 +731,11 @@ import { sharedAction } from '@/components/actions/shared';
    - Application-level DTOs/ViewModels: `src/lib/dto/` (hand-written)
    - Export all from respective `index.ts` files
 6. Access fields with special characters using bracket notation: `event["Allow_Check-in"]`
+7. **Run tests** before committing: `npm run test:run`
 
 ## Contributing
 
-This project follows strict TypeScript conventions and code style. Please review [AGENTS.md](AGENTS.md) before contributing.
+This project follows strict TypeScript conventions and code style. Please review [CLAUDE.md](CLAUDE.md) before contributing.
 
 ## License
 
