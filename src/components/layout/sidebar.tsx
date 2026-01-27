@@ -1,7 +1,7 @@
 "use client";
 
 import { XMarkIcon } from "@heroicons/react/24/outline";
-import { HomeIcon, UsersIcon } from "@heroicons/react/24/outline";
+import { HomeIcon, UsersIcon, ChartBarIcon } from "@heroicons/react/24/outline";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -9,7 +9,8 @@ interface SidebarProps {
 }
 
 const navigation = [
-  { name: "Dashboard", href: "/", icon: HomeIcon },
+  { name: "Home", href: "/", icon: HomeIcon },
+  { name: "Executive Dashboard", href: "/dashboard", icon: ChartBarIcon },
   { name: "Contact Lookup", href: "/contactlookup", icon: UsersIcon },
   // { name: 'Calendar', href: '/calendar', icon: CalendarIcon },
   // { name: 'Settings', href: '/settings', icon: CogIcon },

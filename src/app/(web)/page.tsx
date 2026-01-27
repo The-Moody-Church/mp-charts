@@ -6,11 +6,25 @@ export default function Home() {
   return (
     <div className="container mx-auto p-8 sm:p-20 space-y-12">
       <div className="text-center space-y-4">
-        <h1 className="text-4xl font-bold tracking-tight">Welcome to MPNext</h1>
-        <p className="text-lg text-muted-foreground">Explore demos showcasing Ministry Platform integration capabilities</p>
+        <h1 className="text-4xl font-bold tracking-tight">Ministry Platform Charts & Metrics</h1>
+        <p className="text-lg text-muted-foreground">Explore Ministry Platform data with visual dashboards and interactive tools</p>
       </div>
-      
+
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <Card className="flex flex-col">
+          <CardHeader>
+            <CardTitle>Executive Dashboard</CardTitle>
+            <CardDescription>
+              View ministry year metrics including attendance trends, group participation, and year-over-year comparisons
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="mt-auto">
+            <Link href="/dashboard">
+              <Button className="w-full">View Dashboard</Button>
+            </Link>
+          </CardContent>
+        </Card>
+
         <Card className="flex flex-col">
           <CardHeader>
             <CardTitle>Contact Lookup</CardTitle>
