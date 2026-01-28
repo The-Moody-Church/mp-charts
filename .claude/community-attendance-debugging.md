@@ -1,146 +1,236 @@
-# Community Attendance Chart - Debugging Guide
+# Community Attendance Chart - RESOLVED ✅
 
-## Issue
-The Community Sunday Gathering Attendance chart shows "No community attendance data available"
+## Status: FIXED (2026-01-28)
 
-## Debug Steps
+The Community Sunday Gathering Attendance chart is now working correctly. Multiple issues were identified and resolved.
 
-### 1. Check Browser Console
-After refreshing the dashboard, look for these console.log messages:
+## Issues Found and Solutions
 
-```
-No Community group type found
-No Community groups found
-Found X Community groups: [array of IDs]
-Found X Sunday events for Community groups
-Found X event participants with status 3 or 4
-```
+### 1. ✅ 1000 Record Pagination Limit (CRITICAL)
 
-### 2. Identify Where Pipeline Fails
+**Problem**: Ministry Platform API returns maximum 1000 records per query. When fetching Event_Participants, Group_Participants, or any large dataset, data was being silently truncated.
 
-**If you see "No Community group type found":**
-- Query: `SELECT Group_Type_ID, Group_Type FROM Group_Types WHERE Group_Type = 'Community'`
-- Problem: Group type name doesn't match exactly
-- Check Ministry Platform for actual group type name (case sensitive, check for extra spaces)
+**Solution**: Implemented universal auto-pagination in `MPHelper.getTableRecords()`:
+- Location: `src/lib/providers/ministry-platform/helper.ts` lines 85-157
+- Automatically fetches all records in batches of 1000
+- Applies to ALL queries across the application
+- Only activates when `$top` and `$skip` are not explicitly provided
 
-**If you see "No Community groups found":**
-- Query uses the Group_Type_ID from step 1
-- Problem: No groups have that type assigned
-- Check Ministry Platform Groups table for groups with Group_Type_ID matching Community
+**Impact**: This was the root cause of missing data across the entire dashboard.
 
-**If you see "Found X Community groups" but "Found 0 Sunday events":**
-- Query: Events with Group_ID IN (community group IDs) AND DATEPART(weekday, Event_Start_Date) = 1
-- Problem: Either no events scheduled, or events not on Sunday (weekday = 1), or date range issue
-- Check date range matches ministry year (Sept 1 - May 31)
-- Verify events exist in Ministry Platform with those Group_IDs
-- Check if Event_Start_Date is actually Sunday (SQL: Sunday = 1)
+### 2. ✅ Duplicate Event_Participant Records
 
-**If you see events but "Found 0 event participants":**
-- Query: Event_Participants WHERE Event_ID IN (...) AND Participation_Status_ID IN (3, 4)
-- Problem: No participants marked as present (status 3 or 4)
-- Check Ministry Platform for actual Participation_Status_ID values being used
-- May need to adjust status filter
+**Problem**: Attendance counts were exactly double the actual values (e.g., 290 vs 145 for Fusion in November).
 
-## Manual Testing Queries
+**Root Cause**: Event_Participants query was returning duplicate records, possibly due to:
+- Multiple batches overlapping
+- Database query issues
+- Relationship path complications
 
-Run these directly in Ministry Platform or via API to verify data exists:
-
-### 1. Check Group Type
-```sql
-SELECT Group_Type_ID, Group_Type
-FROM Group_Types
-WHERE Group_Type LIKE '%Community%'
-```
-
-### 2. Check Community Groups (use Group_Type_ID from above)
-```sql
-SELECT Group_ID, Group_Name, Group_Type_ID
-FROM Groups
-WHERE Group_Type_ID = [ID_FROM_STEP_1]
-```
-
-### 3. Check Sunday Events (use Group_IDs from above)
-```sql
-SELECT Event_ID, Group_ID, Event_Start_Date, Event_End_Date
-FROM Events
-WHERE Group_ID IN (list_from_step_2)
-  AND Event_Start_Date >= '2025-09-01'
-  AND Event_End_Date <= '2026-05-31'
-  AND Cancelled = 0
-  AND DATEPART(weekday, Event_Start_Date) = 1
-ORDER BY Event_Start_Date
-```
-
-### 4. Check Participants (use Event_IDs from above)
-```sql
-SELECT Event_ID, Participant_ID, Participation_Status_ID
-FROM Event_Participants
-WHERE Event_ID IN (list_from_step_3)
-  AND Participation_Status_ID IN (3, 4)
-```
-
-## Code Location
-File: `src/services/dashboardService.ts`
-Method: `getCommunityAttendanceTrends` (lines 527-660)
-
-## Quick Fixes to Try
-
-### If Group Type name is different:
-Change line 544:
+**Solution**: Deduplicate by Event_Participant_ID (primary key) before counting:
 ```typescript
-filter: `Group_Type = 'Community'`
-// to whatever the actual name is, e.g.:
-filter: `Group_Type = 'Communities'`
+const uniqueParticipants = Array.from(
+  new Map(eventParticipants.map(p => [p.Event_Participant_ID, p])).values()
+);
 ```
+- Location: `src/services/dashboardService.ts` lines 625-633
+- Added logging to show duplicate count
 
-### If Sunday detection is wrong (maybe Sunday = 7 instead of 1):
-Change line 584:
+### 3. ✅ Monthly Aggregation
+
+**Problem**: Weekly data made chart too wide with 16+ communities over 9 months.
+
+**Solution**: Changed from weekly to monthly aggregation:
+- Group events by month (YYYY-MM format)
+- Calculate average attendance per community per week
+- Then calculate monthly average as: average of weekly averages
+- Excludes weeks with no data (doesn't count as 0)
+
+**Algorithm**:
+1. Group Event_Participants by month, then week, then community
+2. For each week: average attendance = sum of event attendance / number of events
+3. For each month: monthly average = sum of weekly averages / number of weeks with data
+
+### 4. ✅ Timezone Issue with Date Labels
+
+**Problem**: Month labels were off by one (showing Aug-Dec instead of Sep-Jan).
+
+**Root Cause**: JavaScript's `new Date("2025-09-01")` parses as UTC midnight, then converts to Central Time (UTC-6), shifting the date to August 31st.
+
+**Solution**: Parse date components in local time:
 ```typescript
-DATEPART(weekday, Events.Event_Start_Date) = 1
-// to:
-DATEPART(weekday, Events.Event_Start_Date) = 7
+const [year, month, day] = weekStartDate.split('-').map(Number);
+const date = new Date(year, month - 1, day); // month is 0-indexed
 ```
+- Location: `src/components/dashboard/community-attendance-chart.tsx` lines 80-86
 
-### If different participation statuses are used:
-Change line 603:
+### 5. ✅ Chart Visualization
+
+**Evolution**: LineChart → BarChart → AreaChart (stacked)
+
+**Final Solution**: Stacked Area Chart ("ribbon chart")
+- Each community displays as a colored flowing band
+- Stacked order: smallest average on bottom, largest on top
+- Custom tooltip showing values largest to smallest
+- Tooltip has white background (95% opacity) for readability
+- Tooltip displays above legend (z-index: 1000)
+
+**Chart Configuration**:
 ```typescript
-Event_Participants.Participation_Status_ID IN (3, 4)
-// to include other statuses, e.g.:
-Event_Participants.Participation_Status_ID IN (2, 3, 4)
+<AreaChart data={chartData}>
+  {sortedCommunityNames.map((communityName, index) => (
+    <Area
+      key={communityName}
+      type="monotone"
+      dataKey={communityName}
+      stackId="attendance"
+      stroke={CHART_COLORS[index % CHART_COLORS.length]}
+      fill={CHART_COLORS[index % CHART_COLORS.length]}
+    />
+  ))}
+</AreaChart>
 ```
 
 ## Current Implementation
-```typescript
-// Step 1: Get Community group type
-const groupTypes = await this.mp!.getTableRecords({
-  table: 'Group_Types',
-  filter: `Group_Type = 'Community'`
-});
 
-// Step 2: Get Community groups
+### Query Flow
+
+1. **Get Community Groups** (Group_Type_ID = 11):
+```typescript
 const communityGroups = await this.mp!.getTableRecords({
   table: 'Groups',
-  filter: `Group_Type_ID = ${communityTypeId}`
-});
-
-// Step 3: Get Sunday events
-const events = await this.mp!.getTableRecords({
-  table: 'Events',
-  filter: `
-    Events.Group_ID IN (${communityGroupIds.join(',')}) AND
-    Events.Event_Start_Date >= '${startIso}' AND
-    Events.Event_End_Date <= '${endIso}' AND
-    Events.Cancelled = 0 AND
-    DATEPART(weekday, Events.Event_Start_Date) = 1
-  `
-});
-
-// Step 4: Get participants
-const eventParticipants = await this.mp!.getTableRecords({
-  table: 'Event_Participants',
-  filter: `
-    Event_Participants.Event_ID IN (${eventIds.join(',')}) AND
-    Event_Participants.Participation_Status_ID IN (3, 4)
-  `
+  select: 'Group_ID,Group_Name',
+  filter: `Group_Type_ID = 11`
 });
 ```
+
+2. **Get All Events in Date Range**:
+```typescript
+const events = await this.mp!.getTableRecords({
+  table: 'Events',
+  select: 'Event_ID,Event_Start_Date,Event_End_Date',
+  filter: `Events.Event_Start_Date >= '${startIso}' AND
+           Events.Event_Start_Date <= '${endIso}' AND
+           Events.Cancelled = 0`
+});
+```
+
+3. **Get Event_Participants** (batched for URL length):
+```typescript
+const BATCH_SIZE = 100;
+for (let i = 0; i < eventIds.length; i += BATCH_SIZE) {
+  const batchIds = eventIds.slice(i, i + BATCH_SIZE);
+  const batch = await this.mp!.getTableRecords({
+    table: 'Event_Participants',
+    select: 'Event_Participant_ID,Event_ID,Group_ID,Participation_Status_ID',
+    filter: `Event_Participants.Event_ID IN (${batchIds.join(',')}) AND
+             Event_Participants.Group_ID IN (${communityGroupIds.join(',')}) AND
+             Event_Participants.Participation_Status_ID IN (3, 4)`
+  });
+  eventParticipants.push(...batch);
+}
+```
+
+4. **Deduplicate**:
+```typescript
+const uniqueParticipants = Array.from(
+  new Map(eventParticipants.map(p => [p.Event_Participant_ID, p])).values()
+);
+```
+
+5. **Count by Event and Group**:
+```typescript
+for (const participant of uniqueParticipants) {
+  const key = `${participant.Event_ID}-${participant.Group_ID}`;
+  if (!eventGroupAttendance.has(key)) {
+    eventGroupAttendance.set(key, { eventDate, count: 0 });
+  }
+  eventGroupAttendance.get(key)!.count++;
+}
+```
+
+6. **Aggregate by Month**:
+```typescript
+// Group by month → week → community → attendance counts
+// Calculate weekly averages, then monthly averages
+```
+
+## Debug Logging (Currently Active)
+
+Temporary debug logs in `src/services/dashboardService.ts`:
+- Line 561-576: All community groups with IDs and names
+- Line 563-576: Warning for duplicate group names
+- Line 630-632: Before/after deduplication counts
+- Line 663-665: Each Fusion event with details
+- Line 686-694: Monthly event summary
+- Line 710-720: Weekly and monthly average calculations
+
+To remove, search for: `console.log('[DEBUG]` and `console.log('[WARNING]`
+
+## Verification Steps
+
+1. **Check console logs** after dashboard refresh:
+   - Should see "Found 16 Community groups"
+   - Should see "After deduplication: X unique event participants"
+   - Should see "[DEBUG] Fusion event:" for each Fusion event
+   - Should see monthly averages matching database counts
+
+2. **Verify data accuracy**:
+   - Example: Fusion in November 2025
+   - Events: 14974, 14975, 14976, 14978 (4 events)
+   - Participants: 84 + 78 + 84 + 44 = 290 total
+   - Average: 290 / 4 = 72.5 ≈ 73 ✓
+
+3. **Check chart display**:
+   - Months should show: Sep 2025, Oct 2025, Nov 2025, Dec 2025, Jan 2026
+   - Tooltips should sort largest to smallest
+   - Tooltips should appear above legend
+   - Stacking order should be consistent (same colors = same communities)
+
+## Files Modified
+
+1. `src/lib/providers/ministry-platform/helper.ts` - Universal auto-pagination
+2. `src/services/dashboardService.ts` - Deduplication, monthly aggregation, debug logging
+3. `src/components/dashboard/community-attendance-chart.tsx` - Stacked area chart, timezone fix, custom tooltip
+4. `src/components/dashboard/attendance-chart.tsx` - Tooltip styling
+5. `src/components/dashboard/group-participation-chart.tsx` - Tooltip styling
+6. `src/app/(web)/dashboard/page.tsx` - Revalidate cache set to 3600 (1 hour)
+
+## Cleanup Tasks
+
+When stable, these can be cleaned up:
+
+1. **Remove debug logs**:
+   - Search for `[DEBUG]` and `[WARNING]` in `dashboardService.ts`
+   - Remove Fusion-specific logging
+   - Keep essential logs (like deduplication warning)
+
+2. **Consider**:
+   - Remove "Data Summary" card from dashboard if no longer needed
+   - Archive this debugging file once confirmed stable
+
+## Important Notes
+
+- **Participation Status**: Only status 3 and 4 are counted as "present"
+- **Group Type**: Community groups have Group_Type_ID = 11
+- **Date Range**: Ministry year is September 1 - May 31
+- **Deduplication**: Essential for accurate counts - don't remove
+- **Auto-pagination**: Benefits all queries, not just this chart
+
+## Related Issues Prevented
+
+By implementing universal auto-pagination, we also fixed potential issues in:
+- Group_Participants queries (can exceed 1000 members)
+- Events queries (1688 events in ministry year)
+- Any future large dataset queries
+
+## Success Criteria ✅
+
+- [x] Chart displays data instead of "No community attendance data available"
+- [x] Attendance counts match database values
+- [x] Month labels are correct (Sep-Jan, not Aug-Dec)
+- [x] Tooltip is readable with white background
+- [x] Tooltip displays above legend
+- [x] Communities are stacked consistently by average size
+- [x] No duplicate counting of participants
+- [x] All records fetched despite 1000 record API limit

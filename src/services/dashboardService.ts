@@ -558,8 +558,23 @@ export class DashboardService {
       const communityNameMap = new Map(communityGroups.map(g => [g.Group_ID, g.Group_Name]));
 
       console.log(`Found ${communityGroups.length} Community groups:`, communityGroupIds);
+      console.log('[DEBUG] All community groups:', communityGroups.map(g => `${g.Group_ID}: ${g.Group_Name}`));
 
-      // Step 2: Get all events within date range
+      // Check for duplicate group names (like multiple "Fusion" groups)
+      const groupNameCounts = new Map<string, number>();
+      communityGroups.forEach(g => {
+        const count = groupNameCounts.get(g.Group_Name) || 0;
+        groupNameCounts.set(g.Group_Name, count + 1);
+      });
+      for (const [name, count] of groupNameCounts) {
+        if (count > 1) {
+          console.log(`[WARNING] Found ${count} groups with name "${name}"`);
+          const duplicateIds = communityGroups.filter(g => g.Group_Name === name).map(g => g.Group_ID);
+          console.log(`  Group IDs: ${duplicateIds.join(', ')}`);
+        }
+      }
+
+      // Step 2: Get all events within date range (auto-paginated by MPHelper)
       const startIso = startDate.toISOString();
       const endIso = endDate.toISOString();
 
@@ -605,12 +620,22 @@ export class DashboardService {
         eventParticipants.push(...batch);
       }
 
-      console.log(`Found ${eventParticipants.length} event participants with status 3 or 4 in community groups`);
+      console.log(`Found ${eventParticipants.length} event participants (before deduplication) with status 3 or 4 in community groups`);
+
+      // Deduplicate by Event_Participant_ID (primary key)
+      const uniqueParticipants = Array.from(
+        new Map(eventParticipants.map(p => [p.Event_Participant_ID, p])).values()
+      );
+
+      console.log(`After deduplication: ${uniqueParticipants.length} unique event participants`);
+      if (uniqueParticipants.length !== eventParticipants.length) {
+        console.log(`[WARNING] Removed ${eventParticipants.length - uniqueParticipants.length} duplicate Event_Participant records`);
+      }
 
       // Step 4: Count participants by event and group
       const eventGroupAttendance = new Map<string, { eventDate: string; count: number }>();
 
-      for (const participant of eventParticipants) {
+      for (const participant of uniqueParticipants) {
         const eventDate = eventDateMap.get(participant.Event_ID);
         if (!eventDate) continue; // Skip if event not in our filtered list
 
@@ -626,49 +651,105 @@ export class DashboardService {
 
       console.log(`Counted attendance for ${eventGroupAttendance.size} event/group combinations`);
 
-      // Step 5: Group by week and community
-      const weeklyData = new Map<string, { [communityName: string]: number[] }>();
+      // Step 5: Group by month, week, and community
+      const monthlyWeeklyData = new Map<string, Map<string, { [communityName: string]: number[] }>>();
 
       for (const [key, data] of eventGroupAttendance) {
         const [eventIdStr, groupIdStr] = key.split('-');
         const groupId = parseInt(groupIdStr);
         const eventDate = new Date(data.eventDate);
 
-        // Use the event date as the week key (date without time)
+        // Get month key (YYYY-MM format)
+        const monthKey = eventDate.toISOString().slice(0, 7); // "2025-09"
+
+        // Get week key (ISO week start date)
         const weekStart = new Date(eventDate);
         weekStart.setHours(0, 0, 0, 0);
         const weekKey = weekStart.toISOString().split('T')[0];
 
         const communityName = communityNameMap.get(groupId) || 'Unknown';
 
-        if (!weeklyData.has(weekKey)) {
-          weeklyData.set(weekKey, {});
+        // Debug logging for Fusion in November
+        if (communityName.toLowerCase().includes('fusion')) {
+          console.log(`[DEBUG] Fusion event: Event ${eventIdStr}, Group_ID: ${groupId}, Group_Name: "${communityName}", Raw Date: ${data.eventDate}, Parsed Month: ${monthKey}, Week: ${weekKey}, Count: ${data.count}`);
         }
 
-        const weekData = weeklyData.get(weekKey)!;
+        // Initialize month if not exists
+        if (!monthlyWeeklyData.has(monthKey)) {
+          monthlyWeeklyData.set(monthKey, new Map());
+        }
+
+        const monthData = monthlyWeeklyData.get(monthKey)!;
+
+        // Initialize week within month if not exists
+        if (!monthData.has(weekKey)) {
+          monthData.set(weekKey, {});
+        }
+
+        const weekData = monthData.get(weekKey)!;
         if (!weekData[communityName]) {
           weekData[communityName] = [];
         }
         weekData[communityName].push(data.count);
       }
 
-      // Step 6: Calculate averages and format output
+      // Debug: Log Fusion monthly event counts
+      console.log('[DEBUG] Fusion monthly event summary:');
+      for (const [monthKey, weeksData] of monthlyWeeklyData) {
+        for (const [weekKey, communities] of weeksData) {
+          for (const [communityName, attendances] of Object.entries(communities)) {
+            if (communityName.toLowerCase().includes('fusion')) {
+              console.log(`  ${monthKey} week ${weekKey}: ${attendances.length} events, counts: [${attendances.join(', ')}], total: ${attendances.reduce((sum, a) => sum + a, 0)}`);
+            }
+          }
+        }
+      }
+
+      // Step 6: Calculate monthly average attendance per community (average of weekly averages)
       const trends: import('@/lib/dto').CommunityAttendanceTrend[] = [];
 
-      for (const [weekKey, communities] of Array.from(weeklyData.entries()).sort()) {
-        const communityAttendance: { [communityName: string]: number } = {};
+      for (const [monthKey, weeksData] of Array.from(monthlyWeeklyData.entries()).sort()) {
+        const communityWeeklyAverages = new Map<string, number[]>();
 
-        for (const [communityName, attendances] of Object.entries(communities)) {
-          const avg = attendances.reduce((sum, a) => sum + a, 0) / attendances.length;
-          communityAttendance[communityName] = Math.round(avg);
+        // For each week in the month, calculate average attendance per community
+        for (const [, communities] of weeksData) {
+          for (const [communityName, attendances] of Object.entries(communities)) {
+            const weekAvg = attendances.reduce((sum, a) => sum + a, 0) / attendances.length;
+
+            if (!communityWeeklyAverages.has(communityName)) {
+              communityWeeklyAverages.set(communityName, []);
+            }
+            communityWeeklyAverages.get(communityName)!.push(weekAvg);
+          }
+        }
+
+        // Calculate average of weekly averages for each community (omitting weeks with no data)
+        const communityAttendance: { [communityName: string]: number } = {};
+        for (const [communityName, weeklyAvgs] of communityWeeklyAverages) {
+          if (weeklyAvgs.length > 0) {
+            const monthlyAvg = weeklyAvgs.reduce((sum, a) => sum + a, 0) / weeklyAvgs.length;
+            communityAttendance[communityName] = Math.round(monthlyAvg);
+
+            // Debug logging for Fusion
+            if (communityName.toLowerCase().includes('fusion')) {
+              console.log(`[DEBUG] ${communityName} in ${monthKey}:`, {
+                weeklyAverages: weeklyAvgs,
+                numberOfWeeks: weeklyAvgs.length,
+                sum: weeklyAvgs.reduce((sum, a) => sum + a, 0),
+                monthlyAvg,
+                rounded: Math.round(monthlyAvg)
+              });
+            }
+          }
         }
 
         trends.push({
-          weekStartDate: weekKey,
+          weekStartDate: monthKey + '-01', // Use first day of month as the date key
           communityAttendance
         });
       }
 
+      console.log(`Returning ${trends.length} monthly trends:`, trends.map(t => t.weekStartDate));
       return trends;
     } catch (error) {
       console.error('Error fetching community attendance trends:', error);

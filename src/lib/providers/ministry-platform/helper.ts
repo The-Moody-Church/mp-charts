@@ -110,22 +110,56 @@ export class MPHelper {
       globalFilterId,
     } = params;
 
-    // Convert simplified parameters to Ministry Platform query format
-    const queryParams: TableQueryParams = {
-      $select: select,
-      $filter: filter,
-      $orderby: orderBy,
-      $groupby: groupBy,
-      $having: having,
-      $top: top,
-      $skip: skip,
-      $distinct: distinct,
-      $userId: userId,
-      $globalFilterId: globalFilterId,
-    };
+    // Auto-pagination: if no explicit top/skip provided and we hit the 1000 record limit,
+    // automatically fetch additional pages
+    const shouldAutoPaginate = top === undefined && skip === undefined;
 
-    // Delegate to provider with formatted parameters
-    return await this.provider.getTableRecords<T>(table, queryParams);
+    if (shouldAutoPaginate) {
+      const PAGE_SIZE = 1000;
+      const allRecords: T[] = [];
+      let currentSkip = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const queryParams: TableQueryParams = {
+          $select: select,
+          $filter: filter,
+          $orderby: orderBy,
+          $groupby: groupBy,
+          $having: having,
+          $top: PAGE_SIZE,
+          $skip: currentSkip,
+          $distinct: distinct,
+          $userId: userId,
+          $globalFilterId: globalFilterId,
+        };
+
+        const batch = await this.provider.getTableRecords<T>(table, queryParams);
+        allRecords.push(...batch);
+
+        // Continue if we got a full page (indicating there may be more)
+        hasMore = batch.length === PAGE_SIZE;
+        currentSkip += PAGE_SIZE;
+      }
+
+      return allRecords;
+    } else {
+      // If top/skip are explicitly provided, use them without auto-pagination
+      const queryParams: TableQueryParams = {
+        $select: select,
+        $filter: filter,
+        $orderby: orderBy,
+        $groupby: groupBy,
+        $having: having,
+        $top: top,
+        $skip: skip,
+        $distinct: distinct,
+        $userId: userId,
+        $globalFilterId: globalFilterId,
+      };
+
+      return await this.provider.getTableRecords<T>(table, queryParams);
+    }
   }
 
   /**
