@@ -1,3 +1,4 @@
+import { unstable_cache } from 'next/cache';
 import { MPHelper } from '@/lib/providers/ministry-platform';
 import {
   DashboardData,
@@ -50,6 +51,64 @@ export class DashboardService {
    */
   private async initialize(): Promise<void> {
     this.mp = new MPHelper();
+  }
+
+  /**
+   * Gets Group_Types with 24-hour cache
+   * Static data that rarely changes, safe to cache aggressively
+   *
+   * @param groupTypeIds - Set of group type IDs to fetch
+   * @returns Promise<Array> - Array of Group_Type records
+   */
+  private async getGroupTypesWithCache(groupTypeIds: Set<number>) {
+    const ids = Array.from(groupTypeIds).sort().join(',');
+
+    return unstable_cache(
+      async () => {
+        return this.mp!.getTableRecords<{
+          Group_Type_ID: number;
+          Group_Type: string;
+        }>({
+          table: 'Group_Types',
+          select: 'Group_Type_ID,Group_Type',
+          filter: `Group_Type_ID IN (${ids})`
+        });
+      },
+      ['group-types', ids],
+      {
+        revalidate: 86400, // 24 hours
+        tags: ['group-types']
+      }
+    )();
+  }
+
+  /**
+   * Gets Event_Types with 24-hour cache
+   * Static data that rarely changes, safe to cache aggressively
+   *
+   * @param eventTypeIds - Set of event type IDs to fetch
+   * @returns Promise<Array> - Array of Event_Type records
+   */
+  private async getEventTypesWithCache(eventTypeIds: Set<number>) {
+    const ids = Array.from(eventTypeIds).sort().join(',');
+
+    return unstable_cache(
+      async () => {
+        return this.mp!.getTableRecords<{
+          Event_Type_ID: number;
+          Event_Type: string;
+        }>({
+          table: 'Event_Types',
+          select: 'Event_Type_ID,Event_Type',
+          filter: `Event_Type_ID IN (${ids})`
+        });
+      },
+      ['event-types', ids],
+      {
+        revalidate: 86400, // 24 hours
+        tags: ['event-types']
+      }
+    )();
   }
 
   /**
@@ -142,16 +201,9 @@ export class DashboardService {
 
       if (groups.length === 0) return [];
 
-      // Step 2: Get all group types to identify which to exclude
+      // Step 2: Get all group types to identify which to exclude (cached 24 hours)
       const groupTypeIds = new Set(groups.map(g => g.Group_Type_ID));
-      const groupTypes = await this.mp!.getTableRecords<{
-        Group_Type_ID: number;
-        Group_Type: string;
-      }>({
-        table: 'Group_Types',
-        select: 'Group_Type_ID,Group_Type',
-        filter: `Group_Type_ID IN (${Array.from(groupTypeIds).join(',')})`
-      });
+      const groupTypes = await this.getGroupTypesWithCache(groupTypeIds);
 
       // Identify childcare group type IDs
       const childcareTypeIds = new Set(
@@ -264,16 +316,9 @@ export class DashboardService {
       const eventIds = new Set(events.map(e => e.Event_ID));
       if (eventIds.size === 0) return [];
 
-      // Step 2: Get event types
+      // Step 2: Get event types (cached 24 hours)
       const eventTypeIds = new Set(events.map(e => e.Event_Type_ID));
-      const eventTypes = await this.mp!.getTableRecords<{
-        Event_Type_ID: number;
-        Event_Type: string;
-      }>({
-        table: 'Event_Types',
-        select: 'Event_Type_ID,Event_Type',
-        filter: `Event_Type_ID IN (${Array.from(eventTypeIds).join(',')})`
-      });
+      const eventTypes = await this.getEventTypesWithCache(eventTypeIds);
 
       const eventTypeMap = new Map(eventTypes.map(et => [et.Event_Type_ID, et.Event_Type]));
       const eventToTypeMap = new Map(events.map(e => [e.Event_ID, e.Event_Type_ID]));
@@ -515,16 +560,9 @@ export class DashboardService {
 
       if (groups.length === 0) return [];
 
-      // Step 2: Get all group types to identify small groups (1 query)
+      // Step 2: Get all group types to identify small groups (cached 24 hours)
       const groupTypeIds = new Set(groups.map(g => g.Group_Type_ID));
-      const groupTypes = await this.mp!.getTableRecords<{
-        Group_Type_ID: number;
-        Group_Type: string;
-      }>({
-        table: 'Group_Types',
-        select: 'Group_Type_ID,Group_Type',
-        filter: `Group_Type_ID IN (${Array.from(groupTypeIds).join(',')})`
-      });
+      const groupTypes = await this.getGroupTypesWithCache(groupTypeIds);
 
       // Filter for small groups and create lookup maps
       const smallGroupTypeIds = new Set(
