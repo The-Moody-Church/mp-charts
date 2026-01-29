@@ -589,12 +589,137 @@ npm run build
 
 ---
 
+# Session 4: Phase 2 Fix - Complete Cache Invalidation
+
+## Time: Evening (2026-01-29)
+
+## Overview
+Fixed a cache invalidation bug where the manual refresh button only invalidated page-level cache but not query-level caches for Group_Types and Event_Types.
+
+## Problem Identified
+The manual "Refresh Data" button implementation had incomplete cache invalidation:
+- **Worked**: Invalidated page-level cache via `revalidatePath('/dashboard')`
+- **Missed**: Did NOT invalidate query-level `unstable_cache` entries for Group_Types and Event_Types
+- **Result**: Users clicking "Refresh Data" got fresh data for everything EXCEPT type lookups, which remained cached for 24 hours
+
+## Solution
+Updated `refreshDashboardCache()` server action to invalidate all cache layers:
+
+**File**: `src/components/dashboard/actions.ts`
+
+### Changes Made
+
+**1. Updated Import (Line 3)**
+```typescript
+// Before
+import { revalidatePath } from 'next/cache';
+
+// After
+import { revalidatePath, revalidateTag } from 'next/cache';
+```
+
+**2. Enhanced Cache Invalidation (Lines 63-65)**
+```typescript
+export async function refreshDashboardCache(): Promise<{
+  success: boolean;
+  timestamp: Date;
+}> {
+  try {
+    revalidatePath('/dashboard');    // Page-level cache
+    revalidateTag('group-types');    // Query-level cache (NEW)
+    revalidateTag('event-types');    // Query-level cache (NEW)
+    return {
+      success: true,
+      timestamp: new Date()
+    };
+  } catch (error) {
+    console.error('Error refreshing dashboard cache:', error);
+    return {
+      success: false,
+      timestamp: new Date()
+    };
+  }
+}
+```
+
+**3. Updated JSDoc Documentation (Lines 50-56)**
+```typescript
+/**
+ * Manually refreshes the dashboard cache
+ * This action revalidates both page-level and query-level caches:
+ * - Page-level: revalidates the dashboard page
+ * - Query-level: invalidates Group_Types and Event_Types caches
+ *
+ * @returns Promise<{ success: boolean; timestamp: Date }>
+ */
+```
+
+## Behavior Changes
+
+### Before Fix
+| Cache Type | Automatic Refresh | Manual Refresh Button |
+|------------|-------------------|----------------------|
+| Page-level cache (6 hours) | ✅ After 6 hours | ✅ Immediate |
+| Group_Types (24 hours) | ✅ After 24 hours | ❌ Still cached |
+| Event_Types (24 hours) | ✅ After 24 hours | ❌ Still cached |
+
+### After Fix
+| Cache Type | Automatic Refresh | Manual Refresh Button |
+|------------|-------------------|----------------------|
+| Page-level cache (6 hours) | ✅ After 6 hours | ✅ Immediate |
+| Group_Types (24 hours) | ✅ After 24 hours | ✅ Immediate |
+| Event_Types (24 hours) | ✅ After 24 hours | ✅ Immediate |
+
+## Impact
+
+**User Experience**:
+- Manual refresh now truly fetches ALL fresh data from Ministry Platform
+- Solves edge case where new Group_Types or Event_Types weren't appearing after refresh
+- Maintains all performance benefits of Phase 1 + 2 (91% load reduction)
+
+**When This Matters**:
+- Admin adds new Group_Type (e.g., "Life Groups") in Ministry Platform
+- Admin adds new Event_Type (e.g., "Special Services")
+- User needs to see these changes immediately, not wait 24 hours
+
+## Testing Results
+
+### Production Build
+```bash
+npm run build
+```
+- ✓ Compiled successfully in 22.2s
+- ✓ Lint errors: 0
+- ✓ Type errors: 0
+- ✓ Pages generated: 9/9
+- ✓ Exit code: 0
+
+## Files Modified
+
+**1. src/components/dashboard/actions.ts**
+- Added `revalidateTag` import
+- Added two `revalidateTag()` calls
+- Updated JSDoc documentation
+- Total: +3 insertions, -1 deletion
+
+**2. .claude/work-in-progress.md**
+- Added Session 4 notes documenting the fix
+
+**3. .claude/session-summary-2026-01-29.md**
+- Added this Session 4 summary
+
+## Key Takeaway
+
+**Cache tags enable granular invalidation**: Next.js `unstable_cache` tags allow selective cache busting, making manual refresh truly comprehensive while maintaining automatic TTL-based invalidation for normal operations.
+
+---
+
 **Updated Totals (All Sessions)**:
-- **Session Duration**: ~5 hours
+- **Session Duration**: ~5.5 hours
 - **Files Modified**: 10 files (8 code + 2 docs)
 - **New Files Created**: 2 files
-- **Lines Changed**: ~400 lines
-- **Commits**: 2 (Phase 1 + Phase 2)
+- **Lines Changed**: ~405 lines
+- **Commits**: 2 (Phase 1 + Phase 2), 1 pending (Phase 2 Fix)
 - **Database Load Reduction**: 91%
 - **Branch**: feature/optimize-dashboard-queries
-- **Status**: ✅ Ready for PR review
+- **Status**: ✅ Ready for PR review (after Phase 2 fix commit)

@@ -170,6 +170,15 @@
    - Line 573: Updated getSmallGroupTrends() to use cached Group_Types
    - Line 329: Updated getEventTypeMetrics() to use cached Event_Types
 
+#### Session 2026-01-29 (Evening: Phase 2 Fix - Manual Refresh Cache Invalidation)
+1. **src/components/dashboard/actions.ts**
+   - Line 3: Added `revalidateTag` import from 'next/cache'
+   - Lines 50-77: Updated refreshDashboardCache() to invalidate all caches
+     - Added `revalidateTag('group-types')` to invalidate Group_Types cache
+     - Added `revalidateTag('event-types')` to invalidate Event_Types cache
+     - Updated JSDoc to document both page-level and query-level cache invalidation
+   - **Fix**: Manual refresh button now properly invalidates unstable_cache entries
+
 ### Debug Logging
 
 **Status (2026-01-29)**: All debug logging removed in simplified implementation.
