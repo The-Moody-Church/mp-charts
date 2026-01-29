@@ -157,9 +157,10 @@ AI assistants should maintain context files in `.claude/` to track project state
 
 **When to update context files:**
 1. **After completing significant features** → Update `work-in-progress.md` with current status
-2. **At end of coding session** → Create dated `session-summary-YYYY-MM-DD.md`
-3. **When fixing bugs** → Update feature-specific debugging docs
-4. **When patterns change** → Update this CLAUDE.md file
+2. **Before creating commits** → Update `work-in-progress.md` and `session-summary-YYYY-MM-DD.md` with changes being committed
+3. **At end of coding session** → Ensure `session-summary-YYYY-MM-DD.md` is complete and up-to-date
+4. **When fixing bugs** → Update feature-specific debugging docs
+5. **When patterns change** → Update this CLAUDE.md file
 
 **Detecting session end:**
 - AI assistants cannot automatically detect session end
@@ -181,6 +182,11 @@ AI assistants should maintain context files in `.claude/` to track project state
 - Update `work-in-progress.md` as single source of truth for current state
 - Use clear status markers: ✅ COMPLETED, ⚠️ IN PROGRESS, ❌ BLOCKED
 - Session summaries are historical records; work-in-progress is living document
+- **IMPORTANT**: When using `/branch-commit` or creating any commit, ALWAYS update context files FIRST:
+  1. Update `work-in-progress.md` with current implementation status
+  2. Create/update `session-summary-YYYY-MM-DD.md` with session changes
+  3. Then create the commit including the updated context files
+  4. This ensures documentation stays in sync with code changes
 
 ## Reference Documents
 
