@@ -6,12 +6,19 @@ import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 // Using ISR (Incremental Static Regeneration) - page is cached and revalidated every 6 hours
 export const revalidate = 21600;
 
+const BUILD_ID = 'date-range-filter-v1';
+
 export default async function DashboardPage() {
   // Fetch default ministry year data on server for fast initial load
   const dashboardData = await getDashboardMetrics();
 
   return (
     <div className="container mx-auto p-8">
+      {process.env.NODE_ENV === 'development' && (
+        <div className="mb-4 rounded-md border border-blue-300 bg-blue-50 px-4 py-2 text-xs text-blue-800 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-200">
+          <strong>Build:</strong> {BUILD_ID} | <strong>Branch:</strong> claude/review-date-filter-UfQYm | <strong>Rendered:</strong> {new Date().toISOString()}
+        </div>
+      )}
       <DashboardShell initialData={dashboardData} />
     </div>
   );
