@@ -1,6 +1,5 @@
 import { getDashboardMetrics } from '@/components/dashboard/actions';
-import { DashboardMetrics } from '@/components/dashboard/dashboard-metrics';
-import { DashboardHeader } from '@/components/dashboard/dashboard-header';
+import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 
 // Revalidate the dashboard data every 6 hours (21600 seconds)
 // This provides 4 refresh windows per day: 12am, 6am, 12pm, 6pm
@@ -8,15 +7,12 @@ import { DashboardHeader } from '@/components/dashboard/dashboard-header';
 export const revalidate = 21600;
 
 export default async function DashboardPage() {
-  // Fetch data on server
+  // Fetch default ministry year data on server for fast initial load
   const dashboardData = await getDashboardMetrics();
 
   return (
-    <div className="container mx-auto p-8 space-y-8">
-      <DashboardHeader />
-
-      {/* Pass data to client component for rendering */}
-      <DashboardMetrics data={dashboardData} />
+    <div className="container mx-auto p-8">
+      <DashboardShell initialData={dashboardData} />
     </div>
   );
 }

@@ -12,27 +12,43 @@ import { ExpandableChart } from './expandable-chart';
 
 interface DashboardMetricsProps {
   data: DashboardData;
+  showCompare?: boolean;
 }
 
-export function DashboardMetrics({ data }: DashboardMetricsProps) {
+function formatPeriodLabel(data: DashboardData): string {
+  const start = new Date(data.currentPeriod.periodStart);
+  const end = new Date(data.currentPeriod.periodEnd);
+  const startMonth = start.toLocaleString('default', { month: 'short' });
+  const endMonth = end.toLocaleString('default', { month: 'short' });
+  const startYear = start.getFullYear();
+  const endYear = end.getFullYear();
+  if (startYear === endYear) {
+    return `${startMonth} - ${endMonth} ${startYear}`;
+  }
+  return `${startMonth} ${startYear} - ${endMonth} ${endYear}`;
+}
+
+export function DashboardMetrics({ data, showCompare = true }: DashboardMetricsProps) {
+  const periodLabel = formatPeriodLabel(data);
+
   return (
     <div className="space-y-6">
       {/* Key Metrics Cards */}
       <div className="grid gap-4 md:grid-cols-4">
         <MetricCard
-          title="Avg In-Person Attendance (Ministry Year)"
+          title={`Avg In-Person Attendance (${periodLabel})`}
           value={data.currentPeriod.averageInPersonAttendance}
-          previousValue={data.previousPeriod.averageInPersonAttendance}
+          previousValue={showCompare ? data.previousPeriod.averageInPersonAttendance : undefined}
           format="number"
         />
         <MetricCard
-          title="Avg Online Attendance (Ministry Year)"
+          title={`Avg Online Attendance (${periodLabel})`}
           value={data.currentPeriod.averageOnlineAttendance}
-          previousValue={data.previousPeriod.averageOnlineAttendance}
+          previousValue={showCompare ? data.previousPeriod.averageOnlineAttendance : undefined}
           format="number"
         />
         <MetricCard
-          title="Active Communities and Small Groups (Ministry Year)"
+          title={`Active Communities and Small Groups (${periodLabel})`}
           value={data.groupTypeMetrics
             .filter(g =>
               g.groupTypeName.toLowerCase().includes('small') ||
@@ -44,34 +60,33 @@ export function DashboardMetrics({ data }: DashboardMetricsProps) {
         <MetricCard
           title="Baptisms (last 365 days)"
           value={data.baptismsLastYear}
-          previousValue={data.baptismsPreviousYear}
+          previousValue={showCompare ? data.baptismsPreviousYear : undefined}
           format="number"
         />
       </div>
-
 
       {/* Charts Section */}
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Worship Service Attendance (Ministry Year)</CardTitle>
-            <CardDescription>Monthly average attendance comparison (September - May)</CardDescription>
+            <CardTitle>Worship Service Attendance ({periodLabel})</CardTitle>
+            <CardDescription>Monthly average attendance{showCompare ? ' comparison' : ''}</CardDescription>
           </CardHeader>
           <CardContent>
             <ExpandableChart
-              title="Worship Service Attendance (Ministry Year)"
-              description="Monthly average attendance comparison (September - May)"
+              title={`Worship Service Attendance (${periodLabel})`}
+              description={`Monthly average attendance${showCompare ? ' comparison' : ''}`}
               expandedChildren={
                 <AttendanceChart
                   currentYear={data.monthlyAttendanceTrends}
-                  previousYear={data.previousYearMonthlyAttendanceTrends}
+                  previousYear={showCompare ? data.previousYearMonthlyAttendanceTrends : []}
                   height={600}
                 />
               }
             >
               <AttendanceChart
                 currentYear={data.monthlyAttendanceTrends}
-                previousYear={data.previousYearMonthlyAttendanceTrends}
+                previousYear={showCompare ? data.previousYearMonthlyAttendanceTrends : []}
               />
             </ExpandableChart>
           </CardContent>
@@ -79,12 +94,12 @@ export function DashboardMetrics({ data }: DashboardMetricsProps) {
 
         <Card>
           <CardHeader>
-            <CardTitle>Group Participation (Ministry Year)</CardTitle>
+            <CardTitle>Group Participation ({periodLabel})</CardTitle>
             <CardDescription>Active participants by group type</CardDescription>
           </CardHeader>
           <CardContent>
             <ExpandableChart
-              title="Group Participation (Ministry Year)"
+              title={`Group Participation (${periodLabel})`}
               description="Active participants by group type"
               expandedChildren={
                 <GroupParticipationChart
@@ -101,26 +116,28 @@ export function DashboardMetrics({ data }: DashboardMetricsProps) {
       </div>
 
       {/* Year-over-Year Comparison */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Year-over-Year Comparison</CardTitle>
-          <CardDescription>Performance vs. last ministry year</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <YearOverYearComparison data={data.yearOverYear} />
-        </CardContent>
-      </Card>
+      {showCompare && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Period Comparison</CardTitle>
+            <CardDescription>Performance vs. previous period</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <YearOverYearComparison data={data.yearOverYear} />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Community Attendance Trends */}
       <Card>
         <CardHeader>
-          <CardTitle>Community Sunday Gathering Attendance (Ministry Year)</CardTitle>
-          <CardDescription>Average weekly attendance for each community over the ministry year</CardDescription>
+          <CardTitle>Community Sunday Gathering Attendance ({periodLabel})</CardTitle>
+          <CardDescription>Average weekly attendance for each community</CardDescription>
         </CardHeader>
         <CardContent>
           <ExpandableChart
-            title="Community Sunday Gathering Attendance (Ministry Year)"
-            description="Average weekly attendance for each community over the ministry year"
+            title={`Community Sunday Gathering Attendance (${periodLabel})`}
+            description="Average weekly attendance for each community"
             expandedChildren={
               <CommunityAttendanceChart
                 data={data.communityAttendanceTrends}
@@ -136,12 +153,12 @@ export function DashboardMetrics({ data }: DashboardMetricsProps) {
       {/* Small Group Trends */}
       <Card>
         <CardHeader>
-          <CardTitle>Small Group Trends (Ministry Year)</CardTitle>
+          <CardTitle>Small Group Trends ({periodLabel})</CardTitle>
           <CardDescription>Monthly small group participation</CardDescription>
         </CardHeader>
         <CardContent>
           <ExpandableChart
-            title="Small Group Trends (Ministry Year)"
+            title={`Small Group Trends (${periodLabel})`}
             description="Monthly small group participation"
             expandedChildren={
               <SmallGroupTrends data={data.smallGroupTrends} height={600} />

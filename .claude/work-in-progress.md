@@ -1,6 +1,6 @@
 # Executive Dashboard - Work in Progress
 
-## Current Status (2026-02-06)
+## Current Status (2026-02-13)
 
 ### Completed Features
 1. ✅ Worship service attendance tracking using Event_Metrics (Metric_ID 2 = In-Person, 3 = Online)
@@ -49,6 +49,19 @@
    - Fixed dashboard caching performance issue (removed force-dynamic)
    - Implemented proper data-level caching with unstable_cache()
    - Application successfully deployed to production at dashboard.moodychurch.org
+12. ✅ **Dashboard Date Range Selector - COMPLETE (2026-02-13)**
+   - Added interactive date range filter replacing hardcoded ministry year ranges
+   - Two-row filter: month buttons (12 months, current rightmost) + year buttons (5 years)
+   - Multi-select: Ctrl/Cmd+click to select multiple months or years
+   - "Ministry Year" preset button (Sep–May) for quick selection
+   - Compare toggle: checkbox to show/hide previous period comparison
+   - Dynamic period labels throughout dashboard (cards, charts, descriptions)
+   - Year-over-Year comparison section hidden when compare is off
+   - Ministry year month/year mapping: Sep-Dec belong to base year, Jan-May to next calendar year
+   - Server action `getDashboardMetricsByDateRange()` for custom range fetches
+   - Default ministry year data still SSR-cached with ISR (6-hour revalidation)
+   - New `DashboardShell` client component owns filter state and data fetching
+   - Loading state: opacity dimming + pointer-events disabled during fetch
 
 ### Recently Resolved: Community Attendance Chart
 
@@ -349,6 +362,40 @@
    - Added revalidate: 21600 (6 hours) to cache options
    - Lines 51-77: Updated `refreshDashboardCache()` to invalidate `dashboard-data` tag
    - Ensures manual refresh button properly clears unstable_cache entries
+
+#### Session 2026-02-13 (Date Range Selector)
+1. **src/components/dashboard/date-range-filter.tsx** (NEW)
+   - `DateRangeFilter` client component: month/year button rows with multi-select
+   - `DateRangeSelection` interface: months[], years[], compare boolean
+   - `selectionToDateRange()`: converts selection to start/end Date objects
+   - `getPreviousPeriodRange()`: shifts range back one year for comparison
+   - `getDefaultSelection()`: returns current ministry year with compare=true
+   - Ministry year mapping: months >= Aug belong to base year, < Aug to year+1
+
+2. **src/components/dashboard/dashboard-shell.tsx** (NEW)
+   - Client component owning filter state and data lifecycle
+   - Integrates DashboardHeader, DateRangeFilter, and DashboardMetrics
+   - Calls `getDashboardMetricsByDateRange()` on filter changes
+   - Shows loading state (opacity dimming) during server action calls
+   - Replaces separate DashboardHeader + DashboardMetrics rendering
+
+3. **src/components/dashboard/actions.ts**
+   - Added `getDashboardMetricsByDateRange(startDateISO, endDateISO)` server action
+   - Accepts ISO date strings, passes to DashboardService.getDashboardData()
+
+4. **src/components/dashboard/dashboard-metrics.tsx**
+   - Added `showCompare` prop (default true) to toggle comparison data visibility
+   - Replaced hardcoded "(Ministry Year)" labels with dynamic period labels
+   - Period label derived from `data.currentPeriod.periodStart/periodEnd`
+   - Year-over-Year section conditionally rendered based on `showCompare`
+   - AttendanceChart receives empty array for previousYear when compare is off
+
+5. **src/app/(web)/dashboard/page.tsx**
+   - Replaced DashboardHeader + DashboardMetrics with single DashboardShell
+   - Passes server-fetched default data as `initialData` prop
+
+6. **src/components/dashboard/index.ts**
+   - Added exports for DashboardShell and DateRangeFilter
 
 ### Debug Logging
 
