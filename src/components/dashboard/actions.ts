@@ -45,29 +45,42 @@ export async function getDashboardMetrics(
 }
 
 /**
- * Fetches dashboard data for an arbitrary date range.
- * Used when the user selects a custom date range via the filter.
+ * Fetches dashboard data for the full selectable date range (5 ministry years).
+ * All data is loaded once and filtered client-side when the user changes the filter.
+ * Cached for 6 hours with manual invalidation support.
  *
- * @param startDateISO - Start date as ISO string
- * @param endDateISO - End date as ISO string
- * @returns Promise<DashboardData> - Complete dashboard metrics
+ * @returns Promise<DashboardData> - Complete dashboard metrics for the full range
  */
-export async function getDashboardMetricsByDateRange(
-  startDateISO: string,
-  endDateISO: string
-): Promise<DashboardData> {
-  try {
-    const startDate = new Date(startDateISO);
-    const endDate = new Date(endDateISO);
+export async function getFullRangeDashboardMetrics(): Promise<DashboardData> {
+  const currentYear = getCurrentMinistryYear();
+  const earliestYear = currentYear - 4;
 
-    const dashboardService = await DashboardService.getInstance();
-    const data = await dashboardService.getDashboardData(startDate, endDate);
+  const getCachedFullRange = unstable_cache(
+    async (earliest: number, current: number) => {
+      try {
+        const startDate = new Date(earliest, 8, 1); // September 1, 5 years ago
+        const today = new Date();
+        // Use today or May 31 of current+1, whichever is earlier
+        const maxEnd = new Date(current + 1, 4, 31);
+        const endDate = today < maxEnd ? today : maxEnd;
 
-    return data;
-  } catch (error) {
-    console.error('Error fetching dashboard metrics by date range:', error);
-    throw new Error('Failed to fetch dashboard metrics');
-  }
+        const dashboardService = await DashboardService.getInstance();
+        const data = await dashboardService.getDashboardData(startDate, endDate);
+
+        return data;
+      } catch (error) {
+        console.error('Error fetching full range dashboard metrics:', error);
+        throw new Error('Failed to fetch full range dashboard metrics');
+      }
+    },
+    ['dashboard-full-range', `${earliestYear}-${currentYear}`],
+    {
+      revalidate: 21600,
+      tags: ['dashboard-data', 'dashboard-full-range']
+    }
+  );
+
+  return getCachedFullRange(earliestYear, currentYear);
 }
 
 /**

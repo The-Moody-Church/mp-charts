@@ -7,3 +7,4 @@ export { AttendanceChart } from './attendance-chart';
 export { GroupParticipationChart } from './group-participation-chart';
 export { YearOverYearComparison } from './year-over-year-comparison';
 export { SmallGroupTrends } from './small-group-trends';
+export { filterDashboardData } from './filter-dashboard-data';

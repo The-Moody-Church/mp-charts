@@ -1,4 +1,4 @@
-import { getDashboardMetrics } from '@/components/dashboard/actions';
+import { getFullRangeDashboardMetrics } from '@/components/dashboard/actions';
 import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 
 // Revalidate the dashboard data every 6 hours (21600 seconds)
@@ -6,11 +6,11 @@ import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 // Using ISR (Incremental Static Regeneration) - page is cached and revalidated every 6 hours
 export const revalidate = 21600;
 
-const BUILD_ID = 'date-range-filter-v1';
+const BUILD_ID = 'client-side-filter-v1';
 
 export default async function DashboardPage() {
-  // Fetch default ministry year data on server for fast initial load
-  const dashboardData = await getDashboardMetrics();
+  // Fetch full date range on server; client-side filtering handles date selection
+  const dashboardData = await getFullRangeDashboardMetrics();
 
   return (
     <div className="container mx-auto p-8">

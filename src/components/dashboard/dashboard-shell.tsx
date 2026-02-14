@@ -11,11 +11,12 @@ import {
   getDefaultSelection,
   selectionToDateRange,
 } from './date-range-filter';
-import { getDashboardMetricsByDateRange, refreshDashboardCache } from './actions';
+import { refreshDashboardCache, getFullRangeDashboardMetrics } from './actions';
+import { filterDashboardData } from './filter-dashboard-data';
 import { useRouter } from 'next/navigation';
 
 interface DashboardShellProps {
-  /** Initial data loaded server-side for the default ministry year */
+  /** Full-range data loaded server-side, filtered client-side on selection change */
   initialData: DashboardData;
 }
 
@@ -44,33 +45,22 @@ function formatSelectionDescription(selection: DateRangeSelection): string {
 export function DashboardShell({ initialData }: DashboardShellProps) {
   const router = useRouter();
   const [selection, setSelection] = useState<DateRangeSelection>(getDefaultSelection);
-  const [data, setData] = useState<DashboardData>(initialData);
-  const [isFiltering, startFilterTransition] = useTransition();
+  const [fullData, setFullData] = useState<DashboardData>(initialData);
   const [isRefreshing, startRefreshTransition] = useTransition();
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
-  const isPending = isFiltering || isRefreshing;
-
   const description = useMemo(() => formatSelectionDescription(selection), [selection]);
+
+  // Client-side filtering: derive the displayed data from the full dataset + selection
+  const filteredData = useMemo(
+    () => filterDashboardData(fullData, selection),
+    [fullData, selection]
+  );
 
   const handleSelectionChange = useCallback(
     (newSelection: DateRangeSelection) => {
       setSelection(newSelection);
-
-      // Don't fetch if the selection is incomplete
-      if (newSelection.months.length === 0 || newSelection.years.length === 0) {
-        return;
-      }
-
-      const { startDate, endDate } = selectionToDateRange(newSelection);
-
-      startFilterTransition(async () => {
-        const result = await getDashboardMetricsByDateRange(
-          startDate.toISOString(),
-          endDate.toISOString()
-        );
-        setData(result);
-      });
+      // No server call — filteredData is recomputed via useMemo
     },
     []
   );
@@ -82,16 +72,12 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
         setLastRefresh(cacheResult.timestamp);
       }
 
-      // Re-fetch data with current selection
-      const { startDate, endDate } = selectionToDateRange(selection);
-      const result = await getDashboardMetricsByDateRange(
-        startDate.toISOString(),
-        endDate.toISOString()
-      );
-      setData(result);
+      // Re-fetch full range data from server
+      const freshData = await getFullRangeDashboardMetrics();
+      setFullData(freshData);
       router.refresh();
     });
-  }, [selection, router]);
+  }, [router]);
 
   return (
     <div className="space-y-8">
@@ -107,12 +93,12 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
             )}
             <Button
               onClick={handleRefresh}
-              disabled={isPending}
+              disabled={isRefreshing}
               variant="outline"
               size="sm"
               className="gap-2"
             >
-              <RefreshCw className={`h-4 w-4 ${isPending ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
             </Button>
           </div>
@@ -126,13 +112,13 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
         <DateRangeFilter
           selection={selection}
           onSelectionChange={handleSelectionChange}
-          disabled={isPending}
+          disabled={isRefreshing}
         />
       </div>
 
       {/* Dashboard Content */}
-      <div className={isPending ? 'opacity-60 pointer-events-none transition-opacity' : 'transition-opacity'}>
-        <DashboardMetrics data={data} showCompare={selection.compare} />
+      <div className={isRefreshing ? 'opacity-60 pointer-events-none transition-opacity' : 'transition-opacity'}>
+        <DashboardMetrics data={filteredData} showCompare={selection.compare} />
       </div>
     </div>
   );
