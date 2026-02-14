@@ -65,6 +65,12 @@
 - **File**: `src/components/dashboard/small-group-trends.tsx` — Removed `parseMonthName()` helper, uses `item.monthName` directly
 - Charts no longer need to parse YYYY-MM strings for display — month names come from the data layer
 
+#### 9. Stale Cache Compatibility Fix
+- **Problem**: `unstable_cache` served `SmallGroupTrend` objects without the new `monthName` field, causing blank chart
+- **Solution**: Added `ensureMonthName()` in `filterDashboardData` to derive `monthName` from YYYY-MM `month` field if missing
+- **File**: `src/components/dashboard/filter-dashboard-data.ts` — added `MONTH_NAMES` constant and `ensureMonthName()` normalizer
+- Applied to both `smallGroupTrends` and `previousYearSmallGroupTrends` after filtering
+
 ### Files Modified
 - `src/components/dashboard/date-range-filter.tsx` - Month ordering, semester presets, fallback range
 - `src/components/dashboard/attendance-chart.tsx` - Month order, chart margins
