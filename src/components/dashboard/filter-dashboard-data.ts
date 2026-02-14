@@ -51,6 +51,11 @@ export function filterDashboardData(
     prevStart,
     prevEnd
   );
+  const previousYearSmallGroupTrends = filterMonthlyByDate(
+    fullData.smallGroupTrends,
+    prevStart,
+    prevEnd
+  );
 
   // Recompute aggregate PeriodMetrics from filtered monthly data
   const currentPeriod = computePeriodMetrics(monthlyAttendanceTrends, startDate, endDate);
@@ -67,6 +72,7 @@ export function filterDashboardData(
     previousYearMonthlyAttendanceTrends,
     communityAttendanceTrends,
     smallGroupTrends,
+    previousYearSmallGroupTrends,
     yearOverYear,
     // groupTypeMetrics, eventTypeMetrics, baptisms — pass through from full range
   };

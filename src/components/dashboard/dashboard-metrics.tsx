@@ -79,39 +79,29 @@ export function DashboardMetrics({ data, showCompare = true }: DashboardMetricsP
 
         <Card>
           <CardHeader>
-            <CardTitle>Group Participation</CardTitle>
-            <CardDescription>Active participants by group type</CardDescription>
+            <CardTitle>Small Group Trends</CardTitle>
+            <CardDescription>Monthly small group participation{showCompare ? ' comparison' : ''}</CardDescription>
           </CardHeader>
           <CardContent>
             <ExpandableChart
-              title="Group Participation"
-              description="Active participants by group type"
+              title="Small Group Trends"
+              description={`Monthly small group participation${showCompare ? ' comparison' : ''}`}
               expandedChildren={
-                <GroupParticipationChart
-                  data={data.groupTypeMetrics}
+                <SmallGroupTrends
+                  data={data.smallGroupTrends}
+                  previousYear={showCompare ? data.previousYearSmallGroupTrends : []}
                   height={600}
-                  radius={200}
                 />
               }
             >
-              <GroupParticipationChart data={data.groupTypeMetrics} />
+              <SmallGroupTrends
+                data={data.smallGroupTrends}
+                previousYear={showCompare ? data.previousYearSmallGroupTrends : []}
+              />
             </ExpandableChart>
           </CardContent>
         </Card>
       </div>
-
-      {/* Year-over-Year Comparison */}
-      {showCompare && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Period Comparison</CardTitle>
-            <CardDescription>Performance vs. previous period</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <YearOverYearComparison data={data.yearOverYear} />
-          </CardContent>
-        </Card>
-      )}
 
       {/* Community Attendance Trends */}
       <Card>
@@ -135,24 +125,42 @@ export function DashboardMetrics({ data, showCompare = true }: DashboardMetricsP
         </CardContent>
       </Card>
 
-      {/* Small Group Trends */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Small Group Trends</CardTitle>
-          <CardDescription>Monthly small group participation</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ExpandableChart
-            title="Small Group Trends"
-            description="Monthly small group participation"
-            expandedChildren={
-              <SmallGroupTrends data={data.smallGroupTrends} height={600} />
-            }
-          >
-            <SmallGroupTrends data={data.smallGroupTrends} />
-          </ExpandableChart>
-        </CardContent>
-      </Card>
+      {/* Group Participation + Period Comparison */}
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Group Participation</CardTitle>
+            <CardDescription>Active participants by group type</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ExpandableChart
+              title="Group Participation"
+              description="Active participants by group type"
+              expandedChildren={
+                <GroupParticipationChart
+                  data={data.groupTypeMetrics}
+                  height={600}
+                  radius={200}
+                />
+              }
+            >
+              <GroupParticipationChart data={data.groupTypeMetrics} />
+            </ExpandableChart>
+          </CardContent>
+        </Card>
+
+        {showCompare && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Period Comparison</CardTitle>
+              <CardDescription>Performance vs. previous period</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <YearOverYearComparison data={data.yearOverYear} />
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       {/* Debug Info - Development only */}
       {process.env.NODE_ENV === 'development' && (

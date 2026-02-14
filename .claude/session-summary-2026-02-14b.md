@@ -38,10 +38,41 @@
 - Added "Upgrade to Next.js 16" under Technical Debt section
 - Currently on 15.5.6, latest is 16.1.6 LTS with Turbopack, React Compiler, etc.
 
+#### 6. Chart Layout Reorganization
+- **File**: `src/components/dashboard/dashboard-metrics.tsx`
+- Swapped Small Group Trends and Group Participation chart positions
+- Small Group Trends now in top 2-column grid (alongside Worship Service Attendance)
+- Group Participation and Period Comparison share bottom 2-column grid
+
+#### 7. Small Group Trends — Previous Period Comparison
+- **File**: `src/components/dashboard/small-group-trends.tsx`
+- Added `previousYear` prop with dashed lines for previous period data
+- Merges current and previous year data by month name
+- Added ministry year month ordering (Sep-Aug) for X-axis
+- Added chart margins/padding matching attendance chart style
+- **File**: `src/components/dashboard/filter-dashboard-data.ts`
+- Added computation of `previousYearSmallGroupTrends` using previous period date range
+- **File**: `src/lib/dto/dashboard.ts`
+- Added `previousYearSmallGroupTrends: SmallGroupTrend[]` to `DashboardData`
+- **File**: `src/services/dashboardService.ts`
+- Returns empty array for `previousYearSmallGroupTrends` (computed client-side)
+
+#### 8. Data-Level Timezone Fix (YYYY-MM Parsing)
+- **Problem**: Each chart independently parsing YYYY-MM strings risked timezone bugs (`new Date("2025-09")` → Aug 31 in Central Time)
+- **Solution**: Added `monthName: string` to `SmallGroupTrend` DTO (matching `MonthlyAttendanceTrend` pattern)
+- **File**: `src/lib/dto/dashboard.ts` — Added `monthName` field to `SmallGroupTrend`
+- **File**: `src/services/dashboardService.ts` — Extracted `MONTH_NAMES` constant, populate `monthName` in both `getSmallGroupTrends()` and `getMonthlyAttendanceTrends()`
+- **File**: `src/components/dashboard/small-group-trends.tsx` — Removed `parseMonthName()` helper, uses `item.monthName` directly
+- Charts no longer need to parse YYYY-MM strings for display — month names come from the data layer
+
 ### Files Modified
 - `src/components/dashboard/date-range-filter.tsx` - Month ordering, semester presets, fallback range
 - `src/components/dashboard/attendance-chart.tsx` - Month order, chart margins
 - `src/components/dashboard/actions.ts` - Extended data fetch range to Aug 31
-- `src/services/dashboardService.ts` - Updated comments
+- `src/components/dashboard/dashboard-metrics.tsx` - Chart layout reorganization, pass previous year data to SmallGroupTrends
+- `src/components/dashboard/small-group-trends.tsx` - Previous period comparison, timezone fix, ministry year ordering
+- `src/components/dashboard/filter-dashboard-data.ts` - Previous year small group trends computation
+- `src/lib/dto/dashboard.ts` - Added `monthName` to SmallGroupTrend, `previousYearSmallGroupTrends` to DashboardData
+- `src/services/dashboardService.ts` - `MONTH_NAMES` constant, `monthName` population, previousYearSmallGroupTrends
 - `.claude/ideas.md` - Next.js 16 upgrade idea
 - `.claude/work-in-progress.md` - Updated status

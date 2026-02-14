@@ -79,6 +79,13 @@
    - Attendance chart month ordering extended to include Jun, Jul, Aug
    - Attendance chart margins/padding adjusted so first data point doesn't overlap Y-axis
    - Added Next.js 16 upgrade idea to `.claude/ideas.md` technical debt section
+15. ✅ **Chart Layout & Small Group Trends Enhancements - COMPLETE (2026-02-14)**
+   - Swapped Small Group Trends and Group Participation chart positions
+   - Group Participation + Period Comparison share bottom 2-column grid
+   - Added previous period comparison to Small Group Trends (dashed lines)
+   - Fixed timezone bug: added `monthName` field to `SmallGroupTrend` DTO at data level
+   - Service now populates `monthName` — charts use it directly without YYYY-MM parsing
+   - Shared `MONTH_NAMES` constant in dashboardService.ts used by both trend methods
 
 ### Recently Resolved: Community Attendance Chart
 
