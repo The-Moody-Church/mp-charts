@@ -1,6 +1,6 @@
 # Executive Dashboard - Work in Progress
 
-## Current Status (2026-02-14)
+## Current Status (2026-02-14b)
 
 ### Completed Features
 1. ✅ Worship service attendance tracking using Event_Metrics (Metric_ID 2 = In-Person, 3 = Online)
@@ -70,6 +70,15 @@
    - `groupTypeMetrics`, `eventTypeMetrics`, `baptisms` pass through as full-range values
    - Removed `getDashboardMetricsByDateRange()` server action (no longer needed)
    - Refresh button re-fetches full range data from server
+14. ✅ **Dashboard Filter UX Improvements - COMPLETE (2026-02-14)**
+   - Month buttons reordered to ministry year order: Sep through Aug (fixed, not dynamic)
+   - Data fetching extended to full Sep-Aug range (was Sep-May)
+   - Added semester preset buttons: Fall Semester (Sep-Nov), Spring Semester (Feb-Apr), Summer (Jun-Aug)
+   - Ministry Year preset still selects Sep-May only
+   - Generalized `isPresetMatch()` function replaces single `isMinistryYearPreset()`
+   - Attendance chart month ordering extended to include Jun, Jul, Aug
+   - Attendance chart margins/padding adjusted so first data point doesn't overlap Y-axis
+   - Added Next.js 16 upgrade idea to `.claude/ideas.md` technical debt section
 
 ### Recently Resolved: Community Attendance Chart
 
@@ -140,7 +149,7 @@
 #### Filtering
 - **Childcare groups**: Excluded from all group metrics
 - **Worship services**: Event_Type_ID = 7 only
-- **Ministry year**: September 1 - May 31
+- **Ministry year**: September 1 - August 31 (data range); Ministry Year preset = Sep-May
 - **Community groups**: Group_Type_ID = 11
 
 ### Files Modified

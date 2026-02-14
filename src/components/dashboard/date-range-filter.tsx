@@ -26,6 +26,11 @@ const MONTH_LABELS = [
 /** Ministry year months: Sep(8) through May(4) */
 const MINISTRY_YEAR_MONTHS = [8, 9, 10, 11, 0, 1, 2, 3, 4];
 
+/** Semester presets */
+const FALL_SEMESTER_MONTHS = [8, 9, 10]; // Sep, Oct, Nov
+const SPRING_SEMESTER_MONTHS = [1, 2, 3]; // Feb, Mar, Apr
+const SUMMER_MONTHS = [5, 6, 7]; // Jun, Jul, Aug
+
 function getCurrentMinistryYear(): number {
   const today = new Date();
   return today.getMonth() >= 8
@@ -33,16 +38,9 @@ function getCurrentMinistryYear(): number {
     : today.getFullYear() - 1;
 }
 
-/** Builds the list of month buttons ordered by recency (current month rightmost) */
+/** Builds the list of month buttons in ministry year order (Sep through Aug) */
 function getOrderedMonths(): number[] {
-  const now = new Date();
-  const currentMonth = now.getMonth();
-  // 12 months ending at the current month, oldest on left
-  const months: number[] = [];
-  for (let i = 11; i >= 0; i--) {
-    months.push((currentMonth - i + 12) % 12);
-  }
-  return months;
+  return [8, 9, 10, 11, 0, 1, 2, 3, 4, 5, 6, 7];
 }
 
 /** Returns the available year range (current year back 4 years) */
@@ -55,16 +53,16 @@ function getAvailableYears(): number[] {
   return years;
 }
 
-/** Check if the current selection matches the ministry year preset */
-function isMinistryYearPreset(selection: DateRangeSelection): boolean {
+/** Check if the current selection matches a specific month preset (current year only) */
+function isPresetMatch(selection: DateRangeSelection, presetMonths: number[]): boolean {
   const currentMinistryYear = getCurrentMinistryYear();
   if (selection.years.length !== 1 || selection.years[0] !== currentMinistryYear) {
     return false;
   }
-  if (selection.months.length !== MINISTRY_YEAR_MONTHS.length) {
+  if (selection.months.length !== presetMonths.length) {
     return false;
   }
-  return MINISTRY_YEAR_MONTHS.every(m => selection.months.includes(m));
+  return presetMonths.every(m => selection.months.includes(m));
 }
 
 /**
@@ -78,17 +76,17 @@ export function selectionToDateRange(selection: DateRangeSelection): {
 } {
   const { months, years } = selection;
   if (months.length === 0 || years.length === 0) {
-    // Fallback: current ministry year
+    // Fallback: current ministry year (Sep - Aug)
     const my = getCurrentMinistryYear();
     return {
       startDate: new Date(my, 8, 1),
-      endDate: new Date(my + 1, 4, 31)
+      endDate: new Date(my + 1, 7, 31)
     };
   }
 
   // Build all (year, month) pairs
   // For each selected year, treat it as a ministry year starting in Sep of that year.
-  // Months Sep-Dec belong to the base year; months Jan-May belong to the next calendar year.
+  // Months Sep-Dec belong to the base year; months Jan-Aug belong to the next calendar year.
   const pairs: { calendarYear: number; month: number }[] = [];
   for (const year of years) {
     for (const month of months) {
@@ -141,7 +139,10 @@ export function DateRangeFilter({
 }: DateRangeFilterProps) {
   const orderedMonths = useMemo(() => getOrderedMonths(), []);
   const availableYears = useMemo(() => getAvailableYears(), []);
-  const isPreset = isMinistryYearPreset(selection);
+  const isMinistryYear = isPresetMatch(selection, MINISTRY_YEAR_MONTHS);
+  const isFallSemester = isPresetMatch(selection, FALL_SEMESTER_MONTHS);
+  const isSpringSemester = isPresetMatch(selection, SPRING_SEMESTER_MONTHS);
+  const isSummer = isPresetMatch(selection, SUMMER_MONTHS);
 
   const toggleMonth = useCallback(
     (month: number, ctrlKey: boolean) => {
@@ -191,6 +192,14 @@ export function DateRangeFilter({
   const handleMinistryYearPreset = useCallback(() => {
     onSelectionChange(getDefaultSelection());
   }, [onSelectionChange]);
+
+  const handlePreset = useCallback((months: number[]) => {
+    onSelectionChange({
+      months: [...months],
+      years: [getCurrentMinistryYear()],
+      compare: selection.compare
+    });
+  }, [onSelectionChange, selection.compare]);
 
   const handleCompareToggle = useCallback(
     (checked: boolean | 'indeterminate') => {
@@ -246,15 +255,42 @@ export function DateRangeFilter({
         {/* Separator */}
         <div className="h-5 w-px bg-border mx-1" />
 
-        {/* Ministry Year preset */}
+        {/* Preset buttons */}
         <Button
-          variant={isPreset ? 'secondary' : 'outline'}
+          variant={isMinistryYear ? 'secondary' : 'outline'}
           size="sm"
           disabled={disabled}
           className="h-7 px-3 text-xs"
           onClick={handleMinistryYearPreset}
         >
           Ministry Year
+        </Button>
+        <Button
+          variant={isFallSemester ? 'secondary' : 'outline'}
+          size="sm"
+          disabled={disabled}
+          className="h-7 px-3 text-xs"
+          onClick={() => handlePreset(FALL_SEMESTER_MONTHS)}
+        >
+          Fall Semester
+        </Button>
+        <Button
+          variant={isSpringSemester ? 'secondary' : 'outline'}
+          size="sm"
+          disabled={disabled}
+          className="h-7 px-3 text-xs"
+          onClick={() => handlePreset(SPRING_SEMESTER_MONTHS)}
+        >
+          Spring Semester
+        </Button>
+        <Button
+          variant={isSummer ? 'secondary' : 'outline'}
+          size="sm"
+          disabled={disabled}
+          className="h-7 px-3 text-xs"
+          onClick={() => handlePreset(SUMMER_MONTHS)}
+        >
+          Summer
         </Button>
 
         {/* Separator */}

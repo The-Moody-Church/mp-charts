@@ -829,10 +829,10 @@ export class DashboardService {
   }
 
   /**
-   * Gets monthly worship service attendance trends (September - May)
+   * Gets monthly worship service attendance trends (September - August)
    *
    * @param startDate - Start date of period (September 1)
-   * @param endDate - End date of period (May 31)
+   * @param endDate - End date of period (August 31)
    * @returns Promise<MonthlyAttendanceTrend[]> - Monthly attendance data
    */
   private async getMonthlyAttendanceTrends(
@@ -848,7 +848,7 @@ export class DashboardService {
         'July', 'August', 'September', 'October', 'November', 'December'
       ];
 
-      // Loop through each month in the ministry year (Sept - May)
+      // Loop through each month in the ministry year (Sept - Aug)
       while (currentDate <= endDate) {
         const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
         const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
