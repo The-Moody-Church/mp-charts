@@ -12,9 +12,10 @@ import { ExpandableChart } from './expandable-chart';
 
 interface DashboardMetricsProps {
   data: DashboardData;
+  showCompare?: boolean;
 }
 
-export function DashboardMetrics({ data }: DashboardMetricsProps) {
+export function DashboardMetrics({ data, showCompare = true }: DashboardMetricsProps) {
   return (
     <div className="space-y-6">
       {/* Key Metrics Cards */}
@@ -22,13 +23,13 @@ export function DashboardMetrics({ data }: DashboardMetricsProps) {
         <MetricCard
           title="Avg In-Person Attendance"
           value={data.currentPeriod.averageInPersonAttendance}
-          previousValue={data.previousPeriod.averageInPersonAttendance}
+          previousValue={showCompare ? data.previousPeriod.averageInPersonAttendance : undefined}
           format="number"
         />
         <MetricCard
           title="Avg Online Attendance"
           value={data.currentPeriod.averageOnlineAttendance}
-          previousValue={data.previousPeriod.averageOnlineAttendance}
+          previousValue={showCompare ? data.previousPeriod.averageOnlineAttendance : undefined}
           format="number"
         />
         <MetricCard
@@ -44,34 +45,33 @@ export function DashboardMetrics({ data }: DashboardMetricsProps) {
         <MetricCard
           title="Baptisms (last 365 days)"
           value={data.baptismsLastYear}
-          previousValue={data.baptismsPreviousYear}
+          previousValue={showCompare ? data.baptismsPreviousYear : undefined}
           format="number"
         />
       </div>
-
 
       {/* Charts Section */}
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Worship Service Attendance</CardTitle>
-            <CardDescription>Monthly average attendance comparison</CardDescription>
+            <CardDescription>Monthly average attendance{showCompare ? ' comparison' : ''}</CardDescription>
           </CardHeader>
           <CardContent>
             <ExpandableChart
               title="Worship Service Attendance"
-              description="Monthly average attendance comparison"
+              description={`Monthly average attendance${showCompare ? ' comparison' : ''}`}
               expandedChildren={
                 <AttendanceChart
                   currentYear={data.monthlyAttendanceTrends}
-                  previousYear={data.previousYearMonthlyAttendanceTrends}
+                  previousYear={showCompare ? data.previousYearMonthlyAttendanceTrends : []}
                   height={600}
                 />
               }
             >
               <AttendanceChart
                 currentYear={data.monthlyAttendanceTrends}
-                previousYear={data.previousYearMonthlyAttendanceTrends}
+                previousYear={showCompare ? data.previousYearMonthlyAttendanceTrends : []}
               />
             </ExpandableChart>
           </CardContent>
@@ -101,15 +101,17 @@ export function DashboardMetrics({ data }: DashboardMetricsProps) {
       </div>
 
       {/* Year-over-Year Comparison */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Year-over-Year Comparison</CardTitle>
-          <CardDescription>Performance vs. previous period</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <YearOverYearComparison data={data.yearOverYear} />
-        </CardContent>
-      </Card>
+      {showCompare && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Period Comparison</CardTitle>
+            <CardDescription>Performance vs. previous period</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <YearOverYearComparison data={data.yearOverYear} />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Community Attendance Trends */}
       <Card>

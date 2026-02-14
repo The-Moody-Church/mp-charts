@@ -45,6 +45,32 @@ export async function getDashboardMetrics(
 }
 
 /**
+ * Fetches dashboard data for an arbitrary date range.
+ * Used when the user selects a custom date range via the filter.
+ *
+ * @param startDateISO - Start date as ISO string
+ * @param endDateISO - End date as ISO string
+ * @returns Promise<DashboardData> - Complete dashboard metrics
+ */
+export async function getDashboardMetricsByDateRange(
+  startDateISO: string,
+  endDateISO: string
+): Promise<DashboardData> {
+  try {
+    const startDate = new Date(startDateISO);
+    const endDate = new Date(endDateISO);
+
+    const dashboardService = await DashboardService.getInstance();
+    const data = await dashboardService.getDashboardData(startDate, endDate);
+
+    return data;
+  } catch (error) {
+    console.error('Error fetching dashboard metrics by date range:', error);
+    throw new Error('Failed to fetch dashboard metrics');
+  }
+}
+
+/**
  * Determines current ministry year based on today's date
  * If before September, use previous calendar year
  * If September or later, use current calendar year
