@@ -1,6 +1,6 @@
 # Executive Dashboard - Work in Progress
 
-## Current Status (2026-02-13)
+## Current Status (2026-02-14)
 
 ### Completed Features
 1. ✅ Worship service attendance tracking using Event_Metrics (Metric_ID 2 = In-Person, 3 = Online)
@@ -58,10 +58,18 @@
    - Dynamic period labels throughout dashboard (cards, charts, descriptions)
    - Year-over-Year comparison section hidden when compare is off
    - Ministry year month/year mapping: Sep-Dec belong to base year, Jan-May to next calendar year
-   - Server action `getDashboardMetricsByDateRange()` for custom range fetches
-   - Default ministry year data still SSR-cached with ISR (6-hour revalidation)
    - New `DashboardShell` client component owns filter state and data fetching
    - Loading state: opacity dimming + pointer-events disabled during fetch
+13. ✅ **Client-Side Date Filtering - COMPLETE (2026-02-14)**
+   - Replaced per-filter-change server calls with full-range preload + client-side filtering
+   - `getFullRangeDashboardMetrics()` fetches 5 ministry years of data on page load (cached 6 hrs)
+   - `filterDashboardData()` client-side utility filters trend arrays by selected date range
+   - `useMemo` in `DashboardShell` recomputes filtered data instantly on filter change — no round-trip
+   - Recomputes `PeriodMetrics` from filtered monthly data using weighted averages by event count
+   - Recomputes `YearOverYear` from recomputed current/previous period metrics
+   - `groupTypeMetrics`, `eventTypeMetrics`, `baptisms` pass through as full-range values
+   - Removed `getDashboardMetricsByDateRange()` server action (no longer needed)
+   - Refresh button re-fetches full range data from server
 
 ### Recently Resolved: Community Attendance Chart
 
@@ -396,6 +404,34 @@
 
 6. **src/components/dashboard/index.ts**
    - Added exports for DashboardShell and DateRangeFilter
+
+#### Session 2026-02-14 (Client-Side Date Filtering)
+1. **src/components/dashboard/filter-dashboard-data.ts** (NEW)
+   - `filterDashboardData(fullData, selection)`: client-side filtering utility
+   - Filters `monthlyAttendanceTrends`, `communityAttendanceTrends`, `smallGroupTrends` by date range
+   - Computes `previousYearMonthlyAttendanceTrends` by shifting range back one year
+   - Recomputes `PeriodMetrics` from filtered monthly data (weighted average by eventCount)
+   - Recomputes `YearOverYear` from recomputed period metrics
+   - Passes through `groupTypeMetrics`, `eventTypeMetrics`, `baptisms` unchanged
+
+2. **src/components/dashboard/actions.ts**
+   - Replaced `getDashboardMetricsByDateRange()` with `getFullRangeDashboardMetrics()`
+   - New action fetches 5 ministry years of data (earliest available Sept through today)
+   - Cached for 6 hours with `unstable_cache`, tagged `dashboard-full-range`
+
+3. **src/components/dashboard/dashboard-shell.tsx**
+   - Stores full-range data in `fullData` state instead of per-filter `data`
+   - Derives `filteredData` via `useMemo(filterDashboardData, [fullData, selection])`
+   - `handleSelectionChange` now just sets selection — no server call
+   - `handleRefresh` re-fetches full range via `getFullRangeDashboardMetrics()`
+   - Removed `isFiltering` transition (no longer needed — filtering is synchronous)
+
+4. **src/app/(web)/dashboard/page.tsx**
+   - Changed import from `getDashboardMetrics` to `getFullRangeDashboardMetrics`
+   - Updated BUILD_ID to `client-side-filter-v1`
+
+5. **src/components/dashboard/index.ts**
+   - Added export for `filterDashboardData`
 
 ### Debug Logging
 
