@@ -2,6 +2,7 @@ import {
   DashboardData,
   PeriodMetrics,
   MonthlyAttendanceTrend,
+  SmallGroupTrend,
   YearOverYearMetrics,
 } from '@/lib/dto';
 import {
@@ -9,6 +10,18 @@ import {
   selectionToDateRange,
   getPreviousPeriodRange,
 } from './date-range-filter';
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+/** Derive monthName from YYYY-MM if missing (handles stale cached data) */
+function ensureMonthName(item: SmallGroupTrend): SmallGroupTrend {
+  if (item.monthName) return item;
+  const [, m] = item.month.split('-').map(Number);
+  return { ...item, monthName: MONTH_NAMES[m - 1] };
+}
 
 /**
  * Filters the full-range dashboard data to match the user's date selection.
@@ -42,7 +55,7 @@ export function filterDashboardData(
     fullData.smallGroupTrends,
     startDate,
     endDate
-  );
+  ).map(ensureMonthName);
 
   // Compute previous period trends for comparison
   const { startDate: prevStart, endDate: prevEnd } = getPreviousPeriodRange(startDate, endDate);
@@ -55,7 +68,7 @@ export function filterDashboardData(
     fullData.smallGroupTrends,
     prevStart,
     prevEnd
-  );
+  ).map(ensureMonthName);
 
   // Recompute aggregate PeriodMetrics from filtered monthly data
   const currentPeriod = computePeriodMetrics(monthlyAttendanceTrends, startDate, endDate);
