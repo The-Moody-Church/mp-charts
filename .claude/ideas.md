@@ -128,7 +128,7 @@ Root cause: `NEXT_PUBLIC_*` env vars inlined as `undefined` at Docker build time
 Same root cause as #30. Fixed in the same PR.
 
 
-### Review upstream pr 39 ([#34](https://github.com/The-Moody-Church/mp-charts/issues/34))
+### ~~Review upstream pr 39 ([#34](https://github.com/The-Moody-Church/mp-charts/issues/34))~~ ✅ COMPLETED
 Compare to changes already made in our development and cherrypick individual changes or merge all of appropriate.
 
 ### review upstream pr42 ([#35](https://github.com/The-Moody-Church/mp-charts/issues/35))
