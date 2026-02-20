@@ -97,3 +97,24 @@ Modified the full stack to use the logged-in user's OIDC access token for API ca
 
 ### Testing
 - 150 tests pass, production build succeeds
+
+---
+
+## CLAUDE.md: Incorporate Missing Upstream PR #42 Additions
+
+The earlier upstream PR review marked PR #42's CLAUDE.md changes as "N/A (our docs already diverged)" but several additions were applicable to our fork.
+
+### Additions from upstream CLAUDE.md
+- **Next.js 16 Notes** section — proxy pattern, Turbopack defaults, ESLint config, async dynamic APIs, dev output location
+- **Architecture** — Services Layer and Contexts bullets
+- **Data Flow** section — Component → Action → Service → MPHelper → API
+- **Code Style** — Services entry in Ministry Platform Structure
+- **Import Patterns** — Service class and React context import examples
+- **Key Practices #9** — "Use service classes in server actions"
+- **Commands** — Turbopack note on Build, `next lint` removal note on Lint, Setup commands
+
+### Intentionally skipped
+- Zod v4 note — upstream is on `zod@^4.3`, we're on `zod@^3.25.32`
+
+### Files Modified
+- `CLAUDE.md` — All additions above, updated PR #42 review table note
