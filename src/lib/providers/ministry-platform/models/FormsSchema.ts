@@ -7,7 +7,7 @@ export const FormsSchema = z.object({
   Instructions: z.string().max(2147483647).nullable(),
   Get_Contact_Info: z.boolean(),
   Get_Address_Info: z.boolean(),
-  Form_GUID: z.string().uuid(),
+  Form_GUID: z.guid(),
   End_Date: z.string().datetime().nullable(),
   Complete_Message: z.string().max(2147483647).nullable(),
   Primary_Contact: z.number().int().nullable(),

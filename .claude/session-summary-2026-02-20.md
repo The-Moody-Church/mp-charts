@@ -118,3 +118,48 @@ The earlier upstream PR review marked PR #42's CLAUDE.md changes as "N/A (our do
 
 ### Files Modified
 - `CLAUDE.md` — All additions above, updated PR #42 review table note
+
+---
+
+## Upgrade Major Dependencies: Zod v4, openai v6, dotenv v17
+
+Upgraded three major dependencies that were deferred from upstream PR #41.
+
+### Package Versions
+| Package | Before | After |
+|---------|--------|-------|
+| `zod` | `^3.25.32` | `^4.3.6` |
+| `openai` | `^5.5.0` | `^6.22.0` |
+| `dotenv` | `^16.5.0` | `^17.3.1` |
+
+### Zod v4 Migration Details
+
+**Key change: `z.string().uuid()` → `z.guid()`**
+- Zod v4's `z.uuid()` enforces strict RFC 4122 (version + variant bits), which would reject Ministry Platform GUIDs
+- `z.guid()` is the lenient replacement matching v3's `z.string().uuid()` behavior
+- Updated generator script (`generate-types.ts:276`) and 10 generated schema files
+
+**Kept deprecated-but-working v3 chain forms:**
+- `z.string().email()`, `z.string().url()`, `z.string().datetime()` — still work in v4, preserve `.max()` chaining
+
+**Type import change:**
+- `helper.ts:18` — `import type { ZodObject, ZodRawShape } from "zod"` → `import { z } from "zod"` with `z.ZodObject<z.ZodRawShape>`
+
+**No changes needed:**
+- `contact-logs.tsx` hand-written schema — uses `z.object()`, `z.string()`, `z.number()` (all unchanged in v4)
+- `helper.test.ts` test schemas — same patterns
+- `openai` — not imported anywhere in codebase (phantom dependency)
+- `dotenv` — only used via `dotenv.config({ path })` in generator, API compatible
+
+### Files Modified
+- `package.json` — Bumped zod, openai, dotenv
+- `package-lock.json` — Updated lockfile
+- `src/lib/providers/ministry-platform/scripts/generate-types.ts:276` — `z.string().uuid()` → `z.guid()`
+- `src/lib/providers/ministry-platform/helper.ts:18` — Zod type import change
+- 10 generated `*Schema.ts` files — `z.string().uuid()` → `z.guid()`
+- `CLAUDE.md` — Updated PR #41 status from Partial to Incorporated
+
+### Verification
+- 150 tests pass
+- Production build succeeds (TypeScript + Turbopack)
+- ESLint: 0 errors, 1 pre-existing warning

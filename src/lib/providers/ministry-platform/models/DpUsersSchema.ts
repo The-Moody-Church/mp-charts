@@ -10,7 +10,7 @@ export const DpUsersSchema = z.object({
   Publications_Manager: z.boolean(),
   Contact_ID: z.number().int(),
   Supervisor: z.number().int().nullable(),
-  User_GUID: z.string().uuid(),
+  User_GUID: z.guid(),
   Can_Impersonate: z.boolean(),
   In_Recovery: z.boolean().nullable(),
   Time_Zone: z.unknown().nullable(),

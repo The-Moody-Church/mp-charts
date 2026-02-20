@@ -223,7 +223,7 @@ function mapDataTypeToTypeScript(dataType: ParameterDataType, isRequired: boolea
 
 function mapDataTypeToZod(col: ColumnMetadata): string {
   let zodType = "";
-  
+
   switch (col.DataType) {
     case "String":
     case "Text":
@@ -263,7 +263,7 @@ function mapDataTypeToZod(col: ColumnMetadata): string {
       zodType = "z.boolean()";
       break;
     case "Date":
-      zodType = "z.string().datetime()"; // or z.date() for Date objects
+      zodType = "z.string().datetime()";
       break;
     case "Time":
       zodType = "z.string()"; // Could add time format validation
@@ -273,16 +273,16 @@ function mapDataTypeToZod(col: ColumnMetadata): string {
       zodType = "z.string().datetime()";
       break;
     case "Guid":
-      zodType = "z.string().uuid()";
+      zodType = "z.guid()";
       break;
     default:
       zodType = "z.unknown()";
   }
-  
+
   if (!col.IsRequired) {
     zodType += ".nullable()";
   }
-  
+
   return zodType;
 }
 

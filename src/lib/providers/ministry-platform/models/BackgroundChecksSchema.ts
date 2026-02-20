@@ -19,7 +19,7 @@ export const BackgroundChecksSchema = z.object({
   Reference_Number: z.string().max(50).nullable(),
   Report_Url: z.string().url().nullable(),
   Background_Check_Type_ID: z.number().int().nullable(),
-  Background_Check_GUID: z.string().uuid(),
+  Background_Check_GUID: z.guid(),
   First_Name: z.string().max(50).nullable(),
   Middle_Name: z.string().max(50).nullable(),
   Last_Name: z.string().max(50).nullable(),
