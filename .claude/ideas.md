@@ -97,7 +97,7 @@ Replace the hardcoded ministry year date ranges with an interactive date selecto
   - Previous period = same selected date range but shifted back one year
   - Must handle ranges that span multiple years (e.g., Sep 2024–May 2025 compares to Sep 2023–May 2024)
 
-### Volunteer processing model too wide for mobiles views  ([#33](https://github.com/The-Moody-Church/mp-charts/issues/33))
+### Volunteer Processing Mobile Views  ([#33](https://github.com/The-Moody-Church/mp-charts/issues/33))
 When the modal is opened on a phone, it is wider than the screen. Open to suggestions on solutions.
 
 ## Technical Debt
