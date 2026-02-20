@@ -1,5 +1,29 @@
 # Work in Progress
 
+## Upstream PR Review (2026-02-20) — Issues #22, #34, #35
+
+### Status: ✅ COMPLETED
+
+Reviewed upstream PRs #39, #41, #42 from MinistryPlatform-Community/MPNext and cherry-picked applicable changes.
+
+**Changes applied**:
+- `middleware.ts` → `proxy.ts` rename with function export update (from PR #41)
+- Removed unused `@eslint/eslintrc` devDependency (from PR #41)
+- Upgraded `@inquirer/prompts` ^7 → ^8.2.1 (from PR #42)
+- Updated `components.md` layout import patterns (from PR #42)
+- Updated CLAUDE.md upstream review table through PR #42
+- Marked middleware→proxy migration complete in ideas.md
+
+**Already incorporated (no action needed)**:
+- PR #39: sanitizeTypeName digit-leading fix (same as previously incorporated PR #40)
+- PR #41: ESLint flat config, Next.js 16, tsconfig, most dependency versions
+- PR #42: Most CLAUDE.md content (our docs already diverged/more detailed)
+
+**Deferred**:
+- Major dependency bumps from PR #41: openai v5→v6, zod v3→v4, dotenv v16→v17 (evaluate separately)
+
+---
+
 ## MP Auth: User Token Pass-Through (2026-02-20) — Issue #7
 
 ### Status: ⚠️ IN PROGRESS (Code complete, needs live testing)

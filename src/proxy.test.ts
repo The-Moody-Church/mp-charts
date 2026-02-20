@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
- * Middleware Tests
+ * Proxy Tests
  *
- * Tests for the authentication middleware in src/middleware.ts
+ * Tests for the authentication proxy in src/proxy.ts
  * These tests verify route protection behavior including:
  * - Public path access
  * - Token validation
@@ -29,7 +29,7 @@ vi.mock('next/server', async () => {
   };
 });
 
-describe('Middleware', () => {
+describe('Proxy', () => {
   let mockGetToken: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
@@ -61,7 +61,7 @@ describe('Middleware', () => {
     it('should allow access to /api routes without authentication', async () => {
       const request = createMockRequest('/api/auth/session');
 
-      // Simulate middleware logic for public paths
+      // Simulate proxy logic for public paths
       const { pathname } = request.nextUrl;
       const isPublicPath = pathname.startsWith('/api') || pathname === '/signin';
 
@@ -104,7 +104,7 @@ describe('Middleware', () => {
 
       const request = createMockRequest('/dashboard');
 
-      // Simulate middleware logic
+      // Simulate proxy logic
       let token = await mockGetToken({
         req: request,
         secret: 'test-secret',
@@ -336,7 +336,7 @@ describe('Middleware', () => {
   });
 });
 
-describe('Middleware Integration', () => {
+describe('Proxy Integration', () => {
   it('should follow the complete authentication flow for protected routes', async () => {
     const { getToken } = await import('next-auth/jwt');
     const mockGetToken = getToken as ReturnType<typeof vi.fn>;

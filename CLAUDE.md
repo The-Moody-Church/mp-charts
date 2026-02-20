@@ -30,7 +30,7 @@ gh pr create --title "..." --body "..."
 
 ### Upstream Sync
 
-This fork tracks `MinistryPlatform-Community/MPNext`. Upstream changes are reviewed periodically and cherry-picked selectively — we do **not** merge upstream directly, since the fork has intentionally diverged (e.g., Next.js 16 vs upstream's Next.js 15).
+This fork tracks `MinistryPlatform-Community/MPNext`. Upstream changes are reviewed periodically and cherry-picked selectively — we do **not** merge upstream directly, since the fork has intentionally diverged (e.g., Next.js 16 — upstream recently upgraded to 16 as well).
 
 To check for new upstream changes:
 
@@ -41,15 +41,18 @@ git log main..upstream/main --oneline
 
 Or review PRs at: https://github.com/MinistryPlatform-Community/MPNext/pulls
 
-#### Last Review: 2026-02-19
+#### Last Review: 2026-02-20
 
-Reviewed all open/merged upstream PRs through PR #40. Status:
+Reviewed all open/merged upstream PRs through PR #42. Status:
 
 | PR | Title | Action | Notes |
 |----|-------|--------|-------|
 | #37 | Security patches (Next.js + React) | Partial | Already on Next.js 16; pinned `react`/`react-dom` ≥19.1.0 |
 | #38 | Dependency version updates | Incorporated | Bumped minimum pinned versions for 5 packages |
+| #39 | sanitizeTypeName digit-leading fix | Already incorporated | Same fix as #40; our `sanitizeTypeName` already prefixes `_` for digit-leading names |
 | #40 | Generator fix for digit-leading names | Incorporated | `sanitizeTypeName` prefixes `_` when result starts with a digit |
+| #41 | Upgrade to Next.js 16 + all deps | Partial | Already on Next.js 16; cherry-picked: `middleware.ts` → `proxy.ts` rename, removed unused `@eslint/eslintrc`. Skipped: major dep bumps (openai v6, zod v4, dotenv v17) — evaluate separately |
+| #42 | Docs + `@inquirer/prompts` v8 | Incorporated | Upgraded `@inquirer/prompts` ^7→^8; updated `components.md` layout import patterns. CLAUDE.md updates N/A (our docs already diverged) |
 
 **GitHub will show "N commits behind"** — this is expected and harmless. It reflects diverged commit history, not missing changes.
 
@@ -85,6 +88,7 @@ Both files are committed to the repo and must NOT be added to `.gitignore`.
 - **Framework**: Next.js 16 (App Router) with React 19, TypeScript strict mode
 - **Ministry Platform Integration**: Custom provider at `src/lib/providers/ministry-platform/` with REST API client, auth, and type-safe models
 - **Auth**: NextAuth v5 (beta) with Ministry Platform OAuth provider (`src/auth.ts`)
+  - **Route Protection**: `src/proxy.ts` — Next.js 16 proxy (replaces deprecated `middleware.ts`) with JWT token validation
   - **OIDC Logout**: Implements RP-initiated logout flow to properly end Ministry Platform OAuth sessions
   - **Required Environment Variables**: `MINISTRY_PLATFORM_BASE_URL`, `NEXTAUTH_URL`
   - **MP OAuth Setup**: Requires Post-Logout Redirect URIs configured in Ministry Platform OAuth client (see README.md)
@@ -122,11 +126,15 @@ Both files are committed to the repo and must NOT be added to `.gitignore`.
 src/components/
 ├── shared-actions/       # Shared actions used across features
 ├── ui/                   # shadcn/ui components
+├── layout/               # Layout components with barrel export (index.ts)
+│   ├── auth-wrapper.tsx  # Authentication wrapper (Server Component)
+│   ├── header.tsx        # App header with navigation
+│   ├── sidebar.tsx       # Navigation sidebar
+│   └── dynamic-breadcrumb.tsx
 ├── feature-name/         # Feature components (kebab-case)
 │   ├── feature-name.tsx
 │   ├── actions.ts        # Feature-specific server actions
 │   └── index.ts          # Barrel exports
-└── shared-component.tsx  # Shared/layout components
 ```
 
 ## Dev-Only vs Production Navigation
@@ -165,6 +173,9 @@ import { MPHelper } from '@/lib/providers/ministry-platform';
 
 // Feature-specific actions (relative path within same folder)
 import { searchContacts } from './actions';
+
+// Layout components (barrel export)
+import { AuthWrapper, Header, Sidebar, DynamicBreadcrumb } from '@/components/layout';
 
 // Shared actions (used across multiple features)
 import { getCurrentUserProfile } from '@/components/shared-actions/user';
