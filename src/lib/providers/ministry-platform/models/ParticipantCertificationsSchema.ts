@@ -8,7 +8,7 @@ export const ParticipantCertificationsSchema = z.object({
   Certification_Completed: z.string().datetime().nullable(),
   Passed: z.boolean().nullable(),
   Certification_Expires: z.string().datetime().nullable(),
-  Certification_GUID: z.string().uuid(),
+  Certification_GUID: z.guid(),
   Notes: z.string().max(500).nullable(),
 });
 

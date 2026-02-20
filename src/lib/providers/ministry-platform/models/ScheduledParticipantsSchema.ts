@@ -7,7 +7,7 @@ export const ScheduledParticipantsSchema = z.object({
   Accepted: z.boolean().nullable(),
   Notes: z.string().max(2000).nullable(),
   Declined_and_Hidden: z.boolean(),
-  _Scheduled_Participant_GUID: z.string().uuid(),
+  _Scheduled_Participant_GUID: z.guid(),
 });
 
 export type ScheduledParticipantsInput = z.infer<typeof ScheduledParticipantsSchema>;

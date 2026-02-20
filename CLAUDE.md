@@ -30,7 +30,7 @@ gh pr create --title "..." --body "..."
 
 ### Upstream Sync
 
-This fork tracks `MinistryPlatform-Community/MPNext`. Upstream changes are reviewed periodically and cherry-picked selectively — we do **not** merge upstream directly, since the fork has intentionally diverged (e.g., Next.js 16 vs upstream's Next.js 15).
+This fork tracks `MinistryPlatform-Community/MPNext`. Upstream changes are reviewed periodically and cherry-picked selectively — we do **not** merge upstream directly, since the fork has intentionally diverged (e.g., Next.js 16 — upstream recently upgraded to 16 as well).
 
 To check for new upstream changes:
 
@@ -41,15 +41,18 @@ git log main..upstream/main --oneline
 
 Or review PRs at: https://github.com/MinistryPlatform-Community/MPNext/pulls
 
-#### Last Review: 2026-02-19
+#### Last Review: 2026-02-20
 
-Reviewed all open/merged upstream PRs through PR #40. Status:
+Reviewed all open/merged upstream PRs through PR #42. Status:
 
 | PR | Title | Action | Notes |
 |----|-------|--------|-------|
-| #37 | Security patches (Next.js + React) | Partial | Already on Next.js 16; pinned `react`/`react-dom` ≥19.1.0 |
-| #38 | Dependency version updates | Incorporated | Bumped minimum pinned versions for 5 packages |
+| #37 | Security patches (Next.js + React) | Incorporated | Already on Next.js 16; `react`/`react-dom` at `^19.2.4` exceeds the `≥19.1.0` pin |
+| #38 | Dependency version updates | Incorporated | Bumped minimum pinned versions for all packages including lucide-react |
+| #39 | sanitizeTypeName digit-leading fix | Already incorporated | Same fix as #40; our `sanitizeTypeName` already prefixes `_` for digit-leading names |
 | #40 | Generator fix for digit-leading names | Incorporated | `sanitizeTypeName` prefixes `_` when result starts with a digit |
+| #41 | Upgrade to Next.js 16 + all deps | Incorporated | Already on Next.js 16; cherry-picked: `middleware.ts` → `proxy.ts` rename, removed unused `@eslint/eslintrc`. Bumped all deps to match upstream pins: zod v4, openai v6, dotenv v17, @types/node ^25, jsdom ^28, all Radix UI, tailwindcss ^4.2, typescript ^5.9.3, and 10+ more |
+| #42 | Docs + `@inquirer/prompts` v8 | Incorporated | Upgraded `@inquirer/prompts` ^7→^8; updated `components.md` layout import patterns. Cherry-picked CLAUDE.md additions: Next.js 16 Notes section, Services Layer + Contexts in Architecture, Data Flow section, service import patterns |
 
 **GitHub will show "N commits behind"** — this is expected and harmless. It reflects diverged commit history, not missing changes.
 
@@ -69,10 +72,11 @@ Both files are committed to the repo and must NOT be added to `.gitignore`.
 ## Commands
 
 - **Dev**: `npm run dev` (Next.js dev server)
-- **Build**: `npm run build` (production build, runs type checking)
-- **Lint**: `npm run lint` (ESLint)
+- **Build**: `npm run build` (production build with Turbopack, runs type checking)
+- **Lint**: `npm run lint` (ESLint — `next lint` was removed in Next.js 16, uses `eslint` directly)
 - **Generate MP Types**: `npm run mp:generate:models` (generates TypeScript types + Zod schemas from Ministry Platform API, cleans output directory first)
 - **Tests**: `npm test` (Vitest in watch mode), `npm run test:run` (single run), `npm run test:coverage` (with coverage)
+- **Setup**: `npm run setup` (interactive project setup), `npm run setup:check` (validation-only mode)
 
 ### Type Generation Notes
 
@@ -82,14 +86,26 @@ Both files are committed to the repo and must NOT be added to `.gitignore`.
 
 ## Architecture
 
-- **Framework**: Next.js 16 (App Router) with React 19, TypeScript strict mode
+- **Framework**: Next.js 16 (App Router, Turbopack) with React 19, TypeScript strict mode
 - **Ministry Platform Integration**: Custom provider at `src/lib/providers/ministry-platform/` with REST API client, auth, and type-safe models
 - **Auth**: NextAuth v5 (beta) with Ministry Platform OAuth provider (`src/auth.ts`)
+  - **Route Protection**: `src/proxy.ts` — Next.js 16 proxy (replaces deprecated `middleware.ts`) with JWT token validation
   - **OIDC Logout**: Implements RP-initiated logout flow to properly end Ministry Platform OAuth sessions
   - **Required Environment Variables**: `MINISTRY_PLATFORM_BASE_URL`, `NEXTAUTH_URL`
   - **MP OAuth Setup**: Requires Post-Logout Redirect URIs configured in Ministry Platform OAuth client (see README.md)
+- **Services Layer**: Singleton service classes in `src/services/` wrap MPHelper for domain logic (ContactService, ContactLogService, DashboardService, ToolService, UserService, VolunteerService)
+- **Contexts**: React context providers in `src/contexts/` (UserProvider, SessionProvider, RuntimeConfigProvider) composed in `src/app/providers.tsx`
+- **Validation**: Zod v4 (`zod@^4.3`) — note: different API from Zod v3 (e.g., `z.guid()` instead of `z.string().uuid()`, type imports via `z.ZodObject<z.ZodRawShape>`)
 - **UI**: Radix UI primitives + shadcn/ui components in `src/components/ui/`, Tailwind CSS v4
 - **Path Alias**: `@/*` maps to `src/*`
+
+## Next.js 16 Notes
+
+- **Proxy (formerly Middleware)**: Route protection lives in `src/proxy.ts` with an exported `proxy()` function (not `middleware.ts`/`middleware()`)
+- **Turbopack**: Default bundler for both `dev` and `build` — no `--turbopack` flag needed
+- **ESLint**: Uses `eslint .` directly (not `next lint`); config is native flat config in `eslint.config.mjs`
+- **Async Dynamic APIs**: `params`, `searchParams`, `cookies()`, `headers()` must always be awaited — synchronous access is removed
+- **Dev output**: `next dev` outputs to `.next/dev` (not `.next`)
 
 ## Code Style
 
@@ -111,6 +127,7 @@ Both files are committed to the repo and must NOT be added to `.gitignore`.
   - Database models (generated): `src/lib/providers/ministry-platform/models/` - auto-generated from DBMS
   - Zod schemas (generated): `src/lib/providers/ministry-platform/models/*Schema.ts` - for optional runtime validation
   - DTOs/ViewModels (hand-written): `src/lib/dto/` - application-level data transfer objects
+  - Services (hand-written): `src/services/` - singleton classes wrapping MPHelper for domain operations
 - **Validation**: 
   - Use optional `schema` parameter in `createTableRecords()` and `updateTableRecords()` for runtime validation before API calls
   - For updates, set `partial: false` to require all fields (default is `partial: true` for partial updates)
@@ -122,11 +139,23 @@ Both files are committed to the repo and must NOT be added to `.gitignore`.
 src/components/
 ├── shared-actions/       # Shared actions used across features
 ├── ui/                   # shadcn/ui components
+├── layout/               # Layout components with barrel export (index.ts)
+│   ├── auth-wrapper.tsx  # Authentication wrapper (Server Component)
+│   ├── header.tsx        # App header with navigation
+│   ├── sidebar.tsx       # Navigation sidebar
+│   └── dynamic-breadcrumb.tsx
 ├── feature-name/         # Feature components (kebab-case)
 │   ├── feature-name.tsx
 │   ├── actions.ts        # Feature-specific server actions
 │   └── index.ts          # Barrel exports
-└── shared-component.tsx  # Shared/layout components
+```
+
+## Data Flow
+
+Server actions in `actions.ts` should call **service classes** (not MPHelper directly):
+
+```
+Component → Server Action → Service (singleton) → MPHelper → Ministry Platform API
 ```
 
 ## Dev-Only vs Production Navigation
@@ -160,11 +189,20 @@ import { ContactLog, Congregation } from '@/lib/providers/ministry-platform/mode
 // Ministry Platform Zod schemas (for runtime validation)
 import { ContactLogSchema } from '@/lib/providers/ministry-platform/models';
 
-// Ministry Platform helper (main API entry point)
+// Service classes (used in server actions)
+import { ContactService } from '@/services/contactService';
+
+// React contexts
+import { UserProvider, useUser } from '@/contexts';
+
+// Ministry Platform helper (used by services, not directly by components)
 import { MPHelper } from '@/lib/providers/ministry-platform';
 
 // Feature-specific actions (relative path within same folder)
 import { searchContacts } from './actions';
+
+// Layout components (barrel export)
+import { AuthWrapper, Header, Sidebar, DynamicBreadcrumb } from '@/components/layout';
 
 // Shared actions (used across multiple features)
 import { getCurrentUserProfile } from '@/components/shared-actions/user';
@@ -202,7 +240,8 @@ When adding new time-series charts, use the same `toLocaleDateString('en-US', ..
 6. **Never manually edit generated files** - regenerate types using `npm run mp:generate:models`
 7. **Use TypeScript strict mode** - all code must be type-safe
 8. **Validate at API boundaries** - use Zod schemas with the `schema` parameter in `createTableRecords()` and `updateTableRecords()` for runtime validation
-9. **Report file changes** - after completing work, always report in chat which files were **created**, **modified**, or **removed**
+9. **Use service classes in server actions** - call services from `src/services/`, not MPHelper directly from components or actions
+10. **Report file changes** - after completing work, always report in chat which files were **created**, **modified**, or **removed**
 
 ## Validation Best Practices
 

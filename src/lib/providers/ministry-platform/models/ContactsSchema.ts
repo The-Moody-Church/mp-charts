@@ -41,7 +41,7 @@ export const ContactsSchema = z.object({
   Remove_From_Directory: z.boolean(),
   User_Account: z.number().int().nullable(),
   ID_Card: z.string().max(50).nullable(),
-  Contact_GUID: z.string().uuid(),
+  Contact_GUID: z.guid(),
   _Contact_Setup_Date: z.string().datetime(),
   Email_Verified: z.boolean(),
   Mobile_Phone_Verified: z.boolean(),

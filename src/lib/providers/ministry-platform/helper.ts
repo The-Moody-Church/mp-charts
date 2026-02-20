@@ -15,7 +15,7 @@ import {
   TableMetadata,
   QueryParams,
 } from "./types";
-import type { ZodObject, ZodRawShape } from "zod";
+import { z } from "zod";
 
 export interface MPHelperOptions {
   /** Pre-authenticated user access token (from OIDC session). When provided,
@@ -221,7 +221,7 @@ export class MPHelper {
     table: string,
     records: T[],
     params?: Pick<TableQueryParams, "$select" | "$userId"> & {
-      schema?: ZodObject<ZodRawShape>;
+      schema?: z.ZodObject<z.ZodRawShape>;
     }
   ): Promise<T[]> {
     try {
@@ -302,7 +302,7 @@ export class MPHelper {
     table: string,
     records: T[],
     params?: Pick<TableQueryParams, "$select" | "$userId" | "$allowCreate"> & {
-      schema?: ZodObject<ZodRawShape>;
+      schema?: z.ZodObject<z.ZodRawShape>;
       partial?: boolean;
     }
   ): Promise<T[]> {

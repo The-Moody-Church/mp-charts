@@ -15,22 +15,25 @@ src/components/
 ├── tool/                       # Tool layout components (ToolContainer, ToolHeader, ToolFooter, ToolParamsDebug)
 ├── user-tools-debug/           # Debug: User permissions display (dev only)
 ├── user-menu/                  # User dropdown menu
-├── auth-wrapper.tsx            # Authentication wrapper (Server Component)
-├── header.tsx                  # App header with navigation
-├── sidebar.tsx                 # Navigation sidebar
-└── dynamic-breadcrumb.tsx      # Breadcrumb navigation
+└── layout/                     # Layout components with barrel export
+    ├── index.ts                # Barrel export for all layout components
+    ├── auth-wrapper.tsx        # Authentication wrapper (Server Component)
+    ├── header.tsx              # App header with navigation
+    ├── sidebar.tsx             # Navigation sidebar
+    └── dynamic-breadcrumb.tsx  # Breadcrumb navigation
 ```
 
 ## Component Categories
 
-### Layout Components (Root Level)
+### Layout Components (`layout/` folder)
 
 | File | Type | Purpose |
 |------|------|---------|
-| `auth-wrapper.tsx` | Server | Wraps app to enforce authentication, redirects unauthenticated users |
-| `header.tsx` | Client | Top navigation bar with hamburger menu and user menu |
-| `sidebar.tsx` | Client | Slide-out navigation menu with page links |
-| `dynamic-breadcrumb.tsx` | Client | Auto-generates breadcrumbs from URL or custom segments |
+| `layout/index.ts` | Barrel | Re-exports all layout components |
+| `layout/auth-wrapper.tsx` | Server | Wraps app to enforce authentication, redirects unauthenticated users |
+| `layout/header.tsx` | Client | Top navigation bar with hamburger menu and user menu |
+| `layout/sidebar.tsx` | Client | Slide-out navigation menu with page links |
+| `layout/dynamic-breadcrumb.tsx` | Client | Auto-generates breadcrumbs from URL or custom segments |
 
 ### Feature Components
 
@@ -92,9 +95,8 @@ import { ToolContainer, ToolHeader, ToolFooter, ToolParamsDebug } from '@/compon
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 
-// Layout components (direct imports)
-import { AuthWrapper } from '@/components/auth-wrapper';
-import { Header } from '@/components/header';
+// Layout components (barrel export)
+import { AuthWrapper, Header, Sidebar, DynamicBreadcrumb } from '@/components/layout';
 
 // Co-located actions (relative import within feature)
 import { searchContacts } from './actions';

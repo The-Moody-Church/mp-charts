@@ -8,7 +8,7 @@ export const DpIdentityProvidersSchema = z.object({
   Client_Secret: z.unknown().nullable(),
   Metadata_Address: z.string().max(128).nullable(),
   Is_Public: z.boolean(),
-  Identity_Provider_Unique_ID: z.string().uuid(),
+  Identity_Provider_Unique_ID: z.guid(),
   Settings: z.string().max(4000).nullable(),
 });
 
