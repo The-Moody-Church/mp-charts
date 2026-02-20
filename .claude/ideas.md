@@ -65,9 +65,6 @@ On the "New Volunteers In Process" tab, when a volunteer receives the fully appr
 ### Pastoral Interface for Contact Logs ([#19](https://github.com/The-Moody-Church/mp-charts/issues/19))
 A dedicated pastoral interface for viewing and managing contact logs.
 
-### Volunteer processing model too wide for mobiles views  ([#33](https://github.com/The-Moody-Church/mp-charts/issues/33))
-When the modal is opened on a phone, it is wider than the screen. Open to suggestions on solutions.
-
 ### Add current groups list to volunteers already in a group ([#36](https://github.com/The-Moody-Church/mp-charts/issues/36))
 On the active volunteers tab of volunteer processing, on an individuals card, list the groups where they have a role that we are tracking.
 
@@ -99,6 +96,9 @@ Replace the hardcoded ministry year date ranges with an interactive date selecto
 - **Compare toggle**: Checkbox to compare against the previous period
   - Previous period = same selected date range but shifted back one year
   - Must handle ranges that span multiple years (e.g., Sep 2024–May 2025 compares to Sep 2023–May 2024)
+
+### Volunteer processing model too wide for mobiles views  ([#33](https://github.com/The-Moody-Church/mp-charts/issues/33))
+When the modal is opened on a phone, it is wider than the screen. Open to suggestions on solutions.
 
 ## Technical Debt
 
