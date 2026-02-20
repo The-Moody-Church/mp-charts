@@ -1,6 +1,6 @@
 'use server';
 
-import { auth } from "@/auth";
+import { requireSession } from "@/lib/auth-helpers";
 import { MPUserProfile } from "@/lib/providers/ministry-platform/types";
 import { UserService } from '@/services/userService';
 
@@ -10,8 +10,8 @@ import { UserService } from '@/services/userService';
  * @returns The user's profile data
  */
 export async function getCurrentUserProfile(id: string): Promise<MPUserProfile> {
-  const session = await auth();
-  const userService = await UserService.getInstance(session?.accessToken);
+  await requireSession();
+  const userService = await UserService.getInstance();
   const userProfile = await userService.getUserProfile(id);
   return userProfile;
 }

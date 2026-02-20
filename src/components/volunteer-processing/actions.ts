@@ -1,17 +1,13 @@
 "use server";
 
-import { auth } from "@/auth";
+import { requireSession, getMpUserId } from "@/lib/auth-helpers";
 import { VolunteerService } from "@/services/volunteerService";
 import { VolunteerCard, VolunteerDetail, MilestoneFileInfo, ApprovedVolunteersResult, GroupRoleOption, GroupFilterOption } from "@/lib/dto";
 
 export async function getInProcessVolunteers(): Promise<VolunteerCard[]> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      throw new Error("Authentication required");
-    }
-
-    const service = await VolunteerService.getInstance(session.accessToken);
+    await requireSession();
+    const service = await VolunteerService.getInstance();
     return await service.getInProcessVolunteers();
   } catch (error) {
     console.error("Error fetching in-process volunteers:", error);
@@ -21,12 +17,8 @@ export async function getInProcessVolunteers(): Promise<VolunteerCard[]> {
 
 export async function getApprovedVolunteers(): Promise<ApprovedVolunteersResult> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      throw new Error("Authentication required");
-    }
-
-    const service = await VolunteerService.getInstance(session.accessToken);
+    await requireSession();
+    const service = await VolunteerService.getInstance();
     return await service.getApprovedVolunteers();
   } catch (error) {
     console.error("Error fetching approved volunteers:", error);
@@ -40,12 +32,8 @@ export async function getVolunteerDetail(
   groupParticipantId: number
 ): Promise<VolunteerDetail | null> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      throw new Error("Authentication required");
-    }
-
-    const service = await VolunteerService.getInstance(session.accessToken);
+    await requireSession();
+    const service = await VolunteerService.getInstance();
     return await service.getVolunteerDetail(contactId, participantId, groupParticipantId);
   } catch (error) {
     console.error("Error fetching volunteer detail:", error);
@@ -55,12 +43,8 @@ export async function getVolunteerDetail(
 
 export async function getMilestoneFiles(milestoneRecordId: number): Promise<MilestoneFileInfo[]> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      throw new Error("Authentication required");
-    }
-
-    const service = await VolunteerService.getInstance(session.accessToken);
+    await requireSession();
+    const service = await VolunteerService.getInstance();
     return await service.getMilestoneFiles(milestoneRecordId);
   } catch (error) {
     console.error("Error fetching milestone files:", error);
@@ -70,12 +54,8 @@ export async function getMilestoneFiles(milestoneRecordId: number): Promise<Mile
 
 export async function getCertificationFiles(certificationRecordId: number): Promise<MilestoneFileInfo[]> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      throw new Error("Authentication required");
-    }
-
-    const service = await VolunteerService.getInstance(session.accessToken);
+    await requireSession();
+    const service = await VolunteerService.getInstance();
     return await service.getCertificationFiles(certificationRecordId);
   } catch (error) {
     console.error("Error fetching certification files:", error);
@@ -85,12 +65,8 @@ export async function getCertificationFiles(certificationRecordId: number): Prom
 
 export async function getFormResponseFiles(formResponseId: number): Promise<MilestoneFileInfo[]> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      throw new Error("Authentication required");
-    }
-
-    const service = await VolunteerService.getInstance(session.accessToken);
+    await requireSession();
+    const service = await VolunteerService.getInstance();
     return await service.getFormResponseFiles(formResponseId);
   } catch (error) {
     console.error("Error fetching form response files:", error);
@@ -100,17 +76,10 @@ export async function getFormResponseFiles(formResponseId: number): Promise<Mile
 
 export async function createFormResponse(formData: FormData): Promise<void> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      throw new Error("Authentication required");
-    }
+    const session = await requireSession();
+    const userId = getMpUserId(session);
 
-    let userId: number | undefined;
-    if (session?.userProfile?.User_ID) {
-      userId = session.userProfile.User_ID;
-    }
-
-    const service = await VolunteerService.getInstance(session.accessToken);
+    const service = await VolunteerService.getInstance();
     const newFormResponseId = await service.createFormResponse({
       Form_ID: Number(formData.get("Form_ID")),
       Contact_ID: Number(formData.get("Contact_ID")),
@@ -136,10 +105,7 @@ export async function createFormResponse(formData: FormData): Promise<void> {
 
 export async function uploadVolunteerPhoto(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Authentication required" };
-    }
+    const session = await requireSession();
 
     const contactId = Number(formData.get("Contact_ID"));
     if (!contactId || isNaN(contactId)) {
@@ -156,12 +122,9 @@ export async function uploadVolunteerPhoto(formData: FormData): Promise<{ succes
       return { success: false, error: `File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum 1 MB.` };
     }
 
-    let userId: number | undefined;
-    if (session?.userProfile?.User_ID) {
-      userId = session.userProfile.User_ID;
-    }
+    const userId = getMpUserId(session);
 
-    const service = await VolunteerService.getInstance(session.accessToken);
+    const service = await VolunteerService.getInstance();
     await service.uploadContactPhoto(contactId, file, userId);
     return { success: true };
   } catch (error) {
@@ -172,17 +135,10 @@ export async function uploadVolunteerPhoto(formData: FormData): Promise<{ succes
 
 export async function createVolunteerMilestone(formData: FormData): Promise<void> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      throw new Error("Authentication required");
-    }
+    const session = await requireSession();
+    const userId = getMpUserId(session);
 
-    let userId: number | undefined;
-    if (session?.userProfile?.User_ID) {
-      userId = session.userProfile.User_ID;
-    }
-
-    const service = await VolunteerService.getInstance(session.accessToken);
+    const service = await VolunteerService.getInstance();
     const newMilestoneId = await service.createMilestone({
       Participant_ID: Number(formData.get("Participant_ID")),
       Milestone_ID: Number(formData.get("Milestone_ID")),
@@ -210,22 +166,16 @@ export async function createVolunteerMilestone(formData: FormData): Promise<void
 
 export async function updateVolunteerMilestone(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Authentication required" };
-    }
+    const session = await requireSession();
 
     const milestoneRecordId = Number(formData.get("Participant_Milestone_ID"));
     if (!milestoneRecordId || isNaN(milestoneRecordId)) {
       return { success: false, error: "Invalid milestone record ID" };
     }
 
-    let userId: number | undefined;
-    if (session?.userProfile?.User_ID) {
-      userId = session.userProfile.User_ID;
-    }
+    const userId = getMpUserId(session);
 
-    const service = await VolunteerService.getInstance(session.accessToken);
+    const service = await VolunteerService.getInstance();
     await service.updateMilestone({
       Participant_Milestone_ID: milestoneRecordId,
       Date_Accomplished: formData.get("Date_Accomplished") as string || undefined,
@@ -253,22 +203,16 @@ export async function updateVolunteerMilestone(formData: FormData): Promise<{ su
 
 export async function updateVolunteerCertification(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Authentication required" };
-    }
+    const session = await requireSession();
 
     const certId = Number(formData.get("Participant_Certification_ID"));
     if (!certId || isNaN(certId)) {
       return { success: false, error: "Invalid certification record ID" };
     }
 
-    let userId: number | undefined;
-    if (session?.userProfile?.User_ID) {
-      userId = session.userProfile.User_ID;
-    }
+    const userId = getMpUserId(session);
 
-    const service = await VolunteerService.getInstance(session.accessToken);
+    const service = await VolunteerService.getInstance();
     await service.updateCertification({
       Participant_Certification_ID: certId,
       Certification_Completed: formData.get("Certification_Completed") as string || undefined,
@@ -296,22 +240,16 @@ export async function updateVolunteerCertification(formData: FormData): Promise<
 
 export async function updateVolunteerFormResponse(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Authentication required" };
-    }
+    const session = await requireSession();
 
     const frId = Number(formData.get("Form_Response_ID"));
     if (!frId || isNaN(frId)) {
       return { success: false, error: "Invalid form response record ID" };
     }
 
-    let userId: number | undefined;
-    if (session?.userProfile?.User_ID) {
-      userId = session.userProfile.User_ID;
-    }
+    const userId = getMpUserId(session);
 
-    const service = await VolunteerService.getInstance(session.accessToken);
+    const service = await VolunteerService.getInstance();
     await service.updateFormResponse({
       Form_Response_ID: frId,
       Response_Date: formData.get("Response_Date") as string || undefined,
@@ -338,12 +276,8 @@ export async function updateVolunteerFormResponse(formData: FormData): Promise<{
 
 export async function getApprovedGroupRoles(): Promise<GroupRoleOption[]> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      throw new Error("Authentication required");
-    }
-
-    const service = await VolunteerService.getInstance(session.accessToken);
+    await requireSession();
+    const service = await VolunteerService.getInstance();
     return await service.getApprovedGroupRoles();
   } catch (error) {
     console.error("Error fetching approved group roles:", error);
@@ -353,12 +287,8 @@ export async function getApprovedGroupRoles(): Promise<GroupRoleOption[]> {
 
 export async function getApprovedGroupsList(): Promise<GroupFilterOption[]> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      throw new Error("Authentication required");
-    }
-
-    const service = await VolunteerService.getInstance(session.accessToken);
+    await requireSession();
+    const service = await VolunteerService.getInstance();
     return await service.getApprovedGroupsList();
   } catch (error) {
     console.error("Error fetching approved groups list:", error);
@@ -368,10 +298,7 @@ export async function getApprovedGroupsList(): Promise<GroupFilterOption[]> {
 
 export async function assignVolunteerToGroup(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Authentication required" };
-    }
+    const session = await requireSession();
 
     const currentGroupParticipantId = Number(formData.get("currentGroupParticipantId"));
     const participantId = Number(formData.get("participantId"));
@@ -382,12 +309,9 @@ export async function assignVolunteerToGroup(formData: FormData): Promise<{ succ
       return { success: false, error: "Missing required fields" };
     }
 
-    let userId: number | undefined;
-    if (session?.userProfile?.User_ID) {
-      userId = session.userProfile.User_ID;
-    }
+    const userId = getMpUserId(session);
 
-    const service = await VolunteerService.getInstance(session.accessToken);
+    const service = await VolunteerService.getInstance();
     await service.assignVolunteerToGroup({
       currentGroupParticipantId,
       participantId,

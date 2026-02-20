@@ -1,21 +1,18 @@
 'use server';
 
-import { auth } from '@/auth';
+import { requireSession } from '@/lib/auth-helpers';
 import { ContactService } from '@/services/contactService';
 import { ContactSearch } from '@/lib/dto';
 
 export async function searchContacts(searchTerm: string): Promise<ContactSearch[]> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      throw new Error("Authentication required");
-    }
+    await requireSession();
 
     if (!searchTerm || searchTerm.trim().length === 0) {
       return [];
     }
 
-    const contactService = await ContactService.getInstance(session.accessToken);
+    const contactService = await ContactService.getInstance();
     const results = await contactService.contactSearch(searchTerm.trim());
 
     return results;

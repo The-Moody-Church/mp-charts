@@ -217,3 +217,77 @@ Comprehensive audit of upstream PRs #37-42 revealed 24 dependency pins that were
 - 150 tests pass
 - Production build succeeds (TypeScript + Turbopack, 9 routes)
 - ESLint: 0 errors, 1 pre-existing warning
+
+---
+
+## Better Auth Migration (NextAuth v5 → Better Auth)
+
+Replaced NextAuth v5 (beta) with Better Auth (`better-auth@^1.4.18`), inspired by upstream PR #44 but customized to preserve audit log attribution via `$userId`.
+
+### Security Improvement
+OIDC tokens no longer stored in session cookies. Services use client credentials (`MPHelper` singleton) with `$userId` parameter for MP audit log attribution. This eliminates the token-in-cookie attack surface (tokens were base64-readable in both NextAuth and Better Auth JWT cookies) while maintaining personalized audit logs.
+
+### Dependencies
+| Package | Action |
+|---------|--------|
+| `next-auth` (^5.0.0-beta.30) | Removed |
+| `better-auth` (^1.4.18) | Added |
+
+### Files Created
+- `src/lib/auth.ts` — `betterAuth()` server config with `genericOAuth`, `customSession`, `nextCookies()` plugins; `additionalFields` for `userGuid`/`mpUserId`/`mpContactId`; `getUserInfo` callback fetches MP User_ID at login
+- `src/lib/auth-client.ts` — `createAuthClient()` with matching client plugins
+- `src/lib/auth-helpers.ts` — `getSession()`, `requireSession()`, `getMpUserId()`, `getUserGuid()` server-side helpers
+- `src/app/api/auth/[...all]/route.ts` — Better Auth route handler (replaces `[...nextauth]`)
+
+### Files Deleted
+- `src/auth.ts` — Old NextAuth v5 config
+- `src/types/next-auth.d.ts` — NextAuth type augmentations
+- `src/app/api/auth/[...nextauth]/route.ts` — NextAuth route handler
+- `src/lib/providers/ministry-platform/auth/auth-provider.ts` — NextAuth MP provider
+
+### Files Modified
+
+**Core Auth:**
+- `src/lib/providers/ministry-platform/auth/index.ts` — Removed `MinistryPlatformAuthProvider` export
+
+**Route Protection:**
+- `src/proxy.ts` — Replaced `getToken` (next-auth/jwt) with `getSessionCookie` (better-auth/cookies)
+
+**Contexts & Providers:**
+- `src/contexts/session-context.tsx` — Uses `authClient.useSession()` instead of NextAuth SessionProvider
+- `src/contexts/user-context.tsx` — Uses `authClient.useSession()`, extracts `userGuid` from session user
+- `src/contexts/index.ts` — Removed `SessionProvider` export, added `SessionData` type
+- `src/app/providers.tsx` — Removed NextAuth `SessionProvider` wrapper
+
+**Layout & Auth Wrapper:**
+- `src/components/layout/auth-wrapper.tsx` — Uses `auth.api.getSession()` with headers, removed SessionProvider and RefreshTokenError
+
+**Sign-in & Sign-out:**
+- `src/app/signin/page.tsx` — Uses `authClient.signIn.oauth2()` and `authClient.useSession()`
+- `src/components/user-menu/actions.ts` — Uses `auth.api.signOut()`, `BETTER_AUTH_URL` fallback
+
+**Server Actions (all updated to use `requireSession()` + `getMpUserId()`):**
+- `src/components/shared-actions/user.ts`
+- `src/components/contact-lookup/actions.ts`
+- `src/components/contact-lookup-details/actions.ts`
+- `src/components/contact-logs/actions.ts`
+- `src/components/user-tools-debug/actions.ts`
+- `src/components/volunteer-processing/actions.ts` (13 functions)
+
+**Tests:**
+- `src/auth.test.ts` — Rewritten for Better Auth patterns
+- `src/proxy.test.ts` — Mocks `better-auth/cookies` instead of `next-auth/jwt`
+
+**Config & Documentation:**
+- `package.json` — Swapped `next-auth` → `better-auth`
+- `package-lock.json` — Updated lockfile
+- `.env.example` — `BETTER_AUTH_SECRET`/`BETTER_AUTH_URL` replacing `NEXTAUTH_*` references
+- `scripts/setup.ts` — Updated env var definitions (`BETTER_AUTH_SECRET`/`BETTER_AUTH_URL`), removed `OIDC_PROVIDER_NAME`/`OIDC_SCOPE`/`OIDC_WELL_KNOWN_URL`/`NEXTAUTH_DEBUG`
+- `CLAUDE.md` — Updated Auth architecture section, contexts, import patterns
+- `.claude/work-in-progress.md` — Updated auth status
+- `.claude/session-summary-2026-02-20.md` — This entry
+
+### Verification
+- 136 tests pass across 6 test files
+- Production build succeeds (TypeScript + Turbopack)
+- No type errors
