@@ -65,6 +65,9 @@ On the "New Volunteers In Process" tab, when a volunteer receives the fully appr
 ### Pastoral Interface for Contact Logs ([#19](https://github.com/The-Moody-Church/mp-charts/issues/19))
 A dedicated pastoral interface for viewing and managing contact logs.
 
+### Volunteer processing model too wide for mobiles views  ([#33](https://github.com/The-Moody-Church/mp-charts/issues/33))
+When the modal is opened on a phone, it is wider than the screen. Open to suggestions on solutions.
+
 ## Improvements
 
 ### Executive Dashboard: Mobile Views ([#13](https://github.com/The-Moody-Church/mp-charts/issues/13))
