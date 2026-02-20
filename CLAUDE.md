@@ -48,10 +48,10 @@ Reviewed all open/merged upstream PRs through PR #42. Status:
 | PR | Title | Action | Notes |
 |----|-------|--------|-------|
 | #37 | Security patches (Next.js + React) | Partial | Already on Next.js 16; pinned `react`/`react-dom` ≥19.1.0 |
-| #38 | Dependency version updates | Incorporated | Bumped minimum pinned versions for 5 packages |
+| #38 | Dependency version updates | Incorporated | Bumped minimum pinned versions for all packages including lucide-react |
 | #39 | sanitizeTypeName digit-leading fix | Already incorporated | Same fix as #40; our `sanitizeTypeName` already prefixes `_` for digit-leading names |
 | #40 | Generator fix for digit-leading names | Incorporated | `sanitizeTypeName` prefixes `_` when result starts with a digit |
-| #41 | Upgrade to Next.js 16 + all deps | Incorporated | Already on Next.js 16; cherry-picked: `middleware.ts` → `proxy.ts` rename, removed unused `@eslint/eslintrc`. Bumped openai v5→v6, zod v3→v4, dotenv v16→v17 |
+| #41 | Upgrade to Next.js 16 + all deps | Incorporated | Already on Next.js 16; cherry-picked: `middleware.ts` → `proxy.ts` rename, removed unused `@eslint/eslintrc`. Bumped all deps to match upstream pins: zod v4, openai v6, dotenv v17, @types/node ^25, jsdom ^28, all Radix UI, tailwindcss ^4.2, typescript ^5.9.3, and 10+ more |
 | #42 | Docs + `@inquirer/prompts` v8 | Incorporated | Upgraded `@inquirer/prompts` ^7→^8; updated `components.md` layout import patterns. Cherry-picked CLAUDE.md additions: Next.js 16 Notes section, Services Layer + Contexts in Architecture, Data Flow section, service import patterns |
 
 **GitHub will show "N commits behind"** — this is expected and harmless. It reflects diverged commit history, not missing changes.
@@ -95,6 +95,7 @@ Both files are committed to the repo and must NOT be added to `.gitignore`.
   - **MP OAuth Setup**: Requires Post-Logout Redirect URIs configured in Ministry Platform OAuth client (see README.md)
 - **Services Layer**: Singleton service classes in `src/services/` wrap MPHelper for domain logic (ContactService, ContactLogService, DashboardService, ToolService, UserService, VolunteerService)
 - **Contexts**: React context providers in `src/contexts/` (UserProvider, SessionProvider, RuntimeConfigProvider) composed in `src/app/providers.tsx`
+- **Validation**: Zod v4 (`zod@^4.3`) — note: different API from Zod v3 (e.g., `z.guid()` instead of `z.string().uuid()`, type imports via `z.ZodObject<z.ZodRawShape>`)
 - **UI**: Radix UI primitives + shadcn/ui components in `src/components/ui/`, Tailwind CSS v4
 - **Path Alias**: `@/*` maps to `src/*`
 
