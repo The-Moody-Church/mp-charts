@@ -178,8 +178,8 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
             <div className="space-y-2 text-sm">
               <p><strong>Group Types:</strong> {data.groupTypeMetrics.length} types tracked</p>
               <p><strong>Event Types:</strong> {data.eventTypeMetrics.length} types tracked</p>
-              <p><strong>Period:</strong> {new Date(data.currentPeriod.periodStart).toLocaleDateString()} - {new Date(data.currentPeriod.periodEnd).toLocaleDateString()}</p>
-              <p><strong>Generated:</strong> {new Date(data.generatedAt).toLocaleString()}</p>
+              <p suppressHydrationWarning><strong>Period:</strong> {new Date(data.currentPeriod.periodStart).toLocaleDateString()} - {new Date(data.currentPeriod.periodEnd).toLocaleDateString()}</p>
+              <p suppressHydrationWarning><strong>Generated:</strong> {new Date(data.generatedAt).toLocaleString()}</p>
             </div>
           </CardContent>
         </Card>
