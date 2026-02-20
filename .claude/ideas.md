@@ -68,6 +68,9 @@ A dedicated pastoral interface for viewing and managing contact logs.
 ### Volunteer processing model too wide for mobiles views  ([#33](https://github.com/The-Moody-Church/mp-charts/issues/33))
 When the modal is opened on a phone, it is wider than the screen. Open to suggestions on solutions.
 
+### Add current groups list to volunteers already in a group ([#36](https://github.com/The-Moody-Church/mp-charts/issues/36))
+On the active volunteers tab of volunteer processing, on an individuals card, list the groups where they have a role that we are tracking.
+
 ## Improvements
 
 ### Executive Dashboard: Mobile Views ([#13](https://github.com/The-Moody-Church/mp-charts/issues/13))
