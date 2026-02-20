@@ -47,7 +47,7 @@ Reviewed all open/merged upstream PRs through PR #42. Status:
 
 | PR | Title | Action | Notes |
 |----|-------|--------|-------|
-| #37 | Security patches (Next.js + React) | Partial | Already on Next.js 16; pinned `react`/`react-dom` ≥19.1.0 |
+| #37 | Security patches (Next.js + React) | Incorporated | Already on Next.js 16; `react`/`react-dom` at `^19.2.4` exceeds the `≥19.1.0` pin |
 | #38 | Dependency version updates | Incorporated | Bumped minimum pinned versions for all packages including lucide-react |
 | #39 | sanitizeTypeName digit-leading fix | Already incorporated | Same fix as #40; our `sanitizeTypeName` already prefixes `_` for digit-leading names |
 | #40 | Generator fix for digit-leading names | Incorporated | `sanitizeTypeName` prefixes `_` when result starts with a digit |
