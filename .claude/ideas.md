@@ -68,6 +68,9 @@ A dedicated pastoral interface for viewing and managing contact logs.
 ### Volunteer processing model too wide for mobiles views  ([#33](https://github.com/The-Moody-Church/mp-charts/issues/33))
 When the modal is opened on a phone, it is wider than the screen. Open to suggestions on solutions.
 
+### review upstream pr42 ([#35](https://github.com/The-Moody-Church/mp-charts/issues/35))
+Review upstream pr 42 for updates and cherry pick changes or merge all features.
+
 ## Improvements
 
 ### Executive Dashboard: Mobile Views ([#13](https://github.com/The-Moody-Church/mp-charts/issues/13))
