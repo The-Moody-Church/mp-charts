@@ -8,6 +8,13 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 
 ## Features
 
+### Redesign Dashboard Layout: Discipleship Pathway Sections
+Redesign the executive dashboard from a flat chart grid into a structured layout organized around four discipleship pathway sections — **Know God**, **Feed Your Soul**, **Grow in Love**, **Change Your World** — plus an **Other** section. Add a 3-circle **Venn diagram** at the top showing engagement overlap (Any Activity ∩ Small Group/Community ∩ Serving/Leading) with person counts in all 7 intersection regions.
+
+**Know God**: Worship attendance (existing), baptisms (existing), membership milestone (new), unique event participants (new). **Feed Your Soul**: Community attendance (existing), small group trends (existing), group participation (existing), roster vs actual attendance (new). **Grow in Love**: Total serving/leading count (new), serving by role type (new), where people serve by ministry (new), serving trends (new). **Change Your World**: Program giving from Donation_Distributions (new), giving trends (new) — will expand with future survey data. **Other**: Year-over-year comparison and anything that doesn't fit.
+
+Full specification with data sources, MP schema relationships, phased implementation plan, and layout wireframe: [`.claude/draft-issue-dashboard-redesign.md`](.claude/draft-issue-dashboard-redesign.md)
+
 ### Journey/Milestone Tracker ([#17](https://github.com/The-Moody-Church/mp-charts/issues/17))
 Track current journeys from Ministry Platform and provide summary detail about what milestones have been completed. Include filters to narrow by specific journeys or milestones.
 
