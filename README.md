@@ -174,12 +174,12 @@ Add these authorized redirect URIs where users will be sent after authentication
 
 **Development:**
 ```
-http://localhost:3000/api/auth/callback/ministryplatform
+http://localhost:3000/api/auth/oauth2/callback/ministryplatform
 ```
 
 **Production:**
 ```
-https://yourdomain.com/api/auth/callback/ministryplatform
+https://yourdomain.com/api/auth/oauth2/callback/ministryplatform
 ```
 
 > **Important**: The redirect URI must match exactly (including protocol, domain, port, and path). Ministry Platform will reject any OAuth requests with mismatched redirect URIs.
@@ -199,15 +199,15 @@ https://yourdomain.com
 
 > **Important**: Post-logout redirect URIs are **required** for proper logout functionality. The application implements OIDC RP-initiated logout to properly end Ministry Platform OAuth sessions. Without these configured, users will be auto-logged back in after clicking "Sign out" (SSO behavior).
 
-#### Generate NextAuth Secret
+#### Generate Better Auth Secret
 
-Generate a secure secret for NextAuth session encryption:
+Generate a secure secret for Better Auth session encryption:
 
 ```bash
-npx auth secret
+openssl rand -base64 32
 ```
 
-Copy the generated secret to your `.env.local` file as `NEXTAUTH_SECRET`.
+Copy the generated secret to your `.env.local` file as `BETTER_AUTH_SECRET`.
 
 
 ### 4. Generate Ministry Platform Types

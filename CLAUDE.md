@@ -88,13 +88,19 @@ Both files are committed to the repo and must NOT be added to `.gitignore`.
 
 - **Framework**: Next.js 16 (App Router, Turbopack) with React 19, TypeScript strict mode
 - **Ministry Platform Integration**: Custom provider at `src/lib/providers/ministry-platform/` with REST API client, auth, and type-safe models
-- **Auth**: NextAuth v5 (beta) with Ministry Platform OAuth provider (`src/auth.ts`)
-  - **Route Protection**: `src/proxy.ts` — Next.js 16 proxy (replaces deprecated `middleware.ts`) with JWT token validation
+- **Auth**: Better Auth (`better-auth@^1.4`) with Ministry Platform OAuth via `genericOAuth` plugin (`src/lib/auth.ts`)
+  - **Server Config**: `src/lib/auth.ts` — `betterAuth()` with `genericOAuth`, `customSession`, `nextCookies()` plugins
+  - **Client Config**: `src/lib/auth-client.ts` — `createAuthClient()` with matching client plugins
+  - **Auth Helpers**: `src/lib/auth-helpers.ts` — `getSession()`, `requireSession()`, `getMpUserId()`, `getUserGuid()` for server actions
+  - **Route Handler**: `src/app/api/auth/[...all]/route.ts` — Better Auth API route
+  - **Route Protection**: `src/proxy.ts` — Next.js 16 proxy with session cookie validation via `getSessionCookie` from `better-auth/cookies`
+  - **Session Strategy**: JWT cookie-based sessions; no per-user OIDC tokens stored — services use client credentials (`MPHelper` singleton) with `$userId` for audit attribution
+  - **User Fields**: `additionalFields` on user model: `userGuid`, `mpUserId`, `mpContactId` — populated at login via `getUserInfo` callback
   - **OIDC Logout**: Implements RP-initiated logout flow to properly end Ministry Platform OAuth sessions
-  - **Required Environment Variables**: `MINISTRY_PLATFORM_BASE_URL`, `NEXTAUTH_URL`
+  - **Required Environment Variables**: `MINISTRY_PLATFORM_BASE_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`
   - **MP OAuth Setup**: Requires Post-Logout Redirect URIs configured in Ministry Platform OAuth client (see README.md)
 - **Services Layer**: Singleton service classes in `src/services/` wrap MPHelper for domain logic (ContactService, ContactLogService, DashboardService, ToolService, UserService, VolunteerService)
-- **Contexts**: React context providers in `src/contexts/` (UserProvider, SessionProvider, RuntimeConfigProvider) composed in `src/app/providers.tsx`
+- **Contexts**: React context providers in `src/contexts/` (UserProvider, RuntimeConfigProvider) composed in `src/app/providers.tsx`; session access via `authClient.useSession()` from `src/lib/auth-client.ts`
 - **Validation**: Zod v4 (`zod@^4.3`) — note: different API from Zod v3 (e.g., `z.guid()` instead of `z.string().uuid()`, type imports via `z.ZodObject<z.ZodRawShape>`)
 - **UI**: Radix UI primitives + shadcn/ui components in `src/components/ui/`, Tailwind CSS v4
 - **Path Alias**: `@/*` maps to `src/*`
@@ -191,6 +197,13 @@ import { ContactLogSchema } from '@/lib/providers/ministry-platform/models';
 
 // Service classes (used in server actions)
 import { ContactService } from '@/services/contactService';
+
+// Auth - server-side (used in server actions and server components)
+import { auth } from '@/lib/auth';
+import { requireSession, getMpUserId, getUserGuid } from '@/lib/auth-helpers';
+
+// Auth - client-side (used in "use client" components)
+import { authClient } from '@/lib/auth-client';
 
 // React contexts
 import { UserProvider, useUser } from '@/contexts';

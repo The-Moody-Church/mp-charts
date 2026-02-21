@@ -1,22 +1,19 @@
 'use server';
 
-import { auth } from '@/auth';
+import { requireSession } from '@/lib/auth-helpers';
 import { ContactLookupDetails, ContactLogDisplay } from '@/lib/dto';
 import { ContactService } from '@/services/contactService';
 import { ContactLogService } from '@/services/contactLogService';
 
 export async function getContactDetails(guid: string): Promise<ContactLookupDetails> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      throw new Error("Authentication required");
-    }
+    await requireSession();
 
     if (!guid || guid.trim().length === 0) {
       throw new Error('GUID is required');
     }
 
-    const contactService = await ContactService.getInstance(session.accessToken);
+    const contactService = await ContactService.getInstance();
     const contact = await contactService.getContactByGuid(guid.trim());
 
     if (!contact) {
@@ -32,16 +29,13 @@ export async function getContactDetails(guid: string): Promise<ContactLookupDeta
 
 export async function getContactLogsByContactId(contactId: number): Promise<ContactLogDisplay[]> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      throw new Error("Authentication required");
-    }
+    await requireSession();
 
     if (!contactId || contactId <= 0) {
       throw new Error('Valid contact ID is required');
     }
 
-    const contactLogService = await ContactLogService.getInstance(session.accessToken);
+    const contactLogService = await ContactLogService.getInstance();
     const logs = await contactLogService.getContactLogsByContactId(contactId);
 
     // Transform to ContactLogDisplay with type information

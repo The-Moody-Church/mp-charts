@@ -1,26 +1,26 @@
 'use server';
 
-import { signOut, auth } from "@/auth";
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 export async function handleSignOut() {
-  const session = await auth();
-
-  await signOut({ redirect: false });
+  // Clear the Better Auth session
+  await auth.api.signOut({
+    headers: await headers(),
+  });
 
   const baseUrl = process.env.MINISTRY_PLATFORM_BASE_URL;
   if (!baseUrl) {
     throw new Error('MINISTRY_PLATFORM_BASE_URL is not configured');
   }
 
+  // Redirect to MP OIDC endsession to properly terminate the OAuth session
   const endSessionUrl = `${baseUrl}/oauth/connect/endsession`;
+  const postLogoutUri = process.env.BETTER_AUTH_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
   const params = new URLSearchParams({
-    post_logout_redirect_uri: process.env.NEXTAUTH_URL || 'http://localhost:3000',
+    post_logout_redirect_uri: postLogoutUri,
   });
-
-  if (session?.idToken) {
-    params.append('id_token_hint', session.idToken as string);
-  }
 
   redirect(`${endSessionUrl}?${params.toString()}`);
 }

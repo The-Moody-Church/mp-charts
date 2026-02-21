@@ -19,33 +19,31 @@ Reviewed and incorporated all upstream PRs #37-42 from MinistryPlatform-Communit
 
 ---
 
-## MP Auth: User Token Pass-Through (2026-02-20) — Issue #7
+## Better Auth Migration (2026-02-20) — Supersedes Issue #7
 
 ### Status: ⚠️ IN PROGRESS (Code complete, needs live testing)
 
-**Problem**: All API calls used the API Client User's credentials (client_credentials grant), so:
-1. Audit logs showed "API User" instead of the actual logged-in user
-2. Users could see data their MP account shouldn't have access to (e.g., background checks)
-3. `$userId` query parameter was passed but MP doesn't honor it for audit attribution
+**Migration**: Replaced NextAuth v5 (beta) with Better Auth (`better-auth@^1.4.18`). Inspired by upstream PR #44.
 
-**Fix**: Modified the full stack to use the logged-in user's OIDC access token (already captured in the NextAuth session) for API calls instead of client credentials.
+**Security improvement**: OIDC tokens are no longer stored in cookies. Services use client credentials (`MPHelper` singleton) with `$userId` parameter for audit log attribution. This eliminates the token-in-cookie attack surface while maintaining personalized audit logs.
 
-**Architecture changes**:
-- `MinistryPlatformClient` — supports user access token mode (skips client_credentials refresh)
-- `MinistryPlatformProvider` — added `withAccessToken()` factory (non-singleton)
-- `MPHelper` — constructor accepts `{ accessToken }` option
-- All 6 services — `getInstance(accessToken?)` creates per-request instances with user token
-- All server actions — pass `session.accessToken` to `getInstance()`
-- Dashboard cached lookups remain on client credentials (aggregate data, no user context in `unstable_cache`)
-- JWT callback in `auth.ts` remains on client credentials (runs during login before session exists)
+**Architecture**:
+- `src/lib/auth.ts` — `betterAuth()` with `genericOAuth`, `customSession`, `nextCookies()` plugins
+- `src/lib/auth-client.ts` — `createAuthClient()` with matching client plugins
+- `src/lib/auth-helpers.ts` — `getSession()`, `requireSession()`, `getMpUserId()`, `getUserGuid()`
+- `src/app/api/auth/[...all]/route.ts` — Better Auth route handler
+- `src/proxy.ts` — Uses `getSessionCookie` from `better-auth/cookies` (simplified from JWT validation)
+- User model: `additionalFields` for `userGuid`, `mpUserId`, `mpContactId` populated at login via `getUserInfo` callback
+- All server actions use `requireSession()` + `getMpUserId()` for write operations
+- All services use `getInstance()` without access tokens (client credentials)
 
-**Files modified**: `client.ts`, `provider.ts`, `helper.ts`, `index.ts`, 6 services, 6 action files, `shared-actions/user.ts`
+**Deleted files**: `src/auth.ts`, `src/types/next-auth.d.ts`, `src/app/api/auth/[...nextauth]/route.ts`, `src/lib/providers/ministry-platform/auth/auth-provider.ts`
 
 **What still needs testing**:
-- Verify audit logs in MP show the actual user name
-- Verify users with restricted MP permissions get appropriate 403 errors
-- Verify background check data is hidden from users without BG_Check table access
-- Verify the user's token refresh works correctly for long sessions
+- Verify OAuth login flow works with Ministry Platform OIDC
+- Verify audit logs in MP show the actual user name via `$userId`
+- Verify session persistence and cookie-based session management
+- Verify sign-out properly ends MP OAuth sessions
 
 ---
 
@@ -610,7 +608,7 @@ Currently showing on dashboard at bottom - can be removed once stable:
 ### Environment Details
 - Ministry Platform REST API via MPHelper
 - Next.js 16.1.6 LTS with App Router (Turbopack default bundler)
-- NextAuth v5 (beta.30) with Ministry Platform OAuth
+- Better Auth (^1.4.18) with Ministry Platform OAuth via genericOAuth plugin
 - React 19 Server Components with 6-hour cache (unstable_cache with revalidate = 21600)
 - Recharts for visualization (AreaChart, LineChart, PieChart)
 - TypeScript strict mode

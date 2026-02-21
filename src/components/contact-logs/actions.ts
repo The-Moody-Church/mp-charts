@@ -4,18 +4,15 @@ import { ContactLog } from "@/lib/providers/ministry-platform/models/ContactLog"
 import { ContactLogTypes } from "@/lib/providers/ministry-platform/models/ContactLogTypes";
 import { ContactLogInput } from "@/lib/providers/ministry-platform/models/ContactLogSchema";
 import { ContactLogService } from "@/services/contactLogService";
-import { auth } from "@/auth";
+import { requireSession, getMpUserId } from "@/lib/auth-helpers";
 
 export async function getContactLogTypes(): Promise<ContactLogTypes[]> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      throw new Error("Authentication required");
-    }
+    await requireSession();
 
-    const contactLogService = await ContactLogService.getInstance(session.accessToken);
+    const contactLogService = await ContactLogService.getInstance();
     const types = await contactLogService.getContactLogTypes();
-    
+
     return types;
   } catch (error) {
     console.error("Error fetching contact log types:", error);
@@ -27,38 +24,11 @@ export async function createContactLog(
   contactLogData: Omit<ContactLogInput, "Contact_Log_ID" | "Made_By">
 ): Promise<ContactLog> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      throw new Error("Authentication required");
-    }
+    const session = await requireSession();
+    const userId = getMpUserId(session);
 
-    console.log("Session user ID:", session.user.id);
-    console.log("Session userProfile:", session.userProfile);
-
-    let userId: number;
-
-    // Try to get User_ID from session userProfile first
-    if (session?.userProfile?.User_ID) {
-      userId = session.userProfile.User_ID;
-    } else {
-      // Fallback: Fetch user profile using User_GUID
-      console.log("User profile not in session, fetching from MP...");
-      const { MPHelper } = await import("@/lib/providers/ministry-platform");
-      const mp = new MPHelper({ accessToken: session.accessToken });
-
-      const users = await mp.getTableRecords<{ User_ID: number }>({
-        table: "dp_Users",
-        filter: `User_GUID = '${session.user.id}'`,
-        select: "User_ID",
-        top: 1
-      });
-
-      if (!users || users.length === 0 || !users[0].User_ID) {
-        throw new Error("Unable to determine user User_ID");
-      }
-
-      userId = users[0].User_ID;
-      console.log("Fetched User_ID from MP:", userId);
+    if (!userId) {
+      throw new Error("Unable to determine user User_ID for audit logging");
     }
 
     if (!contactLogData.Contact_ID || !contactLogData.Contact_Date || !contactLogData.Notes) {
@@ -71,12 +41,9 @@ export async function createContactLog(
       Made_By: userId,
     };
 
-    console.log("createContactLog action - Creating with data:", JSON.stringify(logDataWithUser, null, 2));
-    
-    const contactLogService = await ContactLogService.getInstance(session.accessToken);
+    const contactLogService = await ContactLogService.getInstance();
     const contactLog = await contactLogService.createContactLog(logDataWithUser);
-    
-    console.log("createContactLog action - Successfully created");
+
     return contactLog;
   } catch (error) {
     console.error("Error creating contact log:", error);
@@ -89,34 +56,11 @@ export async function updateContactLog(
   contactLogData: Partial<Omit<ContactLogInput, "Contact_Log_ID" | "Made_By">>
 ): Promise<ContactLog> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      throw new Error("Authentication required");
-    }
+    const session = await requireSession();
+    const userId = getMpUserId(session);
 
-    let userId: number;
-
-    // Try to get User_ID from session userProfile first
-    if (session?.userProfile?.User_ID) {
-      userId = session.userProfile.User_ID;
-    } else {
-      // Fallback: Fetch user profile using User_GUID
-      console.log("User profile not in session, fetching from MP...");
-      const { MPHelper } = await import("@/lib/providers/ministry-platform");
-      const mp = new MPHelper({ accessToken: session.accessToken });
-
-      const users = await mp.getTableRecords<{ User_ID: number }>({
-        table: "dp_Users",
-        filter: `User_GUID = '${session.user.id}'`,
-        select: "User_ID",
-        top: 1
-      });
-
-      if (!users || users.length === 0 || !users[0].User_ID) {
-        throw new Error("Unable to determine user User_ID");
-      }
-
-      userId = users[0].User_ID;
+    if (!userId) {
+      throw new Error("Unable to determine user User_ID for audit logging");
     }
 
     if (!contactLogId || contactLogId <= 0) {
@@ -129,13 +73,9 @@ export async function updateContactLog(
       Made_By: userId,
     };
 
-    console.log("updateContactLog action - Updating log:", contactLogId);
-    console.log("updateContactLog action - Update data:", JSON.stringify(logDataWithUser, null, 2));
-    
-    const contactLogService = await ContactLogService.getInstance(session.accessToken);
+    const contactLogService = await ContactLogService.getInstance();
     const contactLog = await contactLogService.updateContactLog(contactLogId, logDataWithUser);
-    
-    console.log("updateContactLog action - Successfully updated");
+
     return contactLog;
   } catch (error) {
     console.error("Error updating contact log:", error);
@@ -145,21 +85,14 @@ export async function updateContactLog(
 
 export async function deleteContactLog(contactLogId: number): Promise<void> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      throw new Error("Authentication required");
-    }
+    await requireSession();
 
     if (!contactLogId || contactLogId <= 0) {
       throw new Error("Valid Contact Log ID is required");
     }
 
-    console.log("deleteContactLog action - Deleting log:", contactLogId);
-    
-    const contactLogService = await ContactLogService.getInstance(session.accessToken);
+    const contactLogService = await ContactLogService.getInstance();
     await contactLogService.deleteContactLog(contactLogId);
-    
-    console.log("deleteContactLog action - Successfully deleted");
   } catch (error) {
     console.error("Error deleting contact log:", error);
     throw new Error("Failed to delete contact log");
@@ -168,18 +101,15 @@ export async function deleteContactLog(contactLogId: number): Promise<void> {
 
 export async function getContactLogsByContactId(contactId: number): Promise<ContactLog[]> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      throw new Error("Authentication required");
-    }
+    await requireSession();
 
     if (!contactId || contactId <= 0) {
       throw new Error("Valid contact ID is required");
     }
 
-    const contactLogService = await ContactLogService.getInstance(session.accessToken);
+    const contactLogService = await ContactLogService.getInstance();
     const results = await contactLogService.getContactLogsByContactId(contactId);
-    
+
     return results;
   } catch (error) {
     console.error("Error fetching contact logs by contact ID:", error);
@@ -189,18 +119,15 @@ export async function getContactLogsByContactId(contactId: number): Promise<Cont
 
 export async function getContactLogById(contactLogId: number): Promise<ContactLog | null> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      throw new Error("Authentication required");
-    }
+    await requireSession();
 
     if (!contactLogId || contactLogId <= 0) {
       throw new Error("Valid contact log ID is required");
     }
 
-    const contactLogService = await ContactLogService.getInstance(session.accessToken);
+    const contactLogService = await ContactLogService.getInstance();
     const result = await contactLogService.getContactLogById(contactLogId);
-    
+
     return result;
   } catch (error) {
     console.error("Error fetching contact log by ID:", error);
