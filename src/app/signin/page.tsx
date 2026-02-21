@@ -20,7 +20,7 @@ function SignInContent() {
       // User is not signed in, initiate sign in
       setIsRedirecting(true);
       authClient.signIn.oauth2({
-        providerId: "ministry-platform",
+        providerId: "ministryplatform",
         callbackURL: callbackUrl,
       });
     }

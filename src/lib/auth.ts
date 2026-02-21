@@ -31,7 +31,7 @@ export const auth = betterAuth({
     genericOAuth({
       config: [
         {
-          providerId: "ministry-platform",
+          providerId: "ministryplatform",
           discoveryUrl: `${mpOauthUrl}/.well-known/openid-configuration`,
           clientId: process.env.OIDC_CLIENT_ID!,
           clientSecret: process.env.OIDC_CLIENT_SECRET!,
