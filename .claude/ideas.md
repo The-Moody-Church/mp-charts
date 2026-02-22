@@ -72,7 +72,7 @@ On the "New Volunteers In Process" tab, when a volunteer receives the fully appr
 ### Pastoral Interface for Contact Logs ([#19](https://github.com/The-Moody-Church/mp-charts/issues/19))
 A dedicated pastoral interface for viewing and managing contact logs.
 
-### Add current groups list to volunteers already in a group ([#36](https://github.com/The-Moody-Church/mp-charts/issues/36))
+### ~~Add current groups list to volunteers already in a group ([#36](https://github.com/The-Moody-Church/mp-charts/issues/36))~~ ✅ COMPLETED
 On the active volunteers tab of volunteer processing, on an individuals card, list the groups where they have a role that we are tracking.
 
 ## Improvements
