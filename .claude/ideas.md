@@ -15,8 +15,24 @@ Redesign the executive dashboard from a flat chart grid into a structured layout
 
 Full specification with data sources, MP schema relationships, phased implementation plan, and layout wireframe: [`.claude/draft-issue-dashboard-redesign.md`](.claude/draft-issue-dashboard-redesign.md)
 
-### Journey/Milestone Tracker ([#17](https://github.com/The-Moody-Church/mp-charts/issues/17))
-Track current journeys from Ministry Platform and provide summary detail about what milestones have been completed. Include filters to narrow by specific journeys or milestones.
+### Baptism Processing ([#17](https://github.com/The-Moody-Church/mp-charts/issues/17))
+A dedicated interface for tracking and managing the baptism journey/process in Ministry Platform.
+
+**Current state**: A dashboard metric card shows baptism count (last 365 days) with year-over-year comparison, querying `Participant_Milestones` where `Milestone_ID = 3` and filtering by `Date_Accomplished`.
+
+**Vision**: Expand into a full baptism processing tool — similar in spirit to the volunteer processing feature — that gives staff a streamlined view of where individuals are in the baptism journey and lets them manage milestones and documentation.
+
+**Known MP data points**:
+- `Participant_Milestones` table: `Milestone_ID = 3` (Baptism), with `Date_Accomplished` and `Notes`
+- `Participants` table: `Baptism_Parish_Name` (max 75 chars), `Baptism_Parish_Address` (max 254 chars)
+- `Participant_Milestones` table: Spouse baptism fields (`Spouse_Baptism`, `Spouse_Baptism_Church`, street/city/state/zip)
+- Journeys in MP can have multiple milestones — explore what other milestones exist in the baptism journey
+
+**To explore during implementation**:
+- What journeys and milestones are configured in MP for baptism?
+- What does the baptism preparation/class process look like?
+- Should this be a standalone page or a tab within a broader milestone tracker?
+- What write-back capabilities are needed (scheduling baptism dates, marking completion, uploading certificates)?
 
 ### ~~Volunteer Processing ([#18](https://github.com/The-Moody-Church/mp-charts/issues/18))~~ ✅ COMPLETED
 Provide up-to-date info about volunteer processing, particularly for children's ministry. Include an interface for staff to submit documentation like certificates and other documents/PDFs.
