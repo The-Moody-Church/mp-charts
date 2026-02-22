@@ -18,7 +18,7 @@ Full specification with data sources, MP schema relationships, phased implementa
 ### Journey/Milestone Tracker ([#17](https://github.com/The-Moody-Church/mp-charts/issues/17))
 Track current journeys from Ministry Platform and provide summary detail about what milestones have been completed. Include filters to narrow by specific journeys or milestones.
 
-### Volunteer Processing ([#18](https://github.com/The-Moody-Church/mp-charts/issues/18))
+### ~~Volunteer Processing ([#18](https://github.com/The-Moody-Church/mp-charts/issues/18))~~ ✅ COMPLETED
 Provide up-to-date info about volunteer processing, particularly for children's ministry. Include an interface for staff to submit documentation like certificates and other documents/PDFs.
 
 #### Layout: Two-Tab Interface
