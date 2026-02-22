@@ -8,7 +8,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 
 ## Table of Contents
 
-### Features
+### Features ([#44](https://github.com/The-Moody-Church/mp-charts/issues/44))
 - [Redesign Dashboard Layout: Discipleship Pathway Sections (#42)](#redesign-dashboard-layout-discipleship-pathway-sections-42)
 - [Baptism Processing (#17)](#baptism-processing-17)
 - [Membership Applications](#membership-applications)
@@ -18,7 +18,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Assign to Group on Approval (#25)](#volunteer-processing-assign-to-group-on-approval-25)~~ ✅
 - ~~[Add Current Groups to Volunteer Cards (#36)](#add-current-groups-list-to-volunteers-already-in-a-group-36)~~ ✅
 
-### Improvements
+### Improvements ([#45](https://github.com/The-Moody-Church/mp-charts/issues/45))
 - [Executive Dashboard: Mobile Views (#13)](#executive-dashboard-mobile-views-13)
 - [Small Group Trends Chart (#15)](#small-group-trends-chart-15)
 - [Volunteer Processing Mobile Views (#33)](#volunteer-processing-mobile-views-33)
@@ -27,7 +27,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Update Webpage Title (#4)](#update-webpage-title-4)~~ ✅
 - ~~[Dashboard Date Range Selector (#20)](#dashboard-date-range-selector-20)~~ ✅
 
-### Technical Debt
+### Technical Debt ([#46](https://github.com/The-Moody-Church/mp-charts/issues/46))
 - [Migrate `unstable_cache` to Cache Components (#21)](#migrate-unstable_cache-to-cache-components-use-cache--reverted-2026-02-14-21)
 - [Review upstream PR #42 (#35)](#review-upstream-pr42-35)
 - ~~[Upgrade to Next.js 16](#upgrade-to-nextjs-16)~~ ✅
@@ -62,7 +62,7 @@ A dedicated interface for tracking and managing the baptism journey/process in M
 
 **Config**: Program_ID 306, Group_Role_ID 2, all milestone IDs via env vars. Production-visible from day one.
 
-### Membership Applications
+### Membership Applications ([#47](https://github.com/The-Moody-Church/mp-charts/issues/47))
 A dedicated interface for tracking and managing church membership applications. Patterned after the volunteer processing and baptism processing features — milestone-based checklist, card grid with photos, detail modal with contact info and write-back capabilities. Group IDs, milestone IDs, and process steps TBD.
 
 ### Pastoral Interface for Contact Logs ([#19](https://github.com/The-Moody-Church/mp-charts/issues/19))
