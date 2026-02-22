@@ -27,6 +27,7 @@ export interface VolunteerCard {
   fullyApproved: boolean;
   elderApprovedTeacher: boolean;
   groupIds: number[];
+  groupNames: string[];
 }
 
 export interface GroupFilterOption {

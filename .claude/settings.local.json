@@ -42,7 +42,15 @@
       "Bash(npm run lint:*)",
       "Bash(git status:*)",
       "Bash(gh run list:*)",
-      "Bash(gh run view:*)"
+      "Bash(gh run view:*)",
+      "Bash(npm --version:*)",
+      "Bash(export PATH=\"/usr/local/bin:/opt/homebrew/bin:$PATH\")",
+      "Bash(brew list:*)",
+      "Read(//usr/local/**)",
+      "Bash(export PATH=\"/opt/homebrew/bin:$PATH\")",
+      "Read(//Users/jonathon.huff/.local/bin/**)",
+      "Bash(brew install:*)",
+      "Bash(gh auth status:*)"
     ],
     "deny": [],
     "ask": []
