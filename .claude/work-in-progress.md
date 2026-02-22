@@ -84,6 +84,16 @@ Reviewed and incorporated all upstream PRs #37-42 from MinistryPlatform-Communit
 - Shareable direct links to volunteer modal (URL deep linking)
 - Assign to Group button for approved volunteers on the In Process tab
 
+---
+
+## Issue #36: Group Names on Approved Volunteer Cards (2026-02-22)
+
+### Status: ✅ COMPLETED
+
+Added group name display to volunteer cards on the "Approved Active Volunteers" tab. Each card now shows the groups where the volunteer has a tracked role as small muted badges between the progress indicator and the checklist. No additional API calls — reuses existing group name data fetched for the filter dropdown.
+
+**Files modified**: `src/lib/dto/volunteer-processing.ts`, `src/services/volunteerService.ts`, `src/components/volunteer-processing/volunteer-card.tsx`
+
 **Files**: 9 new files, 8+ modified files. See session summaries for full lists.
 
 ---

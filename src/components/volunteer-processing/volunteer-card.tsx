@@ -68,7 +68,7 @@ function StatusIcon({ item }: { item: ChecklistItemStatus }) {
 
 export function VolunteerCard({ volunteer, onClick }: VolunteerCardProps) {
   const { mpFileUrl } = useRuntimeConfig();
-  const { info, checklist, completedCount, totalCount, fullyApproved, elderApprovedTeacher } = volunteer;
+  const { info, checklist, completedCount, totalCount, fullyApproved, elderApprovedTeacher, groupNames } = volunteer;
   const displayName = getDisplayName(info.First_Name, info.Nickname);
 
   return (
@@ -118,6 +118,21 @@ export function VolunteerCard({ volunteer, onClick }: VolunteerCardProps) {
         <div className="text-xs text-muted-foreground mb-2">
           {completedCount}/{totalCount} complete
         </div>
+
+        {/* Group names */}
+        {groupNames.length > 0 && (
+          <div className="w-full mb-2 flex flex-wrap gap-1 justify-center">
+            {groupNames.map((name) => (
+              <span
+                key={name}
+                className="inline-block text-[10px] leading-tight bg-muted text-muted-foreground rounded px-1.5 py-0.5 truncate max-w-full"
+                title={name}
+              >
+                {name}
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* Checklist */}
         <div className="w-full space-y-1">

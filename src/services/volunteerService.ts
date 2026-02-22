@@ -262,7 +262,8 @@ export class VolunteerService {
     );
     if (volunteers.length === 0) return { volunteers: [], groups };
 
-    const cards = await this.assembleVolunteerCards(volunteers, participantGroupIds);
+    const groupNameMap = new Map(groups.map(g => [g.Group_ID, g.Group_Name]));
+    const cards = await this.assembleVolunteerCards(volunteers, participantGroupIds, groupNameMap);
     return { volunteers: cards, groups };
   }
 
@@ -410,6 +411,7 @@ export class VolunteerService {
       fullyApproved: !!fullyApprovedItem?.completed,
       elderApprovedTeacher: !!elderApprovedItem?.completed,
       groupIds: [],
+      groupNames: [],
       backgroundCheck,
       certification,
       formResponses: formResponseDetails,
@@ -806,7 +808,8 @@ export class VolunteerService {
 
   private async assembleVolunteerCards(
     volunteers: VolunteerInfo[],
-    participantGroupIds?: Map<number, Set<number>>
+    participantGroupIds?: Map<number, Set<number>>,
+    groupNameMap?: Map<number, string>
   ): Promise<VolunteerCard[]> {
     const contactIds = [...new Set(volunteers.map(v => v.Contact_ID))];
     const participantIds = [...new Set(volunteers.map(v => v.Participant_ID))];
@@ -836,6 +839,10 @@ export class VolunteerService {
       const fullyApprovedItem = checklist.find(c => c.key === 'fully_approved');
       const elderApprovedItem = checklist.find(c => c.key === 'elder_approved_teacher');
       const groupIds = participantGroupIds?.get(vol.Participant_ID);
+      const groupIdsArray = groupIds ? [...groupIds] : [];
+      const groupNames = groupNameMap
+        ? groupIdsArray.map(id => groupNameMap.get(id)).filter((name): name is string => !!name).sort()
+        : [];
       return {
         info: vol,
         checklist,
@@ -843,7 +850,8 @@ export class VolunteerService {
         totalCount: checklist.length,
         fullyApproved: !!fullyApprovedItem?.completed,
         elderApprovedTeacher: !!elderApprovedItem?.completed,
-        groupIds: groupIds ? [...groupIds] : []
+        groupIds: groupIdsArray,
+        groupNames
       };
     });
   }
