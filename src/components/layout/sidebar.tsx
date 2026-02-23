@@ -1,7 +1,7 @@
 "use client";
 
 import { XMarkIcon } from "@heroicons/react/24/outline";
-import { HomeIcon, UsersIcon, ChartBarIcon, ClipboardDocumentCheckIcon, WrenchScrewdriverIcon } from "@heroicons/react/24/outline";
+import { HomeIcon, UsersIcon, ChartBarIcon, ClipboardDocumentCheckIcon, UserGroupIcon, WrenchScrewdriverIcon } from "@heroicons/react/24/outline";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -14,6 +14,7 @@ const navigation = [
   { name: "Home", href: "/", icon: HomeIcon },
   { name: "Executive Dashboard", href: "/dashboard", icon: ChartBarIcon },
   { name: "Volunteer Processing", href: "/volunteer-processing", icon: ClipboardDocumentCheckIcon },
+  { name: "Membership Processing", href: "/membership-processing", icon: UserGroupIcon },
   // Dev-only items
   ...(isDev ? [
     { name: "Contact Lookup", href: "/contactlookup", icon: UsersIcon },
