@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, useCallback, useMemo } from 'react';
+import { useState, useEffect, useTransition, useCallback, useMemo } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DashboardData } from '@/lib/dto';
@@ -11,7 +11,7 @@ import {
   getDefaultSelection,
   selectionToDateRange,
 } from './date-range-filter';
-import { refreshDashboardCache, getFullRangeDashboardMetrics } from './actions';
+import { refreshDashboardCache, getFullRangeDashboardMetrics, getExtendedDashboardMetrics } from './actions';
 import { filterDashboardData, isSingleMonthSelection } from './filter-dashboard-data';
 import { useRouter } from 'next/navigation';
 
@@ -46,8 +46,24 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
   const router = useRouter();
   const [selection, setSelection] = useState<DateRangeSelection>(getDefaultSelection);
   const [fullData, setFullData] = useState<DashboardData>(initialData);
+  const [extendedLoading, setExtendedLoading] = useState(true);
   const [isRefreshing, startRefreshTransition] = useTransition();
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+
+  // Progressively load extended (heavy) data after initial render
+  useEffect(() => {
+    let cancelled = false;
+    getExtendedDashboardMetrics().then(extended => {
+      if (!cancelled) {
+        setFullData(prev => ({ ...prev, ...extended }));
+        setExtendedLoading(false);
+      }
+    }).catch(err => {
+      console.error('Error loading extended dashboard data:', err);
+      if (!cancelled) setExtendedLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const description = useMemo(() => formatSelectionDescription(selection), [selection]);
 
@@ -72,9 +88,13 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
         setLastRefresh(cacheResult.timestamp);
       }
 
-      // Re-fetch full range data from server
-      const freshData = await getFullRangeDashboardMetrics();
-      setFullData(freshData);
+      // Re-fetch both core and extended data
+      const [freshData, extended] = await Promise.all([
+        getFullRangeDashboardMetrics(),
+        getExtendedDashboardMetrics(),
+      ]);
+      setFullData({ ...freshData, ...extended });
+      setExtendedLoading(false);
       router.refresh();
     });
   }, [router]);
@@ -118,7 +138,12 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
 
       {/* Dashboard Content */}
       <div className={isRefreshing ? 'opacity-60 pointer-events-none transition-opacity' : 'transition-opacity'}>
-        <DashboardMetrics data={filteredData} showCompare={selection.compare} isSingleMonth={isSingleMonthSelection(selection)} />
+        <DashboardMetrics
+          data={filteredData}
+          showCompare={selection.compare}
+          isSingleMonth={isSingleMonthSelection(selection)}
+          extendedLoading={extendedLoading}
+        />
       </div>
     </div>
   );

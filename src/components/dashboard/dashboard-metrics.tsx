@@ -18,9 +18,21 @@ interface DashboardMetricsProps {
   data: DashboardData;
   showCompare?: boolean;
   isSingleMonth?: boolean;
+  extendedLoading?: boolean;
 }
 
-export function DashboardMetrics({ data, showCompare = true, isSingleMonth = false }: DashboardMetricsProps) {
+function LoadingSkeleton({ height = 300 }: { height?: number }) {
+  return (
+    <div className={`flex items-center justify-center text-muted-foreground`} style={{ height }}>
+      <div className="flex items-center gap-2">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+        Loading...
+      </div>
+    </div>
+  );
+}
+
+export function DashboardMetrics({ data, showCompare = true, isSingleMonth = false, extendedLoading = false }: DashboardMetricsProps) {
   return (
     <div className="space-y-10">
       {/* Engagement Venn Diagram */}
@@ -30,7 +42,7 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
           <CardDescription>People engaged across three dimensions: activity attendance, small groups, and serving/leading</CardDescription>
         </CardHeader>
         <CardContent>
-          <VennDiagram data={data.engagementOverlap} />
+          {extendedLoading ? <LoadingSkeleton /> : <VennDiagram data={data.engagementOverlap} />}
         </CardContent>
       </Card>
 
@@ -95,11 +107,20 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
         </Card>
 
         {/* Unique Event Participants */}
-        <MetricCard
-          title="Unique Event Participants"
-          value={data.uniqueEventParticipants}
-          format="number"
-        />
+        {extendedLoading ? (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Unique Event Participants</CardTitle>
+            </CardHeader>
+            <CardContent><LoadingSkeleton height={60} /></CardContent>
+          </Card>
+        ) : (
+          <MetricCard
+            title="Unique Event Participants"
+            value={data.uniqueEventParticipants}
+            format="number"
+          />
+        )}
       </SectionWrapper>
 
       {/* ============================================================ */}
@@ -193,15 +214,17 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
               <CardDescription>Group roster count vs actual event check-in count</CardDescription>
             </CardHeader>
             <CardContent>
-              <ExpandableChart
-                title="Roster vs Attendance"
-                description="Comparison of people on group rosters vs people who attended events"
-                expandedChildren={
-                  <RosterVsAttendanceChart data={data.rosterVsAttendance} height={600} />
-                }
-              >
-                <RosterVsAttendanceChart data={data.rosterVsAttendance} />
-              </ExpandableChart>
+              {extendedLoading ? <LoadingSkeleton /> : (
+                <ExpandableChart
+                  title="Roster vs Attendance"
+                  description="Comparison of people on group rosters vs people who attended events"
+                  expandedChildren={
+                    <RosterVsAttendanceChart data={data.rosterVsAttendance} height={600} />
+                  }
+                >
+                  <RosterVsAttendanceChart data={data.rosterVsAttendance} />
+                </ExpandableChart>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -211,61 +234,71 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
       {/* Section 3: Grow in Love */}
       {/* ============================================================ */}
       <SectionWrapper title="Grow in Love">
-        <div className="grid gap-4 md:grid-cols-2">
-          <MetricCard
-            title="Total Serving/Leading"
-            value={data.totalServingLeading}
-            format="number"
-          />
+        {extendedLoading ? (
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Serving by Role Type</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ServingByRoleTypeChart data={data.servingByRoleType} height={200} />
+            <CardContent className="pt-6">
+              <LoadingSkeleton />
             </CardContent>
           </Card>
-        </div>
+        ) : (
+          <>
+            <div className="grid gap-4 md:grid-cols-2">
+              <MetricCard
+                title="Total Serving/Leading"
+                value={data.totalServingLeading}
+                format="number"
+              />
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Serving by Role Type</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ServingByRoleTypeChart data={data.servingByRoleType} height={200} />
+                </CardContent>
+              </Card>
+            </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Where People Serve */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Where People Serve</CardTitle>
-              <CardDescription>Distribution of volunteers across ministries</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ExpandableChart
-                title="Where People Serve"
-                description="Distribution of volunteers across ministries"
-                expandedChildren={
-                  <ServingByMinistryChart data={data.servingByMinistry} height={600} />
-                }
-              >
-                <ServingByMinistryChart data={data.servingByMinistry} />
-              </ExpandableChart>
-            </CardContent>
-          </Card>
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Where People Serve */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Where People Serve</CardTitle>
+                  <CardDescription>Distribution of volunteers across ministries</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ExpandableChart
+                    title="Where People Serve"
+                    description="Distribution of volunteers across ministries"
+                    expandedChildren={
+                      <ServingByMinistryChart data={data.servingByMinistry} height={600} />
+                    }
+                  >
+                    <ServingByMinistryChart data={data.servingByMinistry} />
+                  </ExpandableChart>
+                </CardContent>
+              </Card>
 
-          {/* Serving Trends */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Serving Trends</CardTitle>
-              <CardDescription>Monthly active servers and leaders over time</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ExpandableChart
-                title="Serving Trends"
-                description="Monthly active servers and leaders over time"
-                expandedChildren={
-                  <ServingTrendsChart data={data.servingTrends} height={600} />
-                }
-              >
-                <ServingTrendsChart data={data.servingTrends} />
-              </ExpandableChart>
-            </CardContent>
-          </Card>
-        </div>
+              {/* Serving Trends */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Serving Trends</CardTitle>
+                  <CardDescription>Monthly active servers and leaders over time</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ExpandableChart
+                    title="Serving Trends"
+                    description="Monthly active servers and leaders over time"
+                    expandedChildren={
+                      <ServingTrendsChart data={data.servingTrends} height={600} />
+                    }
+                  >
+                    <ServingTrendsChart data={data.servingTrends} />
+                  </ExpandableChart>
+                </CardContent>
+              </Card>
+            </div>
+          </>
+        )}
       </SectionWrapper>
 
       {/* ============================================================ */}

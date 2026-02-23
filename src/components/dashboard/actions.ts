@@ -75,6 +75,33 @@ export async function getFullRangeDashboardMetrics(): Promise<DashboardData> {
 }
 
 /**
+ * Cached extended dashboard data (heavy queries) loaded separately.
+ * Uses a date string cache key so it refreshes daily.
+ */
+async function getCachedExtendedData(dateIso: string): Promise<Partial<DashboardData>> {
+  'use cache';
+  cacheLife({ revalidate: 21600 });
+  cacheTag('dashboard-data', 'dashboard-extended');
+
+  // dateIso is used as cache key only — suppress unused lint
+  void dateIso;
+
+  const dashboardService = await DashboardService.getInstance();
+  return dashboardService.getExtendedDashboardData();
+}
+
+/**
+ * Fetches extended dashboard data (engagement overlap, serving, roster metrics).
+ * Called separately from core data so the page can render progressively.
+ * Cached for 6 hours with manual invalidation support.
+ */
+export async function getExtendedDashboardMetrics(): Promise<Partial<DashboardData>> {
+  const today = new Date();
+  const dateIso = today.toISOString().split('T')[0];
+  return getCachedExtendedData(dateIso);
+}
+
+/**
  * Determines current ministry year based on today's date
  * If before September, use previous calendar year
  * If September or later, use current calendar year

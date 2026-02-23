@@ -169,13 +169,7 @@ export class DashboardService {
     const previousBaptismsStart = new Date(previousBaptismsEnd);
     previousBaptismsStart.setFullYear(previousBaptismsEnd.getFullYear() - 1);
 
-    // Engagement overlap and snapshot metrics use last 12 months only
-    // (these are too heavy for the full 5-year range and are snapshot-style data)
-    const snapshotStart = new Date(today);
-    snapshotStart.setFullYear(today.getFullYear() - 1);
-    const snapshotEnd = today;
-
-    // Fetch all metrics in parallel for better performance
+    // Fetch core metrics in parallel (fast queries only)
     const [
       currentPeriod,
       previousPeriod,
@@ -190,13 +184,6 @@ export class DashboardService {
       baptismsPreviousYear,
       membershipCount,
       membershipPreviousCount,
-      uniqueEventParticipants,
-      rosterVsAttendance,
-      servingTrends,
-      servingByRoleType,
-      servingByMinistry,
-      totalServingLeading,
-      engagementOverlap,
     ] = await Promise.all([
       this.getPeriodMetrics(currentYearStart, currentYearEnd),
       this.getPeriodMetrics(previousYearStart, previousYearEnd),
@@ -211,13 +198,6 @@ export class DashboardService {
       this.getBaptismsCount(previousBaptismsStart, previousBaptismsEnd),
       this.getMembershipCount(currentBaptismsStart, today),
       this.getMembershipCount(previousBaptismsStart, previousBaptismsEnd),
-      this.getUniqueEventParticipants(currentYearStart, currentYearEnd),
-      this.getRosterVsAttendance(snapshotStart, snapshotEnd),
-      this.getServingTrends(currentYearStart, currentYearEnd),
-      this.getServingByRoleType(snapshotStart, snapshotEnd),
-      this.getServingByMinistry(snapshotStart, snapshotEnd),
-      this.getTotalServingLeading(snapshotStart, snapshotEnd),
-      this.getEngagementOverlap(snapshotStart, snapshotEnd),
     ]);
 
     // Calculate year-over-year comparisons
@@ -245,16 +225,66 @@ export class DashboardService {
       baptismsPreviousYear,
       membershipCount,
       membershipPreviousCount,
+      // Extended fields — defaults until loaded separately
+      uniqueEventParticipants: 0,
+      rosterVsAttendance: [],
+      servingTrends: [],
+      servingByRoleType: [],
+      servingByMinistry: [],
+      totalServingLeading: 0,
+      givingByProgram: [],
+      givingTrends: [],
+      engagementOverlap: {
+        activityOnly: 0, groupOnly: 0, servingOnly: 0,
+        activityAndGroup: 0, activityAndServing: 0, groupAndServing: 0,
+        allThree: 0, totalActivity: 0, totalGroup: 0, totalServing: 0,
+      },
+      generatedAt: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Gets extended dashboard data (heavy queries) loaded separately for progressive rendering.
+   * Uses last 12 months for snapshot metrics.
+   */
+  public async getExtendedDashboardData(): Promise<Partial<DashboardData>> {
+    const today = new Date();
+    const snapshotStart = new Date(today);
+    snapshotStart.setFullYear(today.getFullYear() - 1);
+
+    // Current ministry year for time-series data
+    const currentMonth = today.getMonth();
+    const ministryYearStart = currentMonth >= 8
+      ? new Date(today.getFullYear(), 8, 1)
+      : new Date(today.getFullYear() - 1, 8, 1);
+    const ministryYearEnd = today;
+
+    const [
       uniqueEventParticipants,
       rosterVsAttendance,
       servingTrends,
       servingByRoleType,
       servingByMinistry,
       totalServingLeading,
-      givingByProgram: [],
-      givingTrends: [],
       engagementOverlap,
-      generatedAt: new Date().toISOString()
+    ] = await Promise.all([
+      this.getUniqueEventParticipants(snapshotStart, today),
+      this.getRosterVsAttendance(snapshotStart, today),
+      this.getServingTrends(ministryYearStart, ministryYearEnd),
+      this.getServingByRoleType(snapshotStart, today),
+      this.getServingByMinistry(snapshotStart, today),
+      this.getTotalServingLeading(snapshotStart, today),
+      this.getEngagementOverlap(snapshotStart, today),
+    ]);
+
+    return {
+      uniqueEventParticipants,
+      rosterVsAttendance,
+      servingTrends,
+      servingByRoleType,
+      servingByMinistry,
+      totalServingLeading,
+      engagementOverlap,
     };
   }
 
