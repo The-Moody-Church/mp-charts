@@ -18,7 +18,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Assign to Group on Approval (#25)](#volunteer-processing-assign-to-group-on-approval-25)~~ ✅
 - ~~[Add Current Groups to Volunteer Cards (#36)](#add-current-groups-list-to-volunteers-already-in-a-group-36)~~ ✅
 
-### Improvements ([#45](https://github.com/The-Moody-Church/mp-charts/issues/45))
+### ~~Improvements ([#45](https://github.com/The-Moody-Church/mp-charts/issues/45))~~ ✅ COMPLETED
 - [Executive Dashboard: Mobile Views (#13)](#executive-dashboard-mobile-views-13)
 - [Small Group Trends Chart (#15)](#small-group-trends-chart-15)
 - [Volunteer Processing Mobile Views (#33)](#volunteer-processing-mobile-views-33)
