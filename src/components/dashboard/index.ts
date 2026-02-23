@@ -13,5 +13,4 @@ export { SectionWrapper } from './section-wrapper';
 export { VennDiagram } from './venn-diagram';
 export { RosterVsAttendanceChart } from './roster-vs-attendance';
 export { ServingTrendsChart, ServingByRoleTypeChart, ServingByMinistryChart } from './serving-charts';
-export { ProgramGivingChart, GivingTrendsChart } from './giving-charts';
 export { filterDashboardData } from './filter-dashboard-data';

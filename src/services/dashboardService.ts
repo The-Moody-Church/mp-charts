@@ -13,8 +13,6 @@ import {
   ServingTrend,
   ServingByRoleType,
   ServingByMinistry,
-  GivingByProgram,
-  GivingTrend,
   EngagementOverlap,
   RosterVsAttendance,
 } from '@/lib/dto';
@@ -139,7 +137,8 @@ export class DashboardService {
         ? `${idColumn} IN (${batchIds.join(',')}) AND ${extraFilter}`
         : `${idColumn} IN (${batchIds.join(',')})`;
       const batch = await this.mp!.getTableRecords<T>({ table, select, filter });
-      results.push(...batch);
+      // Use concat instead of push(...batch) to avoid stack overflow with large arrays
+      for (const item of batch) results.push(item);
     }
     return results;
   }
@@ -170,6 +169,12 @@ export class DashboardService {
     const previousBaptismsStart = new Date(previousBaptismsEnd);
     previousBaptismsStart.setFullYear(previousBaptismsEnd.getFullYear() - 1);
 
+    // Engagement overlap and snapshot metrics use last 12 months only
+    // (these are too heavy for the full 5-year range and are snapshot-style data)
+    const snapshotStart = new Date(today);
+    snapshotStart.setFullYear(today.getFullYear() - 1);
+    const snapshotEnd = today;
+
     // Fetch all metrics in parallel for better performance
     const [
       currentPeriod,
@@ -191,8 +196,6 @@ export class DashboardService {
       servingByRoleType,
       servingByMinistry,
       totalServingLeading,
-      givingByProgram,
-      givingTrends,
       engagementOverlap,
     ] = await Promise.all([
       this.getPeriodMetrics(currentYearStart, currentYearEnd),
@@ -209,14 +212,12 @@ export class DashboardService {
       this.getMembershipCount(currentBaptismsStart, today),
       this.getMembershipCount(previousBaptismsStart, previousBaptismsEnd),
       this.getUniqueEventParticipants(currentYearStart, currentYearEnd),
-      this.getRosterVsAttendance(currentYearStart, currentYearEnd),
+      this.getRosterVsAttendance(snapshotStart, snapshotEnd),
       this.getServingTrends(currentYearStart, currentYearEnd),
-      this.getServingByRoleType(currentYearStart, currentYearEnd),
-      this.getServingByMinistry(currentYearStart, currentYearEnd),
-      this.getTotalServingLeading(currentYearStart, currentYearEnd),
-      this.getGivingByProgram(currentYearStart, currentYearEnd),
-      this.getGivingTrends(currentYearStart, currentYearEnd),
-      this.getEngagementOverlap(currentYearStart, currentYearEnd),
+      this.getServingByRoleType(snapshotStart, snapshotEnd),
+      this.getServingByMinistry(snapshotStart, snapshotEnd),
+      this.getTotalServingLeading(snapshotStart, snapshotEnd),
+      this.getEngagementOverlap(snapshotStart, snapshotEnd),
     ]);
 
     // Calculate year-over-year comparisons
@@ -250,8 +251,8 @@ export class DashboardService {
       servingByRoleType,
       servingByMinistry,
       totalServingLeading,
-      givingByProgram,
-      givingTrends,
+      givingByProgram: [],
+      givingTrends: [],
       engagementOverlap,
       generatedAt: new Date().toISOString()
     };
@@ -1569,13 +1570,13 @@ export class DashboardService {
       // Get Group_Role_Types for display names
       const roleTypes = await this.mp!.getTableRecords<{
         Group_Role_Type_ID: number;
-        Role_Type: string;
+        Group_Role_Type: string;
       }>({
         table: 'Group_Role_Types',
-        select: 'Group_Role_Type_ID,Role_Type',
+        select: 'Group_Role_Type_ID,Group_Role_Type',
         filter: 'Group_Role_Type_ID IN (1, 3)'
       });
-      const roleTypeNameMap = new Map(roleTypes.map(rt => [rt.Group_Role_Type_ID, rt.Role_Type]));
+      const roleTypeNameMap = new Map(roleTypes.map(rt => [rt.Group_Role_Type_ID, rt.Group_Role_Type]));
 
       const byType = new Map<number, Set<number>>();
       for (const p of participants) {
@@ -1648,152 +1649,6 @@ export class DashboardService {
         .sort((a, b) => b.uniqueContacts - a.uniqueContacts);
     } catch (error) {
       console.error('Error fetching serving by ministry:', error);
-      return [];
-    }
-  }
-
-  // ---------------------------------------------------------------
-  // Change Your World: Giving by Program
-  // ---------------------------------------------------------------
-
-  private async getGivingByProgram(startDate: Date, endDate: Date): Promise<GivingByProgram[]> {
-    const startIso = startDate.toISOString();
-    const endIso = endDate.toISOString();
-    // Programs: 231, 220 (online), 219 (offline) — 220/219 are the same fund
-    const programIds = [231, 220, 219];
-
-    try {
-      // Get Donations in the date range
-      const donations = await this.mp!.getTableRecords<{
-        Donation_ID: number;
-      }>({
-        table: 'Donations',
-        select: 'Donation_ID',
-        filter: `Donation_Date >= '${startIso}' AND Donation_Date <= '${endIso}'`
-      });
-
-      if (donations.length === 0) return [];
-
-      // Get Donation_Distributions for those donations and our programs
-      const distributions = await this.batchGetTableRecords<{
-        Donation_Distribution_ID: number;
-        Donation_ID: number;
-        Program_ID: number;
-        Amount: number;
-      }>({
-        table: 'Donation_Distributions',
-        select: 'Donation_Distribution_ID,Donation_ID,Program_ID,Amount',
-        ids: donations.map(d => d.Donation_ID),
-        idColumn: 'Donation_ID',
-        extraFilter: `Program_ID IN (${programIds.join(',')})`
-      });
-
-      // Get Program names
-      const programs = await this.mp!.getTableRecords<{
-        Program_ID: number;
-        Program_Name: string;
-      }>({
-        table: 'Programs',
-        select: 'Program_ID,Program_Name',
-        filter: `Program_ID IN (${programIds.join(',')})`
-      });
-      const programNameMap = new Map(programs.map(p => [p.Program_ID, p.Program_Name]));
-
-      // Aggregate by program
-      const byProgram = new Map<number, number>();
-      for (const d of distributions) {
-        byProgram.set(d.Program_ID, (byProgram.get(d.Program_ID) || 0) + d.Amount);
-      }
-
-      return Array.from(byProgram.entries()).map(([programId, totalAmount]) => ({
-        programId,
-        programName: programNameMap.get(programId) || `Program ${programId}`,
-        totalAmount: Math.round(totalAmount * 100) / 100,
-      }));
-    } catch (error) {
-      console.error('Error fetching giving by program:', error);
-      return [];
-    }
-  }
-
-  // ---------------------------------------------------------------
-  // Change Your World: Giving Trends (monthly)
-  // ---------------------------------------------------------------
-
-  private async getGivingTrends(startDate: Date, endDate: Date): Promise<GivingTrend[]> {
-    const startIso = startDate.toISOString();
-    const endIso = endDate.toISOString();
-    const programIds = [231, 220, 219];
-
-    try {
-      // Get Donations with dates
-      const donations = await this.mp!.getTableRecords<{
-        Donation_ID: number;
-        Donation_Date: string;
-      }>({
-        table: 'Donations',
-        select: 'Donation_ID,Donation_Date',
-        filter: `Donation_Date >= '${startIso}' AND Donation_Date <= '${endIso}'`
-      });
-
-      if (donations.length === 0) return [];
-
-      const donationDateMap = new Map(donations.map(d => [d.Donation_ID, d.Donation_Date]));
-
-      // Get distributions for our programs
-      const distributions = await this.batchGetTableRecords<{
-        Donation_ID: number;
-        Program_ID: number;
-        Amount: number;
-      }>({
-        table: 'Donation_Distributions',
-        select: 'Donation_ID,Program_ID,Amount',
-        ids: donations.map(d => d.Donation_ID),
-        idColumn: 'Donation_ID',
-        extraFilter: `Program_ID IN (${programIds.join(',')})`
-      });
-
-      // Get program names
-      const programs = await this.mp!.getTableRecords<{
-        Program_ID: number;
-        Program_Name: string;
-      }>({
-        table: 'Programs',
-        select: 'Program_ID,Program_Name',
-        filter: `Program_ID IN (${programIds.join(',')})`
-      });
-      const programNameMap = new Map(programs.map(p => [p.Program_ID, p.Program_Name]));
-
-      // Aggregate by month and program
-      const monthlyData = new Map<string, Map<string, number>>();
-
-      for (const d of distributions) {
-        const donationDate = donationDateMap.get(d.Donation_ID);
-        if (!donationDate) continue;
-
-        const date = new Date(donationDate);
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        const programName = programNameMap.get(d.Program_ID) || `Program ${d.Program_ID}`;
-
-        if (!monthlyData.has(monthKey)) monthlyData.set(monthKey, new Map());
-        const monthMap = monthlyData.get(monthKey)!;
-        monthMap.set(programName, (monthMap.get(programName) || 0) + d.Amount);
-      }
-
-      return Array.from(monthlyData.entries())
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([monthKey, programAmounts]) => {
-          const [, m] = monthKey.split('-').map(Number);
-          return {
-            month: monthKey,
-            monthName: MONTH_NAMES[m - 1],
-            programAmounts: Object.fromEntries(
-              Array.from(programAmounts.entries()).map(([name, amount]) => [name, Math.round(amount * 100) / 100])
-            ),
-          };
-        });
-    } catch (error) {
-      console.error('Error fetching giving trends:', error);
       return [];
     }
   }

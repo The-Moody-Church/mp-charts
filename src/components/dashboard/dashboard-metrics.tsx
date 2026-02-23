@@ -13,7 +13,6 @@ import { SectionWrapper } from './section-wrapper';
 import { VennDiagram } from './venn-diagram';
 import { RosterVsAttendanceChart } from './roster-vs-attendance';
 import { ServingTrendsChart, ServingByRoleTypeChart, ServingByMinistryChart } from './serving-charts';
-import { ProgramGivingChart, GivingTrendsChart } from './giving-charts';
 
 interface DashboardMetricsProps {
   data: DashboardData;
@@ -270,50 +269,7 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
       </SectionWrapper>
 
       {/* ============================================================ */}
-      {/* Section 4: Change Your World */}
-      {/* ============================================================ */}
-      <SectionWrapper title="Change Your World">
-        <div className="grid gap-6 md:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Program Giving</CardTitle>
-              <CardDescription>Total donations by program</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ExpandableChart
-                title="Program Giving"
-                description="Total donations by program"
-                expandedChildren={
-                  <ProgramGivingChart data={data.givingByProgram} height={600} />
-                }
-              >
-                <ProgramGivingChart data={data.givingByProgram} />
-              </ExpandableChart>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Giving Trends</CardTitle>
-              <CardDescription>Monthly giving to tracked programs</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ExpandableChart
-                title="Giving Trends"
-                description="Monthly giving to tracked programs"
-                expandedChildren={
-                  <GivingTrendsChart data={data.givingTrends} height={600} />
-                }
-              >
-                <GivingTrendsChart data={data.givingTrends} />
-              </ExpandableChart>
-            </CardContent>
-          </Card>
-        </div>
-      </SectionWrapper>
-
-      {/* ============================================================ */}
-      {/* Section 5: Other */}
+      {/* Section 4: Other */}
       {/* ============================================================ */}
       {showCompare && (
         <SectionWrapper title="Other">
