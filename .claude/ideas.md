@@ -27,7 +27,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Update Webpage Title (#4)](#update-webpage-title-4)~~ ✅
 - ~~[Dashboard Date Range Selector (#20)](#dashboard-date-range-selector-20)~~ ✅
 
-### Technical Debt ([#46](https://github.com/The-Moody-Church/mp-charts/issues/46))
+### ~~Technical Debt ([#46](https://github.com/The-Moody-Church/mp-charts/issues/46))~~ ✅ COMPLETED
 - [~~Migrate `unstable_cache` to Cache Components (#21)~~](#migrate-unstable_cache-to-cache-components-use-cache--completed-2026-02-23-21)
 - [Review upstream PR #42 (#35)](#review-upstream-pr42-35)
 - ~~[Upgrade to Next.js 16](#upgrade-to-nextjs-16)~~ ✅
