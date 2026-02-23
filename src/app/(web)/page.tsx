@@ -41,6 +41,20 @@ export default function Home() {
           </CardContent>
         </Card>
 
+        <Card className="flex flex-col">
+          <CardHeader>
+            <CardTitle>Baptism Processing</CardTitle>
+            <CardDescription>
+              Track baptism applicants through the baptism journey, manage milestones, and handle approvals
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="mt-auto">
+            <Link href="/baptism-processing">
+              <Button className="w-full">View Baptisms</Button>
+            </Link>
+          </CardContent>
+        </Card>
+
         {isDev && (
           <>
             <Card className="flex flex-col">
