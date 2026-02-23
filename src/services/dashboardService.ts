@@ -776,12 +776,13 @@ export class DashboardService {
       // Step 2: Get Event_Participants for community groups with status 3 or 4 (Present)
       const eventParticipants = await this.mp!.getTableRecords<{
         Event_Participant_ID: number;
+        Participant_ID: number;
         Event_ID: number;
         Group_ID: number;
         Participation_Status_ID: number;
       }>({
         table: 'Event_Participants',
-        select: 'Event_Participant_ID,Event_ID,Group_ID,Participation_Status_ID',
+        select: 'Event_Participant_ID,Participant_ID,Event_ID,Group_ID,Participation_Status_ID',
         filter: `Event_Participants.Group_ID IN (${communityGroupIds.join(',')}) AND Event_Participants.Participation_Status_ID IN (3, 4)`
       });
 
@@ -859,7 +860,7 @@ export class DashboardService {
           });
         }
         const monthGroupData = monthData.get(participant.Group_ID)!;
-        monthGroupData.participantIds.add(participant.Event_Participant_ID);
+        monthGroupData.participantIds.add(participant.Participant_ID);
         monthGroupData.eventIds.add(participant.Event_ID);
 
         // Weekly aggregation
@@ -870,7 +871,7 @@ export class DashboardService {
         if (!weekData.has(participant.Group_ID)) {
           weekData.set(participant.Group_ID, { participantIds: new Set() });
         }
-        weekData.get(participant.Group_ID)!.participantIds.add(participant.Event_Participant_ID);
+        weekData.get(participant.Group_ID)!.participantIds.add(participant.Participant_ID);
       }
 
       // Build monthly trends (averages)
