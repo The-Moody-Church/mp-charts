@@ -1,4 +1,4 @@
-import { unstable_cache } from 'next/cache';
+import { cacheLife, cacheTag } from 'next/cache';
 import { MPHelper } from '@/lib/providers/ministry-platform';
 import {
   DashboardData,
@@ -18,44 +18,44 @@ const MONTH_NAMES = [
 ];
 
 /**
- * Cached Group_Types lookup (24-hour cache)
+ * Cached Group_Types lookup (24-hour cache via 'use cache')
+ * The `ids` parameter is automatically part of the cache key.
  */
-const getCachedGroupTypes = (ids: string) =>
-  unstable_cache(
-    async () => {
-      const mp = new MPHelper();
-      return mp.getTableRecords<{
-        Group_Type_ID: number;
-        Group_Type: string;
-      }>({
-        table: 'Group_Types',
-        select: 'Group_Type_ID,Group_Type',
-        filter: `Group_Type_ID IN (${ids})`
-      });
-    },
-    [`group-types-${ids}`],
-    { revalidate: 86400, tags: ['group-types'] }
-  );
+async function getCachedGroupTypes(ids: string) {
+  'use cache';
+  cacheLife({ revalidate: 86400 });
+  cacheTag('group-types');
+
+  const mp = new MPHelper();
+  return mp.getTableRecords<{
+    Group_Type_ID: number;
+    Group_Type: string;
+  }>({
+    table: 'Group_Types',
+    select: 'Group_Type_ID,Group_Type',
+    filter: `Group_Type_ID IN (${ids})`
+  });
+}
 
 /**
- * Cached Event_Types lookup (24-hour cache)
+ * Cached Event_Types lookup (24-hour cache via 'use cache')
+ * The `ids` parameter is automatically part of the cache key.
  */
-const getCachedEventTypes = (ids: string) =>
-  unstable_cache(
-    async () => {
-      const mp = new MPHelper();
-      return mp.getTableRecords<{
-        Event_Type_ID: number;
-        Event_Type: string;
-      }>({
-        table: 'Event_Types',
-        select: 'Event_Type_ID,Event_Type',
-        filter: `Event_Type_ID IN (${ids})`
-      });
-    },
-    [`event-types-${ids}`],
-    { revalidate: 86400, tags: ['event-types'] }
-  );
+async function getCachedEventTypes(ids: string) {
+  'use cache';
+  cacheLife({ revalidate: 86400 });
+  cacheTag('event-types');
+
+  const mp = new MPHelper();
+  return mp.getTableRecords<{
+    Event_Type_ID: number;
+    Event_Type: string;
+  }>({
+    table: 'Event_Types',
+    select: 'Event_Type_ID,Event_Type',
+    filter: `Event_Type_ID IN (${ids})`
+  });
+}
 
 /**
  * DashboardService - Singleton service for managing dashboard metrics
@@ -77,7 +77,7 @@ export class DashboardService {
    *                    user (respecting their MP permissions and producing accurate audit logs).
    *                    When omitted, returns the singleton instance using client credentials.
    *
-   * Note: Cached lookups (Group_Types, Event_Types via unstable_cache) always use client
+   * Note: Cached lookups (Group_Types, Event_Types via 'use cache') always use client
    * credentials since they run outside user request context. The main data queries
    * use the access token when provided.
    */
@@ -95,19 +95,19 @@ export class DashboardService {
   }
 
   /**
-   * Gets Group_Types with 24-hour cache via unstable_cache
+   * Gets Group_Types with 24-hour cache via 'use cache'
    */
   private async getGroupTypesWithCache(groupTypeIds: Set<number>) {
     const ids = Array.from(groupTypeIds).sort().join(',');
-    return getCachedGroupTypes(ids)();
+    return getCachedGroupTypes(ids);
   }
 
   /**
-   * Gets Event_Types with 24-hour cache via unstable_cache
+   * Gets Event_Types with 24-hour cache via 'use cache'
    */
   private async getEventTypesWithCache(eventTypeIds: Set<number>) {
     const ids = Array.from(eventTypeIds).sort().join(',');
-    return getCachedEventTypes(ids)();
+    return getCachedEventTypes(ids);
   }
 
   /**

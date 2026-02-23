@@ -28,7 +28,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Dashboard Date Range Selector (#20)](#dashboard-date-range-selector-20)~~ ✅
 
 ### Technical Debt ([#46](https://github.com/The-Moody-Church/mp-charts/issues/46))
-- [Migrate `unstable_cache` to Cache Components (#21)](#migrate-unstable_cache-to-cache-components-use-cache--reverted-2026-02-14-21)
+- [~~Migrate `unstable_cache` to Cache Components (#21)~~](#migrate-unstable_cache-to-cache-components-use-cache--completed-2026-02-23-21)
 - [Review upstream PR #42 (#35)](#review-upstream-pr42-35)
 - ~~[Upgrade to Next.js 16](#upgrade-to-nextjs-16)~~ ✅
 - ~~[Refine MP Permissions (#7)](#refine-mp-permissions-7)~~ ✅
@@ -120,8 +120,8 @@ Replace the hardcoded ministry year date ranges with an interactive date selecto
 
 ## Technical Debt
 
-### Migrate `unstable_cache` to Cache Components (`use cache`) ⚠️ REVERTED (2026-02-14) ([#21](https://github.com/The-Moody-Church/mp-charts/issues/21))
-Originally migrated to `'use cache'` directive with `cacheTag` and `cacheLife`, but reverted ([PR #10](https://github.com/The-Moody-Church/mp-charts/pull/10)) because the `'use cache'` directive is only available in Next.js canary builds, not stable releases. The codebase currently uses `unstable_cache`. Revisit when `'use cache'` lands in a stable Next.js release.
+### ~~Migrate `unstable_cache` to Cache Components (`use cache`)~~ ✅ COMPLETED (2026-02-23) ([#21](https://github.com/The-Moody-Church/mp-charts/issues/21))
+Migrated from `unstable_cache` to `'use cache'` directive with `cacheComponents: true` (full PPR). All 4 call sites converted to `'use cache'` + `cacheLife()` + `cacheTag()`. Added Suspense boundaries to all pages with dynamic data. Dashboard uses `connection()` to defer to runtime. Build output shows `◐ (Partial Prerender)` for all authenticated pages.
 
 ### review upstream pr42 ([#35](https://github.com/The-Moody-Church/mp-charts/issues/35))
 Review upstream pr 42 for updates and cherry pick changes or merge all features.

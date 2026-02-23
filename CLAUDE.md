@@ -86,7 +86,7 @@ Both files are committed to the repo and must NOT be added to `.gitignore`.
 
 ## Architecture
 
-- **Framework**: Next.js 16 (App Router, Turbopack) with React 19, TypeScript strict mode
+- **Framework**: Next.js 16 (App Router, Turbopack, Cache Components/PPR) with React 19, TypeScript strict mode
 - **Ministry Platform Integration**: Custom provider at `src/lib/providers/ministry-platform/` with REST API client, auth, and type-safe models
 - **Auth**: Better Auth (`better-auth@^1.4`) with Ministry Platform OAuth via `genericOAuth` plugin (`src/lib/auth.ts`)
   - **Server Config**: `src/lib/auth.ts` — `betterAuth()` with `genericOAuth`, `customSession`, `nextCookies()` plugins
@@ -112,6 +112,84 @@ Both files are committed to the repo and must NOT be added to `.gitignore`.
 - **ESLint**: Uses `eslint .` directly (not `next lint`); config is native flat config in `eslint.config.mjs`
 - **Async Dynamic APIs**: `params`, `searchParams`, `cookies()`, `headers()` must always be awaited — synchronous access is removed
 - **Dev output**: `next dev` outputs to `.next/dev` (not `.next`)
+- **Cache Components (PPR)**: `cacheComponents: true` in `next.config.ts` enables Partial Prerendering — static shells pre-render at build time, dynamic content streams at request time
+
+## Caching & PPR
+
+The project uses **Cache Components** (`cacheComponents: true`) with **Partial Prerendering (PPR)**. All authenticated pages render as `◐ (Partial Prerender)` — the static HTML shell loads instantly, then dynamic content streams in via Suspense boundaries.
+
+### `'use cache'` Directive
+
+Data-fetching functions use the `'use cache'` directive with `cacheLife()` and `cacheTag()` from `next/cache`:
+
+```typescript
+import { cacheLife, cacheTag } from 'next/cache';
+
+async function getCachedData(key: string) {
+  'use cache';
+  cacheLife({ revalidate: 21600 }); // 6 hours
+  cacheTag('my-tag');
+  // ... fetch data ...
+}
+```
+
+**Rules for `'use cache'` functions:**
+- `new Date()` and other non-deterministic expressions must stay OUTSIDE the function — pass as serializable parameters
+- Function arguments automatically become the cache key
+- Invalidate with `revalidateTag('my-tag', { expire: 0 })` from server actions
+
+**Current cached functions:**
+| Function | TTL | Tags | File |
+|---|---|---|---|
+| `getCachedDashboardData(year)` | 6h | `dashboard-data`, `year-N` | `src/components/dashboard/actions.ts` |
+| `getCachedFullRangeData(year, endDate)` | 6h | `dashboard-data`, `dashboard-full-range` | `src/components/dashboard/actions.ts` |
+| `getCachedGroupTypes(ids)` | 24h | `group-types` | `src/services/dashboardService.ts` |
+| `getCachedEventTypes(ids)` | 24h | `event-types` | `src/services/dashboardService.ts` |
+
+### Suspense & PPR Pattern for Pages
+
+Pages with dynamic data access (`params`, `searchParams`, `headers()`) must use the Suspense pattern:
+
+```typescript
+// Sync wrapper — pre-renders as static HTML shell
+export default function MyPage({ searchParams }: Props) {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <MyPageContent searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+// Async inner component — streams at request time
+async function MyPageContent({ searchParams }: Props) {
+  const params = await searchParams;
+  return <ClientComponent data={params} />;
+}
+```
+
+For pages that call `'use cache'` functions but depend on runtime APIs (e.g., dashboard), use `connection()` from `next/server` to skip build-time prerendering:
+
+```typescript
+import { connection } from 'next/server';
+
+async function DashboardContent() {
+  await connection(); // Defer to runtime — API not available at build time
+  const data = await getCachedData();
+  return <Dashboard data={data} />;
+}
+```
+
+### Layout Auth Pattern
+
+The web layout wraps `AuthWrapper` (which uses `headers()`) in a Suspense boundary so the outer HTML shell pre-renders:
+
+```typescript
+<Suspense fallback={<Loading />}>
+  <AuthWrapper>
+    <Providers>{children}</Providers>
+  </AuthWrapper>
+</Suspense>
+```
 
 ## Code Style
 

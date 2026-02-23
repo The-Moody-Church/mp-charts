@@ -1,44 +1,43 @@
 'use server';
 
-import { unstable_cache, revalidatePath, revalidateTag } from 'next/cache';
+import { cacheLife, cacheTag, revalidatePath, revalidateTag } from 'next/cache';
 import { DashboardService } from '@/services/dashboardService';
 import { DashboardData } from '@/lib/dto';
 
 /**
  * Cached dashboard data for a single ministry year (6-hour cache)
  */
-const getCachedDashboardData = (ministryYear: number) =>
-  unstable_cache(
-    async (): Promise<DashboardData> => {
-      // Ministry year runs Sept 1 - Aug 31
-      const startDate = new Date(ministryYear, 8, 1); // September 1
-      const endDate = new Date(ministryYear + 1, 7, 31); // August 31 of next calendar year
+async function getCachedDashboardData(ministryYear: number): Promise<DashboardData> {
+  'use cache';
+  cacheLife({ revalidate: 21600 });
+  cacheTag('dashboard-data', `year-${ministryYear}`);
 
-      const dashboardService = await DashboardService.getInstance();
-      return dashboardService.getDashboardData(startDate, endDate);
-    },
-    [`dashboard-data-${ministryYear}`],
-    { revalidate: 21600, tags: ['dashboard-data', `year-${ministryYear}`] }
-  );
+  // Ministry year runs Sept 1 - Aug 31
+  const startDate = new Date(ministryYear, 8, 1); // September 1
+  const endDate = new Date(ministryYear + 1, 7, 31); // August 31 of next calendar year
+
+  const dashboardService = await DashboardService.getInstance();
+  return dashboardService.getDashboardData(startDate, endDate);
+}
 
 /**
- * Cached full-range dashboard data for 5 ministry years (6-hour cache)
+ * Cached full-range dashboard data for 5 ministry years (6-hour cache).
+ * The endDateIso parameter (YYYY-MM-DD) is computed by the caller so that
+ * `new Date()` stays outside the cache boundary. The date string becomes part
+ * of the automatic cache key, meaning the cache refreshes daily.
  */
-const getCachedFullRangeData = (earliestYear: number, currentYear: number) =>
-  unstable_cache(
-    async (): Promise<DashboardData> => {
-      const startDate = new Date(earliestYear, 8, 1); // September 1, 5 years ago
-      const today = new Date();
-      // Use today or Aug 31 of current+1, whichever is earlier
-      const maxEnd = new Date(currentYear + 1, 7, 31);
-      const endDate = today < maxEnd ? today : maxEnd;
+async function getCachedFullRangeData(earliestYear: number, endDateIso: string): Promise<DashboardData> {
+  'use cache';
+  cacheLife({ revalidate: 21600 });
+  cacheTag('dashboard-data', 'dashboard-full-range');
 
-      const dashboardService = await DashboardService.getInstance();
-      return dashboardService.getDashboardData(startDate, endDate);
-    },
-    [`dashboard-full-range-${earliestYear}-${currentYear}`],
-    { revalidate: 21600, tags: ['dashboard-data', 'dashboard-full-range'] }
-  );
+  const startDate = new Date(earliestYear, 8, 1); // September 1, 5 years ago
+  const [year, month, day] = endDateIso.split('-').map(Number);
+  const endDate = new Date(year, month - 1, day);
+
+  const dashboardService = await DashboardService.getInstance();
+  return dashboardService.getDashboardData(startDate, endDate);
+}
 
 /**
  * Fetches dashboard data for the specified ministry year
@@ -52,7 +51,7 @@ export async function getDashboardMetrics(
   year?: number
 ): Promise<DashboardData> {
   const currentYear = year || getCurrentMinistryYear();
-  return getCachedDashboardData(currentYear)();
+  return getCachedDashboardData(currentYear);
 }
 
 /**
@@ -65,7 +64,14 @@ export async function getDashboardMetrics(
 export async function getFullRangeDashboardMetrics(): Promise<DashboardData> {
   const currentYear = getCurrentMinistryYear();
   const earliestYear = currentYear - 4;
-  return getCachedFullRangeData(earliestYear, currentYear)();
+
+  // Compute end date outside the cache boundary (new Date() is dynamic data)
+  const today = new Date();
+  const maxEnd = new Date(currentYear + 1, 7, 31);
+  const endDate = today < maxEnd ? today : maxEnd;
+  const endDateIso = endDate.toISOString().split('T')[0]; // "YYYY-MM-DD"
+
+  return getCachedFullRangeData(earliestYear, endDateIso);
 }
 
 /**
