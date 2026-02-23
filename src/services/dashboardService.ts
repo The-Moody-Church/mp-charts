@@ -111,6 +111,33 @@ export class DashboardService {
   }
 
   /**
+   * Batches a large array of IDs into multiple getTableRecords calls to avoid
+   * IIS URL length limits (~4096 chars). Results are concatenated.
+   */
+  private async batchGetTableRecords<T>(options: {
+    table: string;
+    select: string;
+    ids: number[];
+    idColumn: string;
+    extraFilter?: string;
+    batchSize?: number;
+  }): Promise<T[]> {
+    const { table, select, ids, idColumn, extraFilter, batchSize = 100 } = options;
+    if (ids.length === 0) return [];
+
+    const results: T[] = [];
+    for (let i = 0; i < ids.length; i += batchSize) {
+      const batchIds = ids.slice(i, i + batchSize);
+      const filter = extraFilter
+        ? `${idColumn} IN (${batchIds.join(',')}) AND ${extraFilter}`
+        : `${idColumn} IN (${batchIds.join(',')})`;
+      const batch = await this.mp!.getTableRecords<T>({ table, select, filter });
+      results.push(...batch);
+    }
+    return results;
+  }
+
+  /**
    * Gets complete dashboard data for current and previous ministry years
    *
    * @param currentYearStart - Start date of current ministry year
@@ -242,18 +269,17 @@ export class DashboardService {
       const groupToTypeMap = new Map(filteredGroups.map(g => [g.Group_ID, g.Group_Type_ID]));
 
       // Step 3: Get group participants for active groups
-      const groupParticipants = await this.mp!.getTableRecords<{
+      // Batched to avoid IIS URL length limits with large ID sets
+      const groupParticipants = await this.batchGetTableRecords<{
         Group_Participant_ID: number;
         Group_ID: number;
         Participant_ID: number;
       }>({
         table: 'Group_Participants',
         select: 'Group_Participant_ID,Group_ID,Participant_ID',
-        filter: `
-          Group_Participants.Group_ID IN (${Array.from(activeGroupIds).join(',')}) AND
-          Group_Participants.Start_Date <= '${endIso}' AND
-          (Group_Participants.End_Date IS NULL OR Group_Participants.End_Date >= '${startIso}')
-        `
+        ids: Array.from(activeGroupIds),
+        idColumn: 'Group_Participants.Group_ID',
+        extraFilter: `Group_Participants.Start_Date <= '${endIso}' AND (Group_Participants.End_Date IS NULL OR Group_Participants.End_Date >= '${startIso}')`
       });
 
       // Aggregate by group type
@@ -343,7 +369,8 @@ export class DashboardService {
       const eventToTypeMap = new Map(events.map(e => [e.Event_ID, e.Event_Type_ID]));
 
       // Step 3: Get attendance metrics from Event_Metrics (Metric_ID 2 = In-Person, 3 = Online)
-      const eventMetrics = await this.mp!.getTableRecords<{
+      // Batched to avoid IIS URL length limits with large ID sets
+      const eventMetrics = await this.batchGetTableRecords<{
         Event_Metric_ID: number;
         Event_ID: number;
         Metric_ID: number;
@@ -351,10 +378,9 @@ export class DashboardService {
       }>({
         table: 'Event_Metrics',
         select: 'Event_Metric_ID,Event_ID,Metric_ID,Numerical_Value',
-        filter: `
-          Event_Metrics.Event_ID IN (${Array.from(eventIds).join(',')}) AND
-          Event_Metrics.Metric_ID IN (2, 3)
-        `
+        ids: Array.from(eventIds),
+        idColumn: 'Event_Metrics.Event_ID',
+        extraFilter: 'Event_Metrics.Metric_ID IN (2, 3)'
       });
 
       // Aggregate by event type with online vs in-person breakdown
@@ -470,7 +496,8 @@ export class DashboardService {
       }
 
       // Step 2: Get attendance metrics from Event_Metrics (Metric_ID 2 = In-Person, 3 = Online)
-      const eventMetrics = await this.mp!.getTableRecords<{
+      // Batched to avoid IIS URL length limits with large ID sets
+      const eventMetrics = await this.batchGetTableRecords<{
         Event_Metric_ID: number;
         Event_ID: number;
         Metric_ID: number;
@@ -478,10 +505,9 @@ export class DashboardService {
       }>({
         table: 'Event_Metrics',
         select: 'Event_Metric_ID,Event_ID,Metric_ID,Numerical_Value',
-        filter: `
-          Event_Metrics.Event_ID IN (${Array.from(eventIds).join(',')}) AND
-          Event_Metrics.Metric_ID IN (2, 3)
-        `
+        ids: Array.from(eventIds),
+        idColumn: 'Event_Metrics.Event_ID',
+        extraFilter: 'Event_Metrics.Metric_ID IN (2, 3)'
       });
 
       // Aggregate metrics and track which events have metrics
@@ -726,25 +752,17 @@ export class DashboardService {
       const uniqueEventIds = Array.from(new Set(eventParticipants.map(p => p.Event_ID)));
 
       // Step 3: Get Event details for those Event_IDs (to get dates and filter)
-      // Batch to avoid URL length limits
-      const BATCH_SIZE = 100;
-      const allEvents: Array<{
+      // Batch to avoid IIS URL length limits
+      const allEvents = await this.batchGetTableRecords<{
         Event_ID: number;
         Event_Start_Date: string;
-      }> = [];
-
-      for (let i = 0; i < uniqueEventIds.length; i += BATCH_SIZE) {
-        const batchIds = uniqueEventIds.slice(i, i + BATCH_SIZE);
-        const batch = await this.mp!.getTableRecords<{
-          Event_ID: number;
-          Event_Start_Date: string;
-        }>({
-          table: 'Events',
-          select: 'Event_ID,Event_Start_Date',
-          filter: `Event_ID IN (${batchIds.join(',')}) AND Cancelled = 0`
-        });
-        allEvents.push(...batch);
-      }
+      }>({
+        table: 'Events',
+        select: 'Event_ID,Event_Start_Date',
+        ids: uniqueEventIds,
+        idColumn: 'Event_ID',
+        extraFilter: 'Cancelled = 0'
+      });
 
       console.log(`Found ${allEvents.length} events`);
 
