@@ -13,12 +13,12 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - [Baptism Processing (#17)](#baptism-processing-17)
 - [Membership Applications (#47)](#membership-applications-47)
 - [Pastoral Interface for Contact Logs (#19)](#pastoral-interface-for-contact-logs-19)
-- [Volunteer Processing Search Bar](#volunteer-processing-search-bar)
-- [Volunteer Processing: Show In-Process Volunteers on Active Tab](#volunteer-processing-show-in-process-volunteers-on-active-tab)
+- [Volunteer Processing Search Bar (#49)](#volunteer-processing-search-bar-49)
+- [Volunteer Processing: Show In-Process Volunteers on Active Tab (#50)](#volunteer-processing-show-in-process-volunteers-on-active-tab-50)
 - ~~[Volunteer Processing (#18)](#volunteer-processing-18)~~ ✅
-- ~~[Shareable Direct Links (#24)](#volunteer-processing-shareable-direct-links-to-volunteer-modal-24)~~ ✅
-- ~~[Assign to Group on Approval (#25)](#volunteer-processing-assign-to-group-on-approval-25)~~ ✅
-- ~~[Add Current Groups to Volunteer Cards (#36)](#add-current-groups-list-to-volunteers-already-in-a-group-36)~~ ✅
+- ~~[Volunteer Processing: Shareable Direct Links to Volunteer Modal (#24)](#volunteer-processing-shareable-direct-links-to-volunteer-modal-24)~~ ✅
+- ~~[Volunteer Processing: Assign to Group on Approval (#25)](#volunteer-processing-assign-to-group-on-approval-25)~~ ✅
+- ~~[Add current groups list to volunteers already in a group (#36)](#add-current-groups-list-to-volunteers-already-in-a-group-36)~~ ✅
 
 ### Improvements
 - [Executive Dashboard: Mobile Views (#13)](#executive-dashboard-mobile-views-13)
@@ -30,17 +30,17 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Dashboard Date Range Selector (#20)](#dashboard-date-range-selector-20)~~ ✅
 
 ### Technical Debt
-- [BUG: Baptism Counter Doesn't Respond to Date Range Changes](#bug-baptism-counter-doesnt-respond-to-date-range-changes)
-- [BUG: Active Communities and Small Groups Chart Needs Work](#bug-active-communities-and-small-groups-chart-needs-work)
-- [~~Migrate `unstable_cache` to Cache Components (#21)~~](#migrate-unstable_cache-to-cache-components-use-cache--completed-2026-02-23-21)
-- [Review upstream PR #42 (#35)](#review-upstream-pr42-35)
+- ~~[Migrate `unstable_cache` to Cache Components (`use cache`) (#21)](#migrate-unstable_cache-to-cache-components-use-cache-21)~~ ✅
+- [review upstream pr42 (#35)](#review-upstream-pr42-35)
+- [BUG: Baptism Counter Doesn't Respond to Date Range Changes (#51)](#bug-baptism-counter-doesnt-respond-to-date-range-changes-51)
+- [BUG: Active Communities and Small Groups Chart Needs Work (#52)](#bug-active-communities-and-small-groups-chart-needs-work-52)
 - ~~[Upgrade to Next.js 16](#upgrade-to-nextjs-16)~~ ✅
 - ~~[Refine MP Permissions (#7)](#refine-mp-permissions-7)~~ ✅
 - ~~[Migrate `middleware.ts` to `proxy.ts` (#22)](#migrate-middlewarets-to-proxyts-22)~~ ✅
 - ~~[BUG: No Volunteers in Production Builds (#27)](#bug-no-volunteers-in-production-builds-27)~~ ✅
-- ~~[Images Not Showing on Volunteers (#30)](#images-are-not-showing-on-the-volunteers-perhaps-a-permssions-issue-30)~~ ✅
-- ~~[MP Links Not Showing in Production (#31)](#links-to-mp-are-not-showing-in-production-in-the-volunteer-processing-pages-31)~~ ✅
-- ~~[Review Upstream PR #39 (#34)](#review-upstream-pr-39-34)~~ ✅
+- ~~[Images are not showing on the volunteers. Perhaps a permssions issue? (#30)](#images-are-not-showing-on-the-volunteers-perhaps-a-permssions-issue-30)~~ ✅
+- ~~[Links to MP are not showing in production in the volunteer processing pages. (#31)](#links-to-mp-are-not-showing-in-production-in-the-volunteer-processing-pages-31)~~ ✅
+- ~~[Review upstream pr 39 (#34)](#review-upstream-pr-39-34)~~ ✅
 
 ---
 
@@ -72,10 +72,10 @@ A dedicated interface for tracking and managing church membership applications. 
 ### Pastoral Interface for Contact Logs ([#19](https://github.com/The-Moody-Church/mp-charts/issues/19))
 A dedicated pastoral interface for viewing and managing contact logs.
 
-### Volunteer Processing Search Bar
+### Volunteer Processing Search Bar ([#49](https://github.com/The-Moody-Church/mp-charts/issues/49))
 Add a search bar to the top-right of both the "New Volunteers In Process" and "Approved Active Volunteers" tabs on the volunteer processing page. Allows staff to quickly filter the card grid by volunteer name instead of visually scanning through all cards.
 
-### Volunteer Processing: Show In-Process Volunteers on Active Tab
+### Volunteer Processing: Show In-Process Volunteers on Active Tab ([#50](https://github.com/The-Moody-Church/mp-charts/issues/50))
 If a volunteer is in the "New Volunteers In Process" group but also already belongs to an active ministry group, they should still appear on the "Approved Active Volunteers" tab. Currently they are excluded from the active list while they remain in the in-process group.
 
 ### ~~Volunteer Processing ([#18](https://github.com/The-Moody-Church/mp-charts/issues/18))~~ ✅ COMPLETED
@@ -136,10 +136,10 @@ Migrated from `unstable_cache` to `'use cache'` directive with `cacheComponents:
 ### review upstream pr42 ([#35](https://github.com/The-Moody-Church/mp-charts/issues/35))
 Review upstream pr 42 for updates and cherry pick changes or merge all features.
 
-### BUG: Baptism Counter Doesn't Respond to Date Range Changes
+### BUG: Baptism Counter Doesn't Respond to Date Range Changes ([#51](https://github.com/The-Moody-Church/mp-charts/issues/51))
 The baptism count on the executive dashboard does not update when the date range selector is changed. It always shows the same value regardless of the selected time period.
 
-### BUG: Active Communities and Small Groups Chart Needs Work
+### BUG: Active Communities and Small Groups Chart Needs Work ([#52](https://github.com/The-Moody-Church/mp-charts/issues/52))
 The active communities and small groups chart on the executive dashboard needs improvement. The data or visualization is not accurately representing the information.
 
 ### ~~Upgrade to Next.js 16~~ ✅ COMPLETED (2026-02-14)
