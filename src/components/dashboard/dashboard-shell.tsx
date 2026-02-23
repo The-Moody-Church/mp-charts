@@ -105,7 +105,7 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
         </div>
 
         <p className="text-muted-foreground">
-          Worship Services attendance and group participation metrics for {description}
+          Church health metrics across discipleship, community, serving, and giving for {description}
         </p>
 
         {/* Date Range Filter */}

@@ -9,7 +9,14 @@ import {
   SmallGroupTrend,
   MonthlyAttendanceTrend,
   WeeklyAttendanceTrend,
-  CommunityAttendanceTrend
+  CommunityAttendanceTrend,
+  ServingTrend,
+  ServingByRoleType,
+  ServingByMinistry,
+  GivingByProgram,
+  GivingTrend,
+  EngagementOverlap,
+  RosterVsAttendance,
 } from '@/lib/dto';
 
 const MONTH_NAMES = [
@@ -175,7 +182,18 @@ export class DashboardService {
       previousYearMonthlyAttendanceTrends,
       weeklyAttendanceTrends,
       baptismsLastYear,
-      baptismsPreviousYear
+      baptismsPreviousYear,
+      membershipCount,
+      membershipPreviousCount,
+      uniqueEventParticipants,
+      rosterVsAttendance,
+      servingTrends,
+      servingByRoleType,
+      servingByMinistry,
+      totalServingLeading,
+      givingByProgram,
+      givingTrends,
+      engagementOverlap,
     ] = await Promise.all([
       this.getPeriodMetrics(currentYearStart, currentYearEnd),
       this.getPeriodMetrics(previousYearStart, previousYearEnd),
@@ -187,7 +205,18 @@ export class DashboardService {
       this.getMonthlyAttendanceTrends(previousYearStart, previousYearEnd),
       this.getWeeklyAttendanceTrends(currentYearStart, currentYearEnd),
       this.getBaptismsCount(currentBaptismsStart, today),
-      this.getBaptismsCount(previousBaptismsStart, previousBaptismsEnd)
+      this.getBaptismsCount(previousBaptismsStart, previousBaptismsEnd),
+      this.getMembershipCount(currentBaptismsStart, today),
+      this.getMembershipCount(previousBaptismsStart, previousBaptismsEnd),
+      this.getUniqueEventParticipants(currentYearStart, currentYearEnd),
+      this.getRosterVsAttendance(currentYearStart, currentYearEnd),
+      this.getServingTrends(currentYearStart, currentYearEnd),
+      this.getServingByRoleType(currentYearStart, currentYearEnd),
+      this.getServingByMinistry(currentYearStart, currentYearEnd),
+      this.getTotalServingLeading(currentYearStart, currentYearEnd),
+      this.getGivingByProgram(currentYearStart, currentYearEnd),
+      this.getGivingTrends(currentYearStart, currentYearEnd),
+      this.getEngagementOverlap(currentYearStart, currentYearEnd),
     ]);
 
     // Calculate year-over-year comparisons
@@ -213,6 +242,17 @@ export class DashboardService {
       weeklyCommunityAttendanceTrends: communityTrends.weekly,
       baptismsLastYear,
       baptismsPreviousYear,
+      membershipCount,
+      membershipPreviousCount,
+      uniqueEventParticipants,
+      rosterVsAttendance,
+      servingTrends,
+      servingByRoleType,
+      servingByMinistry,
+      totalServingLeading,
+      givingByProgram,
+      givingTrends,
+      engagementOverlap,
       generatedAt: new Date().toISOString()
     };
   }
@@ -1205,5 +1245,712 @@ export class DashboardService {
     const change = this.calculatePercentChange(current, previous);
     if (Math.abs(change) < 5) return 'stable';
     return change > 0 ? 'up' : 'down';
+  }
+
+  // ---------------------------------------------------------------
+  // Know God: Membership count (Milestone 48 net of Milestone 49)
+  // ---------------------------------------------------------------
+
+  private async getMembershipCount(startDate: Date, endDate: Date): Promise<number> {
+    try {
+      const startIso = startDate.toISOString();
+      const endIso = endDate.toISOString();
+
+      // Milestone 48 = Registered Member, Milestone 49 = Dropped Membership
+      const [registered, dropped] = await Promise.all([
+        this.mp!.getTableRecords<{ Participant_Milestone_ID: number }>({
+          table: 'Participant_Milestones',
+          select: 'Participant_Milestone_ID',
+          filter: `Milestone_ID = 48 AND Date_Accomplished >= '${startIso}' AND Date_Accomplished <= '${endIso}'`
+        }),
+        this.mp!.getTableRecords<{ Participant_Milestone_ID: number }>({
+          table: 'Participant_Milestones',
+          select: 'Participant_Milestone_ID',
+          filter: `Milestone_ID = 49 AND Date_Accomplished >= '${startIso}' AND Date_Accomplished <= '${endIso}'`
+        }),
+      ]);
+
+      return registered.length - dropped.length;
+    } catch (error) {
+      console.error('Error fetching membership count:', error);
+      return 0;
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // Know God: Unique Event Participants
+  // ---------------------------------------------------------------
+
+  private async getUniqueEventParticipants(startDate: Date, endDate: Date): Promise<number> {
+    const startIso = startDate.toISOString();
+    const endIso = endDate.toISOString();
+
+    try {
+      // Get events in the date range
+      const events = await this.mp!.getTableRecords<{ Event_ID: number }>({
+        table: 'Events',
+        select: 'Event_ID',
+        filter: `Event_Start_Date >= '${startIso}' AND Event_End_Date <= '${endIso}' AND Cancelled = 0`
+      });
+
+      if (events.length === 0) return 0;
+
+      // Get participants with status 3 or 4 (present)
+      const eventParticipants = await this.batchGetTableRecords<{
+        Participant_ID: number;
+      }>({
+        table: 'Event_Participants',
+        select: 'Participant_ID',
+        ids: events.map(e => e.Event_ID),
+        idColumn: 'Event_ID',
+        extraFilter: 'Participation_Status_ID IN (3, 4)'
+      });
+
+      const uniqueParticipants = new Set(eventParticipants.map(p => p.Participant_ID));
+      return uniqueParticipants.size;
+    } catch (error) {
+      console.error('Error fetching unique event participants:', error);
+      return 0;
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // Feed Your Soul: Roster vs Attendance
+  // ---------------------------------------------------------------
+
+  private async getRosterVsAttendance(startDate: Date, endDate: Date): Promise<RosterVsAttendance[]> {
+    const startIso = startDate.toISOString();
+    const endIso = endDate.toISOString();
+
+    try {
+      // Get community and small group types
+      const groups = await this.mp!.getTableRecords<{
+        Group_ID: number;
+        Group_Type_ID: number;
+      }>({
+        table: 'Groups',
+        select: 'Group_ID,Group_Type_ID',
+        filter: `Start_Date <= '${endIso}' AND (End_Date IS NULL OR End_Date >= '${startIso}')`
+      });
+
+      if (groups.length === 0) return [];
+
+      const groupTypeIds = new Set(groups.map(g => g.Group_Type_ID));
+      const groupTypes = await this.getGroupTypesWithCache(groupTypeIds);
+
+      // Filter for community and small group types
+      const relevantTypeIds = new Set(
+        groupTypes
+          .filter(gt =>
+            gt.Group_Type.toLowerCase().includes('small') ||
+            gt.Group_Type.toLowerCase().includes('life') ||
+            gt.Group_Type.toLowerCase().includes('community')
+          )
+          .map(gt => gt.Group_Type_ID)
+      );
+
+      const relevantGroups = groups.filter(g => relevantTypeIds.has(g.Group_Type_ID));
+      if (relevantGroups.length === 0) return [];
+
+      const groupTypeMap = new Map(groupTypes.map(gt => [gt.Group_Type_ID, gt.Group_Type]));
+      const groupToTypeMap = new Map(relevantGroups.map(g => [g.Group_ID, g.Group_Type_ID]));
+      const relevantGroupIds = relevantGroups.map(g => g.Group_ID);
+
+      // Roster: Group_Participants active during period
+      const rosterParticipants = await this.batchGetTableRecords<{
+        Group_ID: number;
+        Participant_ID: number;
+      }>({
+        table: 'Group_Participants',
+        select: 'Group_ID,Participant_ID',
+        ids: relevantGroupIds,
+        idColumn: 'Group_ID',
+        extraFilter: `Start_Date <= '${endIso}' AND (End_Date IS NULL OR End_Date >= '${startIso}')`
+      });
+
+      // Attendance: Event_Participants with present status for events linked to these groups
+      const attendanceParticipants = await this.batchGetTableRecords<{
+        Group_ID: number;
+        Participant_ID: number;
+      }>({
+        table: 'Event_Participants',
+        select: 'Group_ID,Participant_ID',
+        ids: relevantGroupIds,
+        idColumn: 'Group_ID',
+        extraFilter: 'Participation_Status_ID IN (3, 4)'
+      });
+
+      // Aggregate by group type
+      const typeRoster = new Map<number, Set<number>>();
+      const typeAttendance = new Map<number, Set<number>>();
+
+      for (const gp of rosterParticipants) {
+        const typeId = groupToTypeMap.get(gp.Group_ID);
+        if (!typeId) continue;
+        if (!typeRoster.has(typeId)) typeRoster.set(typeId, new Set());
+        typeRoster.get(typeId)!.add(gp.Participant_ID);
+      }
+
+      for (const ep of attendanceParticipants) {
+        const typeId = groupToTypeMap.get(ep.Group_ID);
+        if (!typeId) continue;
+        if (!typeAttendance.has(typeId)) typeAttendance.set(typeId, new Set());
+        typeAttendance.get(typeId)!.add(ep.Participant_ID);
+      }
+
+      const results: RosterVsAttendance[] = [];
+      for (const typeId of relevantTypeIds) {
+        const name = groupTypeMap.get(typeId) || 'Unknown';
+        results.push({
+          groupTypeName: name,
+          rosterCount: typeRoster.get(typeId)?.size || 0,
+          attendanceCount: typeAttendance.get(typeId)?.size || 0,
+        });
+      }
+
+      return results.filter(r => r.rosterCount > 0 || r.attendanceCount > 0);
+    } catch (error) {
+      console.error('Error fetching roster vs attendance:', error);
+      return [];
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // Grow in Love: Serving/Leading helpers
+  // ---------------------------------------------------------------
+
+  /**
+   * Gets Group_Participants in serving (Group_Role_Type_ID=3) or leading (Group_Role_Type_ID=1) roles
+   */
+  private async getServingLeadingParticipants(startDate: Date, endDate: Date): Promise<{
+    participantId: number;
+    contactId: number;
+    groupId: number;
+    groupRoleId: number;
+    roleTypeId: number;
+    startDate: string;
+    endDate: string | null;
+  }[]> {
+    const startIso = startDate.toISOString();
+    const endIso = endDate.toISOString();
+
+    try {
+      // Get all Group_Roles that are serving (type 3) or leading (type 1)
+      const servingRoles = await this.mp!.getTableRecords<{
+        Group_Role_ID: number;
+        Group_Role_Type_ID: number;
+        Ministry_ID: number | null;
+      }>({
+        table: 'Group_Roles',
+        select: 'Group_Role_ID,Group_Role_Type_ID,Ministry_ID',
+        filter: 'Group_Role_Type_ID IN (1, 3)'
+      });
+
+      if (servingRoles.length === 0) return [];
+
+      const servingRoleIds = servingRoles.map(r => r.Group_Role_ID);
+      const roleTypeMap = new Map(servingRoles.map(r => [r.Group_Role_ID, r.Group_Role_Type_ID]));
+
+      // Get Group_Participants with those roles, active during the period
+      const participants = await this.batchGetTableRecords<{
+        Participant_ID: number;
+        Group_ID: number;
+        Group_Role_ID: number;
+        Start_Date: string;
+        End_Date: string | null;
+      }>({
+        table: 'Group_Participants',
+        select: 'Participant_ID,Group_ID,Group_Role_ID,Start_Date,End_Date',
+        ids: servingRoleIds,
+        idColumn: 'Group_Role_ID',
+        extraFilter: `Start_Date <= '${endIso}' AND (End_Date IS NULL OR End_Date >= '${startIso}')`
+      });
+
+      // Get Participant → Contact mapping
+      const participantIds = [...new Set(participants.map(p => p.Participant_ID))];
+      const contactLookup = await this.batchGetTableRecords<{
+        Participant_ID: number;
+        Contact_ID: number;
+      }>({
+        table: 'Participants',
+        select: 'Participant_ID,Contact_ID',
+        ids: participantIds,
+        idColumn: 'Participant_ID'
+      });
+      const contactMap = new Map(contactLookup.map(c => [c.Participant_ID, c.Contact_ID]));
+
+      return participants.map(p => ({
+        participantId: p.Participant_ID,
+        contactId: contactMap.get(p.Participant_ID) || 0,
+        groupId: p.Group_ID,
+        groupRoleId: p.Group_Role_ID,
+        roleTypeId: roleTypeMap.get(p.Group_Role_ID) || 0,
+        startDate: p.Start_Date,
+        endDate: p.End_Date,
+      }));
+    } catch (error) {
+      console.error('Error fetching serving/leading participants:', error);
+      return [];
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // Grow in Love: Total Serving/Leading count
+  // ---------------------------------------------------------------
+
+  private async getTotalServingLeading(startDate: Date, endDate: Date): Promise<number> {
+    try {
+      const participants = await this.getServingLeadingParticipants(startDate, endDate);
+      const uniqueContacts = new Set(participants.map(p => p.contactId));
+      return uniqueContacts.size;
+    } catch (error) {
+      console.error('Error fetching total serving/leading:', error);
+      return 0;
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // Grow in Love: Serving Trends (monthly)
+  // ---------------------------------------------------------------
+
+  private async getServingTrends(startDate: Date, endDate: Date): Promise<ServingTrend[]> {
+    try {
+      const participants = await this.getServingLeadingParticipants(startDate, endDate);
+      if (participants.length === 0) return [];
+
+      const trends: ServingTrend[] = [];
+      const currentDate = new Date(startDate);
+
+      while (currentDate <= endDate) {
+        const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+        const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+
+        const servingContacts = new Set<number>();
+        const leadingContacts = new Set<number>();
+        const allContacts = new Set<number>();
+
+        for (const p of participants) {
+          const pStart = new Date(p.startDate);
+          const pEnd = p.endDate ? new Date(p.endDate) : null;
+          if (pStart <= monthEnd && (!pEnd || pEnd >= monthStart)) {
+            allContacts.add(p.contactId);
+            if (p.roleTypeId === 3) servingContacts.add(p.contactId);
+            if (p.roleTypeId === 1) leadingContacts.add(p.contactId);
+          }
+        }
+
+        trends.push({
+          month: `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`,
+          monthName: MONTH_NAMES[currentDate.getMonth()],
+          servingCount: servingContacts.size,
+          leadingCount: leadingContacts.size,
+          totalCount: allContacts.size,
+        });
+
+        currentDate.setMonth(currentDate.getMonth() + 1);
+      }
+
+      return trends;
+    } catch (error) {
+      console.error('Error fetching serving trends:', error);
+      return [];
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // Grow in Love: Serving by Role Type
+  // ---------------------------------------------------------------
+
+  private async getServingByRoleType(startDate: Date, endDate: Date): Promise<ServingByRoleType[]> {
+    try {
+      const participants = await this.getServingLeadingParticipants(startDate, endDate);
+      if (participants.length === 0) return [];
+
+      // Get Group_Role_Types for display names
+      const roleTypes = await this.mp!.getTableRecords<{
+        Group_Role_Type_ID: number;
+        Role_Type: string;
+      }>({
+        table: 'Group_Role_Types',
+        select: 'Group_Role_Type_ID,Role_Type',
+        filter: 'Group_Role_Type_ID IN (1, 3)'
+      });
+      const roleTypeNameMap = new Map(roleTypes.map(rt => [rt.Group_Role_Type_ID, rt.Role_Type]));
+
+      const byType = new Map<number, Set<number>>();
+      for (const p of participants) {
+        if (!byType.has(p.roleTypeId)) byType.set(p.roleTypeId, new Set());
+        byType.get(p.roleTypeId)!.add(p.contactId);
+      }
+
+      return Array.from(byType.entries()).map(([typeId, contacts]) => ({
+        roleTypeId: typeId,
+        roleTypeName: roleTypeNameMap.get(typeId) || (typeId === 1 ? 'Leader' : 'Servant'),
+        uniqueContacts: contacts.size,
+      }));
+    } catch (error) {
+      console.error('Error fetching serving by role type:', error);
+      return [];
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // Grow in Love: Serving by Ministry
+  // ---------------------------------------------------------------
+
+  private async getServingByMinistry(startDate: Date, endDate: Date): Promise<ServingByMinistry[]> {
+    try {
+      const participants = await this.getServingLeadingParticipants(startDate, endDate);
+      if (participants.length === 0) return [];
+
+      // Get Group_Roles with Ministry_ID
+      const roleIds = [...new Set(participants.map(p => p.groupRoleId))];
+      const roles = await this.batchGetTableRecords<{
+        Group_Role_ID: number;
+        Ministry_ID: number | null;
+      }>({
+        table: 'Group_Roles',
+        select: 'Group_Role_ID,Ministry_ID',
+        ids: roleIds,
+        idColumn: 'Group_Role_ID'
+      });
+      const roleMinistryMap = new Map(roles.map(r => [r.Group_Role_ID, r.Ministry_ID]));
+
+      // Get Ministry names
+      const ministryIds = [...new Set(roles.map(r => r.Ministry_ID).filter((id): id is number => id !== null))];
+      if (ministryIds.length === 0) return [];
+
+      const ministries = await this.batchGetTableRecords<{
+        Ministry_ID: number;
+        Ministry_Name: string;
+      }>({
+        table: 'Ministries',
+        select: 'Ministry_ID,Ministry_Name',
+        ids: ministryIds,
+        idColumn: 'Ministry_ID'
+      });
+      const ministryNameMap = new Map(ministries.map(m => [m.Ministry_ID, m.Ministry_Name]));
+
+      const byMinistry = new Map<number, Set<number>>();
+      for (const p of participants) {
+        const ministryId = roleMinistryMap.get(p.groupRoleId);
+        if (!ministryId) continue;
+        if (!byMinistry.has(ministryId)) byMinistry.set(ministryId, new Set());
+        byMinistry.get(ministryId)!.add(p.contactId);
+      }
+
+      return Array.from(byMinistry.entries())
+        .map(([ministryId, contacts]) => ({
+          ministryId,
+          ministryName: ministryNameMap.get(ministryId) || 'Unknown',
+          uniqueContacts: contacts.size,
+        }))
+        .sort((a, b) => b.uniqueContacts - a.uniqueContacts);
+    } catch (error) {
+      console.error('Error fetching serving by ministry:', error);
+      return [];
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // Change Your World: Giving by Program
+  // ---------------------------------------------------------------
+
+  private async getGivingByProgram(startDate: Date, endDate: Date): Promise<GivingByProgram[]> {
+    const startIso = startDate.toISOString();
+    const endIso = endDate.toISOString();
+    // Programs: 231, 220 (online), 219 (offline) — 220/219 are the same fund
+    const programIds = [231, 220, 219];
+
+    try {
+      // Get Donations in the date range
+      const donations = await this.mp!.getTableRecords<{
+        Donation_ID: number;
+      }>({
+        table: 'Donations',
+        select: 'Donation_ID',
+        filter: `Donation_Date >= '${startIso}' AND Donation_Date <= '${endIso}'`
+      });
+
+      if (donations.length === 0) return [];
+
+      // Get Donation_Distributions for those donations and our programs
+      const distributions = await this.batchGetTableRecords<{
+        Donation_Distribution_ID: number;
+        Donation_ID: number;
+        Program_ID: number;
+        Amount: number;
+      }>({
+        table: 'Donation_Distributions',
+        select: 'Donation_Distribution_ID,Donation_ID,Program_ID,Amount',
+        ids: donations.map(d => d.Donation_ID),
+        idColumn: 'Donation_ID',
+        extraFilter: `Program_ID IN (${programIds.join(',')})`
+      });
+
+      // Get Program names
+      const programs = await this.mp!.getTableRecords<{
+        Program_ID: number;
+        Program_Name: string;
+      }>({
+        table: 'Programs',
+        select: 'Program_ID,Program_Name',
+        filter: `Program_ID IN (${programIds.join(',')})`
+      });
+      const programNameMap = new Map(programs.map(p => [p.Program_ID, p.Program_Name]));
+
+      // Aggregate by program
+      const byProgram = new Map<number, number>();
+      for (const d of distributions) {
+        byProgram.set(d.Program_ID, (byProgram.get(d.Program_ID) || 0) + d.Amount);
+      }
+
+      return Array.from(byProgram.entries()).map(([programId, totalAmount]) => ({
+        programId,
+        programName: programNameMap.get(programId) || `Program ${programId}`,
+        totalAmount: Math.round(totalAmount * 100) / 100,
+      }));
+    } catch (error) {
+      console.error('Error fetching giving by program:', error);
+      return [];
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // Change Your World: Giving Trends (monthly)
+  // ---------------------------------------------------------------
+
+  private async getGivingTrends(startDate: Date, endDate: Date): Promise<GivingTrend[]> {
+    const startIso = startDate.toISOString();
+    const endIso = endDate.toISOString();
+    const programIds = [231, 220, 219];
+
+    try {
+      // Get Donations with dates
+      const donations = await this.mp!.getTableRecords<{
+        Donation_ID: number;
+        Donation_Date: string;
+      }>({
+        table: 'Donations',
+        select: 'Donation_ID,Donation_Date',
+        filter: `Donation_Date >= '${startIso}' AND Donation_Date <= '${endIso}'`
+      });
+
+      if (donations.length === 0) return [];
+
+      const donationDateMap = new Map(donations.map(d => [d.Donation_ID, d.Donation_Date]));
+
+      // Get distributions for our programs
+      const distributions = await this.batchGetTableRecords<{
+        Donation_ID: number;
+        Program_ID: number;
+        Amount: number;
+      }>({
+        table: 'Donation_Distributions',
+        select: 'Donation_ID,Program_ID,Amount',
+        ids: donations.map(d => d.Donation_ID),
+        idColumn: 'Donation_ID',
+        extraFilter: `Program_ID IN (${programIds.join(',')})`
+      });
+
+      // Get program names
+      const programs = await this.mp!.getTableRecords<{
+        Program_ID: number;
+        Program_Name: string;
+      }>({
+        table: 'Programs',
+        select: 'Program_ID,Program_Name',
+        filter: `Program_ID IN (${programIds.join(',')})`
+      });
+      const programNameMap = new Map(programs.map(p => [p.Program_ID, p.Program_Name]));
+
+      // Aggregate by month and program
+      const monthlyData = new Map<string, Map<string, number>>();
+
+      for (const d of distributions) {
+        const donationDate = donationDateMap.get(d.Donation_ID);
+        if (!donationDate) continue;
+
+        const date = new Date(donationDate);
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        const programName = programNameMap.get(d.Program_ID) || `Program ${d.Program_ID}`;
+
+        if (!monthlyData.has(monthKey)) monthlyData.set(monthKey, new Map());
+        const monthMap = monthlyData.get(monthKey)!;
+        monthMap.set(programName, (monthMap.get(programName) || 0) + d.Amount);
+      }
+
+      return Array.from(monthlyData.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([monthKey, programAmounts]) => {
+          const [, m] = monthKey.split('-').map(Number);
+          return {
+            month: monthKey,
+            monthName: MONTH_NAMES[m - 1],
+            programAmounts: Object.fromEntries(
+              Array.from(programAmounts.entries()).map(([name, amount]) => [name, Math.round(amount * 100) / 100])
+            ),
+          };
+        });
+    } catch (error) {
+      console.error('Error fetching giving trends:', error);
+      return [];
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // Engagement Venn Diagram: 3-way overlap
+  // ---------------------------------------------------------------
+
+  private async getEngagementOverlap(startDate: Date, endDate: Date): Promise<EngagementOverlap> {
+    const empty: EngagementOverlap = {
+      activityOnly: 0, groupOnly: 0, servingOnly: 0,
+      activityAndGroup: 0, activityAndServing: 0, groupAndServing: 0,
+      allThree: 0, totalActivity: 0, totalGroup: 0, totalServing: 0,
+    };
+
+    try {
+      const startIso = startDate.toISOString();
+      const endIso = endDate.toISOString();
+
+      // Run all three queries in parallel
+      const [activityContacts, groupContacts, servingContacts] = await Promise.all([
+        this.getActivityContactIds(startIso, endIso),
+        this.getGroupContactIds(startIso, endIso),
+        this.getServingContactIds(startIso, endIso),
+      ]);
+
+      // Compute 7 regions
+      const allThree = new Set([...activityContacts].filter(c => groupContacts.has(c) && servingContacts.has(c)));
+      const actAndGroup = new Set([...activityContacts].filter(c => groupContacts.has(c) && !servingContacts.has(c)));
+      const actAndServing = new Set([...activityContacts].filter(c => !groupContacts.has(c) && servingContacts.has(c)));
+      const groupAndServing = new Set([...groupContacts].filter(c => !activityContacts.has(c) && servingContacts.has(c)));
+      const actOnly = new Set([...activityContacts].filter(c => !groupContacts.has(c) && !servingContacts.has(c)));
+      const groupOnly = new Set([...groupContacts].filter(c => !activityContacts.has(c) && !servingContacts.has(c)));
+      const servingOnly = new Set([...servingContacts].filter(c => !activityContacts.has(c) && !groupContacts.has(c)));
+
+      return {
+        activityOnly: actOnly.size,
+        groupOnly: groupOnly.size,
+        servingOnly: servingOnly.size,
+        activityAndGroup: actAndGroup.size,
+        activityAndServing: actAndServing.size,
+        groupAndServing: groupAndServing.size,
+        allThree: allThree.size,
+        totalActivity: activityContacts.size,
+        totalGroup: groupContacts.size,
+        totalServing: servingContacts.size,
+      };
+    } catch (error) {
+      console.error('Error fetching engagement overlap:', error);
+      return empty;
+    }
+  }
+
+  /** Any Activity: unique Contact_IDs from Event_Participants with present status */
+  private async getActivityContactIds(startIso: string, endIso: string): Promise<Set<number>> {
+    const events = await this.mp!.getTableRecords<{ Event_ID: number }>({
+      table: 'Events',
+      select: 'Event_ID',
+      filter: `Event_Start_Date >= '${startIso}' AND Event_End_Date <= '${endIso}' AND Cancelled = 0`
+    });
+    if (events.length === 0) return new Set();
+
+    const participants = await this.batchGetTableRecords<{ Participant_ID: number }>({
+      table: 'Event_Participants',
+      select: 'Participant_ID',
+      ids: events.map(e => e.Event_ID),
+      idColumn: 'Event_ID',
+      extraFilter: 'Participation_Status_ID IN (3, 4)'
+    });
+
+    const participantIds = [...new Set(participants.map(p => p.Participant_ID))];
+    if (participantIds.length === 0) return new Set();
+
+    const contacts = await this.batchGetTableRecords<{ Participant_ID: number; Contact_ID: number }>({
+      table: 'Participants',
+      select: 'Participant_ID,Contact_ID',
+      ids: participantIds,
+      idColumn: 'Participant_ID'
+    });
+
+    return new Set(contacts.map(c => c.Contact_ID));
+  }
+
+  /** Small Group/Community: unique Contact_IDs from Group_Participants in community/small group types */
+  private async getGroupContactIds(startIso: string, endIso: string): Promise<Set<number>> {
+    const groups = await this.mp!.getTableRecords<{ Group_ID: number; Group_Type_ID: number }>({
+      table: 'Groups',
+      select: 'Group_ID,Group_Type_ID',
+      filter: `Start_Date <= '${endIso}' AND (End_Date IS NULL OR End_Date >= '${startIso}')`
+    });
+    if (groups.length === 0) return new Set();
+
+    const groupTypeIds = new Set(groups.map(g => g.Group_Type_ID));
+    const groupTypes = await this.getGroupTypesWithCache(groupTypeIds);
+    const smallGroupTypeIds = new Set(
+      groupTypes
+        .filter(gt =>
+          gt.Group_Type.toLowerCase().includes('small') ||
+          gt.Group_Type.toLowerCase().includes('life') ||
+          gt.Group_Type.toLowerCase().includes('community')
+        )
+        .map(gt => gt.Group_Type_ID)
+    );
+
+    const relevantGroupIds = groups
+      .filter(g => smallGroupTypeIds.has(g.Group_Type_ID))
+      .map(g => g.Group_ID);
+    if (relevantGroupIds.length === 0) return new Set();
+
+    const participants = await this.batchGetTableRecords<{ Participant_ID: number }>({
+      table: 'Group_Participants',
+      select: 'Participant_ID',
+      ids: relevantGroupIds,
+      idColumn: 'Group_ID',
+      extraFilter: `Start_Date <= '${endIso}' AND (End_Date IS NULL OR End_Date >= '${startIso}')`
+    });
+
+    const participantIds = [...new Set(participants.map(p => p.Participant_ID))];
+    if (participantIds.length === 0) return new Set();
+
+    const contacts = await this.batchGetTableRecords<{ Participant_ID: number; Contact_ID: number }>({
+      table: 'Participants',
+      select: 'Participant_ID,Contact_ID',
+      ids: participantIds,
+      idColumn: 'Participant_ID'
+    });
+
+    return new Set(contacts.map(c => c.Contact_ID));
+  }
+
+  /** Serving/Leading: unique Contact_IDs from Group_Participants with serving/leading role types */
+  private async getServingContactIds(startIso: string, endIso: string): Promise<Set<number>> {
+    const roles = await this.mp!.getTableRecords<{ Group_Role_ID: number }>({
+      table: 'Group_Roles',
+      select: 'Group_Role_ID',
+      filter: 'Group_Role_Type_ID IN (1, 3)'
+    });
+    if (roles.length === 0) return new Set();
+
+    const participants = await this.batchGetTableRecords<{ Participant_ID: number }>({
+      table: 'Group_Participants',
+      select: 'Participant_ID',
+      ids: roles.map(r => r.Group_Role_ID),
+      idColumn: 'Group_Role_ID',
+      extraFilter: `Start_Date <= '${endIso}' AND (End_Date IS NULL OR End_Date >= '${startIso}')`
+    });
+
+    const participantIds = [...new Set(participants.map(p => p.Participant_ID))];
+    if (participantIds.length === 0) return new Set();
+
+    const contacts = await this.batchGetTableRecords<{ Participant_ID: number; Contact_ID: number }>({
+      table: 'Participants',
+      select: 'Participant_ID,Contact_ID',
+      ids: participantIds,
+      idColumn: 'Participant_ID'
+    });
+
+    return new Set(contacts.map(c => c.Contact_ID));
   }
 }

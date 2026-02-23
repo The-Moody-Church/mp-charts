@@ -134,6 +134,10 @@ export function filterDashboardData(
   // Recompute year-over-year from the recomputed period metrics
   const yearOverYear = computeYearOverYear(currentPeriod, previousPeriod);
 
+  // Filter time-series serving & giving trends by selected date range
+  const servingTrends = filterMonthlyByDate(fullData.servingTrends, startDate, endDate);
+  const givingTrends = filterMonthlyByDate(fullData.givingTrends, startDate, endDate);
+
   return {
     ...fullData,
     currentPeriod,
@@ -144,7 +148,11 @@ export function filterDashboardData(
     smallGroupTrends,
     previousYearSmallGroupTrends,
     yearOverYear,
-    // groupTypeMetrics, eventTypeMetrics, baptisms — pass through from full range
+    servingTrends,
+    givingTrends,
+    // groupTypeMetrics, eventTypeMetrics, baptisms, engagementOverlap,
+    // rosterVsAttendance, servingByRoleType, servingByMinistry,
+    // givingByProgram, membership counts — pass through from full range
   };
 }
 
