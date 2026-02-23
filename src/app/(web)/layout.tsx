@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
@@ -17,7 +18,7 @@ export const viewport: Viewport = {
   themeColor: "#000000",
 }
 
-export default async function WebLayout({
+export default function WebLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
@@ -30,18 +31,24 @@ export default async function WebLayout({
   };
 
   return (
-    <AuthWrapper>
-      <Providers runtimeConfig={runtimeConfig}>
-        <div className={`flex flex-col ${GeistSans.variable} ${GeistMono.variable}`}>
-          <Header />
-          <main className="flex-1 mt-16">
-            <div className="px-4 py-3 border-b bg-muted/30">
-              <DynamicBreadcrumb />
-            </div>
-            {children}
-          </main>
-        </div>
-      </Providers>
-    </AuthWrapper>
+    <Suspense fallback={
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    }>
+      <AuthWrapper>
+        <Providers runtimeConfig={runtimeConfig}>
+          <div className={`flex flex-col ${GeistSans.variable} ${GeistMono.variable}`}>
+            <Header />
+            <main className="flex-1 mt-16">
+              <div className="px-4 py-3 border-b bg-muted/30">
+                <DynamicBreadcrumb />
+              </div>
+              {children}
+            </main>
+          </div>
+        </Providers>
+      </AuthWrapper>
+    </Suspense>
   );
 }

@@ -122,8 +122,9 @@ Same `"use server"` + `requireSession()` + delegate pattern as volunteer `action
 ### Components
 
 **Page** (`src/app/(web)/baptism-processing/page.tsx`):
-- Server Component, same as volunteer page
+- Sync wrapper with Suspense + async inner component (PPR pattern, same as volunteer page)
 - Deep link param: `?applicant=123`
+- Pattern: page exports sync function → `<Suspense>` → async `PageContent` awaits `searchParams`
 
 **Main** (`baptism-processing.tsx`):
 - `"use client"` with two tabs: "Current Baptism Applicants" / "Paused Baptism Applicants"

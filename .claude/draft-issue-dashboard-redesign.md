@@ -202,12 +202,26 @@ Participant_Milestones
   → Milestone_ID → Milestones
 ```
 
+### Caching architecture (updated 2026-02-23)
+The project now uses Cache Components (`cacheComponents: true` in `next.config.ts`) with PPR. New cached data functions should use the `'use cache'` directive with `cacheLife()` and `cacheTag()` instead of `unstable_cache`. Example:
+```ts
+async function getCachedEngagementData(startDateIso: string, endDateIso: string) {
+  'use cache';
+  cacheLife({ revalidate: 21600 }); // 6 hours
+  cacheTag('dashboard-data', 'engagement');
+  // ... fetch data ...
+}
+```
+Important: `new Date()` and other non-deterministic expressions must stay OUTSIDE `'use cache'` functions. Pass dates as serializable parameters (e.g., ISO strings).
+
+The dashboard page uses PPR — the outer shell pre-renders as static HTML, and `DashboardContent` (wrapped in `<Suspense>`) streams at request time via `await connection()`.
+
 ### Files that will be modified
 - `src/components/dashboard/dashboard-metrics.tsx` — major refactor for section layout
 - `src/components/dashboard/dashboard-shell.tsx` — may need section collapse state
-- `src/services/dashboardService.ts` — new data methods
+- `src/services/dashboardService.ts` — new data methods (use `'use cache'` pattern)
 - `src/lib/dto/dashboard.ts` — new interfaces for new data types
-- `src/components/dashboard/actions.ts` — new server actions for new data
+- `src/components/dashboard/actions.ts` — new cached server actions (use `'use cache'` + `cacheLife` + `cacheTag`)
 
 ### New files expected
 - `src/components/dashboard/venn-diagram.tsx` — engagement Venn
