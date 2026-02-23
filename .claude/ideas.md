@@ -120,8 +120,14 @@ Replace the hardcoded ministry year date ranges with an interactive date selecto
 
 ## Technical Debt
 
-### Migrate `unstable_cache` to Cache Components (`use cache`) ⚠️ REVERTED (2026-02-14) ([#21](https://github.com/The-Moody-Church/mp-charts/issues/21))
-Originally migrated to `'use cache'` directive with `cacheTag` and `cacheLife`, but reverted ([PR #10](https://github.com/The-Moody-Church/mp-charts/pull/10)) because the `'use cache'` directive is only available in Next.js canary builds, not stable releases. The codebase currently uses `unstable_cache`. Revisit when `'use cache'` lands in a stable Next.js release.
+### Migrate `unstable_cache` to Cache Components (`use cache`) ⚠️ READY TO MIGRATE ([#21](https://github.com/The-Moody-Church/mp-charts/issues/21))
+Previously reverted ([PR #10](https://github.com/The-Moody-Church/mp-charts/pull/10)) because `'use cache'` was only in canary builds. **Now available in stable Next.js 16.** Investigation (2026-02-23) confirmed two migration paths:
+
+**Option A (Recommended): `experimental: { useCache: true }`** — Drop-in replacement for 4 `unstable_cache` call sites. No PPR, no Suspense boundaries required. Minimal diff.
+
+**Option B: `cacheComponents: true`** — Full Cache Components with PPR. Stable/non-experimental but requires `<Suspense>` boundaries around all uncached dynamic data. More invasive.
+
+4 call sites to migrate: `getCachedDashboardData` (6h), `getCachedFullRangeData` (6h), `getCachedGroupTypes` (24h), `getCachedEventTypes` (24h). All in `actions.ts` and `dashboardService.ts`. Compatible with `output: "standalone"` and Docker.
 
 ### review upstream pr42 ([#35](https://github.com/The-Moody-Church/mp-charts/issues/35))
 Review upstream pr 42 for updates and cherry pick changes or merge all features.
