@@ -8,17 +8,19 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 
 ## Table of Contents
 
-### ~~Features ([#44](https://github.com/The-Moody-Church/mp-charts/issues/44))~~ ✅ COMPLETED
+### Features
 - [Redesign Dashboard Layout: Discipleship Pathway Sections (#42)](#redesign-dashboard-layout-discipleship-pathway-sections-42)
 - [Baptism Processing (#17)](#baptism-processing-17)
-- [Membership Applications](#membership-applications)
+- [Membership Applications (#47)](#membership-applications-47)
 - [Pastoral Interface for Contact Logs (#19)](#pastoral-interface-for-contact-logs-19)
+- [Volunteer Processing Search Bar](#volunteer-processing-search-bar)
+- [Volunteer Processing: Show In-Process Volunteers on Active Tab](#volunteer-processing-show-in-process-volunteers-on-active-tab)
 - ~~[Volunteer Processing (#18)](#volunteer-processing-18)~~ ✅
 - ~~[Shareable Direct Links (#24)](#volunteer-processing-shareable-direct-links-to-volunteer-modal-24)~~ ✅
 - ~~[Assign to Group on Approval (#25)](#volunteer-processing-assign-to-group-on-approval-25)~~ ✅
 - ~~[Add Current Groups to Volunteer Cards (#36)](#add-current-groups-list-to-volunteers-already-in-a-group-36)~~ ✅
 
-### ~~Improvements ([#45](https://github.com/The-Moody-Church/mp-charts/issues/45))~~ ✅ COMPLETED
+### Improvements
 - [Executive Dashboard: Mobile Views (#13)](#executive-dashboard-mobile-views-13)
 - [Small Group Trends Chart (#15)](#small-group-trends-chart-15)
 - [Volunteer Processing Mobile Views (#33)](#volunteer-processing-mobile-views-33)
@@ -27,7 +29,9 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Update Webpage Title (#4)](#update-webpage-title-4)~~ ✅
 - ~~[Dashboard Date Range Selector (#20)](#dashboard-date-range-selector-20)~~ ✅
 
-### ~~Technical Debt ([#46](https://github.com/The-Moody-Church/mp-charts/issues/46))~~ ✅ COMPLETED
+### Technical Debt
+- [BUG: Baptism Counter Doesn't Respond to Date Range Changes](#bug-baptism-counter-doesnt-respond-to-date-range-changes)
+- [BUG: Active Communities and Small Groups Chart Needs Work](#bug-active-communities-and-small-groups-chart-needs-work)
 - [~~Migrate `unstable_cache` to Cache Components (#21)~~](#migrate-unstable_cache-to-cache-components-use-cache--completed-2026-02-23-21)
 - [Review upstream PR #42 (#35)](#review-upstream-pr42-35)
 - ~~[Upgrade to Next.js 16](#upgrade-to-nextjs-16)~~ ✅
@@ -47,12 +51,12 @@ Redesign the executive dashboard from a flat chart grid into a structured layout
 
 **Know God**: Worship attendance (existing), baptisms (existing), membership milestone (new), unique event participants (new). **Feed Your Soul**: Community attendance (existing), small group trends (existing), group participation (existing), roster vs actual attendance (new). **Grow in Love**: Total serving/leading count (new), serving by role type (new), where people serve by ministry (new), serving trends (new). **Change Your World**: Program giving from Donation_Distributions (new), giving trends (new) — will expand with future survey data. **Other**: Year-over-year comparison and anything that doesn't fit.
 
-Full specification with data sources, MP schema relationships, phased implementation plan, and layout wireframe: [`.claude/draft-issue-dashboard-redesign.md`](.claude/draft-issue-dashboard-redesign.md)
+Full specification with data sources, MP schema relationships, phased implementation plan, and layout wireframe: [`.claude/draft-issue-dashboard-redesign.md`](draft-issue-dashboard-redesign.md)
 
 ### Baptism Processing ([#17](https://github.com/The-Moody-Church/mp-charts/issues/17))
 A dedicated interface for tracking and managing the baptism journey/process in Ministry Platform. Mirrors the volunteer processing pattern but simplified — purely milestone-based with 9 ordered steps.
 
-**Implementation plan**: [`.claude/plan-baptism-processing.md`](.claude/plan-baptism-processing.md)
+**Implementation plan**: [`.claude/plan-baptism-processing.md`](plan-baptism-processing.md)
 
 **Groups**: Current Applicants (Group 1023) / Paused Applicants (Group 1024)
 
@@ -67,6 +71,12 @@ A dedicated interface for tracking and managing church membership applications. 
 
 ### Pastoral Interface for Contact Logs ([#19](https://github.com/The-Moody-Church/mp-charts/issues/19))
 A dedicated pastoral interface for viewing and managing contact logs.
+
+### Volunteer Processing Search Bar
+Add a search bar to the top-right of both the "New Volunteers In Process" and "Approved Active Volunteers" tabs on the volunteer processing page. Allows staff to quickly filter the card grid by volunteer name instead of visually scanning through all cards.
+
+### Volunteer Processing: Show In-Process Volunteers on Active Tab
+If a volunteer is in the "New Volunteers In Process" group but also already belongs to an active ministry group, they should still appear on the "Approved Active Volunteers" tab. Currently they are excluded from the active list while they remain in the in-process group.
 
 ### ~~Volunteer Processing ([#18](https://github.com/The-Moody-Church/mp-charts/issues/18))~~ ✅ COMPLETED
 Volunteer processing interface for children's ministry with two-tab layout (New Volunteers In Process / Approved Active Volunteers), card-based display with photos and requirement checklists, detail modal with expanded statuses and MP links, and write-back capabilities for milestones, certifications, and file uploads.
@@ -125,6 +135,12 @@ Migrated from `unstable_cache` to `'use cache'` directive with `cacheComponents:
 
 ### review upstream pr42 ([#35](https://github.com/The-Moody-Church/mp-charts/issues/35))
 Review upstream pr 42 for updates and cherry pick changes or merge all features.
+
+### BUG: Baptism Counter Doesn't Respond to Date Range Changes
+The baptism count on the executive dashboard does not update when the date range selector is changed. It always shows the same value regardless of the selected time period.
+
+### BUG: Active Communities and Small Groups Chart Needs Work
+The active communities and small groups chart on the executive dashboard needs improvement. The data or visualization is not accurately representing the information.
 
 ### ~~Upgrade to Next.js 16~~ ✅ COMPLETED (2026-02-14)
 Upgraded from Next.js 15.5.6 to 16.1.6 LTS. See session summary for details.

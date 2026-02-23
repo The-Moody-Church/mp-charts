@@ -50,7 +50,9 @@
       "Bash(export PATH=\"/opt/homebrew/bin:$PATH\")",
       "Read(//Users/jonathon.huff/.local/bin/**)",
       "Bash(brew install:*)",
-      "Bash(gh auth status:*)"
+      "Bash(gh auth status:*)",
+      "Edit(**)",
+      "Write(**)"
     ],
     "deny": [],
     "ask": []
