@@ -31,7 +31,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 
 ### Technical Debt
 - ~~[Migrate `unstable_cache` to Cache Components (`use cache`) (#21)](#migrate-unstable_cache-to-cache-components-use-cache-21)~~ ✅
-- [review upstream pr42 (#35)](#review-upstream-pr42-35)
+- ~~[review upstream pr42 (#35)](#review-upstream-pr42-35)~~ ✅
 - [BUG: Baptism Counter Doesn't Respond to Date Range Changes (#51)](#bug-baptism-counter-doesnt-respond-to-date-range-changes-51)
 - [BUG: Active Communities and Small Groups Chart Needs Work (#52)](#bug-active-communities-and-small-groups-chart-needs-work-52)
 - ~~[Upgrade to Next.js 16](#upgrade-to-nextjs-16)~~ ✅
@@ -67,7 +67,17 @@ A dedicated interface for tracking and managing the baptism journey/process in M
 **Config**: Program_ID 306, Group_Role_ID 2, all milestone IDs via env vars. Production-visible from day one.
 
 ### Membership Applications ([#47](https://github.com/The-Moody-Church/mp-charts/issues/47))
-A dedicated interface for tracking and managing church membership applications. Patterned after the volunteer processing and baptism processing features — milestone-based checklist, card grid with photos, detail modal with contact info and write-back capabilities. Group IDs, milestone IDs, and process steps TBD.
+A dedicated interface for tracking and managing church membership applications. Simplest of the three processing features — single group (1025), purely milestone-based, no tabs.
+
+**Implementation plan**: [`.claude/plan-membership-processing.md`](plan-membership-processing.md)
+
+**Group**: Membership Applicants (Group 1025) — single list, no tabs
+
+**8 milestones in order**: Pre-Application (27) → Application (42) → Started Class (43) → Completed Class (44) → Approved by LC (45) → Listed in Bulletin (46) → Presented to Congregation (47) → Registered Member (48). Excluded: Dropped Membership (49) — managed in MP.
+
+**Key features**: Single-page card grid with photos + checklist, detail modal with contact info (email/phone), file uploads on milestones, photo upload, "Complete Membership" action (creates milestone 48 + ends group participation), deep linking (`?applicant=123`).
+
+**Config**: Program_ID 307, Group_Role_ID 2, all milestone IDs via env vars. Production-visible from day one.
 
 ### Pastoral Interface for Contact Logs ([#19](https://github.com/The-Moody-Church/mp-charts/issues/19))
 A dedicated pastoral interface for viewing and managing contact logs.
@@ -133,8 +143,8 @@ Replace the hardcoded ministry year date ranges with an interactive date selecto
 ### ~~Migrate `unstable_cache` to Cache Components (`use cache`)~~ ✅ COMPLETED (2026-02-23) ([#21](https://github.com/The-Moody-Church/mp-charts/issues/21))
 Migrated from `unstable_cache` to `'use cache'` directive with `cacheComponents: true` (full PPR). All 4 call sites converted to `'use cache'` + `cacheLife()` + `cacheTag()`. Added Suspense boundaries to all pages with dynamic data. Dashboard uses `connection()` to defer to runtime. Build output shows `◐ (Partial Prerender)` for all authenticated pages.
 
-### review upstream pr42 ([#35](https://github.com/The-Moody-Church/mp-charts/issues/35))
-Review upstream pr 42 for updates and cherry pick changes or merge all features.
+### ~~review upstream pr42 ([#35](https://github.com/The-Moody-Church/mp-charts/issues/35))~~ ✅ COMPLETED
+Reviewed all upstream PRs through #42 (2026-02-20). Cherry-picked: `@inquirer/prompts` ^7→^8, updated `components.md` layout import patterns, CLAUDE.md additions (Next.js 16 Notes, Services Layer + Contexts, Data Flow, service import patterns).
 
 ### BUG: Baptism Counter Doesn't Respond to Date Range Changes ([#51](https://github.com/The-Moody-Church/mp-charts/issues/51))
 The baptism count on the executive dashboard does not update when the date range selector is changed. It always shows the same value regardless of the selected time period.
