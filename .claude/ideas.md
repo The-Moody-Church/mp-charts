@@ -8,7 +8,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 
 ## Table of Contents
 
-### Features ([#44](https://github.com/The-Moody-Church/mp-charts/issues/44))
+### ~~Features ([#44](https://github.com/The-Moody-Church/mp-charts/issues/44))~~ ✅ COMPLETED
 - [Redesign Dashboard Layout: Discipleship Pathway Sections (#42)](#redesign-dashboard-layout-discipleship-pathway-sections-42)
 - [Baptism Processing (#17)](#baptism-processing-17)
 - [Membership Applications](#membership-applications)
