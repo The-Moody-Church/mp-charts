@@ -121,8 +121,6 @@ export class ContactLogService {
   public async createContactLog(
     contactLogData: Omit<ContactLogInput, 'Contact_Log_ID'>,
   ): Promise<ContactLog> {
-    console.log('ContactLogService.createContactLog - Creating with data:', JSON.stringify(contactLogData, null, 2));
-    
     // Convert ISO date to SQL Server format (YYYY-MM-DD HH:MM:SS)
     // Ministry Platform expects SQL datetime format, not ISO format
     if (contactLogData.Contact_Date) {
@@ -135,12 +133,10 @@ export class ContactLogService {
       const minutes = String(date.getMinutes()).padStart(2, '0');
       const seconds = String(date.getSeconds()).padStart(2, '0');
       contactLogData.Contact_Date = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-      console.log('ContactLogService.createContactLog - Converted date to SQL format:', contactLogData.Contact_Date);
     }
-    
+
     // Validate the input data (update schema to accept SQL datetime string)
     const validatedData = ContactLogSchema.omit({ Contact_Log_ID: true }).parse(contactLogData);
-    console.log('ContactLogService.createContactLog - Validation successful');
     
     const result = await this.mp!.createTableRecords(
       "Contact_Log",
@@ -165,9 +161,6 @@ export class ContactLogService {
     contactLogId: number,
     contactLogData: Partial<Omit<ContactLogInput, 'Contact_Log_ID'>>
   ): Promise<ContactLog> {
-    console.log('ContactLogService.updateContactLog - Updating log:', contactLogId);
-    console.log('ContactLogService.updateContactLog - Update data:', JSON.stringify(contactLogData, null, 2));
-    
     // Convert ISO date to SQL Server format if provided
     if (contactLogData.Contact_Date) {
       const date = new Date(contactLogData.Contact_Date);
@@ -178,7 +171,6 @@ export class ContactLogService {
       const minutes = String(date.getMinutes()).padStart(2, '0');
       const seconds = String(date.getSeconds()).padStart(2, '0');
       contactLogData.Contact_Date = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-      console.log('ContactLogService.updateContactLog - Converted date to SQL format:', contactLogData.Contact_Date);
     }
     
     // Validate the input data
@@ -206,13 +198,9 @@ export class ContactLogService {
    * @returns Promise<void>
    */
   public async deleteContactLog(contactLogId: number): Promise<void> {
-    console.log('ContactLogService.deleteContactLog - Deleting log:', contactLogId);
-    
     await this.mp!.deleteTableRecords(
       "Contact_Log",
       [contactLogId]
     );
-    
-    console.log('ContactLogService.deleteContactLog - Successfully deleted');
   }
 }

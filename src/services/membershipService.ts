@@ -1,4 +1,5 @@
 import { MPHelper } from '@/lib/providers/ministry-platform';
+import { sanitizeIds } from '@/lib/providers/ministry-platform/utils/filter-sanitize';
 import {
   MembershipApplicantInfo,
   MembershipCard,
@@ -322,7 +323,7 @@ export class MembershipService {
       const batch = await this.mp!.getTableRecords<ParticipantRecord>({
         table: 'Participants',
         select: 'Participant_ID,Contact_ID',
-        filter: `Participant_ID IN (${batchIds.join(',')})`
+        filter: `Participant_ID IN (${sanitizeIds(batchIds)})`
       });
       allParticipants.push(...batch);
     }
@@ -344,7 +345,7 @@ export class MembershipService {
       }>({
         table: 'Contacts',
         select: 'Contact_ID,First_Name,Nickname,Last_Name,dp_fileUniqueId AS Image_GUID,Email_Address,Mobile_Phone',
-        filter: `Contact_ID IN (${batchIds.join(',')})`
+        filter: `Contact_ID IN (${sanitizeIds(batchIds)})`
       });
       allContacts.push(...batch);
     }
@@ -428,7 +429,7 @@ export class MembershipService {
       const batch = await this.mp!.getTableRecords<MilestoneRecord>({
         table: 'Participant_Milestones',
         select: 'Participant_Milestone_ID,Participant_ID,Milestone_ID,Date_Accomplished,Notes',
-        filter: `Milestone_ID IN (${milestoneIds.join(',')}) AND Participant_ID IN (${batchIds.join(',')})`,
+        filter: `Milestone_ID IN (${sanitizeIds(milestoneIds)}) AND Participant_ID IN (${sanitizeIds(batchIds)})`,
         orderBy: 'Date_Accomplished DESC'
       });
       allResults.push(...batch);

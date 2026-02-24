@@ -1,12 +1,14 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { getSessionCookie } from 'better-auth/cookies';
 
+const isDev = process.env.NODE_ENV === 'development';
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Early returns for public paths
   if (pathname.startsWith('/api') || pathname === '/signin') {
-    console.log(`Proxy: Allowing public path ${pathname}`);
+    if (isDev) console.log(`Proxy: Allowing public path ${pathname}`);
     return NextResponse.next();
   }
 
@@ -14,11 +16,11 @@ export async function proxy(request: NextRequest) {
     const sessionCookie = getSessionCookie(request);
 
     if (!sessionCookie) {
-      console.log("Proxy: Redirecting to signin - no session cookie");
+      if (isDev) console.log("Proxy: Redirecting to signin - no session cookie");
       return NextResponse.redirect(new URL('/signin', request.url));
     }
 
-    console.log(`Proxy: Allowing request to ${pathname}`);
+    if (isDev) console.log(`Proxy: Allowing request to ${pathname}`);
     return NextResponse.next();
 
   } catch (error) {

@@ -5,6 +5,7 @@ import { ContactLogTypes } from "@/lib/providers/ministry-platform/models/Contac
 import { ContactLogInput } from "@/lib/providers/ministry-platform/models/ContactLogSchema";
 import { ContactLogService } from "@/services/contactLogService";
 import { requireSession, getMpUserId } from "@/lib/auth-helpers";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 export async function getContactLogTypes(): Promise<ContactLogTypes[]> {
   try {
@@ -25,6 +26,7 @@ export async function createContactLog(
 ): Promise<ContactLog> {
   try {
     const session = await requireSession();
+    enforceRateLimit(session.user.id, "write");
     const userId = getMpUserId(session);
 
     if (!userId) {
@@ -57,6 +59,7 @@ export async function updateContactLog(
 ): Promise<ContactLog> {
   try {
     const session = await requireSession();
+    enforceRateLimit(session.user.id, "write");
     const userId = getMpUserId(session);
 
     if (!userId) {
@@ -85,7 +88,8 @@ export async function updateContactLog(
 
 export async function deleteContactLog(contactLogId: number): Promise<void> {
   try {
-    await requireSession();
+    const session = await requireSession();
+    enforceRateLimit(session.user.id, "write");
 
     if (!contactLogId || contactLogId <= 0) {
       throw new Error("Valid Contact Log ID is required");

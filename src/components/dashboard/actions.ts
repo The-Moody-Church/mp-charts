@@ -1,6 +1,8 @@
 'use server';
 
 import { cacheLife, cacheTag, revalidatePath, revalidateTag } from 'next/cache';
+import { requireSession } from '@/lib/auth-helpers';
+import { enforceRateLimit } from '@/lib/rate-limit';
 import { DashboardService } from '@/services/dashboardService';
 import { DashboardData } from '@/lib/dto';
 
@@ -204,6 +206,9 @@ export async function refreshDashboardCache(): Promise<{
   timestamp: Date;
 }> {
   try {
+    const session = await requireSession();
+    enforceRateLimit(session.user.id, "cacheRefresh");
+
     revalidatePath('/dashboard');
     revalidateTag('dashboard-data', { expire: 0 });
     revalidateTag('group-types', { expire: 0 });

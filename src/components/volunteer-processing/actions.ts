@@ -1,8 +1,12 @@
 "use server";
 
 import { requireSession, getMpUserId } from "@/lib/auth-helpers";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { VolunteerService } from "@/services/volunteerService";
 import { VolunteerCard, VolunteerDetail, MilestoneFileInfo, ApprovedVolunteersResult, GroupRoleOption, GroupFilterOption } from "@/lib/dto";
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const ALLOWED_DOCUMENT_TYPES = [...ALLOWED_IMAGE_TYPES, 'application/pdf'];
 
 export async function getInProcessVolunteers(): Promise<VolunteerCard[]> {
   try {
@@ -77,6 +81,7 @@ export async function getFormResponseFiles(formResponseId: number): Promise<Mile
 export async function createFormResponse(formData: FormData): Promise<void> {
   try {
     const session = await requireSession();
+    enforceRateLimit(session.user.id, "write");
     const userId = getMpUserId(session);
 
     const service = await VolunteerService.getInstance();
@@ -90,6 +95,9 @@ export async function createFormResponse(formData: FormData): Promise<void> {
     const files: File[] = [];
     for (const [key, value] of formData.entries()) {
       if (key === "files" && value instanceof File && value.size > 0) {
+        if (!ALLOWED_DOCUMENT_TYPES.includes(value.type)) {
+          throw new Error(`Invalid file type: ${value.type}. Allowed: JPEG, PNG, GIF, WebP, PDF`);
+        }
         files.push(value);
       }
     }
@@ -106,6 +114,7 @@ export async function createFormResponse(formData: FormData): Promise<void> {
 export async function uploadVolunteerPhoto(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
     const session = await requireSession();
+    enforceRateLimit(session.user.id, "upload");
 
     const contactId = Number(formData.get("Contact_ID"));
     if (!contactId || isNaN(contactId)) {
@@ -122,6 +131,10 @@ export async function uploadVolunteerPhoto(formData: FormData): Promise<{ succes
       return { success: false, error: `File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum 1 MB.` };
     }
 
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      return { success: false, error: "Invalid file type. Allowed: JPEG, PNG, GIF, WebP" };
+    }
+
     const userId = getMpUserId(session);
 
     const service = await VolunteerService.getInstance();
@@ -136,6 +149,7 @@ export async function uploadVolunteerPhoto(formData: FormData): Promise<{ succes
 export async function createVolunteerMilestone(formData: FormData): Promise<void> {
   try {
     const session = await requireSession();
+    enforceRateLimit(session.user.id, "write");
     const userId = getMpUserId(session);
 
     const service = await VolunteerService.getInstance();
@@ -151,6 +165,9 @@ export async function createVolunteerMilestone(formData: FormData): Promise<void
     const files: File[] = [];
     for (const [key, value] of formData.entries()) {
       if (key === "files" && value instanceof File && value.size > 0) {
+        if (!ALLOWED_DOCUMENT_TYPES.includes(value.type)) {
+          throw new Error(`Invalid file type: ${value.type}. Allowed: JPEG, PNG, GIF, WebP, PDF`);
+        }
         files.push(value);
       }
     }
@@ -167,6 +184,7 @@ export async function createVolunteerMilestone(formData: FormData): Promise<void
 export async function updateVolunteerMilestone(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
     const session = await requireSession();
+    enforceRateLimit(session.user.id, "write");
 
     const milestoneRecordId = Number(formData.get("Participant_Milestone_ID"));
     if (!milestoneRecordId || isNaN(milestoneRecordId)) {
@@ -186,6 +204,9 @@ export async function updateVolunteerMilestone(formData: FormData): Promise<{ su
     const files: File[] = [];
     for (const [key, value] of formData.entries()) {
       if (key === "files" && value instanceof File && value.size > 0) {
+        if (!ALLOWED_DOCUMENT_TYPES.includes(value.type)) {
+          return { success: false, error: `Invalid file type: ${value.type}. Allowed: JPEG, PNG, GIF, WebP, PDF` };
+        }
         files.push(value);
       }
     }
@@ -204,6 +225,7 @@ export async function updateVolunteerMilestone(formData: FormData): Promise<{ su
 export async function updateVolunteerCertification(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
     const session = await requireSession();
+    enforceRateLimit(session.user.id, "write");
 
     const certId = Number(formData.get("Participant_Certification_ID"));
     if (!certId || isNaN(certId)) {
@@ -223,6 +245,9 @@ export async function updateVolunteerCertification(formData: FormData): Promise<
     const files: File[] = [];
     for (const [key, value] of formData.entries()) {
       if (key === "files" && value instanceof File && value.size > 0) {
+        if (!ALLOWED_DOCUMENT_TYPES.includes(value.type)) {
+          return { success: false, error: `Invalid file type: ${value.type}. Allowed: JPEG, PNG, GIF, WebP, PDF` };
+        }
         files.push(value);
       }
     }
@@ -241,6 +266,7 @@ export async function updateVolunteerCertification(formData: FormData): Promise<
 export async function updateVolunteerFormResponse(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
     const session = await requireSession();
+    enforceRateLimit(session.user.id, "write");
 
     const frId = Number(formData.get("Form_Response_ID"));
     if (!frId || isNaN(frId)) {
@@ -259,6 +285,9 @@ export async function updateVolunteerFormResponse(formData: FormData): Promise<{
     const files: File[] = [];
     for (const [key, value] of formData.entries()) {
       if (key === "files" && value instanceof File && value.size > 0) {
+        if (!ALLOWED_DOCUMENT_TYPES.includes(value.type)) {
+          return { success: false, error: `Invalid file type: ${value.type}. Allowed: JPEG, PNG, GIF, WebP, PDF` };
+        }
         files.push(value);
       }
     }
@@ -299,6 +328,7 @@ export async function getApprovedGroupsList(): Promise<GroupFilterOption[]> {
 export async function assignVolunteerToGroup(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
     const session = await requireSession();
+    enforceRateLimit(session.user.id, "write");
 
     const currentGroupParticipantId = Number(formData.get("currentGroupParticipantId"));
     const participantId = Number(formData.get("participantId"));

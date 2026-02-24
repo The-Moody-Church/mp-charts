@@ -1,8 +1,12 @@
 "use server";
 
 import { requireSession, getMpUserId } from "@/lib/auth-helpers";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { MembershipService } from "@/services/membershipService";
 import { MembershipCard, MembershipDetail, MembershipMilestoneFileInfo } from "@/lib/dto";
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const ALLOWED_DOCUMENT_TYPES = [...ALLOWED_IMAGE_TYPES, 'application/pdf'];
 
 export async function getApplicants(): Promise<MembershipCard[]> {
   try {
@@ -33,6 +37,7 @@ export async function getApplicantDetail(
 export async function createMembershipMilestone(formData: FormData): Promise<void> {
   try {
     const session = await requireSession();
+    enforceRateLimit(session.user.id, "write");
     const userId = getMpUserId(session);
 
     const service = await MembershipService.getInstance();
@@ -47,6 +52,9 @@ export async function createMembershipMilestone(formData: FormData): Promise<voi
     const files: File[] = [];
     for (const [key, value] of formData.entries()) {
       if (key === "files" && value instanceof File && value.size > 0) {
+        if (!ALLOWED_DOCUMENT_TYPES.includes(value.type)) {
+          throw new Error(`Invalid file type: ${value.type}. Allowed: JPEG, PNG, GIF, WebP, PDF`);
+        }
         files.push(value);
       }
     }
@@ -63,6 +71,7 @@ export async function createMembershipMilestone(formData: FormData): Promise<voi
 export async function updateMembershipMilestone(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
     const session = await requireSession();
+    enforceRateLimit(session.user.id, "write");
 
     const milestoneRecordId = Number(formData.get("Participant_Milestone_ID"));
     if (!milestoneRecordId || isNaN(milestoneRecordId)) {
@@ -81,6 +90,9 @@ export async function updateMembershipMilestone(formData: FormData): Promise<{ s
     const files: File[] = [];
     for (const [key, value] of formData.entries()) {
       if (key === "files" && value instanceof File && value.size > 0) {
+        if (!ALLOWED_DOCUMENT_TYPES.includes(value.type)) {
+          return { success: false, error: `Invalid file type: ${value.type}. Allowed: JPEG, PNG, GIF, WebP, PDF` };
+        }
         files.push(value);
       }
     }
@@ -99,6 +111,7 @@ export async function updateMembershipMilestone(formData: FormData): Promise<{ s
 export async function confirmMembershipCompletion(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
     const session = await requireSession();
+    enforceRateLimit(session.user.id, "write");
 
     const groupParticipantId = Number(formData.get("Group_Participant_ID"));
     if (!groupParticipantId || isNaN(groupParticipantId)) {
@@ -134,6 +147,7 @@ export async function getMembershipMilestoneFiles(milestoneRecordId: number): Pr
 export async function uploadApplicantPhoto(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
     const session = await requireSession();
+    enforceRateLimit(session.user.id, "upload");
 
     const contactId = Number(formData.get("Contact_ID"));
     if (!contactId || isNaN(contactId)) {
@@ -148,6 +162,10 @@ export async function uploadApplicantPhoto(formData: FormData): Promise<{ succes
     const MAX_FILE_SIZE = 1 * 1024 * 1024;
     if (file.size > MAX_FILE_SIZE) {
       return { success: false, error: `File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum 1 MB.` };
+    }
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      return { success: false, error: "Invalid file type. Allowed: JPEG, PNG, GIF, WebP" };
     }
 
     const userId = getMpUserId(session);

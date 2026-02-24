@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { VolunteerCard as VolunteerCardData, VolunteerDetail, ChecklistItemStatus, WriteBackConfig, MilestoneFileInfo, MilestoneDetail, CertificationDetail, FormResponseDetail, GroupFilterOption, GroupRoleOption } from "@/lib/dto";
+import { VolunteerCard as VolunteerCardData, VolunteerDetail, ChecklistItemStatus, WriteBackConfig, MilestoneFileInfo, MilestoneDetail, FormResponseDetail, GroupFilterOption, GroupRoleOption } from "@/lib/dto";
 import {
   getVolunteerDetail,
   createVolunteerMilestone,

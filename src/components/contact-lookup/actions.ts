@@ -1,12 +1,14 @@
 'use server';
 
 import { requireSession } from '@/lib/auth-helpers';
+import { enforceRateLimit } from '@/lib/rate-limit';
 import { ContactService } from '@/services/contactService';
 import { ContactSearch } from '@/lib/dto';
 
 export async function searchContacts(searchTerm: string): Promise<ContactSearch[]> {
   try {
-    await requireSession();
+    const session = await requireSession();
+    enforceRateLimit(session.user.id, "search");
 
     if (!searchTerm || searchTerm.trim().length === 0) {
       return [];

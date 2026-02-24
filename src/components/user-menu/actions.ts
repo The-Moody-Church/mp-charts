@@ -17,7 +17,7 @@ export async function handleSignOut() {
 
   // Redirect to MP OIDC endsession to properly terminate the OAuth session
   const endSessionUrl = `${baseUrl}/oauth/connect/endsession`;
-  const postLogoutUri = process.env.BETTER_AUTH_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
+  const postLogoutUri = process.env.BETTER_AUTH_URL || 'http://localhost:3000';
   const params = new URLSearchParams({
     post_logout_redirect_uri: postLogoutUri,
   });
