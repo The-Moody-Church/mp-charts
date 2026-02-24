@@ -16,7 +16,7 @@ Conducted a comprehensive security audit of the MPNext application, identified 1
 9. Compiled comprehensive audit report with findings, recommendations, and priority matrix
 10. Implemented fixes for 9 of 15 findings
 11. Added Security Best Practices section to CLAUDE.md to catch issues at development time
-12. Created GitHub Action workflow for automated Claude security reviews on PRs
+12. Added mandatory pre-PR security review checklist to CLAUDE.md (replaced GitHub Action approach with in-session review)
 
 ### Findings Summary (15 total, 9 fixed)
 
@@ -42,7 +42,6 @@ Conducted a comprehensive security audit of the MPNext application, identified 1
 - `src/lib/providers/ministry-platform/utils/filter-sanitize.ts` — Central sanitization utility (`sanitizeFilterValue`, `sanitizeIds`, `sanitizeIdsOptional`, `sanitizeGuid`)
 - `.claude/security-audit-2026-02-24.md` — Full audit report with 15 findings
 - `.claude/session-summary-2026-02-24.md` — This file
-- `.github/workflows/claude-security-review.yml` — GitHub Action for automated Claude security review on PRs + @claude mention support
 
 ### Files Modified
 
@@ -72,7 +71,7 @@ Conducted a comprehensive security audit of the MPNext application, identified 1
 
 **Documentation & CI:**
 - `CLAUDE.md` — Added "Security Best Practices" section covering filter safety, file upload validation, URL/redirect safety, logging/PII rules, auth requirements, and security headers
-- `.github/workflows/claude-security-review.yml` — Automated security review on every PR + on-demand via @claude comments
+- `CLAUDE.md` — Added mandatory "Pre-PR Security Review" checklist under Git & Pull Request Workflow section
 
 ### Remaining Open Items (Medium-term)
 - **Rate limiting (#6)**: Implement per-user rate limiting on server actions
