@@ -1,0 +1,74 @@
+name: Claude Security Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  # Also allow triggering via @claude mention in PR comments
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  # ── Automatic security review on every PR ──
+  security-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: "--max-turns 10 --model claude-sonnet-4-6"
+          prompt: |
+            You are a security reviewer for the MPNext application, a Next.js 16 app that integrates with Ministry Platform and handles PII (names, emails, phones, dates of birth, background check data).
+
+            Review ONLY the files changed in this PR. For each changed file, check for:
+
+            **Critical (must fix before merge):**
+            - Filter injection: Any string interpolated into a `filter:` parameter without using `sanitizeFilterValue()`, `sanitizeIds()`, or `sanitizeGuid()` from `@/lib/providers/ministry-platform/utils/filter-sanitize`
+            - Open redirects: User-supplied URLs used for redirects without validation
+            - Missing authentication: Server actions without `requireSession()` call
+            - Hardcoded secrets or credentials
+
+            **High (should fix before merge):**
+            - PII logged via `console.log` (contact records, emails, phones, notes, request bodies)
+            - File uploads without MIME type validation (`ALLOWED_IMAGE_TYPES` / `ALLOWED_DOCUMENT_TYPES`)
+            - Missing input validation on user-supplied IDs (NaN checks, type coercion)
+
+            **Medium (flag for awareness):**
+            - New endpoints that accept record IDs without per-record authorization (IDOR risk)
+            - Verbose logging that should be gated behind `NODE_ENV === 'development'`
+            - New dependencies that could introduce vulnerabilities
+
+            **Format your review as:**
+            1. A summary line: "X issues found (Y critical, Z high, W medium)" or "No security issues found"
+            2. For each issue: severity, file:line, description, and suggested fix
+            3. If no issues, confirm what was checked
+
+            Refer to `.claude/security-audit-2026-02-24.md` for the full audit report and established patterns.
+            Refer to the "Security Best Practices" section in `CLAUDE.md` for the project's security standards.
+
+  # ── On-demand review via @claude mention in PR comments ──
+  claude-comment:
+    if: |
+      (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment')
+      && contains(github.event.comment.body, '@claude')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: "--max-turns 10 --model claude-sonnet-4-6"
