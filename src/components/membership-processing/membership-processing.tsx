@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { MembershipCard as MembershipCardData } from "@/lib/dto";
+import { ProcessingGrid } from "@/components/processing";
 import { MembershipCard } from "./membership-card";
 import { MembershipDetailModal } from "./membership-detail-modal";
 import { getApplicants } from "./actions";
@@ -67,29 +68,19 @@ export function MembershipProcessing({ initialApplicantId }: { initialApplicantI
         </p>
       </div>
 
-      {loading ? (
-        <div className="py-12 text-center text-muted-foreground">
-          Loading applicants...
-        </div>
-      ) : error ? (
-        <div className="py-8 text-center text-red-500 bg-red-50 rounded-md">
-          {error}
-        </div>
-      ) : applicants.length === 0 ? (
-        <div className="py-12 text-center text-muted-foreground">
-          No membership applicants found.
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {applicants.map((applicant) => (
-            <MembershipCard
-              key={applicant.info.Group_Participant_ID}
-              applicant={applicant}
-              onClick={() => handleCardClick(applicant)}
-            />
-          ))}
-        </div>
-      )}
+      <ProcessingGrid
+        items={applicants}
+        loading={loading}
+        error={error}
+        emptyMessage="No membership applicants found."
+        keyExtractor={(a) => a.info.Group_Participant_ID}
+        renderCard={(applicant) => (
+          <MembershipCard
+            applicant={applicant}
+            onClick={() => handleCardClick(applicant)}
+          />
+        )}
+      />
 
       <MembershipDetailModal
         applicant={selectedApplicant}

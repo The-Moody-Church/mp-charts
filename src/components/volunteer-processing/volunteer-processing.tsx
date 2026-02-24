@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VolunteerCard as VolunteerCardData, GroupFilterOption } from "@/lib/dto";
+import { ProcessingGrid } from "@/components/processing";
 import { VolunteerCard } from "./volunteer-card";
 import { VolunteerDetailModal } from "./volunteer-detail-modal";
 import { getInProcessVolunteers, getApprovedVolunteers } from "./actions";
@@ -136,12 +137,16 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
         </TabsList>
 
         <TabsContent value="in-process">
-          <VolunteerGrid
-            volunteers={currentVolunteers}
+          <ProcessingGrid
+            items={currentVolunteers}
             loading={loading && activeTab === "in-process"}
             error={error}
             emptyMessage="No volunteers currently in process."
-            onCardClick={handleCardClick}
+            keyExtractor={(v) => v.info.Group_Participant_ID}
+            renderCard={(volunteer) => (
+              <VolunteerCard volunteer={volunteer} onClick={() => handleCardClick(volunteer)} />
+            )}
+            marginTop
           />
         </TabsContent>
 
@@ -169,12 +174,16 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
               </select>
             </div>
           )}
-          <VolunteerGrid
-            volunteers={currentVolunteers}
+          <ProcessingGrid
+            items={currentVolunteers}
             loading={loading && activeTab === "approved"}
             error={error}
             emptyMessage="No approved volunteers found."
-            onCardClick={handleCardClick}
+            keyExtractor={(v) => v.info.Group_Participant_ID}
+            renderCard={(volunteer) => (
+              <VolunteerCard volunteer={volunteer} onClick={() => handleCardClick(volunteer)} />
+            )}
+            marginTop
           />
         </TabsContent>
       </Tabs>
@@ -187,56 +196,6 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
         approvedGroups={approvedGroups}
         isInProcessTab={activeTab === "in-process"}
       />
-    </div>
-  );
-}
-
-function VolunteerGrid({
-  volunteers,
-  loading,
-  error,
-  emptyMessage,
-  onCardClick,
-}: {
-  volunteers: VolunteerCardData[];
-  loading: boolean;
-  error: string | null;
-  emptyMessage: string;
-  onCardClick: (volunteer: VolunteerCardData) => void;
-}) {
-  if (loading) {
-    return (
-      <div className="py-12 text-center text-muted-foreground">
-        Loading volunteers...
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="py-8 text-center text-red-500 bg-red-50 rounded-md">
-        {error}
-      </div>
-    );
-  }
-
-  if (volunteers.length === 0) {
-    return (
-      <div className="py-12 text-center text-muted-foreground">
-        {emptyMessage}
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mt-4">
-      {volunteers.map((volunteer) => (
-        <VolunteerCard
-          key={volunteer.info.Group_Participant_ID}
-          volunteer={volunteer}
-          onClick={() => onCardClick(volunteer)}
-        />
-      ))}
     </div>
   );
 }

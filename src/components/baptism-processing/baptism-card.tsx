@@ -1,29 +1,15 @@
 "use client";
 
 import React from "react";
-import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import { BaptismCard as BaptismCardData, BaptismChecklistItem } from "@/lib/dto";
+import { getDisplayName, formatDate } from "@/lib/processing-utils";
+import { PersonAvatar } from "@/components/processing";
 import { useRuntimeConfig } from "@/contexts";
 
 interface BaptismCardProps {
   applicant: BaptismCardData;
   onClick: () => void;
-}
-
-function getDisplayName(firstName: string, nickname: string | null): string {
-  return nickname && nickname.trim() ? nickname : firstName;
-}
-
-function getInitials(firstName: string, nickname: string | null, lastName: string): string {
-  const displayFirst = getDisplayName(firstName, nickname);
-  const first = displayFirst?.charAt(0)?.toUpperCase() || "";
-  const last = lastName?.charAt(0)?.toUpperCase() || "";
-  return first + last;
-}
-
-function getImageUrl(baseUrl: string, imageGuid: string): string {
-  return `${baseUrl}/${imageGuid}?$thumbnail=true`;
 }
 
 function StatusIcon({ item }: { item: BaptismChecklistItem }) {
@@ -37,11 +23,6 @@ function StatusIcon({ item }: { item: BaptismChecklistItem }) {
   return (
     <div className="h-4 w-4 rounded-full border-2 border-gray-300 flex-shrink-0" />
   );
-}
-
-function formatEndDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 export function BaptismCard({ applicant, onClick }: BaptismCardProps) {
@@ -71,29 +52,23 @@ export function BaptismCard({ applicant, onClick }: BaptismCardProps) {
             {endDate && (
               <span
                 className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-700"
-                title={`End Date: ${formatEndDate(endDate)}`}
+                title={`End Date: ${formatDate(endDate)}`}
               >
-                Ends {formatEndDate(endDate)}
+                Ends {formatDate(endDate)}
               </span>
             )}
           </div>
         )}
 
         {/* Photo */}
-        <div className="w-16 h-16 rounded-full overflow-hidden relative flex-shrink-0 mb-2">
-          {info.Image_GUID && mpFileUrl ? (
-            <Image
-              src={getImageUrl(mpFileUrl, info.Image_GUID)}
-              alt={`${displayName} ${info.Last_Name}`}
-              fill
-              className="object-cover"
-              unoptimized
-            />
-          ) : (
-            <div className="w-full h-full bg-gray-300 rounded-full flex items-center justify-center text-gray-600 text-lg font-medium">
-              {getInitials(info.First_Name, info.Nickname, info.Last_Name)}
-            </div>
-          )}
+        <div className="mb-2">
+          <PersonAvatar
+            imageGuid={info.Image_GUID}
+            mpFileUrl={mpFileUrl}
+            firstName={info.First_Name}
+            nickname={info.Nickname}
+            lastName={info.Last_Name}
+          />
         </div>
 
         {/* Name */}

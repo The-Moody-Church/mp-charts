@@ -8,6 +8,7 @@ This document provides detailed context about the `src/components/` folder struc
 src/components/
 ├── shared-actions/             # Shared server actions
 ├── ui/                         # shadcn/ui components (19 components)
+├── processing/                 # Shared processing UI components (8 components)
 ├── baptism-processing/         # Baptism applicant workflow
 ├── contact-logs/               # Contact log CRUD feature
 ├── contact-lookup/             # Contact search feature
@@ -51,6 +52,41 @@ src/components/
 | `user-menu/` | User dropdown with sign-out | Yes |
 | `volunteer-processing/` | Volunteer onboarding with background checks, certifications, group assignment | Yes |
 | `tool/` | Tool layout components (ToolContainer, ToolHeader, ToolFooter, ToolParamsDebug) | No |
+
+### Shared Processing Components (`processing/` folder)
+
+Domain-specific shared components used by all three processing features. These are NOT general-purpose UI primitives (those go in `ui/`).
+
+```
+processing/
+├── index.ts                      # Barrel export
+├── person-avatar.tsx             # Photo circle with initials fallback
+├── detail-modal-photo-upload.tsx # Clickable photo with upload overlay
+├── contact-links.tsx             # Email/phone bordered pill-style buttons
+├── processing-grid.tsx           # Card grid with loading/error/empty states
+├── file-type-icon.tsx            # PDF/image/generic file icon
+├── milestone-expanded-view.tsx   # Read-only milestone detail (notes + file list)
+├── milestone-edit-form.tsx       # Edit mode: date, notes, file input, save/cancel
+└── quick-actions-panel.tsx       # Milestone dropdown + date/notes/file/submit
+```
+
+| Component | Purpose | Used By |
+|---|---|---|
+| `PersonAvatar` | Photo circle (MP file URL) with initials fallback | All 3 cards, all 3 detail modals |
+| `DetailModalPhotoUpload` | Clickable avatar with upload overlay + file validation | All 3 detail modals |
+| `ContactLinks` | Bordered pill-style email/phone links | Baptism + membership modals |
+| `ProcessingGrid` | Card grid with skeleton loading, error, and empty states | All 3 main page components |
+| `FileTypeIcon` | PDF/image/generic file icon | Milestone expanded view, milestone edit form |
+| `MilestoneExpandedView` | Read-only milestone detail: notes + downloadable file list | All 3 detail modals |
+| `MilestoneEditForm` | Edit mode: date picker, notes textarea, file input, save/cancel | All 3 detail modals |
+| `QuickActionsPanel` | Milestone dropdown + date/notes/file/submit for quick creation | Baptism + membership modals |
+
+**Import**: `import { PersonAvatar, ProcessingGrid, MilestoneEditForm } from '@/components/processing';`
+
+**Supporting utilities**:
+- `src/lib/processing-utils.ts` — `getDisplayName()`, `getInitials()`, `getImageUrl()`, `formatDate()`, file type/size constants
+- `src/lib/dto/processing-shared.ts` — `BasePersonInfo`, `BaseCardData<T,C>`, `BaseFileInfo`, `BaseMilestoneDetail` base interfaces
+- `src/components/shared-actions/processing.ts` — `extractValidatedFiles()`, `extractValidatedFilesResult()`, `uploadContactPhoto()` server action helpers
 
 ### Processing Features — Shared Architecture
 
@@ -103,6 +139,7 @@ Actions are co-located with their feature components:
 | user-tools-debug | `user-tools-debug/actions.ts` | `getUserTools` |
 | volunteer-processing | `volunteer-processing/actions.ts` | `getInProcessVolunteers`, `getApprovedVolunteers`, `getVolunteerDetail`, `getMilestoneFiles`, `getCertificationFiles`, `getFormResponseFiles`, `createFormResponse`, `uploadVolunteerPhoto`, `createVolunteerMilestone`, `updateVolunteerMilestone`, `updateVolunteerCertification`, `updateVolunteerFormResponse`, `getApprovedGroupRoles`, `getApprovedGroupsList`, `assignVolunteerToGroup` |
 | **shared** | `shared-actions/user.ts` | `getCurrentUserProfile` |
+| **shared** | `shared-actions/processing.ts` | `extractValidatedFiles`, `extractValidatedFilesResult`, `uploadContactPhoto` |
 
 **Shared Actions Folder**: `src/components/shared-actions/` contains actions used across multiple features. See the README in that folder for guidelines on when to use shared vs co-located actions.
 
@@ -130,8 +167,15 @@ import { AuthWrapper, Header, Sidebar, DynamicBreadcrumb } from '@/components/la
 // Co-located actions (relative import within feature)
 import { searchContacts } from './actions';
 
+// Shared processing components (barrel export)
+import { PersonAvatar, ProcessingGrid, MilestoneEditForm } from '@/components/processing';
+
+// Shared processing utilities
+import { getDisplayName, formatDate, MAX_FILE_SIZE } from '@/lib/processing-utils';
+
 // Shared actions
 import { getCurrentUserProfile } from '@/components/shared-actions/user';
+import { extractValidatedFiles, uploadContactPhoto } from '@/components/shared-actions/processing';
 ```
 
 ## Component Structure Template
