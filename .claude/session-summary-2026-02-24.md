@@ -1,8 +1,8 @@
 # Session Summary — 2026-02-24
 
-## Security Audit
+## Security Audit & Remediation
 
-Conducted a comprehensive security audit of the MPNext application covering:
+Conducted a comprehensive security audit of the MPNext application, identified 15 findings, and implemented fixes for 9 of them (all Immediate and Short-term priority items).
 
 ### Methodology
 1. Mapped codebase structure and identified all security-sensitive areas
@@ -14,33 +14,66 @@ Conducted a comprehensive security audit of the MPNext application covering:
 7. Audited client-side security (XSS, CSRF, storage, data exposure)
 8. Performed gap analysis covering SSRF, open redirect, IDOR, mass assignment, prototype pollution, timing attacks, eval, and hardcoded secrets
 9. Compiled comprehensive audit report with findings, recommendations, and priority matrix
+10. Implemented fixes for 9 of 15 findings
 
-### Key Findings (15 total)
+### Findings Summary (15 total, 9 fixed)
 
-**HIGH severity:**
-- Filter injection via LIKE string interpolation in `contactService.ts:47`
-- Filter injection via IN clause array joins across all services
-- Open redirect on signin page `src/app/signin/page.tsx:18`
-- Missing security headers (CSP, X-Frame-Options, HSTS, etc.)
-- No rate limiting on any server action or API route
-
-**MEDIUM severity:**
-- OIDC GUID interpolated in filter (`auth.ts:60`)
-- PII logged via console.log in contactService, contactLogService, http-client
-- Debug HTTP PUT logging includes full request bodies
-- No MIME type validation on file uploads
-- IDOR risk — server actions accept record IDs without per-record authorization
-- No RBAC — all authenticated users have equal access
-
-**LOW severity:**
-- npm dependency vulnerabilities (dev-only eslint chain)
-- Proxy logs request paths
-- Shared dashboard cache across all users
-- BETTER_AUTH_SECRET fallback to NEXTAUTH_SECRET
+| # | Finding | Severity | Status |
+|---|---------|----------|--------|
+| 1 | Filter injection via LIKE interpolation | HIGH | ✅ Fixed |
+| 2 | Filter injection via IN clause array joins | HIGH | ✅ Fixed |
+| 3 | Open redirect on signin page | HIGH | ✅ Fixed |
+| 4 | OIDC GUID interpolated in filter | MEDIUM | ✅ Fixed |
+| 5 | Missing security headers | HIGH | ✅ Fixed (no CSP yet) |
+| 6 | No rate limiting | HIGH | Open |
+| 7 | PII logged to console | MEDIUM | ✅ Fixed |
+| 8 | Debug HTTP PUT logging | MEDIUM | ✅ Fixed |
+| 9 | No MIME type validation on uploads | MEDIUM | ✅ Fixed |
+| 10 | IDOR risk | MEDIUM | Open |
+| 11 | npm dependency vulnerabilities | LOW | Open |
+| 12 | Proxy logs request paths | LOW | ✅ Fixed |
+| 13 | No RBAC | MEDIUM | Open |
+| 14 | Shared dashboard cache | LOW | Open |
+| 15 | BETTER_AUTH_SECRET fallback | LOW | Open |
 
 ### Files Created
-- `.claude/security-audit-2026-02-24.md` — Full audit report with 15 findings, recommendations, and priority matrix
+- `src/lib/providers/ministry-platform/utils/filter-sanitize.ts` — Central sanitization utility (`sanitizeFilterValue`, `sanitizeIds`, `sanitizeIdsOptional`, `sanitizeGuid`)
+- `.claude/security-audit-2026-02-24.md` — Full audit report with 15 findings
 - `.claude/session-summary-2026-02-24.md` — This file
+
+### Files Modified
+
+**Authentication & Authorization:**
+- `src/app/signin/page.tsx` — Added `getSafeCallbackUrl()` to prevent open redirect (#3)
+- `src/lib/auth.ts` — Added GUID validation via `sanitizeGuid()` before filter interpolation (#4)
+
+**Services (filter injection fixes):**
+- `src/services/contactService.ts` — Sanitized LIKE search input via `sanitizeFilterValue()`, validated GUID via `sanitizeGuid()`, removed PII logging (#1, #4, #7)
+- `src/services/userService.ts` — Added GUID validation via `sanitizeGuid()` (#4)
+- `src/services/dashboardService.ts` — Replaced all `.join(',')` with `sanitizeIds()` (6 locations), removed noisy console.log statements (#2, #7)
+- `src/services/volunteerService.ts` — Replaced all 13 `.join(',')` with `sanitizeIds()` (#2)
+- `src/services/baptismService.ts` — Replaced all `.join(',')` with `sanitizeIds()` (4 locations) (#2)
+- `src/services/membershipService.ts` — Replaced all `.join(',')` with `sanitizeIds()` (4 locations) (#2)
+- `src/services/contactLogService.ts` — Removed 6 PII-logging console.log statements (#7)
+- `src/services/toolService.ts` — Removed 8 verbose console.log statements (#7)
+
+**Configuration & Infrastructure:**
+- `next.config.ts` — Added security headers: X-Frame-Options, X-Content-Type-Options, Referrer-Policy, HSTS, Permissions-Policy, X-DNS-Prefetch-Control (#5)
+- `src/proxy.ts` — Gated all logging behind `NODE_ENV === 'development'` (#12)
+- `src/lib/providers/ministry-platform/utils/http-client.ts` — Removed debug PUT logging and error response body logging (#8)
+
+**Server Actions (MIME validation):**
+- `src/components/volunteer-processing/actions.ts` — Added MIME type validation to all 6 file upload functions (#9)
+- `src/components/baptism-processing/actions.ts` — Added MIME type validation to 3 file upload functions (#9)
+- `src/components/membership-processing/actions.ts` — Added MIME type validation to 3 file upload functions (#9)
+
+### Remaining Open Items (Medium-term)
+- **Rate limiting (#6)**: Implement per-user rate limiting on server actions
+- **IDOR mitigation (#10)**: Evaluate per-record authorization or access-token-based MPHelper instances
+- **RBAC (#13)**: Design role-based access control leveraging MP security groups
+- **eslint upgrade (#11)**: Upgrade to eslint 10.x to resolve dependency audit
+- **CSP header (#5 partial)**: Add Content-Security-Policy header after testing
+- **Structured logging (#13 from recommendations)**: Replace console.log/error with structured logging library
 
 ### Positive Findings
 - No XSS vectors (no dangerouslySetInnerHTML, no eval)

@@ -3,6 +3,7 @@ import { nextCookies } from "better-auth/next-js";
 import { genericOAuth, customSession } from "better-auth/plugins";
 import { MPHelper } from "@/lib/providers/ministry-platform";
 import type { MPUserProfile } from "@/lib/providers/ministry-platform/types";
+import { sanitizeGuid } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
 
 const mpBaseUrl = process.env.MINISTRY_PLATFORM_BASE_URL;
 const mpOauthUrl = `${mpBaseUrl}/oauth`;
@@ -54,10 +55,11 @@ export const auth = betterAuth({
             let mpContactId: number | undefined;
 
             try {
+              const validGuid = sanitizeGuid(profile.sub);
               const mp = new MPHelper();
               const records = await mp.getTableRecords<MPUserProfile>({
                 table: "dp_Users",
-                filter: `User_GUID = '${profile.sub}'`,
+                filter: `User_GUID = '${validGuid}'`,
                 select: "User_ID,Contact_ID",
                 top: 1,
               });

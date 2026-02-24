@@ -1,4 +1,5 @@
 import { MPHelper } from '@/lib/providers/ministry-platform';
+import { sanitizeIds } from '@/lib/providers/ministry-platform/utils/filter-sanitize';
 import {
   VolunteerInfo,
   VolunteerCard,
@@ -178,7 +179,7 @@ export class VolunteerService {
     const groupParticipants = await this.mp!.getTableRecords<GroupParticipantRecord>({
       table: 'Group_Participants',
       select: 'Group_Participant_ID,Participant_ID,Group_ID,Group_Role_ID,Start_Date,End_Date',
-      filter: `Group_ID IN (${groupIds.join(',')}) AND (End_Date IS NULL OR End_Date >= '${now}')`
+      filter: `Group_ID IN (${sanitizeIds(groupIds)}) AND (End_Date IS NULL OR End_Date >= '${now}')`
     });
 
     if (groupParticipants.length === 0) return [];
@@ -212,7 +213,7 @@ export class VolunteerService {
     const groupParticipants = await this.mp!.getTableRecords<GroupParticipantRecord>({
       table: 'Group_Participants',
       select: 'Group_Participant_ID,Participant_ID,Group_ID,Group_Role_ID,Start_Date,End_Date',
-      filter: `Group_Role_ID IN (${approvedRoleIds.join(',')}) AND (End_Date IS NULL OR End_Date >= '${now}')`
+      filter: `Group_Role_ID IN (${sanitizeIds(approvedRoleIds)}) AND (End_Date IS NULL OR End_Date >= '${now}')`
     });
 
     if (groupParticipants.length === 0) return { volunteers: [], groups: [] };
@@ -225,7 +226,7 @@ export class VolunteerService {
       const inProcessGPs = await this.mp!.getTableRecords<{ Participant_ID: number }>({
         table: 'Group_Participants',
         select: 'Participant_ID',
-        filter: `Group_ID IN (${processingGroupIds.join(',')}) AND (End_Date IS NULL OR End_Date >= '${now}')`
+        filter: `Group_ID IN (${sanitizeIds(processingGroupIds)}) AND (End_Date IS NULL OR End_Date >= '${now}')`
       });
 
       const inProcessParticipantIds = new Set(inProcessGPs.map(gp => gp.Participant_ID));
@@ -652,7 +653,7 @@ export class VolunteerService {
     }>({
       table: 'Group_Roles',
       select: 'Group_Role_ID,Role_Title',
-      filter: `Group_Role_ID IN (${roleIds.join(',')})`
+      filter: `Group_Role_ID IN (${sanitizeIds(roleIds)})`
     });
 
     return roles;
@@ -666,7 +667,7 @@ export class VolunteerService {
     const gps = await this.mp!.getTableRecords<{ Group_ID: number }>({
       table: 'Group_Participants',
       select: 'Group_ID',
-      filter: `Group_Role_ID IN (${approvedRoleIds.join(',')}) AND (End_Date IS NULL OR End_Date >= '${now}')`
+      filter: `Group_Role_ID IN (${sanitizeIds(approvedRoleIds)}) AND (End_Date IS NULL OR End_Date >= '${now}')`
     });
 
     const groupIds = [...new Set(gps.map(gp => gp.Group_ID))];
@@ -675,7 +676,7 @@ export class VolunteerService {
     const groups = await this.mp!.getTableRecords<{ Group_ID: number; Group_Name: string }>({
       table: 'Groups',
       select: 'Group_ID,Group_Name',
-      filter: `Group_ID IN (${groupIds.join(',')})`
+      filter: `Group_ID IN (${sanitizeIds(groupIds)})`
     });
 
     return groups
@@ -732,7 +733,7 @@ export class VolunteerService {
       const batch = await this.mp!.getTableRecords<ParticipantRecord>({
         table: 'Participants',
         select: 'Participant_ID,Contact_ID',
-        filter: `Participant_ID IN (${batchIds.join(',')})`
+        filter: `Participant_ID IN (${sanitizeIds(batchIds)})`
       });
       allParticipants.push(...batch);
     }
@@ -753,7 +754,7 @@ export class VolunteerService {
       }>({
         table: 'Contacts',
         select: 'Contact_ID,First_Name,Nickname,Last_Name,dp_fileUniqueId AS Image_GUID',
-        filter: `Contact_ID IN (${batchIds.join(',')})`
+        filter: `Contact_ID IN (${sanitizeIds(batchIds)})`
       });
       allContacts.push(...batch);
     }
@@ -869,7 +870,7 @@ export class VolunteerService {
       const batch = await this.mp!.getTableRecords<{ Group_ID: number; Group_Name: string }>({
         table: 'Groups',
         select: 'Group_ID,Group_Name',
-        filter: `Group_ID IN (${batchIds.join(',')})`
+        filter: `Group_ID IN (${sanitizeIds(batchIds)})`
       });
       allResults.push(...batch);
     }
@@ -896,7 +897,7 @@ export class VolunteerService {
       const batch = await this.mp!.getTableRecords<FormResponseRecord>({
         table: 'Form_Responses',
         select: 'Form_Response_ID,Form_ID,Contact_ID,Response_Date,Expires',
-        filter: `Form_ID IN (${formIds.join(',')}) AND Contact_ID IN (${batchIds.join(',')})`,
+        filter: `Form_ID IN (${sanitizeIds(formIds)}) AND Contact_ID IN (${sanitizeIds(batchIds)})`,
         orderBy: 'Response_Date DESC'
       });
       allResults.push(...batch);
@@ -923,7 +924,7 @@ export class VolunteerService {
       const batch = await this.mp!.getTableRecords<MilestoneRecord>({
         table: 'Participant_Milestones',
         select: 'Participant_Milestone_ID,Participant_ID,Milestone_ID,Date_Accomplished,Notes',
-        filter: `Milestone_ID IN (${milestoneIds.join(',')}) AND Participant_ID IN (${batchIds.join(',')})`,
+        filter: `Milestone_ID IN (${sanitizeIds(milestoneIds)}) AND Participant_ID IN (${sanitizeIds(batchIds)})`,
         orderBy: 'Date_Accomplished DESC'
       });
       allResults.push(...batch);
@@ -940,7 +941,7 @@ export class VolunteerService {
       const batch = await this.mp!.getTableRecords<BackgroundCheckRecord>({
         table: 'Background_Checks',
         select: 'Background_Check_ID,Contact_ID,Background_Check_Status_ID,Background_Check_Started,Background_Check_Submitted,Background_Check_Returned,All_Clear,Background_Check_Expires,Report_Url',
-        filter: `Contact_ID IN (${batchIds.join(',')})`,
+        filter: `Contact_ID IN (${sanitizeIds(batchIds)})`,
         orderBy: 'Background_Check_Started DESC'
       });
       allResults.push(...batch);
@@ -958,7 +959,7 @@ export class VolunteerService {
       const batch = await this.mp!.getTableRecords<CertificationRecord>({
         table: 'Participant_Certifications',
         select: 'Participant_Certification_ID,Participant_ID,Certification_Type_ID,Certification_Submitted,Certification_Completed,Certification_Expires,Passed,Notes',
-        filter: `Certification_Type_ID = ${certTypeId} AND Participant_ID IN (${batchIds.join(',')})`,
+        filter: `Certification_Type_ID = ${certTypeId} AND Participant_ID IN (${sanitizeIds(batchIds)})`,
         orderBy: 'Certification_Submitted DESC'
       });
       allResults.push(...batch);

@@ -4,6 +4,9 @@ import { requireSession, getMpUserId } from "@/lib/auth-helpers";
 import { VolunteerService } from "@/services/volunteerService";
 import { VolunteerCard, VolunteerDetail, MilestoneFileInfo, ApprovedVolunteersResult, GroupRoleOption, GroupFilterOption } from "@/lib/dto";
 
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const ALLOWED_DOCUMENT_TYPES = [...ALLOWED_IMAGE_TYPES, 'application/pdf'];
+
 export async function getInProcessVolunteers(): Promise<VolunteerCard[]> {
   try {
     await requireSession();
@@ -90,6 +93,9 @@ export async function createFormResponse(formData: FormData): Promise<void> {
     const files: File[] = [];
     for (const [key, value] of formData.entries()) {
       if (key === "files" && value instanceof File && value.size > 0) {
+        if (!ALLOWED_DOCUMENT_TYPES.includes(value.type)) {
+          throw new Error(`Invalid file type: ${value.type}. Allowed: JPEG, PNG, GIF, WebP, PDF`);
+        }
         files.push(value);
       }
     }
@@ -122,6 +128,10 @@ export async function uploadVolunteerPhoto(formData: FormData): Promise<{ succes
       return { success: false, error: `File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum 1 MB.` };
     }
 
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      return { success: false, error: "Invalid file type. Allowed: JPEG, PNG, GIF, WebP" };
+    }
+
     const userId = getMpUserId(session);
 
     const service = await VolunteerService.getInstance();
@@ -151,6 +161,9 @@ export async function createVolunteerMilestone(formData: FormData): Promise<void
     const files: File[] = [];
     for (const [key, value] of formData.entries()) {
       if (key === "files" && value instanceof File && value.size > 0) {
+        if (!ALLOWED_DOCUMENT_TYPES.includes(value.type)) {
+          throw new Error(`Invalid file type: ${value.type}. Allowed: JPEG, PNG, GIF, WebP, PDF`);
+        }
         files.push(value);
       }
     }
@@ -186,6 +199,9 @@ export async function updateVolunteerMilestone(formData: FormData): Promise<{ su
     const files: File[] = [];
     for (const [key, value] of formData.entries()) {
       if (key === "files" && value instanceof File && value.size > 0) {
+        if (!ALLOWED_DOCUMENT_TYPES.includes(value.type)) {
+          return { success: false, error: `Invalid file type: ${value.type}. Allowed: JPEG, PNG, GIF, WebP, PDF` };
+        }
         files.push(value);
       }
     }
@@ -223,6 +239,9 @@ export async function updateVolunteerCertification(formData: FormData): Promise<
     const files: File[] = [];
     for (const [key, value] of formData.entries()) {
       if (key === "files" && value instanceof File && value.size > 0) {
+        if (!ALLOWED_DOCUMENT_TYPES.includes(value.type)) {
+          return { success: false, error: `Invalid file type: ${value.type}. Allowed: JPEG, PNG, GIF, WebP, PDF` };
+        }
         files.push(value);
       }
     }
@@ -259,6 +278,9 @@ export async function updateVolunteerFormResponse(formData: FormData): Promise<{
     const files: File[] = [];
     for (const [key, value] of formData.entries()) {
       if (key === "files" && value instanceof File && value.size > 0) {
+        if (!ALLOWED_DOCUMENT_TYPES.includes(value.type)) {
+          return { success: false, error: `Invalid file type: ${value.type}. Allowed: JPEG, PNG, GIF, WebP, PDF` };
+        }
         files.push(value);
       }
     }

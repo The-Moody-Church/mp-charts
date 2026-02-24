@@ -1,5 +1,6 @@
 import { ContactSearch } from "@/lib/dto";
 import { MPHelper } from "@/lib/providers/ministry-platform";
+import { sanitizeFilterValue, sanitizeGuid } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
 
 /**
  * ContactService - Singleton service for managing contact-related operations
@@ -42,9 +43,10 @@ export class ContactService {
    * @returns Promise<ContactSearch[]> - Array of matching contacts (limited to 20 results)
    */
   public async contactSearch(search: string): Promise<ContactSearch[]> {
+    const safe = sanitizeFilterValue(search);
     const records = await this.mp!.getTableRecords<ContactSearch>({
       table: "Contacts",
-      filter: `First_Name LIKE '%${search}%' OR Last_Name LIKE '%${search}%' OR Nickname LIKE '%${search}%' OR Email_Address LIKE '%${search}%' OR Mobile_Phone LIKE '%${search}%'`,
+      filter: `First_Name LIKE '%${safe}%' OR Last_Name LIKE '%${safe}%' OR Nickname LIKE '%${safe}%' OR Email_Address LIKE '%${safe}%' OR Mobile_Phone LIKE '%${safe}%'`,
       select: "Contact_ID, Contact_GUID,First_Name,Nickname,Last_Name,Email_Address,Mobile_Phone,dp_fileUniqueId AS Image_GUID",
       top: 20
     });
@@ -59,9 +61,10 @@ export class ContactService {
    * @returns Promise<ContactSearch | null> - The matching contact record or null if not found
    */
   public async getContactByGuid(contactGuid: string): Promise<ContactSearch | null> {
+    const validGuid = sanitizeGuid(contactGuid);
     const records = await this.mp!.getTableRecords<ContactSearch>({
       table: "Contacts",
-      filter: `Contact_GUID = '${contactGuid}'`,
+      filter: `Contact_GUID = '${validGuid}'`,
       select: "Contact_ID, Contact_GUID,First_Name,Nickname,Last_Name,Email_Address,Mobile_Phone,dp_fileUniqueId AS Image_GUID",
       top: 1
     });
@@ -82,8 +85,7 @@ export class ContactService {
     fields: Partial<Pick<ContactSearch, "Email_Address" | "Mobile_Phone">>
   ): Promise<void> {
     const record = { Contact_ID: contactId, ...fields };
-    console.log("ContactService.updateContact - Updating record:", JSON.stringify(record, null, 2));
-    
+
     await this.mp!.updateTableRecords(
       "Contacts",
       [record]

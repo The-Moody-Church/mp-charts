@@ -1,5 +1,6 @@
 import { cacheLife, cacheTag } from 'next/cache';
 import { MPHelper } from '@/lib/providers/ministry-platform';
+import { sanitizeIds } from '@/lib/providers/ministry-platform/utils/filter-sanitize';
 import {
   DashboardData,
   PeriodMetrics,
@@ -36,7 +37,7 @@ async function getCachedGroupTypes(ids: string) {
   }>({
     table: 'Group_Types',
     select: 'Group_Type_ID,Group_Type',
-    filter: `Group_Type_ID IN (${ids})`
+    filter: `Group_Type_ID IN (${sanitizeIds(ids.split(',').map(Number))})`
   });
 }
 
@@ -103,9 +104,10 @@ export class DashboardService {
     const results: T[] = [];
     for (let i = 0; i < ids.length; i += batchSize) {
       const batchIds = ids.slice(i, i + batchSize);
+      const safeIds = sanitizeIds(batchIds);
       const filter = extraFilter
-        ? `${idColumn} IN (${batchIds.join(',')}) AND ${extraFilter}`
-        : `${idColumn} IN (${batchIds.join(',')})`;
+        ? `${idColumn} IN (${safeIds}) AND ${extraFilter}`
+        : `${idColumn} IN (${safeIds})`;
       const batch = await this.mp!.getTableRecords<T>({ table, select, filter });
       // Use concat instead of push(...batch) to avoid stack overflow with large arrays
       for (const item of batch) results.push(item);
@@ -518,7 +520,7 @@ export class DashboardService {
         table: 'Group_Participants',
         select: 'Group_Participant_ID,Group_ID,Participant_ID,Start_Date,End_Date',
         filter: `
-          Group_Participants.Group_ID IN (${Array.from(smallGroupIds).join(',')}) AND
+          Group_Participants.Group_ID IN (${sanitizeIds(Array.from(smallGroupIds))}) AND
           Group_Participants.Start_Date <= '${endIso}' AND
           (Group_Participants.End_Date IS NULL OR Group_Participants.End_Date >= '${startIso}')
         `
@@ -605,14 +607,11 @@ export class DashboardService {
       });
 
       if (communityGroups.length === 0) {
-        console.log('No Community groups found (Group_Type_ID = 11)');
         return { monthly: [], weekly: [] };
       }
 
       const communityGroupIds = communityGroups.map(g => g.Group_ID);
       const communityNameMap = new Map(communityGroups.map(g => [g.Group_ID, g.Group_Name]));
-
-      console.log(`Found ${communityGroups.length} Community groups`);
 
       // Step 2: Get Event_Participants for community groups with status 3 or 4 (Present)
       const eventParticipants = await this.mp!.getTableRecords<{
@@ -623,10 +622,8 @@ export class DashboardService {
       }>({
         table: 'Event_Participants',
         select: 'Event_Participant_ID,Event_ID,Group_ID,Participation_Status_ID',
-        filter: `Event_Participants.Group_ID IN (${communityGroupIds.join(',')}) AND Event_Participants.Participation_Status_ID IN (3, 4)`
+        filter: `Event_Participants.Group_ID IN (${sanitizeIds(communityGroupIds)}) AND Event_Participants.Participation_Status_ID IN (3, 4)`
       });
-
-      console.log(`Found ${eventParticipants.length} event participants for community groups`);
 
       if (eventParticipants.length === 0) return { monthly: [], weekly: [] };
 
@@ -646,7 +643,6 @@ export class DashboardService {
         extraFilter: 'Cancelled = 0'
       });
 
-      console.log(`Found ${allEvents.length} events`);
 
       // Create a map of Event_ID to Event_Start_Date
       const eventDateMap = new Map(allEvents.map(e => [e.Event_ID, e.Event_Start_Date]));
@@ -664,8 +660,6 @@ export class DashboardService {
         // Check if Sunday (getDay() returns 0 for Sunday)
         return date.getDay() === 0;
       });
-
-      console.log(`After filtering to Sundays in date range: ${sundayParticipants.length} participants`);
 
       if (sundayParticipants.length === 0) return { monthly: [], weekly: [] };
 
@@ -743,7 +737,6 @@ export class DashboardService {
         });
       }
 
-      console.log(`Returning ${monthly.length} monthly and ${weekly.length} weekly trends`);
       return { monthly, weekly };
     } catch (error) {
       console.error('Error fetching community attendance trends:', error);
@@ -803,7 +796,7 @@ export class DashboardService {
             table: 'Event_Metrics',
             select: 'Event_ID,Metric_ID,Numerical_Value',
             filter: `
-              Event_Metrics.Event_ID IN (${eventIds.join(',')}) AND
+              Event_Metrics.Event_ID IN (${sanitizeIds(eventIds)}) AND
               Event_Metrics.Metric_ID IN (2, 3)
             `
           });
@@ -890,7 +883,7 @@ export class DashboardService {
         table: 'Event_Metrics',
         select: 'Event_ID,Metric_ID,Numerical_Value',
         filter: `
-          Event_Metrics.Event_ID IN (${eventIds.join(',')}) AND
+          Event_Metrics.Event_ID IN (${sanitizeIds(eventIds)}) AND
           Event_Metrics.Metric_ID IN (2, 3)
         `
       });

@@ -14,18 +14,18 @@ The application has solid fundamentals — proper session management, server-sid
 
 | # | Finding | Severity | Category | Status |
 |---|---------|----------|----------|--------|
-| 1 | Filter injection via string interpolation (LIKE) | **HIGH** | Injection | Open |
-| 2 | Filter injection via IN clause array joins | **HIGH** | Injection | Open |
-| 3 | Open redirect on signin page | **HIGH** | Redirect | Open |
-| 4 | OIDC GUID interpolated in filter | **MEDIUM** | Injection | Open |
-| 5 | Missing security headers (CSP, X-Frame-Options) | **HIGH** | Configuration | Open |
+| 1 | Filter injection via string interpolation (LIKE) | **HIGH** | Injection | ✅ Fixed |
+| 2 | Filter injection via IN clause array joins | **HIGH** | Injection | ✅ Fixed |
+| 3 | Open redirect on signin page | **HIGH** | Redirect | ✅ Fixed |
+| 4 | OIDC GUID interpolated in filter | **MEDIUM** | Injection | ✅ Fixed |
+| 5 | Missing security headers (CSP, X-Frame-Options) | **HIGH** | Configuration | ✅ Fixed (no CSP yet) |
 | 6 | No rate limiting on server actions/API routes | **HIGH** | DoS/Abuse | Open |
-| 7 | Sensitive data logged to console | **MEDIUM** | Data Exposure | Open |
-| 8 | Debug HTTP PUT logging in production | **MEDIUM** | Data Exposure | Open |
-| 9 | No file type validation on uploads | **MEDIUM** | Input Validation | Open |
+| 7 | Sensitive data logged to console | **MEDIUM** | Data Exposure | ✅ Fixed |
+| 8 | Debug HTTP PUT logging in production | **MEDIUM** | Data Exposure | ✅ Fixed |
+| 9 | No file type validation on uploads | **MEDIUM** | Input Validation | ✅ Fixed |
 | 10 | IDOR risk — no per-record authorization | **MEDIUM** | Authorization | Open |
 | 11 | npm dependency vulnerabilities (eslint chain) | **LOW** | Dependencies | Open |
-| 12 | Proxy logs request paths | **LOW** | Information Disclosure | Open |
+| 12 | Proxy logs request paths | **LOW** | Information Disclosure | ✅ Fixed |
 | 13 | No RBAC — all authenticated users see all data | **MEDIUM** | Authorization | Open |
 | 14 | Dashboard cache shared across all users | **LOW** | Data Exposure | Open |
 | 15 | `BETTER_AUTH_SECRET` fallback to `NEXTAUTH_SECRET` | **LOW** | Configuration | Open |

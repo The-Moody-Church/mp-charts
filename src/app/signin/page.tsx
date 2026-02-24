@@ -4,9 +4,18 @@ import { useEffect, useState, Suspense } from "react";
 import { authClient } from "@/lib/auth-client";
 import { useSearchParams } from "next/navigation";
 
+function getSafeCallbackUrl(url: string | null): string {
+  if (!url) return "/";
+  // Only allow relative URLs — block protocol-relative (//evil.com) and absolute URLs
+  if (url.startsWith("/") && !url.startsWith("//") && !url.includes("://")) {
+    return url;
+  }
+  return "/";
+}
+
 function SignInContent() {
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams?.get("callbackUrl") || "/";
+  const callbackUrl = getSafeCallbackUrl(searchParams?.get("callbackUrl"));
   const [isRedirecting, setIsRedirecting] = useState(false);
   const { data: session, isPending } = authClient.useSession();
 
