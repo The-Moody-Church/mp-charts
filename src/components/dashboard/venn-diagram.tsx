@@ -246,19 +246,10 @@ export function VennDiagram({ data }: VennDiagramProps) {
   const [hovered, setHovered] = useState<string | null>(null);
   const { circles, labels, vb } = useMemo(() => computeLayout(data), [data]);
 
-  if (data.totalActivity === 0 && data.totalGroup === 0 && data.totalServing === 0) {
-    return (
-      <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-        No engagement data available
-      </div>
-    );
-  }
-
   const [cA, cB, cC] = circles;
   const all = [cA, cB, cC];
-  const clrArr = [CLR.A, CLR.B, CLR.C];
 
-  const regions = [
+  const regions = useMemo(() => [
     { id: 'activity-only',   inside: [0],       outside: [1, 2], label: 'Activity Only',      count: data.activityOnly,       desc: 'Attended events but not in a group or serving' },
     { id: 'group-only',      inside: [1],       outside: [0, 2], label: 'Groups Only',        count: data.groupOnly,          desc: 'In a group but not attending events or serving' },
     { id: 'serving-only',    inside: [2],       outside: [0, 1], label: 'Serving Only',       count: data.servingOnly,        desc: 'Serving/leading but not attending events or in a group' },
@@ -266,7 +257,7 @@ export function VennDiagram({ data }: VennDiagramProps) {
     { id: 'activity-serving',inside: [0, 2],    outside: [1],    label: 'Activity + Serving', count: data.activityAndServing, desc: 'Attending events and serving/leading' },
     { id: 'group-serving',   inside: [1, 2],    outside: [0],    label: 'Groups + Serving',   count: data.groupAndServing,    desc: 'In a group and serving/leading' },
     { id: 'all-three',       inside: [0, 1, 2], outside: [],     label: 'All Three',          count: data.allThree,           desc: 'Attending, in a group, and serving/leading' },
-  ];
+  ], [data]);
 
   const totalUnique = data.activityOnly + data.groupOnly + data.servingOnly
     + data.activityAndGroup + data.activityAndServing + data.groupAndServing + data.allThree;
@@ -281,6 +272,16 @@ export function VennDiagram({ data }: VennDiagramProps) {
     return pts;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [circles, data]);
+
+  if (data.totalActivity === 0 && data.totalGroup === 0 && data.totalServing === 0) {
+    return (
+      <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+        No engagement data available
+      </div>
+    );
+  }
+
+  const clrArr = [CLR.A, CLR.B, CLR.C];
 
   return (
     <div className="flex flex-col lg:flex-row lg:items-stretch gap-6">

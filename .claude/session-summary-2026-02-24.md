@@ -95,6 +95,11 @@ Conducted a comprehensive security audit of the MPNext application, identified 1
 **Documentation (#14):**
 - `CLAUDE.md` — Added note in Caching section that dashboard cache is shared by design
 
+### Lint Fixes (PR testing)
+- `src/app/signin/page.tsx` — Replaced `useState`/`setIsRedirecting` with `useRef` to avoid `setState` inside effect (`react-hooks/set-state-in-effect`)
+- `src/components/dashboard/venn-diagram.tsx` — Moved early return after all hooks to fix conditional `useMemo` call (`react-hooks/rules-of-hooks`); wrapped `regions` array in `useMemo`
+- `src/components/volunteer-processing/volunteer-detail-modal.tsx` — Removed unused `CertificationDetail` import (`@typescript-eslint/no-unused-vars`)
+
 ### Remaining Open Items
 - **IDOR mitigation (#10)**: Evaluate per-record authorization or access-token-based MPHelper instances
 - **RBAC (#13)**: Design role-based access control leveraging MP security groups
