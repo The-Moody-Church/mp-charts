@@ -19,6 +19,7 @@ interface DashboardMetricsProps {
   showCompare?: boolean;
   isSingleMonth?: boolean;
   extendedLoading?: boolean;
+  engagementLoading?: boolean;
 }
 
 function LoadingSkeleton({ height = 300 }: { height?: number }) {
@@ -32,17 +33,17 @@ function LoadingSkeleton({ height = 300 }: { height?: number }) {
   );
 }
 
-export function DashboardMetrics({ data, showCompare = true, isSingleMonth = false, extendedLoading = false }: DashboardMetricsProps) {
+export function DashboardMetrics({ data, showCompare = true, isSingleMonth = false, extendedLoading = false, engagementLoading = false }: DashboardMetricsProps) {
   return (
     <div className="space-y-10">
       {/* Engagement Venn Diagram */}
       <Card>
         <CardHeader>
           <CardTitle>Engagement Overview</CardTitle>
-          <CardDescription>People engaged across three dimensions: activity attendance, small groups, and serving/leading</CardDescription>
+          <CardDescription>People engaged across three dimensions: activity attendance, communities &amp; groups, and serving/leading</CardDescription>
         </CardHeader>
         <CardContent>
-          {extendedLoading ? <LoadingSkeleton /> : <VennDiagram data={data.engagementOverlap} />}
+          {engagementLoading ? <LoadingSkeleton /> : <VennDiagram data={data.engagementOverlap} />}
         </CardContent>
       </Card>
 
@@ -51,7 +52,7 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
       {/* ============================================================ */}
       <SectionWrapper title="Know God">
         {/* Metric Cards */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
           <MetricCard
             title="Avg In-Person Attendance"
             value={data.currentPeriod.averageInPersonAttendance}
@@ -65,17 +66,31 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
             format="number"
           />
           <MetricCard
-            title="Baptisms (last 365 days)"
-            value={data.baptismsLastYear}
-            previousValue={showCompare ? data.baptismsPreviousYear : undefined}
+            title="Baptisms"
+            value={data.baptismsCurrentPeriod}
+            previousValue={showCompare ? data.baptismsPreviousPeriod : undefined}
             format="number"
           />
           <MetricCard
-            title="New Members (last 365 days)"
-            value={data.membershipCount}
-            previousValue={showCompare ? data.membershipPreviousCount : undefined}
+            title="New Members"
+            value={data.membershipCurrentPeriod}
+            previousValue={showCompare ? data.membershipPreviousPeriod : undefined}
             format="number"
           />
+          {extendedLoading ? (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Unique Event Participants</CardTitle>
+              </CardHeader>
+              <CardContent><LoadingSkeleton height={60} /></CardContent>
+            </Card>
+          ) : (
+            <MetricCard
+              title="Unique Event Participants"
+              value={data.uniqueEventParticipants}
+              format="number"
+            />
+          )}
         </div>
 
         {/* Worship Service Attendance */}
@@ -105,39 +120,12 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
             </ExpandableChart>
           </CardContent>
         </Card>
-
-        {/* Unique Event Participants */}
-        {extendedLoading ? (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Unique Event Participants</CardTitle>
-            </CardHeader>
-            <CardContent><LoadingSkeleton height={60} /></CardContent>
-          </Card>
-        ) : (
-          <MetricCard
-            title="Unique Event Participants"
-            value={data.uniqueEventParticipants}
-            format="number"
-          />
-        )}
       </SectionWrapper>
 
       {/* ============================================================ */}
       {/* Section 2: Feed Your Soul */}
       {/* ============================================================ */}
       <SectionWrapper title="Feed Your Soul">
-        <MetricCard
-          title="Active Communities and Small Groups"
-          value={data.groupTypeMetrics
-            .filter(g =>
-              g.groupTypeName.toLowerCase().includes('small') ||
-              g.groupTypeName.toLowerCase().includes('community')
-            )
-            .reduce((sum, g) => sum + g.activeGroupCount, 0)}
-          format="number"
-        />
-
         <div className="grid gap-6 md:grid-cols-2">
           {/* Community Attendance */}
           <Card>
@@ -318,23 +306,6 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
         </SectionWrapper>
       )}
 
-      {/* Debug Info - Development only */}
-      {process.env.NODE_ENV === 'development' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Data Summary</CardTitle>
-            <CardDescription>Current dashboard data (for verification)</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2 text-sm">
-              <p><strong>Group Types:</strong> {data.groupTypeMetrics.length} types tracked</p>
-              <p><strong>Event Types:</strong> {data.eventTypeMetrics.length} types tracked</p>
-              <p suppressHydrationWarning><strong>Period:</strong> {new Date(data.currentPeriod.periodStart).toLocaleDateString()} - {new Date(data.currentPeriod.periodEnd).toLocaleDateString()}</p>
-              <p suppressHydrationWarning><strong>Generated:</strong> {new Date(data.generatedAt).toLocaleString()}</p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

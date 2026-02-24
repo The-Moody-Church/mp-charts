@@ -77,8 +77,14 @@ export async function getFullRangeDashboardMetrics(): Promise<DashboardData> {
 /**
  * Cached extended dashboard data (heavy queries) loaded separately.
  * Uses a date string cache key so it refreshes daily.
+ * Date-filterable data (event participants, roster/attendance) uses the full
+ * selectable range so filterDashboardData can recompute on the client.
  */
-async function getCachedExtendedData(dateIso: string): Promise<Partial<DashboardData>> {
+async function getCachedExtendedData(
+  dateIso: string,
+  fullRangeStartIso: string,
+  fullRangeEndIso: string
+): Promise<Partial<DashboardData>> {
   'use cache';
   cacheLife({ revalidate: 21600 });
   cacheTag('dashboard-data', 'dashboard-extended');
@@ -86,8 +92,14 @@ async function getCachedExtendedData(dateIso: string): Promise<Partial<Dashboard
   // dateIso is used as cache key only — suppress unused lint
   void dateIso;
 
+  const [startYear, startMonth, startDay] = fullRangeStartIso.split('-').map(Number);
+  const [endYear, endMonth, endDay] = fullRangeEndIso.split('-').map(Number);
+
   const dashboardService = await DashboardService.getInstance();
-  return dashboardService.getExtendedDashboardData();
+  return dashboardService.getExtendedDashboardData(
+    new Date(startYear, startMonth - 1, startDay),
+    new Date(endYear, endMonth - 1, endDay)
+  );
 }
 
 /**
@@ -96,9 +108,71 @@ async function getCachedExtendedData(dateIso: string): Promise<Partial<Dashboard
  * Cached for 6 hours with manual invalidation support.
  */
 export async function getExtendedDashboardMetrics(): Promise<Partial<DashboardData>> {
+  const currentYear = getCurrentMinistryYear();
+  const earliestYear = currentYear - 4;
+
   const today = new Date();
   const dateIso = today.toISOString().split('T')[0];
-  return getCachedExtendedData(dateIso);
+
+  const fullRangeStart = new Date(earliestYear, 8, 1); // September 1, 5 years ago
+  const maxEnd = new Date(currentYear + 1, 7, 31);
+  const fullRangeEnd = today < maxEnd ? today : maxEnd;
+
+  return getCachedExtendedData(
+    dateIso,
+    fullRangeStart.toISOString().split('T')[0],
+    fullRangeEnd.toISOString().split('T')[0]
+  );
+}
+
+/**
+ * Cached engagement venn data (Activity_Log query — slowest query) loaded last.
+ * Separated from extended data so serving/roster/EP charts can render first.
+ * Uses a date string cache key so it refreshes daily.
+ */
+async function getCachedEngagementData(
+  dateIso: string,
+  fullRangeStartIso: string,
+  fullRangeEndIso: string
+): Promise<Partial<DashboardData>> {
+  'use cache';
+  cacheLife({ revalidate: 21600 });
+  cacheTag('dashboard-data', 'dashboard-engagement');
+
+  // dateIso is used as cache key only — suppress unused lint
+  void dateIso;
+
+  const [startYear, startMonth, startDay] = fullRangeStartIso.split('-').map(Number);
+  const [endYear, endMonth, endDay] = fullRangeEndIso.split('-').map(Number);
+
+  const dashboardService = await DashboardService.getInstance();
+  return dashboardService.getEngagementDashboardData(
+    new Date(startYear, startMonth - 1, startDay),
+    new Date(endYear, endMonth - 1, endDay)
+  );
+}
+
+/**
+ * Fetches engagement venn diagram data (Activity_Log — slowest query).
+ * Loaded separately from extended data so other charts can render first.
+ * Cached for 6 hours with manual invalidation support.
+ */
+export async function getEngagementDashboardMetrics(): Promise<Partial<DashboardData>> {
+  const currentYear = getCurrentMinistryYear();
+  const earliestYear = currentYear - 4;
+
+  const today = new Date();
+  const dateIso = today.toISOString().split('T')[0];
+
+  const fullRangeStart = new Date(earliestYear, 8, 1);
+  const maxEnd = new Date(currentYear + 1, 7, 31);
+  const fullRangeEnd = today < maxEnd ? today : maxEnd;
+
+  return getCachedEngagementData(
+    dateIso,
+    fullRangeStart.toISOString().split('T')[0],
+    fullRangeEnd.toISOString().split('T')[0]
+  );
 }
 
 /**
@@ -121,7 +195,7 @@ function getCurrentMinistryYear(): number {
  * Manually refreshes the dashboard cache
  * Revalidates both page-level and data-level caches:
  * - Page-level: revalidates the dashboard page
- * - Data-level: invalidates dashboard-data, Group_Types and Event_Types caches
+ * - Data-level: invalidates dashboard-data and Group_Types caches
  *
  * @returns Promise<{ success: boolean; timestamp: Date }>
  */
@@ -133,7 +207,6 @@ export async function refreshDashboardCache(): Promise<{
     revalidatePath('/dashboard');
     revalidateTag('dashboard-data', { expire: 0 });
     revalidateTag('group-types', { expire: 0 });
-    revalidateTag('event-types', { expire: 0 });
     return {
       success: true,
       timestamp: new Date()

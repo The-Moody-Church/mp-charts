@@ -111,3 +111,53 @@ Route (app)
 - `.claude/plan-baptism-processing.md` — updated page pattern note
 - `.claude/draft-issue-dashboard-redesign.md` — added caching architecture section
 - `.claude/session-summary-2026-02-23.md` — this file
+
+---
+
+## Dashboard Redesign: Remove Dead Code, Make All Metrics Date-Filterable, Split Loading Phases
+
+### Task
+Implemented 4-phase refactoring plan from audit of dashboard architecture:
+1. Remove dead weight (unused interfaces, methods, dev debug card)
+2. Make serving metrics date-filterable (consolidate 4 redundant API calls → 1, compute client-side)
+3. Make engagement venn date-filterable (store raw data, compute client-side)
+4. Split engagement loading into separate phase (Activity_Log query is slow)
+
+### Changes Made
+
+**Phase 1: Remove Dead Weight**
+- Deleted `EventTypeMetrics`, `GivingByProgram`, `GivingTrend` interfaces from DTO
+- Removed `uniqueAttendees`/`uniqueInPersonAttendees`/`uniqueOnlineAttendees` from `PeriodMetrics`
+- Deleted `getCachedEventTypes`, `getEventTypesWithCache`, `getEventTypeMetrics` (~120 lines), `calculateYearOverYear`, `calculatePercentChange`, `determineTrend` from service
+- Removed dev debug card from `dashboard-metrics.tsx`
+- Removed `event-types` cache invalidation from `refreshDashboardCache`
+
+**Phase 2: Date-Filterable Serving Metrics**
+- Added `ServingLeadingRecord` interface to DTO with date ranges for client-side filtering
+- New `getServingLeadingRaw()` service method: single API chain (Group_Roles → Group_Participants → Participants → Role_Types → Ministries), deduplicated per (contactId, roleTypeId, ministryId)
+- Deleted 4 old methods: `getServingLeadingParticipants`, `getTotalServingLeading`, `getServingTrends`, `getServingByRoleType`, `getServingByMinistry`
+- New `computeServingMetrics()` in filter-dashboard-data.ts: computes servingTrends, servingByRoleType, servingByMinistry, totalServingLeading from raw records
+
+**Phase 3: Date-Filterable Engagement Venn**
+- Added `EngagementActivityMonth`, `EngagementGroupRecord`, `EngagementRawData` interfaces
+- New `getEngagementRawData()` service method: Activity_Log bucketed by month, Groups (Ministry_ID=8) with date ranges, pre-computed adult filter
+- Deleted `getEngagementOverlap`, `getActivityContactIds`, `getGroupContactIds`, `getServingContactIds` (old methods)
+- New `computeEngagementOverlap()` in filter-dashboard-data.ts: 7 venn regions via set intersection/difference
+- New SVG-based `VennDiagram` component replacing placeholder
+
+**Phase 4: Split Engagement Loading (Activity_Log → Last)**
+- `getExtendedDashboardData()` now returns only EP/roster/serving (all parallel, no sequential phase)
+- New `getEngagementDashboardData()` public method on service for venn data
+- `getEngagementRawData()` now self-contained: fetches serving contact IDs internally via lightweight `getServingContactIds()` helper
+- New `getCachedEngagementData()` + `getEngagementDashboardMetrics()` server action with `dashboard-engagement` cache tag
+- `DashboardShell` has two independent loading stages: `extendedLoading` (fast) + `engagementLoading` (slow)
+- `DashboardMetrics` accepts `engagementLoading` prop — venn skeleton independent from other extended loading
+
+### Files Modified
+- `src/lib/dto/dashboard.ts` — removed 3 dead interfaces, added 5 new interfaces, cleaned PeriodMetrics/DashboardData
+- `src/services/dashboardService.ts` — removed ~400 lines dead code, added getServingLeadingRaw, getEngagementRawData, getEngagementDashboardData, getServingContactIds
+- `src/components/dashboard/filter-dashboard-data.ts` — added computeServingMetrics, computeEngagementOverlap
+- `src/components/dashboard/dashboard-metrics.tsx` — removed debug card, added engagementLoading prop
+- `src/components/dashboard/dashboard-shell.tsx` — two-stage loading with engagementLoading state
+- `src/components/dashboard/actions.ts` — added getCachedEngagementData + getEngagementDashboardMetrics, removed event-types invalidation
+- `src/components/dashboard/venn-diagram.tsx` — new SVG-based venn diagram component

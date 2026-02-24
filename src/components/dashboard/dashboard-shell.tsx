@@ -11,7 +11,7 @@ import {
   getDefaultSelection,
   selectionToDateRange,
 } from './date-range-filter';
-import { refreshDashboardCache, getFullRangeDashboardMetrics, getExtendedDashboardMetrics } from './actions';
+import { refreshDashboardCache, getFullRangeDashboardMetrics, getExtendedDashboardMetrics, getEngagementDashboardMetrics } from './actions';
 import { filterDashboardData, isSingleMonthSelection } from './filter-dashboard-data';
 import { useRouter } from 'next/navigation';
 
@@ -47,10 +47,11 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
   const [selection, setSelection] = useState<DateRangeSelection>(getDefaultSelection);
   const [fullData, setFullData] = useState<DashboardData>(initialData);
   const [extendedLoading, setExtendedLoading] = useState(true);
+  const [engagementLoading, setEngagementLoading] = useState(true);
   const [isRefreshing, startRefreshTransition] = useTransition();
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
-  // Progressively load extended (heavy) data after initial render
+  // Stage 1: Load extended data (serving, EP, roster) — fast
   useEffect(() => {
     let cancelled = false;
     getExtendedDashboardMetrics().then(extended => {
@@ -61,6 +62,21 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
     }).catch(err => {
       console.error('Error loading extended dashboard data:', err);
       if (!cancelled) setExtendedLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Stage 2: Load engagement venn data (Activity_Log — slow)
+  useEffect(() => {
+    let cancelled = false;
+    getEngagementDashboardMetrics().then(engagement => {
+      if (!cancelled) {
+        setFullData(prev => ({ ...prev, ...engagement }));
+        setEngagementLoading(false);
+      }
+    }).catch(err => {
+      console.error('Error loading engagement dashboard data:', err);
+      if (!cancelled) setEngagementLoading(false);
     });
     return () => { cancelled = true; };
   }, []);
@@ -88,13 +104,15 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
         setLastRefresh(cacheResult.timestamp);
       }
 
-      // Re-fetch both core and extended data
-      const [freshData, extended] = await Promise.all([
+      // Re-fetch core, extended, and engagement data
+      const [freshData, extended, engagement] = await Promise.all([
         getFullRangeDashboardMetrics(),
         getExtendedDashboardMetrics(),
+        getEngagementDashboardMetrics(),
       ]);
-      setFullData({ ...freshData, ...extended });
+      setFullData({ ...freshData, ...extended, ...engagement });
       setExtendedLoading(false);
+      setEngagementLoading(false);
       router.refresh();
     });
   }, [router]);
@@ -143,6 +161,7 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
           showCompare={selection.compare}
           isSingleMonth={isSingleMonthSelection(selection)}
           extendedLoading={extendedLoading}
+          engagementLoading={engagementLoading}
         />
       </div>
     </div>
