@@ -321,6 +321,29 @@ Charts that follow this standard:
 
 When adding new time-series charts, use the same `toLocaleDateString('en-US', ...)` pattern with the options above.
 
+## UI Style Guide
+
+### Contact Action Links (Email, Phone, External URLs)
+
+When displaying actionable contact information (email, phone, links to external systems), render them as **bordered pill-style buttons** with an inline SVG icon — not as plain text links. This pattern provides a clear click target and consistent visual treatment across features.
+
+```tsx
+<a
+  href={`mailto:${email}`}
+  className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
+>
+  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    {/* icon path */}
+  </svg>
+  {email}
+</a>
+```
+
+**Key classes**: `inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 transition-colors`
+
+Components using this pattern:
+- `BaptismDetailModal` — email and phone links
+
 ## Key Development Practices
 
 1. **Always use the `@/` path alias** for imports instead of relative paths

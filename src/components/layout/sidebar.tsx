@@ -14,6 +14,7 @@ const navigation = [
   { name: "Home", href: "/", icon: HomeIcon },
   { name: "Executive Dashboard", href: "/dashboard", icon: ChartBarIcon },
   { name: "Volunteer Processing", href: "/volunteer-processing", icon: ClipboardDocumentCheckIcon },
+  { name: "Baptism Processing", href: "/baptism-processing", icon: ClipboardDocumentCheckIcon },
   // Dev-only items
   ...(isDev ? [
     { name: "Contact Lookup", href: "/contactlookup", icon: UsersIcon },
