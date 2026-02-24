@@ -2,14 +2,17 @@ import { cacheLife, cacheTag } from 'next/cache';
 import { MPHelper } from '@/lib/providers/ministry-platform';
 import {
   DashboardData,
-  GroupTypeMetrics,
-  EventTypeMetrics,
   PeriodMetrics,
-  YearOverYearMetrics,
+  GroupTypeMetrics,
   SmallGroupTrend,
   MonthlyAttendanceTrend,
   WeeklyAttendanceTrend,
-  CommunityAttendanceTrend
+  CommunityAttendanceTrend,
+  ServingLeadingRecord,
+  EngagementRawData,
+  EventParticipantMonth,
+  RosterMemberRecord,
+  AttendanceMonthRecord,
 } from '@/lib/dto';
 
 const MONTH_NAMES = [
@@ -34,26 +37,6 @@ async function getCachedGroupTypes(ids: string) {
     table: 'Group_Types',
     select: 'Group_Type_ID,Group_Type',
     filter: `Group_Type_ID IN (${ids})`
-  });
-}
-
-/**
- * Cached Event_Types lookup (24-hour cache via 'use cache')
- * The `ids` parameter is automatically part of the cache key.
- */
-async function getCachedEventTypes(ids: string) {
-  'use cache';
-  cacheLife({ revalidate: 86400 });
-  cacheTag('event-types');
-
-  const mp = new MPHelper();
-  return mp.getTableRecords<{
-    Event_Type_ID: number;
-    Event_Type: string;
-  }>({
-    table: 'Event_Types',
-    select: 'Event_Type_ID,Event_Type',
-    filter: `Event_Type_ID IN (${ids})`
   });
 }
 
@@ -103,14 +86,6 @@ export class DashboardService {
   }
 
   /**
-   * Gets Event_Types with 24-hour cache via 'use cache'
-   */
-  private async getEventTypesWithCache(eventTypeIds: Set<number>) {
-    const ids = Array.from(eventTypeIds).sort().join(',');
-    return getCachedEventTypes(ids);
-  }
-
-  /**
    * Batches a large array of IDs into multiple getTableRecords calls to avoid
    * IIS URL length limits (~4096 chars). Results are concatenated.
    */
@@ -132,7 +107,8 @@ export class DashboardService {
         ? `${idColumn} IN (${batchIds.join(',')}) AND ${extraFilter}`
         : `${idColumn} IN (${batchIds.join(',')})`;
       const batch = await this.mp!.getTableRecords<T>({ table, select, filter });
-      results.push(...batch);
+      // Use concat instead of push(...batch) to avoid stack overflow with large arrays
+      for (const item of batch) results.push(item);
     }
     return results;
   }
@@ -154,56 +130,38 @@ export class DashboardService {
     const previousYearEnd = new Date(currentYearEnd);
     previousYearEnd.setFullYear(previousYearEnd.getFullYear() - 1);
 
-    // Calculate baptisms date ranges (last 365 days from today)
-    const today = new Date();
-    const currentBaptismsStart = new Date(today);
-    currentBaptismsStart.setFullYear(today.getFullYear() - 1);
-    const previousBaptismsEnd = new Date(currentBaptismsStart);
-    previousBaptismsEnd.setDate(previousBaptismsEnd.getDate() - 1);
-    const previousBaptismsStart = new Date(previousBaptismsEnd);
-    previousBaptismsStart.setFullYear(previousBaptismsEnd.getFullYear() - 1);
-
-    // Fetch all metrics in parallel for better performance
+    // Fetch core metrics in parallel (fast queries only)
     const [
       currentPeriod,
       previousPeriod,
       groupTypeMetrics,
-      eventTypeMetrics,
       smallGroupTrends,
       communityTrends,
       monthlyAttendanceTrends,
       previousYearMonthlyAttendanceTrends,
       weeklyAttendanceTrends,
-      baptismsLastYear,
-      baptismsPreviousYear
+      baptismDates,
+      membershipDates,
+      membershipDroppedDates,
     ] = await Promise.all([
       this.getPeriodMetrics(currentYearStart, currentYearEnd),
       this.getPeriodMetrics(previousYearStart, previousYearEnd),
       this.getGroupTypeMetrics(currentYearStart, currentYearEnd),
-      this.getEventTypeMetrics(currentYearStart, currentYearEnd),
       this.getSmallGroupTrends(currentYearStart, currentYearEnd),
       this.getCommunityAttendanceTrends(currentYearStart, currentYearEnd),
       this.getMonthlyAttendanceTrends(currentYearStart, currentYearEnd),
       this.getMonthlyAttendanceTrends(previousYearStart, previousYearEnd),
       this.getWeeklyAttendanceTrends(currentYearStart, currentYearEnd),
-      this.getBaptismsCount(currentBaptismsStart, today),
-      this.getBaptismsCount(previousBaptismsStart, previousBaptismsEnd)
+      this.getMilestoneDates(3, currentYearStart, currentYearEnd),           // Baptism
+      this.getMilestoneDates(48, currentYearStart, currentYearEnd),          // Registered Member
+      this.getMilestoneDates(49, currentYearStart, currentYearEnd),          // Dropped Membership
     ]);
-
-    // Calculate year-over-year comparisons
-    const yearOverYear = this.calculateYearOverYear(
-      currentPeriod,
-      previousPeriod,
-      groupTypeMetrics,
-      eventTypeMetrics
-    );
 
     return {
       currentPeriod,
       previousPeriod,
       groupTypeMetrics,
-      eventTypeMetrics,
-      yearOverYear,
+      yearOverYear: [], // Computed client-side by filterDashboardData
       smallGroupTrends,
       previousYearSmallGroupTrends: [], // Computed client-side by filterDashboardData
       communityAttendanceTrends: communityTrends.monthly,
@@ -211,9 +169,85 @@ export class DashboardService {
       previousYearMonthlyAttendanceTrends,
       weeklyAttendanceTrends,
       weeklyCommunityAttendanceTrends: communityTrends.weekly,
-      baptismsLastYear,
-      baptismsPreviousYear,
+      baptismDates,
+      membershipDates,
+      membershipDroppedDates,
+      baptismsCurrentPeriod: 0,  // Computed client-side by filterDashboardData
+      baptismsPreviousPeriod: 0,
+      membershipCurrentPeriod: 0,
+      membershipPreviousPeriod: 0,
+      // Extended fields — defaults until loaded separately
+      uniqueEventParticipants: 0, // Computed client-side by filterDashboardData
+      eventParticipantsByMonth: [],
+      rosterVsAttendance: [], // Computed client-side by filterDashboardData
+      rosterMemberRecords: [],
+      attendanceByMonth: [],
+      servingLeadingRecords: [],
+      servingTrends: [],
+      servingByRoleType: [],
+      servingByMinistry: [],
+      totalServingLeading: 0,
+      engagementOverlap: {
+        activityOnly: 0, groupOnly: 0, servingOnly: 0,
+        activityAndGroup: 0, activityAndServing: 0, groupAndServing: 0,
+        allThree: 0, totalActivity: 0, totalGroup: 0, totalServing: 0,
+      },
+      engagementRawData: { activityByMonth: [], groupRecords: [], adultContactIds: [] },
       generatedAt: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Gets extended dashboard data (heavy queries) loaded separately for progressive rendering.
+   * Date-filterable data (event participants, roster/attendance) uses the full range so
+   * filterDashboardData can recompute when the user changes the date selection.
+   * Snapshot metrics (serving, engagement) use last 12 months.
+   *
+   * @param fullRangeStart - Start of the full selectable range (for date-filterable data)
+   * @param fullRangeEnd - End of the full selectable range (for date-filterable data)
+   */
+  public async getExtendedDashboardData(fullRangeStart: Date, fullRangeEnd: Date): Promise<Partial<DashboardData>> {
+    // All three queries run in parallel — no sequential dependency
+    const [
+      eventParticipantsByMonth,
+      rosterAndAttendance,
+      servingLeadingRecords,
+    ] = await Promise.all([
+      this.getEventParticipantsByMonth(fullRangeStart, fullRangeEnd),
+      this.getRosterAndAttendanceRaw(fullRangeStart, fullRangeEnd),
+      this.getServingLeadingRaw(fullRangeStart, fullRangeEnd),
+    ]);
+
+    return {
+      eventParticipantsByMonth,
+      rosterMemberRecords: rosterAndAttendance.rosterMemberRecords,
+      attendanceByMonth: rosterAndAttendance.attendanceByMonth,
+      uniqueEventParticipants: 0, // Computed client-side by filterDashboardData
+      rosterVsAttendance: [], // Computed client-side by filterDashboardData
+      servingLeadingRecords,
+      // Computed client-side by filterDashboardData from servingLeadingRecords:
+      servingTrends: [],
+      servingByRoleType: [],
+      servingByMinistry: [],
+      totalServingLeading: 0,
+    };
+  }
+
+  /**
+   * Gets engagement venn diagram data (Activity_Log + Groups + adult filter).
+   * Loaded separately from extended data because the Activity_Log query is slow.
+   * Self-contained: fetches its own serving contact IDs for the adult filter.
+   */
+  public async getEngagementDashboardData(fullRangeStart: Date, fullRangeEnd: Date): Promise<Partial<DashboardData>> {
+    const engagementRawData = await this.getEngagementRawData(fullRangeStart, fullRangeEnd);
+
+    return {
+      engagementOverlap: {
+        activityOnly: 0, groupOnly: 0, servingOnly: 0,
+        activityAndGroup: 0, activityAndServing: 0, groupAndServing: 0,
+        allThree: 0, totalActivity: 0, totalGroup: 0, totalServing: 0,
+      },
+      engagementRawData,
     };
   }
 
@@ -236,9 +270,10 @@ export class DashboardService {
       const groups = await this.mp!.getTableRecords<{
         Group_ID: number;
         Group_Type_ID: number;
+        Ministry_ID: number | null;
       }>({
         table: 'Groups',
-        select: 'Group_ID,Group_Type_ID',
+        select: 'Group_ID,Group_Type_ID,Ministry_ID',
         filter: `
           Groups.Start_Date <= '${endIso}' AND
           (Groups.End_Date IS NULL OR Groups.End_Date >= '${startIso}')
@@ -251,22 +286,15 @@ export class DashboardService {
       const groupTypeIds = new Set(groups.map(g => g.Group_Type_ID));
       const groupTypes = await this.getGroupTypesWithCache(groupTypeIds);
 
-      // Identify childcare group type IDs
-      const childcareTypeIds = new Set(
-        groupTypes
-          .filter(gt => gt.Group_Type === 'Childcare')
-          .map(gt => gt.Group_Type_ID)
-      );
-
-      // Filter out childcare groups
-      const filteredGroups = groups.filter(g => !childcareTypeIds.has(g.Group_Type_ID));
+      // Filter out childcare groups (Group_Type_ID = 13)
+      const filteredGroups = groups.filter(g => g.Group_Type_ID !== 13);
       const activeGroupIds = new Set(filteredGroups.map(g => g.Group_ID));
       if (activeGroupIds.size === 0) return [];
 
-      // Filter out childcare from group types
-      const filteredGroupTypes = groupTypes.filter(gt => gt.Group_Type !== 'Childcare');
+      const filteredGroupTypes = groupTypes.filter(gt => gt.Group_Type_ID !== 13);
       const groupTypeMap = new Map(filteredGroupTypes.map(gt => [gt.Group_Type_ID, gt.Group_Type]));
       const groupToTypeMap = new Map(filteredGroups.map(g => [g.Group_ID, g.Group_Type_ID]));
+      const groupToMinistryMap = new Map(filteredGroups.map(g => [g.Group_ID, g.Ministry_ID ?? null]));
 
       // Step 3: Get group participants for active groups
       // Batched to avoid IIS URL length limits with large ID sets
@@ -285,6 +313,7 @@ export class DashboardService {
       // Aggregate by group type
       const metricsMap = new Map<number, {
         groupTypeName: string;
+        ministryId: number | null;
         groupIds: Set<number>;
         participantIds: Set<number>;
         totalParticipants: number;
@@ -299,6 +328,7 @@ export class DashboardService {
         if (!metricsMap.has(groupTypeId)) {
           metricsMap.set(groupTypeId, {
             groupTypeName,
+            ministryId: groupToMinistryMap.get(gp.Group_ID) ?? null,
             groupIds: new Set(),
             participantIds: new Set(),
             totalParticipants: 0
@@ -315,6 +345,7 @@ export class DashboardService {
       return Array.from(metricsMap.entries()).map(([groupTypeId, metrics]) => ({
         groupTypeId,
         groupTypeName: metrics.groupTypeName,
+        ministryId: metrics.ministryId,
         activeGroupCount: metrics.groupIds.size,
         totalParticipants: metrics.totalParticipants,
         uniqueParticipants: metrics.participantIds.size,
@@ -324,128 +355,6 @@ export class DashboardService {
       }));
     } catch (error) {
       console.error('Error fetching group type metrics:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Gets event attendance metrics by event type
-   *
-   * @param startDate - Start date of period
-   * @param endDate - End date of period
-   * @returns Promise<EventTypeMetrics[]> - Event metrics by type
-   */
-  private async getEventTypeMetrics(
-    startDate: Date,
-    endDate: Date
-  ): Promise<EventTypeMetrics[]> {
-    const startIso = startDate.toISOString();
-    const endIso = endDate.toISOString();
-
-    try {
-      // Step 1: Get events for the period (Event_Type_ID = 7 for Worship Services)
-      const events = await this.mp!.getTableRecords<{
-        Event_ID: number;
-        Event_Type_ID: number;
-      }>({
-        table: 'Events',
-        select: 'Event_ID,Event_Type_ID',
-        filter: `
-          Events.Event_Start_Date >= '${startIso}' AND
-          Events.Event_End_Date <= '${endIso}' AND
-          Events.Cancelled = 0 AND
-          Events.Event_Type_ID = 7
-        `
-      });
-
-      const eventIds = new Set(events.map(e => e.Event_ID));
-      if (eventIds.size === 0) return [];
-
-      // Step 2: Get event types (cached 24 hours)
-      const eventTypeIds = new Set(events.map(e => e.Event_Type_ID));
-      const eventTypes = await this.getEventTypesWithCache(eventTypeIds);
-
-      const eventTypeMap = new Map(eventTypes.map(et => [et.Event_Type_ID, et.Event_Type]));
-      const eventToTypeMap = new Map(events.map(e => [e.Event_ID, e.Event_Type_ID]));
-
-      // Step 3: Get attendance metrics from Event_Metrics (Metric_ID 2 = In-Person, 3 = Online)
-      // Batched to avoid IIS URL length limits with large ID sets
-      const eventMetrics = await this.batchGetTableRecords<{
-        Event_Metric_ID: number;
-        Event_ID: number;
-        Metric_ID: number;
-        Numerical_Value: number;
-      }>({
-        table: 'Event_Metrics',
-        select: 'Event_Metric_ID,Event_ID,Metric_ID,Numerical_Value',
-        ids: Array.from(eventIds),
-        idColumn: 'Event_Metrics.Event_ID',
-        extraFilter: 'Event_Metrics.Metric_ID IN (2, 3)'
-      });
-
-      // Aggregate by event type with online vs in-person breakdown
-      const metricsMap = new Map<number, {
-        eventTypeName: string;
-        eventIds: Set<number>;
-        totalAttendance: number;
-        inPersonAttendance: number;
-        onlineAttendance: number;
-      }>();
-
-      for (const metric of eventMetrics) {
-        const eventTypeId = eventToTypeMap.get(metric.Event_ID);
-        if (!eventTypeId) continue;
-
-        const eventTypeName = eventTypeMap.get(eventTypeId) || 'Unknown';
-
-        if (!metricsMap.has(eventTypeId)) {
-          metricsMap.set(eventTypeId, {
-            eventTypeName,
-            eventIds: new Set(),
-            totalAttendance: 0,
-            inPersonAttendance: 0,
-            onlineAttendance: 0
-          });
-        }
-
-        const metrics = metricsMap.get(eventTypeId)!;
-        metrics.eventIds.add(metric.Event_ID);
-
-        if (metric.Metric_ID === 2) {
-          // In-Person attendance
-          metrics.inPersonAttendance += metric.Numerical_Value;
-          metrics.totalAttendance += metric.Numerical_Value;
-        } else if (metric.Metric_ID === 3) {
-          // Online attendance
-          metrics.onlineAttendance += metric.Numerical_Value;
-          metrics.totalAttendance += metric.Numerical_Value;
-        }
-      }
-
-      // Convert to array format
-      return Array.from(metricsMap.entries()).map(([eventTypeId, metrics]) => ({
-        eventTypeId,
-        eventTypeName: metrics.eventTypeName,
-        eventCount: metrics.eventIds.size,
-        totalAttendance: metrics.totalAttendance,
-        totalInPersonAttendance: metrics.inPersonAttendance,
-        totalOnlineAttendance: metrics.onlineAttendance,
-        // Event_Metrics doesn't track individual participants, only headcounts
-        uniqueAttendees: 0,
-        uniqueInPersonAttendees: 0,
-        uniqueOnlineAttendees: 0,
-        averageAttendance: metrics.eventIds.size > 0
-          ? Math.round(metrics.totalAttendance / metrics.eventIds.size)
-          : 0,
-        averageInPersonAttendance: metrics.eventIds.size > 0
-          ? Math.round(metrics.inPersonAttendance / metrics.eventIds.size)
-          : 0,
-        averageOnlineAttendance: metrics.eventIds.size > 0
-          ? Math.round(metrics.onlineAttendance / metrics.eventIds.size)
-          : 0
-      }));
-    } catch (error) {
-      console.error('Error fetching event type metrics:', error);
       return [];
     }
   }
@@ -488,9 +397,6 @@ export class DashboardService {
           averageAttendance: 0,
           averageInPersonAttendance: 0,
           averageOnlineAttendance: 0,
-          uniqueAttendees: 0,
-          uniqueInPersonAttendees: 0,
-          uniqueOnlineAttendees: 0,
           totalEvents: 0
         };
       }
@@ -544,10 +450,6 @@ export class DashboardService {
         averageOnlineAttendance: totalEvents > 0
           ? Math.round(totalOnline / totalEvents)
           : 0,
-        // Note: Event_Metrics doesn't track individual participants, only headcounts
-        uniqueAttendees: 0,
-        uniqueInPersonAttendees: 0,
-        uniqueOnlineAttendees: 0
       };
     } catch (error) {
       console.error('Error fetching period metrics:', error);
@@ -557,9 +459,6 @@ export class DashboardService {
         averageAttendance: 0,
         averageInPersonAttendance: 0,
         averageOnlineAttendance: 0,
-        uniqueAttendees: 0,
-        uniqueInPersonAttendees: 0,
-        uniqueOnlineAttendees: 0,
         totalEvents: 0
       };
     }
@@ -588,8 +487,8 @@ export class DashboardService {
     const endIso = endDate.toISOString();
 
     try {
-      // Step 1: Get all active groups for the entire period (1 query)
-      const groups = await this.mp!.getTableRecords<{
+      // Step 1: Get active groups in Ministry_ID = 8 for the entire period (1 query)
+      const smallGroups = await this.mp!.getTableRecords<{
         Group_ID: number;
         Group_Type_ID: number;
         Start_Date: string;
@@ -598,32 +497,15 @@ export class DashboardService {
         table: 'Groups',
         select: 'Group_ID,Group_Type_ID,Start_Date,End_Date',
         filter: `
+          Ministry_ID = 8 AND
           Groups.Start_Date <= '${endIso}' AND
           (Groups.End_Date IS NULL OR Groups.End_Date >= '${startIso}')
         `
       });
 
-      if (groups.length === 0) return [];
+      if (smallGroups.length === 0) return [];
 
-      // Step 2: Get all group types to identify small groups (cached 24 hours)
-      const groupTypeIds = new Set(groups.map(g => g.Group_Type_ID));
-      const groupTypes = await this.getGroupTypesWithCache(groupTypeIds);
-
-      // Filter for small groups and create lookup maps
-      const smallGroupTypeIds = new Set(
-        groupTypes
-          .filter(gt =>
-            gt.Group_Type.toLowerCase().includes('small') ||
-            gt.Group_Type.toLowerCase().includes('life') ||
-            gt.Group_Type.toLowerCase().includes('community')
-          )
-          .map(gt => gt.Group_Type_ID)
-      );
-
-      const smallGroups = groups.filter(g => smallGroupTypeIds.has(g.Group_Type_ID));
       const smallGroupIds = new Set(smallGroups.map(g => g.Group_ID));
-
-      if (smallGroupIds.size === 0) return [];
 
       // Step 3: Get all group participants for the entire period (1 query)
       const groupParticipants = await this.mp!.getTableRecords<{
@@ -1072,138 +954,553 @@ export class DashboardService {
   }
 
   /**
-   * Gets the count of baptisms for a specific date range
-   * Queries Participant_Milestones for records where:
-   * - Milestone_ID = 3 (Baptism)
-   * - Date_Accomplished is within the specified date range
-   *
-   * @param startDate - Start date of the period (365 days ago from reference date)
-   * @param endDate - End date of the period (reference date, typically today)
-   * @returns Promise<number> - Count of baptisms in the specified period
+   * Gets all Date_Accomplished values for a given Milestone_ID in the date range.
+   * Returns ISO date strings so counts can be filtered client-side by selected period.
    */
-  private async getBaptismsCount(startDate: Date, endDate: Date): Promise<number> {
+  private async getMilestoneDates(milestoneId: number, startDate: Date, endDate: Date): Promise<string[]> {
     try {
       const startIso = startDate.toISOString();
       const endIso = endDate.toISOString();
 
-      // Query Participant_Milestones for baptisms (Milestone_ID = 3) in the date range
-      const participantMilestones = await this.mp!.getTableRecords<{
-        Participant_Milestone_ID: number;
-      }>({
+      const records = await this.mp!.getTableRecords<{ Date_Accomplished: string }>({
         table: 'Participant_Milestones',
-        select: 'Participant_Milestone_ID',
-        filter: `
-          Participant_Milestones.Milestone_ID = 3 AND
-          Participant_Milestones.Date_Accomplished >= '${startIso}' AND
-          Participant_Milestones.Date_Accomplished <= '${endIso}'
-        `
+        select: 'Date_Accomplished',
+        filter: `Milestone_ID = ${milestoneId} AND Date_Accomplished >= '${startIso}' AND Date_Accomplished <= '${endIso}'`
       });
 
-      console.log(`Found ${participantMilestones.length} baptisms between ${startDate.toISOString().split('T')[0]} and ${endDate.toISOString().split('T')[0]}`);
-      return participantMilestones.length;
+      return records.map(r => r.Date_Accomplished);
     } catch (error) {
-      console.error('Error fetching baptisms count:', error);
-      return 0;
+      console.error(`Error fetching milestone dates for Milestone_ID=${milestoneId}:`, error);
+      return [];
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // Know God: Unique Event Participants
+  // ---------------------------------------------------------------
+
+  private async getEventParticipantsByMonth(startDate: Date, endDate: Date): Promise<EventParticipantMonth[]> {
+    const startIso = startDate.toISOString();
+    const endIso = endDate.toISOString();
+
+    try {
+      // Get events in the date range with their dates
+      const events = await this.mp!.getTableRecords<{ Event_ID: number; Event_Start_Date: string }>({
+        table: 'Events',
+        select: 'Event_ID,Event_Start_Date',
+        filter: `Event_Start_Date >= '${startIso}' AND Event_End_Date <= '${endIso}' AND Cancelled = 0`
+      });
+
+      if (events.length === 0) return [];
+
+      // Get participants with status 3 or 4 (present)
+      const eventParticipants = await this.batchGetTableRecords<{
+        Event_ID: number;
+        Participant_ID: number;
+      }>({
+        table: 'Event_Participants',
+        select: 'Event_ID,Participant_ID',
+        ids: events.map(e => e.Event_ID),
+        idColumn: 'Event_ID',
+        extraFilter: 'Participation_Status_ID IN (3, 4)'
+      });
+
+      // Build event → month map
+      const eventMonthMap = new Map<number, string>();
+      for (const e of events) {
+        const d = new Date(e.Event_Start_Date);
+        const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        eventMonthMap.set(e.Event_ID, month);
+      }
+
+      // Group unique participant IDs by month
+      const monthBuckets = new Map<string, Set<number>>();
+      for (const ep of eventParticipants) {
+        const month = eventMonthMap.get(ep.Event_ID);
+        if (!month) continue;
+        if (!monthBuckets.has(month)) monthBuckets.set(month, new Set());
+        monthBuckets.get(month)!.add(ep.Participant_ID);
+      }
+
+      // Convert to array sorted by month
+      return Array.from(monthBuckets.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([month, pids]) => ({ month, participantIds: [...pids] }));
+    } catch (error) {
+      console.error('Error fetching event participants by month:', error);
+      return [];
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // Feed Your Soul: Roster vs Attendance
+  // ---------------------------------------------------------------
+
+  private async getRosterAndAttendanceRaw(startDate: Date, endDate: Date): Promise<{
+    rosterMemberRecords: RosterMemberRecord[];
+    attendanceByMonth: AttendanceMonthRecord[];
+  }> {
+    const startIso = startDate.toISOString();
+    const endIso = endDate.toISOString();
+
+    try {
+      // Get groups filtered by Group_Type_ID: 1 (Small Group), 3 (Class), 11 (Community)
+      const relevantGroups = await this.mp!.getTableRecords<{
+        Group_ID: number;
+        Group_Type_ID: number;
+      }>({
+        table: 'Groups',
+        select: 'Group_ID,Group_Type_ID',
+        filter: `Group_Type_ID IN (1, 3, 11) AND Start_Date <= '${endIso}' AND (End_Date IS NULL OR End_Date >= '${startIso}')`
+      });
+
+      if (relevantGroups.length === 0) return { rosterMemberRecords: [], attendanceByMonth: [] };
+
+      const groupTypeIds = new Set(relevantGroups.map(g => g.Group_Type_ID));
+      const groupTypes = await this.getGroupTypesWithCache(groupTypeIds);
+
+      const groupTypeMap = new Map(groupTypes.map(gt => [gt.Group_Type_ID, gt.Group_Type]));
+      const groupToTypeMap = new Map(relevantGroups.map(g => [g.Group_ID, g.Group_Type_ID]));
+      const relevantGroupIds = relevantGroups.map(g => g.Group_ID);
+
+      // Roster: Group_Participants with their date ranges (no period filter — client will filter)
+      const rosterParticipants = await this.batchGetTableRecords<{
+        Group_ID: number;
+        Participant_ID: number;
+        Start_Date: string;
+        End_Date: string | null;
+      }>({
+        table: 'Group_Participants',
+        select: 'Group_ID,Participant_ID,Start_Date,End_Date',
+        ids: relevantGroupIds,
+        idColumn: 'Group_ID',
+      });
+
+      // Attendance: Event_Participants with event dates
+      const allEventParticipants = await this.batchGetTableRecords<{
+        Event_ID: number;
+        Group_ID: number;
+        Participant_ID: number;
+      }>({
+        table: 'Event_Participants',
+        select: 'Event_ID,Group_ID,Participant_ID',
+        ids: relevantGroupIds,
+        idColumn: 'Group_ID',
+        extraFilter: 'Participation_Status_ID IN (3, 4)'
+      });
+
+      // Look up Event dates for attendance records
+      const uniqueEventIds = [...new Set(allEventParticipants.map(p => p.Event_ID))];
+      const eventDateMap = new Map<number, string>();
+
+      if (uniqueEventIds.length > 0) {
+        const events = await this.batchGetTableRecords<{
+          Event_ID: number;
+          Event_Start_Date: string;
+        }>({
+          table: 'Events',
+          select: 'Event_ID,Event_Start_Date',
+          ids: uniqueEventIds,
+          idColumn: 'Event_ID'
+        });
+        for (const e of events) eventDateMap.set(e.Event_ID, e.Event_Start_Date);
+      }
+
+      // Resolve Participant_ID → Contact_ID
+      const allParticipantIds = new Set<number>();
+      for (const gp of rosterParticipants) allParticipantIds.add(gp.Participant_ID);
+      for (const ep of allEventParticipants) allParticipantIds.add(ep.Participant_ID);
+
+      const contactLookup = await this.batchGetTableRecords<{
+        Participant_ID: number;
+        Contact_ID: number;
+      }>({
+        table: 'Participants',
+        select: 'Participant_ID,Contact_ID',
+        ids: [...allParticipantIds],
+        idColumn: 'Participant_ID'
+      });
+      const contactMap = new Map(contactLookup.map(c => [c.Participant_ID, c.Contact_ID]));
+
+      // Build roster member records (unique contactId + groupType + date range)
+      const rosterDedup = new Map<string, RosterMemberRecord>();
+      for (const gp of rosterParticipants) {
+        const typeId = groupToTypeMap.get(gp.Group_ID);
+        const contactId = contactMap.get(gp.Participant_ID);
+        if (!typeId || !contactId) continue;
+        const key = `${contactId}-${typeId}`;
+        const existing = rosterDedup.get(key);
+        // Keep the record with the earliest start date for this contact+type
+        if (!existing || gp.Start_Date < existing.startDate) {
+          rosterDedup.set(key, {
+            contactId,
+            groupTypeId: typeId,
+            groupTypeName: groupTypeMap.get(typeId) || 'Unknown',
+            startDate: gp.Start_Date,
+            endDate: gp.End_Date,
+          });
+        } else if (existing && gp.End_Date === null) {
+          // If any record has no end date, the person is still active
+          existing.endDate = null;
+        }
+      }
+
+      // Build attendance by month + group type (unique contact IDs per bucket)
+      const attendanceBuckets = new Map<string, { groupTypeId: number; groupTypeName: string; contacts: Set<number> }>();
+      for (const ep of allEventParticipants) {
+        const eventDate = eventDateMap.get(ep.Event_ID);
+        if (!eventDate) continue;
+        const typeId = groupToTypeMap.get(ep.Group_ID);
+        const contactId = contactMap.get(ep.Participant_ID);
+        if (!typeId || !contactId) continue;
+
+        const d = new Date(eventDate);
+        const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const bucketKey = `${month}-${typeId}`;
+
+        if (!attendanceBuckets.has(bucketKey)) {
+          attendanceBuckets.set(bucketKey, {
+            groupTypeId: typeId,
+            groupTypeName: groupTypeMap.get(typeId) || 'Unknown',
+            contacts: new Set(),
+          });
+        }
+        attendanceBuckets.get(bucketKey)!.contacts.add(contactId);
+      }
+
+      const attendanceByMonth: AttendanceMonthRecord[] = Array.from(attendanceBuckets.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, bucket]) => ({
+          month: key.substring(0, 7), // YYYY-MM
+          groupTypeId: bucket.groupTypeId,
+          groupTypeName: bucket.groupTypeName,
+          contactIds: [...bucket.contacts],
+        }));
+
+      return {
+        rosterMemberRecords: [...rosterDedup.values()],
+        attendanceByMonth,
+      };
+    } catch (error) {
+      console.error('Error fetching roster and attendance raw data:', error);
+      return { rosterMemberRecords: [], attendanceByMonth: [] };
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // Grow in Love: Serving/Leading raw records
+  // ---------------------------------------------------------------
+
+  /**
+   * Gets serving/leading records enriched with role type names and ministry names.
+   * Single API call chain replaces 4 separate methods that each called getServingLeadingParticipants.
+   * Returns raw records for client-side date filtering and aggregation.
+   */
+  private async getServingLeadingRaw(startDate: Date, endDate: Date): Promise<ServingLeadingRecord[]> {
+    const startIso = startDate.toISOString();
+    const endIso = endDate.toISOString();
+
+    try {
+      // Step 1: Get all Group_Roles that are serving (type 3) or leading (type 1)
+      const servingRoles = await this.mp!.getTableRecords<{
+        Group_Role_ID: number;
+        Group_Role_Type_ID: number;
+        Ministry_ID: number | null;
+      }>({
+        table: 'Group_Roles',
+        select: 'Group_Role_ID,Group_Role_Type_ID,Ministry_ID',
+        filter: 'Group_Role_Type_ID IN (1, 3)'
+      });
+
+      if (servingRoles.length === 0) return [];
+
+      const servingRoleIds = servingRoles.map(r => r.Group_Role_ID);
+      const roleTypeMap = new Map(servingRoles.map(r => [r.Group_Role_ID, r.Group_Role_Type_ID]));
+      const roleMinistryMap = new Map(servingRoles.map(r => [r.Group_Role_ID, r.Ministry_ID]));
+
+      // Step 2: Get Group_Participants with those roles, active during the period
+      const participants = await this.batchGetTableRecords<{
+        Participant_ID: number;
+        Group_Role_ID: number;
+        Start_Date: string;
+        End_Date: string | null;
+      }>({
+        table: 'Group_Participants',
+        select: 'Participant_ID,Group_Role_ID,Start_Date,End_Date',
+        ids: servingRoleIds,
+        idColumn: 'Group_Role_ID',
+        extraFilter: `Start_Date <= '${endIso}' AND (End_Date IS NULL OR End_Date >= '${startIso}')`
+      });
+
+      if (participants.length === 0) return [];
+
+      // Step 3: Resolve Participant → Contact
+      const participantIds = [...new Set(participants.map(p => p.Participant_ID))];
+      const contactLookup = await this.batchGetTableRecords<{
+        Participant_ID: number;
+        Contact_ID: number;
+      }>({
+        table: 'Participants',
+        select: 'Participant_ID,Contact_ID',
+        ids: participantIds,
+        idColumn: 'Participant_ID'
+      });
+      const contactMap = new Map(contactLookup.map(c => [c.Participant_ID, c.Contact_ID]));
+
+      // Step 4: Get role type display names
+      const roleTypes = await this.mp!.getTableRecords<{
+        Group_Role_Type_ID: number;
+        Group_Role_Type: string;
+      }>({
+        table: 'Group_Role_Types',
+        select: 'Group_Role_Type_ID,Group_Role_Type',
+        filter: 'Group_Role_Type_ID IN (1, 3)'
+      });
+      const roleTypeNameMap = new Map(roleTypes.map(rt => [rt.Group_Role_Type_ID, rt.Group_Role_Type]));
+
+      // Step 5: Get Ministry names for all unique Ministry_IDs
+      const ministryIds = [...new Set(
+        servingRoles.map(r => r.Ministry_ID).filter((id): id is number => id !== null)
+      )];
+      const ministryNameMap = new Map<number, string>();
+      if (ministryIds.length > 0) {
+        const ministries = await this.batchGetTableRecords<{
+          Ministry_ID: number;
+          Ministry_Name: string;
+        }>({
+          table: 'Ministries',
+          select: 'Ministry_ID,Ministry_Name',
+          ids: ministryIds,
+          idColumn: 'Ministry_ID'
+        });
+        for (const m of ministries) ministryNameMap.set(m.Ministry_ID, m.Ministry_Name);
+      }
+
+      // Step 6: Build records, deduplicate per (contactId, roleTypeId, ministryId)
+      const dedup = new Map<string, ServingLeadingRecord>();
+      for (const p of participants) {
+        const contactId = contactMap.get(p.Participant_ID);
+        if (!contactId) continue;
+
+        const roleTypeId = roleTypeMap.get(p.Group_Role_ID) || 0;
+        const ministryId = roleMinistryMap.get(p.Group_Role_ID) ?? null;
+        const key = `${contactId}-${roleTypeId}-${ministryId}`;
+
+        const existing = dedup.get(key);
+        if (!existing || p.Start_Date < existing.startDate) {
+          dedup.set(key, {
+            contactId,
+            roleTypeId,
+            roleTypeName: roleTypeNameMap.get(roleTypeId) || (roleTypeId === 1 ? 'Leader' : 'Servant'),
+            ministryId,
+            ministryName: ministryId ? (ministryNameMap.get(ministryId) || 'Unknown') : null,
+            startDate: p.Start_Date,
+            endDate: p.End_Date,
+          });
+        } else if (existing && p.End_Date === null) {
+          // If any record has no end date, the person is still active
+          existing.endDate = null;
+        }
+      }
+
+      return [...dedup.values()];
+    } catch (error) {
+      console.error('Error fetching serving/leading raw records:', error);
+      return [];
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // Engagement Venn Diagram: raw data for client-side computation
+  // ---------------------------------------------------------------
+
+  /**
+   * Gets raw engagement data for the venn diagram.
+   * Three dimensions: Activity (Activity_Log), Groups (Ministry_ID=8), Serving (contact IDs).
+   * All data is bucketed/dated so client can filter by selected date range.
+   * Adult filter is pre-computed once and stored for client-side intersection.
+   * Self-contained: fetches serving contact IDs internally for the adult filter.
+   */
+  private async getEngagementRawData(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<EngagementRawData> {
+    const empty: EngagementRawData = { activityByMonth: [], groupRecords: [], adultContactIds: [] };
+    const startIso = startDate.toISOString();
+    const endIso = endDate.toISOString();
+
+    try {
+      // Step 1: Activity — query Activity_Log, bucket by month
+      const activityRecords = await this.mp!.getTableRecords<{
+        Contact_ID: number;
+        Activity_Date: string;
+      }>({
+        table: 'Activity_Log',
+        select: 'Contact_ID,Activity_Date',
+        filter: `Activity_Date >= '${startIso}' AND Activity_Date <= '${endIso}'`,
+      });
+
+      const activityBuckets = new Map<string, Set<number>>();
+      for (const r of activityRecords) {
+        const d = new Date(r.Activity_Date);
+        const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        if (!activityBuckets.has(month)) activityBuckets.set(month, new Set());
+        activityBuckets.get(month)!.add(r.Contact_ID);
+      }
+      const activityByMonth = Array.from(activityBuckets.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([month, contacts]) => ({ month, contactIds: [...contacts] }));
+
+      // Step 2: Groups — Ministry_ID=8, with date ranges for client-side filtering
+      const groups = await this.mp!.getTableRecords<{ Group_ID: number }>({
+        table: 'Groups',
+        select: 'Group_ID',
+        filter: `Ministry_ID = 8 AND Start_Date <= '${endIso}' AND (End_Date IS NULL OR End_Date >= '${startIso}')`
+      });
+
+      let groupRecords: EngagementRawData['groupRecords'] = [];
+      if (groups.length > 0) {
+        const groupIds = groups.map(g => g.Group_ID);
+        const participants = await this.batchGetTableRecords<{
+          Participant_ID: number;
+          Start_Date: string;
+          End_Date: string | null;
+        }>({
+          table: 'Group_Participants',
+          select: 'Participant_ID,Start_Date,End_Date',
+          ids: groupIds,
+          idColumn: 'Group_ID',
+          extraFilter: `Start_Date <= '${endIso}' AND (End_Date IS NULL OR End_Date >= '${startIso}')`
+        });
+
+        // Resolve Participant → Contact
+        const participantIds = [...new Set(participants.map(p => p.Participant_ID))];
+        if (participantIds.length > 0) {
+          const contacts = await this.batchGetTableRecords<{
+            Participant_ID: number;
+            Contact_ID: number;
+          }>({
+            table: 'Participants',
+            select: 'Participant_ID,Contact_ID',
+            ids: participantIds,
+            idColumn: 'Participant_ID'
+          });
+          const contactMap = new Map(contacts.map(c => [c.Participant_ID, c.Contact_ID]));
+
+          // Deduplicate per contact (keep earliest start, null end if any null)
+          const dedup = new Map<number, { startDate: string; endDate: string | null }>();
+          for (const p of participants) {
+            const contactId = contactMap.get(p.Participant_ID);
+            if (!contactId) continue;
+            const existing = dedup.get(contactId);
+            if (!existing || p.Start_Date < existing.startDate) {
+              dedup.set(contactId, { startDate: p.Start_Date, endDate: p.End_Date });
+            } else if (existing && p.End_Date === null) {
+              existing.endDate = null;
+            }
+          }
+
+          groupRecords = Array.from(dedup.entries()).map(([contactId, dates]) => ({
+            contactId,
+            startDate: dates.startDate,
+            endDate: dates.endDate,
+          }));
+        }
+      }
+
+      // Step 3: Get serving contact IDs (lightweight — just need IDs for adult filter)
+      const servingContactIds = await this.getServingContactIds(startIso, endIso);
+
+      // Step 4: Adult filter — collect all contact IDs, filter to adults once
+      const allContactIds = new Set<number>();
+      for (const bucket of activityByMonth) {
+        for (const id of bucket.contactIds) allContactIds.add(id);
+      }
+      for (const r of groupRecords) allContactIds.add(r.contactId);
+      for (const id of servingContactIds) allContactIds.add(id);
+
+      const adultSet = await this.filterAdultContacts(allContactIds);
+
+      // Filter activity and group data to adults only
+      const adultActivityByMonth = activityByMonth.map(bucket => ({
+        month: bucket.month,
+        contactIds: bucket.contactIds.filter(id => adultSet.has(id)),
+      }));
+      const adultGroupRecords = groupRecords.filter(r => adultSet.has(r.contactId));
+
+      return {
+        activityByMonth: adultActivityByMonth,
+        groupRecords: adultGroupRecords,
+        adultContactIds: [...adultSet],
+      };
+    } catch (error) {
+      console.error('Error fetching engagement raw data:', error);
+      return empty;
     }
   }
 
   /**
-   * Calculate year-over-year comparison metrics
-   *
-   * @param current - Current period metrics
-   * @param previous - Previous period metrics
-   * @param currentGroups - Current group type metrics
-   * @param currentEvents - Current event type metrics
-   * @returns YearOverYearMetrics[] - Year-over-year comparisons
+   * Lightweight query to get unique Contact_IDs of people in serving/leading roles.
+   * Used by getEngagementRawData for the adult filter without needing full enriched records.
    */
-  private calculateYearOverYear(
-    current: PeriodMetrics,
-    previous: PeriodMetrics,
-    currentGroups: GroupTypeMetrics[],
-    currentEvents: EventTypeMetrics[]
-  ): YearOverYearMetrics[] {
-    const metrics: YearOverYearMetrics[] = [];
+  private async getServingContactIds(startIso: string, endIso: string): Promise<Set<number>> {
+    try {
+      // Get serving/leading role IDs
+      const servingRoles = await this.mp!.getTableRecords<{ Group_Role_ID: number }>({
+        table: 'Group_Roles',
+        select: 'Group_Role_ID',
+        filter: 'Group_Role_Type_ID IN (1, 3)'
+      });
+      if (servingRoles.length === 0) return new Set();
 
-    // Overall attendance YoY
-    metrics.push({
-      metric: 'Average Attendance',
-      currentYear: current.averageAttendance,
-      previousYear: previous.averageAttendance,
-      percentageChange: this.calculatePercentChange(current.averageAttendance, previous.averageAttendance),
-      trend: this.determineTrend(current.averageAttendance, previous.averageAttendance)
-    });
+      // Get participants with those roles, active in range
+      const participants = await this.batchGetTableRecords<{ Participant_ID: number }>({
+        table: 'Group_Participants',
+        select: 'Participant_ID',
+        ids: servingRoles.map(r => r.Group_Role_ID),
+        idColumn: 'Group_Role_ID',
+        extraFilter: `Start_Date <= '${endIso}' AND (End_Date IS NULL OR End_Date >= '${startIso}')`
+      });
+      if (participants.length === 0) return new Set();
 
-    metrics.push({
-      metric: 'Unique Attendees',
-      currentYear: current.uniqueAttendees,
-      previousYear: previous.uniqueAttendees,
-      percentageChange: this.calculatePercentChange(current.uniqueAttendees, previous.uniqueAttendees),
-      trend: this.determineTrend(current.uniqueAttendees, previous.uniqueAttendees)
-    });
+      // Resolve to Contact_IDs
+      const participantIds = [...new Set(participants.map(p => p.Participant_ID))];
+      const contacts = await this.batchGetTableRecords<{ Participant_ID: number; Contact_ID: number }>({
+        table: 'Participants',
+        select: 'Participant_ID,Contact_ID',
+        ids: participantIds,
+        idColumn: 'Participant_ID'
+      });
 
-    // Total events YoY
-    metrics.push({
-      metric: 'Total Events',
-      currentYear: current.totalEvents,
-      previousYear: previous.totalEvents,
-      percentageChange: this.calculatePercentChange(current.totalEvents, previous.totalEvents),
-      trend: this.determineTrend(current.totalEvents, previous.totalEvents)
-    });
-
-    // Active groups YoY
-    const currentGroupCount = currentGroups.reduce((sum, g) => sum + g.activeGroupCount, 0);
-    const currentParticipants = currentGroups.reduce((sum, g) => sum + g.uniqueParticipants, 0);
-    const currentEventTypes = currentEvents.length;
-
-    metrics.push({
-      metric: 'Active Groups',
-      currentYear: currentGroupCount,
-      previousYear: 0, // Would need to query previous year groups
-      percentageChange: 0,
-      trend: 'stable'
-    });
-
-    metrics.push({
-      metric: 'Group Participants',
-      currentYear: currentParticipants,
-      previousYear: 0, // Would need to query previous year groups
-      percentageChange: 0,
-      trend: 'stable'
-    });
-
-    metrics.push({
-      metric: 'Event Types Active',
-      currentYear: currentEventTypes,
-      previousYear: 0, // Would need to query previous year events
-      percentageChange: 0,
-      trend: 'stable'
-    });
-
-    return metrics;
+      return new Set(contacts.map(c => c.Contact_ID));
+    } catch (error) {
+      console.error('Error fetching serving contact IDs:', error);
+      return new Set();
+    }
   }
 
-  /**
-   * Calculate percentage change between two values
-   *
-   * @param current - Current value
-   * @param previous - Previous value
-   * @returns number - Percentage change
-   */
-  private calculatePercentChange(current: number, previous: number): number {
-    if (previous === 0) return current > 0 ? 100 : 0;
-    return Math.round(((current - previous) / previous) * 100);
-  }
+  /** Filter a set of Contact_IDs to only include adults (age >= 18 or Date_of_Birth is null) */
+  private async filterAdultContacts(contactIds: Set<number>): Promise<Set<number>> {
+    if (contactIds.size === 0) return new Set();
 
-  /**
-   * Determine trend direction
-   *
-   * @param current - Current value
-   * @param previous - Previous value
-   * @returns 'up' | 'down' | 'stable' - Trend direction
-   */
-  private determineTrend(current: number, previous: number): 'up' | 'down' | 'stable' {
-    const change = this.calculatePercentChange(current, previous);
-    if (Math.abs(change) < 5) return 'stable';
-    return change > 0 ? 'up' : 'down';
+    const contacts = await this.batchGetTableRecords<{ Contact_ID: number; Date_of_Birth: string | null }>({
+      table: 'Contacts',
+      select: 'Contact_ID,Date_of_Birth',
+      ids: [...contactIds],
+      idColumn: 'Contact_ID',
+    });
+
+    const today = new Date();
+    return new Set(
+      contacts
+        .filter(c => {
+          if (!c.Date_of_Birth) return true;
+          const dob = new Date(c.Date_of_Birth);
+          const age = today.getFullYear() - dob.getFullYear()
+            - (today < new Date(today.getFullYear(), dob.getMonth(), dob.getDate()) ? 1 : 0);
+          return age >= 18;
+        })
+        .map(c => c.Contact_ID)
+    );
   }
 }

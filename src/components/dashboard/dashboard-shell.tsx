@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, useCallback, useMemo } from 'react';
+import { useState, useEffect, useTransition, useCallback, useMemo } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DashboardData } from '@/lib/dto';
@@ -11,7 +11,7 @@ import {
   getDefaultSelection,
   selectionToDateRange,
 } from './date-range-filter';
-import { refreshDashboardCache, getFullRangeDashboardMetrics } from './actions';
+import { refreshDashboardCache, getFullRangeDashboardMetrics, getExtendedDashboardMetrics, getEngagementDashboardMetrics } from './actions';
 import { filterDashboardData, isSingleMonthSelection } from './filter-dashboard-data';
 import { useRouter } from 'next/navigation';
 
@@ -46,8 +46,40 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
   const router = useRouter();
   const [selection, setSelection] = useState<DateRangeSelection>(getDefaultSelection);
   const [fullData, setFullData] = useState<DashboardData>(initialData);
+  const [extendedLoading, setExtendedLoading] = useState(true);
+  const [engagementLoading, setEngagementLoading] = useState(true);
   const [isRefreshing, startRefreshTransition] = useTransition();
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+
+  // Stage 1: Load extended data (serving, EP, roster) — fast
+  useEffect(() => {
+    let cancelled = false;
+    getExtendedDashboardMetrics().then(extended => {
+      if (!cancelled) {
+        setFullData(prev => ({ ...prev, ...extended }));
+        setExtendedLoading(false);
+      }
+    }).catch(err => {
+      console.error('Error loading extended dashboard data:', err);
+      if (!cancelled) setExtendedLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Stage 2: Load engagement venn data (Activity_Log — slow)
+  useEffect(() => {
+    let cancelled = false;
+    getEngagementDashboardMetrics().then(engagement => {
+      if (!cancelled) {
+        setFullData(prev => ({ ...prev, ...engagement }));
+        setEngagementLoading(false);
+      }
+    }).catch(err => {
+      console.error('Error loading engagement dashboard data:', err);
+      if (!cancelled) setEngagementLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const description = useMemo(() => formatSelectionDescription(selection), [selection]);
 
@@ -72,9 +104,15 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
         setLastRefresh(cacheResult.timestamp);
       }
 
-      // Re-fetch full range data from server
-      const freshData = await getFullRangeDashboardMetrics();
-      setFullData(freshData);
+      // Re-fetch core, extended, and engagement data
+      const [freshData, extended, engagement] = await Promise.all([
+        getFullRangeDashboardMetrics(),
+        getExtendedDashboardMetrics(),
+        getEngagementDashboardMetrics(),
+      ]);
+      setFullData({ ...freshData, ...extended, ...engagement });
+      setExtendedLoading(false);
+      setEngagementLoading(false);
       router.refresh();
     });
   }, [router]);
@@ -105,7 +143,7 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
         </div>
 
         <p className="text-muted-foreground">
-          Worship Services attendance and group participation metrics for {description}
+          Church health metrics across discipleship, community, serving, and giving for {description}
         </p>
 
         {/* Date Range Filter */}
@@ -118,7 +156,13 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
 
       {/* Dashboard Content */}
       <div className={isRefreshing ? 'opacity-60 pointer-events-none transition-opacity' : 'transition-opacity'}>
-        <DashboardMetrics data={filteredData} showCompare={selection.compare} isSingleMonth={isSingleMonthSelection(selection)} />
+        <DashboardMetrics
+          data={filteredData}
+          showCompare={selection.compare}
+          isSingleMonth={isSingleMonthSelection(selection)}
+          extendedLoading={extendedLoading}
+          engagementLoading={engagementLoading}
+        />
       </div>
     </div>
   );
