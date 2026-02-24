@@ -409,13 +409,13 @@ AI assistants should maintain context files in `.claude/` to track project state
 ### Update Workflow
 
 **When to update context files:**
-1. **Before every push to remote** → Update `session-summary-YYYY-MM-DD.md` with what was committed and pushed
+1. **Before every commit (on ANY branch)** → Update `session-summary-YYYY-MM-DD.md` with what is being committed. Session notes are part of the commit, not an afterthought.
 2. **Before creating PRs** → Ensure `session-summary-YYYY-MM-DD.md` and `work-in-progress.md` are up to date and included in the PR
 3. **After completing significant features** → Update `work-in-progress.md` with current status
 4. **When fixing bugs** → Update feature-specific debugging docs
 5. **When patterns change** → Update this CLAUDE.md file
 
-**Key rule**: Session notes are updated **incrementally as work happens**, not batched at the end. Every `git push` should include updated session notes reflecting the changes being pushed.
+**Key rule**: Session notes are updated **incrementally as work happens**, not batched at the end. Every `git commit` — on any branch — must include updated session notes reflecting the changes in that commit. Do NOT commit code changes without including the session summary update in the same commit.
 
 **Detecting session end:**
 - AI assistants cannot automatically detect session end
@@ -436,7 +436,7 @@ AI assistants should maintain context files in `.claude/` to track project state
 - Update `work-in-progress.md` as single source of truth for current state
 - Use clear status markers: ✅ COMPLETED, ⚠️ IN PROGRESS, ❌ BLOCKED
 - Session summaries are historical records; work-in-progress is living document
-- **IMPORTANT**: Before every commit, run through this checklist:
+- **MANDATORY**: Before every commit (on ANY branch), run through this checklist:
   1. **CLAUDE.md check**: Do any of the changes introduce new patterns, conventions, workflows, naming standards, or architectural decisions that should be documented in CLAUDE.md? If so, update it in the same commit. Examples: new file naming conventions, new component patterns, new CLI commands, new environment variables, new label/section mappings, new API patterns.
   2. Update `session-summary-YYYY-MM-DD.md` with what is being committed
   3. Update `work-in-progress.md` if implementation status changed

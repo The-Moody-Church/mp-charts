@@ -55,6 +55,20 @@ export default function Home() {
           </CardContent>
         </Card>
 
+        <Card className="flex flex-col">
+          <CardHeader>
+            <CardTitle>Membership Processing</CardTitle>
+            <CardDescription>
+              Track membership application milestones, manage the approval process, and complete new member registrations
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="mt-auto">
+            <Link href="/membership-processing">
+              <Button className="w-full">View Applicants</Button>
+            </Link>
+          </CardContent>
+        </Card>
+
         {isDev && (
           <>
             <Card className="flex flex-col">

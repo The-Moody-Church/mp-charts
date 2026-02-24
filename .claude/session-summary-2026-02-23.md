@@ -294,3 +294,51 @@ Implemented 4-phase refactoring plan from audit of dashboard architecture:
 - `src/components/dashboard/dashboard-shell.tsx` — two-stage loading with engagementLoading state
 - `src/components/dashboard/actions.ts` — added getCachedEngagementData + getEngagementDashboardMetrics, removed event-types invalidation
 - `src/components/dashboard/venn-diagram.tsx` — new SVG-based venn diagram component
+
+---
+
+## Membership Processing: Completion Refactor (Branch: `feature/membership-processing`)
+
+### Task
+Tested the membership processing feature (tests 1-3 passed), then refactored the completion workflow per user feedback:
+1. Decouple the "Registered Member" milestone from the group participation end-dating
+2. Treat all 8 milestones uniformly (including Registered Member) via Quick Actions
+3. Add a standalone "Confirm Membership Completion" button to end-date the Group_Participant
+
+### Changes Made
+
+**`src/lib/dto/membership-processing.ts`**:
+- Removed `registeredMemberMilestoneId` from `MembershipWriteBackConfig` (no longer needed)
+
+**`src/services/membershipService.ts`**:
+- Replaced `completeMembership()` (created milestone + end-dated GP) with `endGroupParticipation()` (only sets End_Date)
+- End_Date formatted in Central Time via `toLocaleString('sv-SE', { timeZone: 'America/Chicago' })` to avoid UTC offset in MP
+- Removed `registeredMemberMilestoneId` from `getWriteBackConfig()`
+
+**`src/components/membership-processing/actions.ts`**:
+- Replaced `completeMembership` server action with `confirmMembershipCompletion` — only needs `Group_Participant_ID`
+- Removed milestone creation, file handling, and `Participant_ID`/`Date_Accomplished`/`Notes` params
+
+**`src/components/membership-processing/membership-detail-modal.tsx`**:
+- Removed: "Complete Membership" green box (date/notes/file form), `completeConfirm`/`completeDate`/`completeNotes`/`completeFileInputRef` state, `handleCompleteMembership` handler, `priorMilestonesComplete`/`showCompleteMembership` computed values
+- Added: "Confirm Membership Completion" button bar (right-aligned, between header and content), inline confirmation ("Remove from processing group?" → Yes/Cancel)
+- Ungated `registered_member` from Quick Actions dropdown — all 8 milestones now selectable
+- Updated "all complete" message (removed "use Complete Membership above" reference)
+
+### PR
+- **PR #55**: https://github.com/The-Moody-Church/mp-charts/pull/55
+- Branch: `feature/membership-processing` → `main`
+- Build passes, lint clean (pre-existing issues in signin page and volunteer modal unrelated)
+
+---
+
+## CLAUDE.md: Strengthen Session Summary Commit Requirements
+
+### Task
+Clarified that session summaries must be included in every commit on any branch, not just before pushes.
+
+### Changes Made
+**`CLAUDE.md`**:
+- Item #1: "Before every push to remote" → "Before every commit (on ANY branch)" with note that session notes are part of the commit
+- Key rule: "every `git push`" → "every `git commit` — on any branch" with explicit prohibition on committing without session notes
+- Checklist header: "IMPORTANT" → "MANDATORY" with "(on ANY branch)"

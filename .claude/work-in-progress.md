@@ -2,9 +2,9 @@
 
 ## Baptism Processing (2026-02-23) — Branch: `feature/baptism-processing`
 
-### Status: ✅ COMPLETED — Tested & Ready to Merge
+### Status: ✅ COMPLETED — Merged to main (PR #54)
 
-Full baptism processing feature with milestone-based workflow. 8-point manual test plan passed. PR #54 open for merge.
+Full baptism processing feature with milestone-based workflow. 8-point manual test plan passed.
 
 **Post-testing fixes applied** (commit `bdfc1e2`):
 - "Applied [date]" label (was "Applicant since")
@@ -15,6 +15,16 @@ Full baptism processing feature with milestone-based workflow. 8-point manual te
 - UI Style Guide added to CLAUDE.md
 
 **Key files**: `src/components/baptism-processing/`, `src/services/baptismService.ts`, `src/lib/dto/baptism-processing.ts`
+
+---
+
+## Membership Processing (2026-02-23) — Branch: `feature/membership-processing`
+
+### Status: ⚠️ IN PROGRESS (merging to main)
+
+Feature complete with completion refactor. All 8 milestones treated uniformly via Quick Actions. "Confirm Membership Completion" button end-dates Group_Participant (Central Time). Applicants with End_Date automatically removed from view.
+
+**Files**: 12 new, 8+ modified. Key files: `src/services/membershipService.ts`, `src/components/membership-processing/`, `src/lib/dto/membership-processing.ts`
 
 ---
 
