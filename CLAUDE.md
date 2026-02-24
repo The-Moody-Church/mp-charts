@@ -190,6 +190,8 @@ async function getCachedData(key: string) {
 | `getCachedGroupTypes(ids)` | 24h | `group-types` | `src/services/dashboardService.ts` |
 | `getCachedEventTypes(ids)` | 24h | `event-types` | `src/services/dashboardService.ts` |
 
+**Note:** Dashboard cache is shared across all authenticated users (not keyed per-user). This is intentional — the dashboard shows aggregate metrics, not per-user data. If user-specific dashboard access is ever needed, the cache would need to be keyed by user or permission level.
+
 ### Suspense & PPR Pattern for Pages
 
 Pages with dynamic data access (`params`, `searchParams`, `headers()`) must use the Suspense pattern:

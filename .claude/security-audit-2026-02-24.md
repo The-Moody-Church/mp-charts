@@ -24,11 +24,11 @@ The application has solid fundamentals — proper session management, server-sid
 | 8 | Debug HTTP PUT logging in production | **MEDIUM** | Data Exposure | ✅ Fixed |
 | 9 | No file type validation on uploads | **MEDIUM** | Input Validation | ✅ Fixed |
 | 10 | IDOR risk — no per-record authorization | **MEDIUM** | Authorization | Open |
-| 11 | npm dependency vulnerabilities (eslint chain) | **LOW** | Dependencies | Open |
+| 11 | npm dependency vulnerabilities (eslint chain) | **LOW** | Dependencies | Accepted (dev-only) |
 | 12 | Proxy logs request paths | **LOW** | Information Disclosure | ✅ Fixed |
 | 13 | No RBAC — all authenticated users see all data | **MEDIUM** | Authorization | Open |
-| 14 | Dashboard cache shared across all users | **LOW** | Data Exposure | Open |
-| 15 | `BETTER_AUTH_SECRET` fallback to `NEXTAUTH_SECRET` | **LOW** | Configuration | Open |
+| 14 | Dashboard cache shared across all users | **LOW** | Data Exposure | ✅ Documented as intentional |
+| 15 | `BETTER_AUTH_SECRET` fallback to `NEXTAUTH_SECRET` | **LOW** | Configuration | ✅ Fixed |
 
 ---
 

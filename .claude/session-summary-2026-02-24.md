@@ -19,7 +19,7 @@ Conducted a comprehensive security audit of the MPNext application, identified 1
 12. Added mandatory pre-PR security review checklist to CLAUDE.md (replaced GitHub Action approach with in-session review)
 13. Implemented per-user rate limiting on all server actions (#6) — in-memory sliding window with tiered limits
 
-### Findings Summary (15 total, 10 fixed)
+### Findings Summary (15 total, 12 resolved)
 
 | # | Finding | Severity | Status |
 |---|---------|----------|--------|
@@ -33,11 +33,11 @@ Conducted a comprehensive security audit of the MPNext application, identified 1
 | 8 | Debug HTTP PUT logging | MEDIUM | ✅ Fixed |
 | 9 | No MIME type validation on uploads | MEDIUM | ✅ Fixed |
 | 10 | IDOR risk | MEDIUM | Open |
-| 11 | npm dependency vulnerabilities | LOW | Open |
+| 11 | npm dependency vulnerabilities | LOW | Accepted (dev-only) |
 | 12 | Proxy logs request paths | LOW | ✅ Fixed |
 | 13 | No RBAC | MEDIUM | Open |
-| 14 | Shared dashboard cache | LOW | Open |
-| 15 | BETTER_AUTH_SECRET fallback | LOW | Open |
+| 14 | Shared dashboard cache | LOW | ✅ Documented as intentional |
+| 15 | BETTER_AUTH_SECRET fallback | LOW | ✅ Fixed |
 
 ### Files Created
 - `src/lib/providers/ministry-platform/utils/filter-sanitize.ts` — Central sanitization utility (`sanitizeFilterValue`, `sanitizeIds`, `sanitizeIdsOptional`, `sanitizeGuid`)
@@ -86,12 +86,21 @@ Conducted a comprehensive security audit of the MPNext application, identified 1
 - `CLAUDE.md` — Added mandatory "Pre-PR Security Review" checklist under Git & Pull Request Workflow section
 - `CLAUDE.md` — Added "Rate Limiting" section documenting tiers and how to apply to new actions
 
-### Remaining Open Items (Medium-term)
+**BETTER_AUTH_SECRET fallback removal (#15):**
+- `src/lib/auth.ts` — Removed `NEXTAUTH_SECRET` and `NEXTAUTH_URL` fallbacks
+- `src/components/user-menu/actions.ts` — Removed `NEXTAUTH_URL` fallback in post-logout redirect
+- `src/test-setup.ts` — Updated env stubs from `NEXTAUTH_*` to `BETTER_AUTH_*`
+- `.env.example` — Removed backward-compatibility comments
+
+**Documentation (#14):**
+- `CLAUDE.md` — Added note in Caching section that dashboard cache is shared by design
+
+### Remaining Open Items
 - **IDOR mitigation (#10)**: Evaluate per-record authorization or access-token-based MPHelper instances
 - **RBAC (#13)**: Design role-based access control leveraging MP security groups
-- **eslint upgrade (#11)**: Upgrade to eslint 10.x to resolve dependency audit
+- **eslint upgrade (#11)**: Dev-only; requires eslint 10.x breaking change — deferred
 - **CSP header (#5 partial)**: Add Content-Security-Policy header after testing
-- **Structured logging (#13 from recommendations)**: Replace console.log/error with structured logging library
+- **Structured logging**: Replace console.log/error with structured logging library
 
 ### Positive Findings
 - No XSS vectors (no dangerouslySetInnerHTML, no eval)
