@@ -146,3 +146,16 @@ Tested the membership processing feature (tests 1-3 passed), then refactored the
 - **PR #55**: https://github.com/The-Moody-Church/mp-charts/pull/55
 - Branch: `feature/membership-processing` → `main`
 - Build passes, lint clean (pre-existing issues in signin page and volunteer modal unrelated)
+
+---
+
+## CLAUDE.md: Strengthen Session Summary Commit Requirements
+
+### Task
+Clarified that session summaries must be included in every commit on any branch, not just before pushes.
+
+### Changes Made
+**`CLAUDE.md`**:
+- Item #1: "Before every push to remote" → "Before every commit (on ANY branch)" with note that session notes are part of the commit
+- Key rule: "every `git push`" → "every `git commit` — on any branch" with explicit prohibition on committing without session notes
+- Checklist header: "IMPORTANT" → "MANDATORY" with "(on ANY branch)"
