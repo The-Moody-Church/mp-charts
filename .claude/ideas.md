@@ -30,7 +30,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Dashboard Date Range Selector (#20)](#dashboard-date-range-selector-20)~~ ✅
 
 ### Technical Debt
-- [Extract Shared Processing Components (Person Card, Milestone Checklist, Detail Modal)](#extract-shared-processing-components-person-card-milestone-checklist-detail-modal)
+- [Extract Shared Processing Components (Person Card, Milestone Checklist, Detail Modal) (#60)](#extract-shared-processing-components-person-card-milestone-checklist-detail-modal-60)
 - [BUG: Baptism Counter Doesn't Respond to Date Range Changes (#51)](#bug-baptism-counter-doesnt-respond-to-date-range-changes-51)
 - [BUG: Active Communities and Small Groups Chart Needs Work (#52)](#bug-active-communities-and-small-groups-chart-needs-work-52)
 - [IDOR Mitigation — Per-Record Authorization (#57)](#idor-mitigation-per-record-authorization-57)
@@ -143,7 +143,7 @@ Replace the hardcoded ministry year date ranges with an interactive date selecto
 
 ## Technical Debt
 
-### Extract Shared Processing Components (Person Card, Milestone Checklist, Detail Modal)
+### Extract Shared Processing Components (Person Card, Milestone Checklist, Detail Modal) ([#60](https://github.com/The-Moody-Church/mp-charts/issues/60))
 The volunteer processing, baptism processing, and membership processing features share very similar UI patterns — person cards with photos, milestone checklists with show/edit states, detail modals with contact info and action buttons, file upload controls, and deep linking. Currently each feature has its own implementation of these patterns. These should be extracted into shared, reusable components in `src/components/shared/` (or similar) so that:
 
 - **Person card**: A single card component accepting a config for which fields to display (photo, name, milestone progress, group names, etc.), reused across all three processing pages.
