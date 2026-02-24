@@ -17,8 +17,9 @@ Conducted a comprehensive security audit of the MPNext application, identified 1
 10. Implemented fixes for 9 of 15 findings
 11. Added Security Best Practices section to CLAUDE.md to catch issues at development time
 12. Added mandatory pre-PR security review checklist to CLAUDE.md (replaced GitHub Action approach with in-session review)
+13. Implemented per-user rate limiting on all server actions (#6) — in-memory sliding window with tiered limits
 
-### Findings Summary (15 total, 9 fixed)
+### Findings Summary (15 total, 10 fixed)
 
 | # | Finding | Severity | Status |
 |---|---------|----------|--------|
@@ -27,7 +28,7 @@ Conducted a comprehensive security audit of the MPNext application, identified 1
 | 3 | Open redirect on signin page | HIGH | ✅ Fixed |
 | 4 | OIDC GUID interpolated in filter | MEDIUM | ✅ Fixed |
 | 5 | Missing security headers | HIGH | ✅ Fixed (no CSP yet) |
-| 6 | No rate limiting | HIGH | Open |
+| 6 | No rate limiting | HIGH | ✅ Fixed |
 | 7 | PII logged to console | MEDIUM | ✅ Fixed |
 | 8 | Debug HTTP PUT logging | MEDIUM | ✅ Fixed |
 | 9 | No MIME type validation on uploads | MEDIUM | ✅ Fixed |
@@ -40,6 +41,8 @@ Conducted a comprehensive security audit of the MPNext application, identified 1
 
 ### Files Created
 - `src/lib/providers/ministry-platform/utils/filter-sanitize.ts` — Central sanitization utility (`sanitizeFilterValue`, `sanitizeIds`, `sanitizeIdsOptional`, `sanitizeGuid`)
+- `src/lib/rate-limit.ts` — In-memory sliding window rate limiter with tiered limits (general, write, upload, search, cacheRefresh)
+- `src/lib/rate-limit.test.ts` — 7 tests for rate limiter (user isolation, tier isolation, limit enforcement)
 - `.claude/security-audit-2026-02-24.md` — Full audit report with 15 findings
 - `.claude/session-summary-2026-02-24.md` — This file
 
@@ -69,12 +72,21 @@ Conducted a comprehensive security audit of the MPNext application, identified 1
 - `src/components/baptism-processing/actions.ts` — Added MIME type validation to 3 file upload functions (#9)
 - `src/components/membership-processing/actions.ts` — Added MIME type validation to 3 file upload functions (#9)
 
+**Rate Limiting (#6):**
+- `src/lib/auth-helpers.ts` — Integrated general rate limit (120 req/min) into `requireSession()`
+- `src/components/volunteer-processing/actions.ts` — Added `enforceRateLimit()` to 7 write/upload functions
+- `src/components/baptism-processing/actions.ts` — Added `enforceRateLimit()` to 5 write/upload functions
+- `src/components/membership-processing/actions.ts` — Added `enforceRateLimit()` to 4 write/upload functions
+- `src/components/contact-logs/actions.ts` — Added `enforceRateLimit()` to 3 write functions
+- `src/components/contact-lookup/actions.ts` — Added `enforceRateLimit()` for search tier
+- `src/components/dashboard/actions.ts` — Added `enforceRateLimit()` and `requireSession()` to `refreshDashboardCache()`
+
 **Documentation & CI:**
 - `CLAUDE.md` — Added "Security Best Practices" section covering filter safety, file upload validation, URL/redirect safety, logging/PII rules, auth requirements, and security headers
 - `CLAUDE.md` — Added mandatory "Pre-PR Security Review" checklist under Git & Pull Request Workflow section
+- `CLAUDE.md` — Added "Rate Limiting" section documenting tiers and how to apply to new actions
 
 ### Remaining Open Items (Medium-term)
-- **Rate limiting (#6)**: Implement per-user rate limiting on server actions
 - **IDOR mitigation (#10)**: Evaluate per-record authorization or access-token-based MPHelper instances
 - **RBAC (#13)**: Design role-based access control leveraging MP security groups
 - **eslint upgrade (#11)**: Upgrade to eslint 10.x to resolve dependency audit

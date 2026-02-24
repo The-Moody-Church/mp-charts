@@ -19,7 +19,7 @@ The application has solid fundamentals — proper session management, server-sid
 | 3 | Open redirect on signin page | **HIGH** | Redirect | ✅ Fixed |
 | 4 | OIDC GUID interpolated in filter | **MEDIUM** | Injection | ✅ Fixed |
 | 5 | Missing security headers (CSP, X-Frame-Options) | **HIGH** | Configuration | ✅ Fixed (no CSP yet) |
-| 6 | No rate limiting on server actions/API routes | **HIGH** | DoS/Abuse | Open |
+| 6 | No rate limiting on server actions/API routes | **HIGH** | DoS/Abuse | ✅ Fixed |
 | 7 | Sensitive data logged to console | **MEDIUM** | Data Exposure | ✅ Fixed |
 | 8 | Debug HTTP PUT logging in production | **MEDIUM** | Data Exposure | ✅ Fixed |
 | 9 | No file type validation on uploads | **MEDIUM** | Input Validation | ✅ Fixed |

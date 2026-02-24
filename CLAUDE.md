@@ -539,9 +539,34 @@ Security headers are configured in `next.config.ts` via the `headers()` function
 - `Referrer-Policy: strict-origin-when-cross-origin`
 - `Permissions-Policy` — disables unused browser APIs
 
+### Rate Limiting
+
+Server actions are rate-limited per authenticated user via `src/lib/rate-limit.ts` (in-memory sliding window). The general limit is enforced automatically in `requireSession()`; stricter tiers must be called explicitly with `enforceRateLimit()`:
+
+```typescript
+import { enforceRateLimit } from "@/lib/rate-limit";
+
+// In a write server action:
+const session = await requireSession(); // ← auto-enforces "general" (120/min)
+enforceRateLimit(session.user.id, "write"); // ← explicit stricter limit (30/min)
+```
+
+| Tier | Limit | Window | Applied to |
+|------|-------|--------|------------|
+| `general` | 120 req | 1 min | All server actions (via `requireSession()`) |
+| `write` | 30 req | 1 min | Create/update/delete operations |
+| `upload` | 10 req | 10 min | Photo and document uploads |
+| `search` | 30 req | 1 min | Contact search (PII access) |
+| `cacheRefresh` | 5 req | 1 hour | Dashboard cache invalidation |
+
+When adding new server actions:
+- **Read-only actions**: No extra work — `requireSession()` handles the general limit
+- **Write actions**: Add `enforceRateLimit(session.user.id, "write")` after `requireSession()`
+- **File uploads**: Add `enforceRateLimit(session.user.id, "upload")` after `requireSession()`
+
 ### Security Audit Reference
 
-The full security audit report is at `.claude/security-audit-2026-02-24.md`. It documents all 15 findings, their status, and remaining open items (rate limiting, RBAC, IDOR mitigation).
+The full security audit report is at `.claude/security-audit-2026-02-24.md`. It documents all 15 findings, their status, and remaining open items (RBAC, IDOR mitigation).
 
 ## Memory & Context Management
 

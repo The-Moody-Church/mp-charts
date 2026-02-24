@@ -1,6 +1,7 @@
 "use server";
 
 import { requireSession, getMpUserId } from "@/lib/auth-helpers";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { MembershipService } from "@/services/membershipService";
 import { MembershipCard, MembershipDetail, MembershipMilestoneFileInfo } from "@/lib/dto";
 
@@ -36,6 +37,7 @@ export async function getApplicantDetail(
 export async function createMembershipMilestone(formData: FormData): Promise<void> {
   try {
     const session = await requireSession();
+    enforceRateLimit(session.user.id, "write");
     const userId = getMpUserId(session);
 
     const service = await MembershipService.getInstance();
@@ -69,6 +71,7 @@ export async function createMembershipMilestone(formData: FormData): Promise<voi
 export async function updateMembershipMilestone(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
     const session = await requireSession();
+    enforceRateLimit(session.user.id, "write");
 
     const milestoneRecordId = Number(formData.get("Participant_Milestone_ID"));
     if (!milestoneRecordId || isNaN(milestoneRecordId)) {
@@ -108,6 +111,7 @@ export async function updateMembershipMilestone(formData: FormData): Promise<{ s
 export async function confirmMembershipCompletion(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
     const session = await requireSession();
+    enforceRateLimit(session.user.id, "write");
 
     const groupParticipantId = Number(formData.get("Group_Participant_ID"));
     if (!groupParticipantId || isNaN(groupParticipantId)) {
@@ -143,6 +147,7 @@ export async function getMembershipMilestoneFiles(milestoneRecordId: number): Pr
 export async function uploadApplicantPhoto(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
     const session = await requireSession();
+    enforceRateLimit(session.user.id, "upload");
 
     const contactId = Number(formData.get("Contact_ID"));
     if (!contactId || isNaN(contactId)) {
