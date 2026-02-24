@@ -9,12 +9,12 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 ## Table of Contents
 
 ### Features
-- ~~[Redesign Dashboard Layout: Discipleship Pathway Sections (#42)](#redesign-dashboard-layout-discipleship-pathway-sections-42)~~ ✅
-- ~~[Baptism Processing (#17)](#baptism-processing-17)~~ ✅
-- ~~[Membership Applications (#47)](#membership-applications-47)~~ ✅
 - [Pastoral Interface for Contact Logs (#19)](#pastoral-interface-for-contact-logs-19)
 - [Volunteer Processing Search Bar (#49)](#volunteer-processing-search-bar-49)
 - [Volunteer Processing: Show In-Process Volunteers on Active Tab (#50)](#volunteer-processing-show-in-process-volunteers-on-active-tab-50)
+- ~~[Redesign Dashboard Layout: Discipleship Pathway Sections (#42)](#redesign-dashboard-layout-discipleship-pathway-sections-42)~~ ✅
+- ~~[Baptism Processing (#17)](#baptism-processing-17)~~ ✅
+- ~~[Membership Applications (#47)](#membership-applications-47)~~ ✅
 - ~~[Volunteer Processing (#18)](#volunteer-processing-18)~~ ✅
 - ~~[Volunteer Processing: Shareable Direct Links to Volunteer Modal (#24)](#volunteer-processing-shareable-direct-links-to-volunteer-modal-24)~~ ✅
 - ~~[Volunteer Processing: Assign to Group on Approval (#25)](#volunteer-processing-assign-to-group-on-approval-25)~~ ✅
@@ -30,10 +30,13 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Dashboard Date Range Selector (#20)](#dashboard-date-range-selector-20)~~ ✅
 
 ### Technical Debt
-- ~~[Migrate `unstable_cache` to Cache Components (`use cache`) (#21)](#migrate-unstable_cache-to-cache-components-use-cache-21)~~ ✅
-- ~~[review upstream pr42 (#35)](#review-upstream-pr42-35)~~ ✅
+- [Extract Shared Processing Components (Person Card, Milestone Checklist, Detail Modal)](#extract-shared-processing-components-person-card-milestone-checklist-detail-modal)
 - [BUG: Baptism Counter Doesn't Respond to Date Range Changes (#51)](#bug-baptism-counter-doesnt-respond-to-date-range-changes-51)
 - [BUG: Active Communities and Small Groups Chart Needs Work (#52)](#bug-active-communities-and-small-groups-chart-needs-work-52)
+- [IDOR Mitigation — Per-Record Authorization (#57)](#idor-mitigation-per-record-authorization-57)
+- [Role-Based Access Control (RBAC) (#58)](#role-based-access-control-rbac-58)
+- ~~[Migrate `unstable_cache` to Cache Components (`use cache`) (#21)](#migrate-unstable_cache-to-cache-components-use-cache-21)~~ ✅
+- ~~[review upstream pr42 (#35)](#review-upstream-pr42-35)~~ ✅
 - ~~[Upgrade to Next.js 16](#upgrade-to-nextjs-16)~~ ✅
 - ~~[Refine MP Permissions (#7)](#refine-mp-permissions-7)~~ ✅
 - ~~[Migrate `middleware.ts` to `proxy.ts` (#22)](#migrate-middlewarets-to-proxyts-22)~~ ✅
@@ -41,12 +44,19 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Images are not showing on the volunteers. Perhaps a permssions issue? (#30)](#images-are-not-showing-on-the-volunteers-perhaps-a-permssions-issue-30)~~ ✅
 - ~~[Links to MP are not showing in production in the volunteer processing pages. (#31)](#links-to-mp-are-not-showing-in-production-in-the-volunteer-processing-pages-31)~~ ✅
 - ~~[Review upstream pr 39 (#34)](#review-upstream-pr-39-34)~~ ✅
-- [IDOR Mitigation — Per-Record Authorization (#57)](#idor-mitigation-per-record-authorization-57)
-- [Role-Based Access Control (RBAC) (#58)](#role-based-access-control-rbac-58)
 
 ---
 
 ## Features
+
+### Pastoral Interface for Contact Logs ([#19](https://github.com/The-Moody-Church/mp-charts/issues/19))
+A dedicated pastoral interface for viewing and managing contact logs.
+
+### Volunteer Processing Search Bar ([#49](https://github.com/The-Moody-Church/mp-charts/issues/49))
+Add a search bar to the top-right of both the "New Volunteers In Process" and "Approved Active Volunteers" tabs on the volunteer processing page. Allows staff to quickly filter the card grid by volunteer name instead of visually scanning through all cards.
+
+### Volunteer Processing: Show In-Process Volunteers on Active Tab ([#50](https://github.com/The-Moody-Church/mp-charts/issues/50))
+If a volunteer is in the "New Volunteers In Process" group but also already belongs to an active ministry group, they should still appear on the "Approved Active Volunteers" tab. Currently they are excluded from the active list while they remain in the in-process group.
 
 ### ~~Redesign Dashboard Layout: Discipleship Pathway Sections ([#42](https://github.com/The-Moody-Church/mp-charts/issues/42))~~ ✅ COMPLETED
 Redesign the executive dashboard from a flat chart grid into a structured layout organized around four discipleship pathway sections — **Know God**, **Feed Your Soul**, **Grow in Love**, **Change Your World** — plus an **Other** section. Add a 3-circle **Venn diagram** at the top showing engagement overlap (Any Activity ∩ Small Group/Community ∩ Serving/Leading) with person counts in all 7 intersection regions.
@@ -80,15 +90,6 @@ A dedicated interface for tracking and managing church membership applications. 
 **Key features**: Single-page card grid with photos + checklist, detail modal with contact info (email/phone), file uploads on milestones, photo upload, "Complete Membership" action (creates milestone 48 + ends group participation), deep linking (`?applicant=123`).
 
 **Config**: Program_ID 307, Group_Role_ID 2, all milestone IDs via env vars. Production-visible from day one.
-
-### Pastoral Interface for Contact Logs ([#19](https://github.com/The-Moody-Church/mp-charts/issues/19))
-A dedicated pastoral interface for viewing and managing contact logs.
-
-### Volunteer Processing Search Bar ([#49](https://github.com/The-Moody-Church/mp-charts/issues/49))
-Add a search bar to the top-right of both the "New Volunteers In Process" and "Approved Active Volunteers" tabs on the volunteer processing page. Allows staff to quickly filter the card grid by volunteer name instead of visually scanning through all cards.
-
-### Volunteer Processing: Show In-Process Volunteers on Active Tab ([#50](https://github.com/The-Moody-Church/mp-charts/issues/50))
-If a volunteer is in the "New Volunteers In Process" group but also already belongs to an active ministry group, they should still appear on the "Approved Active Volunteers" tab. Currently they are excluded from the active list while they remain in the in-process group.
 
 ### ~~Volunteer Processing ([#18](https://github.com/The-Moody-Church/mp-charts/issues/18))~~ ✅ COMPLETED
 Volunteer processing interface for children's ministry with two-tab layout (New Volunteers In Process / Approved Active Volunteers), card-based display with photos and requirement checklists, detail modal with expanded statuses and MP links, and write-back capabilities for milestones, certifications, and file uploads.
@@ -142,17 +143,47 @@ Replace the hardcoded ministry year date ranges with an interactive date selecto
 
 ## Technical Debt
 
-### ~~Migrate `unstable_cache` to Cache Components (`use cache`)~~ ✅ COMPLETED (2026-02-23) ([#21](https://github.com/The-Moody-Church/mp-charts/issues/21))
-Migrated from `unstable_cache` to `'use cache'` directive with `cacheComponents: true` (full PPR). All 4 call sites converted to `'use cache'` + `cacheLife()` + `cacheTag()`. Added Suspense boundaries to all pages with dynamic data. Dashboard uses `connection()` to defer to runtime. Build output shows `◐ (Partial Prerender)` for all authenticated pages.
+### Extract Shared Processing Components (Person Card, Milestone Checklist, Detail Modal)
+The volunteer processing, baptism processing, and membership processing features share very similar UI patterns — person cards with photos, milestone checklists with show/edit states, detail modals with contact info and action buttons, file upload controls, and deep linking. Currently each feature has its own implementation of these patterns. These should be extracted into shared, reusable components in `src/components/shared/` (or similar) so that:
 
-### ~~review upstream pr42 ([#35](https://github.com/The-Moody-Church/mp-charts/issues/35))~~ ✅ COMPLETED
-Reviewed all upstream PRs through #42 (2026-02-20). Cherry-picked: `@inquirer/prompts` ^7→^8, updated `components.md` layout import patterns, CLAUDE.md additions (Next.js 16 Notes, Services Layer + Contexts, Data Flow, service import patterns).
+- **Person card**: A single card component accepting a config for which fields to display (photo, name, milestone progress, group names, etc.), reused across all three processing pages.
+- **Milestone checklist**: A generic milestone list component that renders ordered steps with completed/pending states, edit toggles, and write-back actions — configured per feature via milestone definitions.
+- **Detail modal**: A shared modal shell with contact info pills (email, phone), photo display, milestone detail view, file upload slots, and action buttons — composed per feature via slots or config.
+- **Contact action links**: The bordered pill-style email/phone/link buttons already follow a shared pattern (documented in UI Style Guide) but are copy-pasted per feature.
+
+Consolidating these would reduce duplication, ensure consistent UX across features, and allow updates (e.g., accessibility improvements, mobile fixes) to apply everywhere at once.
 
 ### BUG: Baptism Counter Doesn't Respond to Date Range Changes ([#51](https://github.com/The-Moody-Church/mp-charts/issues/51))
 The baptism count on the executive dashboard does not update when the date range selector is changed. It always shows the same value regardless of the selected time period.
 
 ### BUG: Active Communities and Small Groups Chart Needs Work ([#52](https://github.com/The-Moody-Church/mp-charts/issues/52))
 The active communities and small groups chart on the executive dashboard needs improvement. The data or visualization is not accurately representing the information.
+
+### IDOR Mitigation — Per-Record Authorization ([#57](https://github.com/The-Moody-Church/mp-charts/issues/57))
+Server actions accept record IDs from clients (contactId, participantId, etc.) and only check session presence — not whether the requesting user should access that specific record. An authenticated user could enumerate IDs to access any contact's details, volunteer background check data, or membership information.
+
+**Options to evaluate:**
+1. **Per-user access tokens**: Use the user's OIDC access token instead of client credentials so Ministry Platform enforces its own security model per-user. Requires token refresh logic and per-user MPHelper instances.
+2. **Relationship checks**: Verify the requesting user's relationship to the record (e.g., are they a group leader for this volunteer's group?).
+3. **Audit logging** (interim): Log user ID + accessed record IDs for abuse detection while a proper authorization model is designed.
+
+From security audit finding #10 (2026-02-24).
+
+### Role-Based Access Control (RBAC) ([#58](https://github.com/The-Moody-Church/mp-charts/issues/58))
+All authenticated users currently have identical access to all features and data. The proxy only checks session cookie presence, not roles. Any church member with MP OAuth access can view volunteer background checks, baptism applicant data, membership records, and the executive dashboard.
+
+**Options to evaluate:**
+1. **MP Security Groups**: Check the user's Ministry Platform security groups at login, store group memberships in the session, and gate features accordingly (e.g., only "Volunteer Coordinators" group can access volunteer processing).
+2. **Page-level authorization**: Add role checks in server actions before data access.
+3. **Leverage `$userId` more**: Use access-token-based MPHelper instances so MP's built-in permission model governs data access transparently.
+
+From security audit finding #13 (2026-02-24).
+
+### ~~Migrate `unstable_cache` to Cache Components (`use cache`)~~ ✅ COMPLETED (2026-02-23) ([#21](https://github.com/The-Moody-Church/mp-charts/issues/21))
+Migrated from `unstable_cache` to `'use cache'` directive with `cacheComponents: true` (full PPR). All 4 call sites converted to `'use cache'` + `cacheLife()` + `cacheTag()`. Added Suspense boundaries to all pages with dynamic data. Dashboard uses `connection()` to defer to runtime. Build output shows `◐ (Partial Prerender)` for all authenticated pages.
+
+### ~~review upstream pr42 ([#35](https://github.com/The-Moody-Church/mp-charts/issues/35))~~ ✅ COMPLETED
+Reviewed all upstream PRs through #42 (2026-02-20). Cherry-picked: `@inquirer/prompts` ^7→^8, updated `components.md` layout import patterns, CLAUDE.md additions (Next.js 16 Notes, Services Layer + Contexts, Data Flow, service import patterns).
 
 ### ~~Upgrade to Next.js 16~~ ✅ COMPLETED (2026-02-14)
 Upgraded from Next.js 15.5.6 to 16.1.6 LTS. See session summary for details.
@@ -178,23 +209,3 @@ Same root cause as #30. Fixed in the same PR.
 
 ### ~~Review upstream pr 39 ([#34](https://github.com/The-Moody-Church/mp-charts/issues/34))~~ ✅ COMPLETED
 Compare to changes already made in our development and cherrypick individual changes or merge all of appropriate.
-
-### IDOR Mitigation — Per-Record Authorization ([#57](https://github.com/The-Moody-Church/mp-charts/issues/57))
-Server actions accept record IDs from clients (contactId, participantId, etc.) and only check session presence — not whether the requesting user should access that specific record. An authenticated user could enumerate IDs to access any contact's details, volunteer background check data, or membership information.
-
-**Options to evaluate:**
-1. **Per-user access tokens**: Use the user's OIDC access token instead of client credentials so Ministry Platform enforces its own security model per-user. Requires token refresh logic and per-user MPHelper instances.
-2. **Relationship checks**: Verify the requesting user's relationship to the record (e.g., are they a group leader for this volunteer's group?).
-3. **Audit logging** (interim): Log user ID + accessed record IDs for abuse detection while a proper authorization model is designed.
-
-From security audit finding #10 (2026-02-24).
-
-### Role-Based Access Control (RBAC) ([#58](https://github.com/The-Moody-Church/mp-charts/issues/58))
-All authenticated users currently have identical access to all features and data. The proxy only checks session cookie presence, not roles. Any church member with MP OAuth access can view volunteer background checks, baptism applicant data, membership records, and the executive dashboard.
-
-**Options to evaluate:**
-1. **MP Security Groups**: Check the user's Ministry Platform security groups at login, store group memberships in the session, and gate features accordingly (e.g., only "Volunteer Coordinators" group can access volunteer processing).
-2. **Page-level authorization**: Add role checks in server actions before data access.
-3. **Leverage `$userId` more**: Use access-token-based MPHelper instances so MP's built-in permission model governs data access transparently.
-
-From security audit finding #13 (2026-02-24).

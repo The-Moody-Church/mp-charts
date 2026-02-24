@@ -653,6 +653,20 @@ This will close issue #5 on next push to main.
 - **Mark completed**: Wrap the title in `~~strikethrough~~` and add `✅ COMPLETED`
 - **ideas.md is included in session pushes** alongside session summaries and work-in-progress updates
 
+### Entry Ordering
+
+Within each section (`## Features`, `## Improvements`, `## Technical Debt`) **and** the Table of Contents, entries must be ordered:
+
+1. **Incomplete items first** (active/open) — newest on top
+2. **Completed items last** (~~strikethrough~~ ✅) — at the bottom of the section
+
+When adding a new entry, insert it as the **first `###` heading** after the `## Section` header (above existing entries). When marking an entry completed, move it below all incomplete entries in the same section. The Table of Contents mirrors this order automatically.
+
+This ordering is enforced in three places:
+- **AI assistants**: Follow this convention when editing ideas.md during sessions
+- **GitHub Actions**: The `sync-issues-to-ideas` workflow sorts entries after every sync
+- **Manual edits**: If editing ideas.md by hand, maintain this order
+
 ### Labels
 
 Issues are categorized by label, which maps to ideas.md sections:
