@@ -1,5 +1,23 @@
 # Work in Progress
 
+## Baptism Processing (2026-02-23) — Branch: `feature/baptism-processing`
+
+### Status: ✅ COMPLETED — Tested & Ready to Merge
+
+Full baptism processing feature with milestone-based workflow. 8-point manual test plan passed. PR #54 open for merge.
+
+**Post-testing fixes applied** (commit `bdfc1e2`):
+- "Applied [date]" label (was "Applicant since")
+- Bordered pill-style email/phone buttons with icons
+- MP record links on completed milestones
+- Removed certificate badge from capstone
+- Central time for all MP date writes (was UTC)
+- UI Style Guide added to CLAUDE.md
+
+**Key files**: `src/components/baptism-processing/`, `src/services/baptismService.ts`, `src/lib/dto/baptism-processing.ts`
+
+---
+
 ## Upstream PR Review (2026-02-20) — Issues #22, #34, #35
 
 ### Status: ✅ COMPLETED (Full sync achieved)
