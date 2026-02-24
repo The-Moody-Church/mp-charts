@@ -110,7 +110,6 @@ Route (app)
 - `.claude/ideas.md` — marked #21 completed
 - `.claude/plan-baptism-processing.md` — updated page pattern note
 - `.claude/draft-issue-dashboard-redesign.md` — added caching architecture section
-- `.claude/session-summary-2026-02-23.md` — this file
 
 ---
 
@@ -297,6 +296,56 @@ Implemented 4-phase refactoring plan from audit of dashboard architecture:
 
 ---
 
+## Baptism Processing: Pre-Merge Testing & Fixes (Branch: `feature/baptism-processing`)
+
+### Task
+Manual testing of baptism processing feature before merge. Walked through 8-point test plan, applied UI fixes and a timezone bug fix discovered during testing.
+
+### Testing Results
+All 8 test areas passed after fixes:
+1. Navigation & Page Load — pass
+2. Tab Loading — pass
+3. Detail Modal — pass (after fixes below)
+4. Milestone CRUD (Create) — pass
+5. Milestone CRUD (Edit) — pass
+6. Approval / Pause / Resume Flow — pass
+7. Photo Upload — pass
+8. Deep Linking — pass
+
+### Fixes Applied
+
+#### 1. Modal Header Label
+- **`src/components/baptism-processing/baptism-detail-modal.tsx:466`** — Changed "Applicant since [date]" to "Applied [date]"
+
+#### 2. Contact Links Styled as Buttons
+- **`src/components/baptism-processing/baptism-detail-modal.tsx:492-518`** — Replaced plain `text-blue-600 hover:underline` email/phone links with bordered pill-style buttons using `inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 transition-colors` with inline SVG mail/phone icons
+
+#### 3. MP Milestone Record Links
+- **`src/components/baptism-processing/baptism-detail-modal.tsx:632-645`** — Added "MP" link on completed milestones pointing to `/mp/344/{Participant_Milestone_ID}` (matches volunteer processing pattern)
+
+#### 4. Removed Certificate Badge
+- **`src/components/baptism-processing/baptism-detail-modal.tsx`** — Removed blue "Certificate" badge from baptism capstone milestone, removed `isCertificateUpload` variable and "Baptism Certificate (PDF)" label variants from edit/quick action sections
+
+#### 5. Central Time for MP Dates (Bug Fix)
+- **`src/services/baptismService.ts:20-37`** — Added `nowCentral()` helper using `Intl.DateTimeFormat` with `timeZone: 'America/Chicago'` to produce ISO-like timestamps in Central time
+- **`src/services/baptismService.ts`** — Replaced all 3 instances of `new Date().toISOString()` with `nowCentral()` for group `Start_Date`/`End_Date` (pause/resume flows) and milestone `Date_Accomplished` fallback
+- **`src/components/baptism-processing/baptism-detail-modal.tsx:184,340`** — Changed user-picked date construction from `new Date(date + "T12:00:00").toISOString()` (UTC conversion) to `date + "T12:00:00"` (no conversion)
+- **`src/components/baptism-processing/baptism-detail-modal.tsx:538`** — Approval date now uses `toLocaleString('sv-SE', { timeZone: 'America/Chicago' })` for Central time
+
+#### 6. CLAUDE.md Updates
+- **`CLAUDE.md:324-347`** — Added "UI Style Guide" section documenting the contact action link pattern (bordered pill-style buttons with icons)
+
+### Files Modified
+- `CLAUDE.md` — added UI Style Guide section
+- `src/components/baptism-processing/baptism-detail-modal.tsx` — all UI fixes + Central time dates
+- `src/services/baptismService.ts` — `nowCentral()` helper, replaced UTC dates
+
+### Commit
+- `bdfc1e2` — `fix: baptism modal UI polish and Central time dates`
+- PR: https://github.com/The-Moody-Church/mp-charts/pull/54
+
+---
+
 ## Membership Processing: Completion Refactor (Branch: `feature/membership-processing`)
 
 ### Task
@@ -342,73 +391,3 @@ Clarified that session summaries must be included in every commit on any branch,
 - Item #1: "Before every push to remote" → "Before every commit (on ANY branch)" with note that session notes are part of the commit
 - Key rule: "every `git push`" → "every `git commit` — on any branch" with explicit prohibition on committing without session notes
 - Checklist header: "IMPORTANT" → "MANDATORY" with "(on ANY branch)"
-
----
-
-## Session 2026-02-24: Merge All Feature Branches to Main
-
-### Task
-Merged all 3 open PRs to main, resolved merge conflicts, and cleaned up branches/worktrees.
-
-### PRs Merged
-
-| PR | Branch | Merge Type |
-|---|---|---|
-| #53 `feature/dashboard-redesign` | Clean merge via GitHub | Fast-forward |
-| #54 `feature/baptism-processing` | Clean merge via GitHub | Fast-forward |
-| #55 `feature/membership-processing` | Local merge (conflicts) | Manual conflict resolution |
-
-### PR #55 Conflict Resolution
-5 files had conflicts — all additive (both baptism and membership added content in the same locations):
-- **`src/app/(web)/page.tsx`** — kept both baptism and membership cards on home page
-- **`src/components/layout/sidebar.tsx`** — kept both nav items
-- **`.env.example`** — kept both config sections (baptism + membership env vars)
-- **`.claude/session-summary-2026-02-23.md`** — kept both dashboard summaries and membership summaries
-- **`.claude/work-in-progress.md`** — kept both entries, updated statuses
-
-### Cleanup
-- Removed 2 git worktrees (`mp-charts-baptism`, `mp-charts-membership`)
-- Deleted 3 local branches (`feature/dashboard-redesign`, `feature/baptism-processing`, `feature/membership-processing`)
-- Deleted 3 remote branches
-- Main is the only remaining branch
-
----
-
-## Session 2026-02-24: Baptism End Date Alert + UI Consistency Fixes
-
-### Baptism End Date Alert
-**Problem**: Group members with a future End_Date were showing in the baptism processing list, which was confusing since it appeared they should be hidden. Root cause: a person had two Group_Participant records — one with End_Date, one without.
-
-**Fix** (`src/services/baptismService.ts`):
-- Added deduplication logic in `getApplicantsForGroup()` — prefers record with `End_Date IS NULL`, falls back to latest future End_Date
-- Computes `endDateAlerts` map for participants with no active (null End_Date) record
-- `getApplicantDetail()` now fetches End_Date from the specific Group_Participant record
-- New `endDate: string | null` field on `BaptismCard` DTO (`src/lib/dto/baptism-processing.ts`)
-
-**UI** (`src/components/baptism-processing/baptism-card.tsx`, `baptism-detail-modal.tsx`):
-- Orange "Ends {date}" badge on card (top-right, alongside Complete/Paused badges)
-- Orange warning banner in detail modal: "Group membership ends {date}"
-
-### Contact Info Buttons — Show Immediately
-**Fix** (`src/components/baptism-processing/baptism-detail-modal.tsx`):
-- Email/phone buttons were gated behind `detail &&` (only showed after API call)
-- Changed to use card data (`info`) immediately, preferring `detail.info` when loaded
-
-### Membership Processing — Pill-Style Contact Buttons
-**Fix** (`src/components/membership-processing/membership-detail-modal.tsx`):
-- Updated email/phone links from plain text links to bordered pill-style buttons
-- Matches baptism processing and CLAUDE.md UI Style Guide
-- Phone icon changed to handset (matching baptism)
-
-### Documentation Updates
-- **CLAUDE.md**: Added `MembershipDetailModal` to UI Style Guide contact button pattern list
-- **`.claude/references/components.md`**: Full refresh — added `baptism-processing/`, `membership-processing/`, `volunteer-processing/` to folder overview, feature table, server actions table, import patterns, quick reference, and services table. Added "Processing Features — Shared Architecture" section.
-
-### Files Modified
-- `src/services/baptismService.ts` — dedup logic, endDate computation, detail End_Date fetch
-- `src/lib/dto/baptism-processing.ts` — added `endDate` field to `BaptismCard`
-- `src/components/baptism-processing/baptism-card.tsx` — orange end date badge
-- `src/components/baptism-processing/baptism-detail-modal.tsx` — end date alert banner, immediate contact info
-- `src/components/membership-processing/membership-detail-modal.tsx` — pill-style contact buttons
-- `CLAUDE.md` — MembershipDetailModal in style guide
-- `.claude/references/components.md` — full update with all processing features
