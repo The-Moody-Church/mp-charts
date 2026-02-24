@@ -181,7 +181,7 @@ export function BaptismDetailModal({
       formData.set("Participant_ID", String(applicant.info.Participant_ID));
       formData.set("Milestone_ID", String(milestoneId));
       formData.set("Program_ID", String(programId));
-      formData.set("Date_Accomplished", new Date(milestoneDate + "T12:00:00").toISOString());
+      formData.set("Date_Accomplished", milestoneDate + "T12:00:00");
       if (milestoneNotes) {
         formData.set("Notes", milestoneNotes);
       }
@@ -337,7 +337,7 @@ export function BaptismDetailModal({
 
       const formData = new FormData();
       formData.set("Participant_Milestone_ID", String(milestoneRecord.Participant_Milestone_ID));
-      if (editDate) formData.set("Date_Accomplished", new Date(editDate + "T12:00:00").toISOString());
+      if (editDate) formData.set("Date_Accomplished", editDate + "T12:00:00");
       formData.set("Notes", editNotes);
       for (const file of editFiles) formData.append("files", file);
 
@@ -463,7 +463,7 @@ export function BaptismDetailModal({
                 {displayName} {info.Last_Name}
               </DialogTitle>
               <DialogDescription>
-                Applicant since {formatDate(info.Start_Date)}
+                Applied {formatDate(info.Start_Date)}
                 {mpParticipantUrl && (
                   <>
                     {" \u2014 "}
@@ -491,14 +491,26 @@ export function BaptismDetailModal({
 
         {/* Contact info */}
         {detail && (detail.info.Email_Address || detail.info.Mobile_Phone) && (
-          <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+          <div className="flex flex-wrap gap-2">
             {detail.info.Email_Address && (
-              <a href={`mailto:${detail.info.Email_Address}`} className="text-blue-600 hover:underline">
+              <a
+                href={`mailto:${detail.info.Email_Address}`}
+                className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                </svg>
                 {detail.info.Email_Address}
               </a>
             )}
             {detail.info.Mobile_Phone && (
-              <a href={`tel:${detail.info.Mobile_Phone}`} className="text-blue-600 hover:underline">
+              <a
+                href={`tel:${detail.info.Mobile_Phone}`}
+                className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
+                </svg>
                 {detail.info.Mobile_Phone}
               </a>
             )}
@@ -535,7 +547,7 @@ export function BaptismDetailModal({
                         formData.set("Participant_ID", String(applicant.info.Participant_ID));
                         formData.set("Milestone_ID", String(milestoneId));
                         formData.set("Program_ID", String(programId));
-                        formData.set("Date_Accomplished", new Date().toISOString());
+                        formData.set("Date_Accomplished", new Date().toLocaleString('sv-SE', { timeZone: 'America/Chicago' }).replace(' ', 'T'));
                         await createBaptismMilestone(formData);
                         onUpdate();
                         const updated = await getApplicantDetail(
@@ -619,8 +631,6 @@ export function BaptismDetailModal({
                 const isExpanded = expandedKey === item.key;
                 const files = milestoneRecord ? recordFiles[milestoneRecord.Participant_Milestone_ID] : undefined;
                 const hasExpandableContent = hasRecord && (milestoneRecord.Notes || (files && files.length > 0));
-                const isCertificateUpload = item.key === "baptism";
-
                 return (
                   <div key={item.key} className="rounded-lg border bg-gray-50/50">
                     {/* Header row */}
@@ -631,8 +641,19 @@ export function BaptismDetailModal({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium">{item.label}</span>
-                          {isCertificateUpload && item.completed && (
-                            <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Certificate</span>
+                          {item.completed && milestoneRecord && mpBaseOrigin && (
+                            <a
+                              href={`${mpBaseOrigin}/mp/344/${milestoneRecord.Participant_Milestone_ID}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-[10px] text-blue-600 hover:underline flex-shrink-0 inline-flex items-center gap-0.5"
+                            >
+                              <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 7h3a5 5 0 010 10h-3m-6 0H6A5 5 0 016 7h3M8 12h8" />
+                              </svg>
+                              MP
+                            </a>
                           )}
                         </div>
                         {item.completed && (
@@ -697,7 +718,7 @@ export function BaptismDetailModal({
                         </div>
                         <div>
                           <Label htmlFor="editFile" className="text-xs">
-                            {isCertificateUpload ? "Baptism Certificate (PDF)" : "Attach File"}
+                            Attach File
                           </Label>
                           <Input
                             id="editFile"
@@ -799,7 +820,7 @@ export function BaptismDetailModal({
                       </div>
                       <div>
                         <Label htmlFor="milestoneFile" className="text-xs">
-                          {selectedMilestoneKey === "baptism" ? "Baptism Certificate (PDF)" : "Attach File (optional)"}
+                          Attach File (optional)
                         </Label>
                         <Input
                           id="milestoneFile"

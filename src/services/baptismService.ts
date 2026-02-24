@@ -17,6 +17,25 @@ function getEnvId(key: string): number | null {
   return isNaN(num) ? null : num;
 }
 
+/**
+ * Returns the current date/time formatted as an ISO-like string in Central time.
+ * Ministry Platform expects Central time for date fields — using UTC shifts dates forward.
+ */
+function nowCentral(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Chicago',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date());
+  const get = (type: string) => parts.find(p => p.type === type)?.value || '00';
+  return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:${get('second')}`;
+}
+
 // Batch size for IN clause queries to avoid URL length limits
 const BATCH_SIZE = 100;
 
@@ -203,7 +222,7 @@ export class BaptismService {
   }, userId?: number): Promise<number> {
     const record = {
       ...data,
-      Date_Accomplished: data.Date_Accomplished || new Date().toISOString(),
+      Date_Accomplished: data.Date_Accomplished || nowCentral(),
     };
 
     const created = await this.mp!.createTableRecords(
@@ -264,7 +283,7 @@ export class BaptismService {
     }, userId);
 
     // Move to paused group
-    const now = new Date().toISOString();
+    const now = nowCentral();
     await this.mp!.updateTableRecords(
       'Group_Participants',
       [{ Group_Participant_ID: currentGroupParticipantId, End_Date: now }],
@@ -296,7 +315,7 @@ export class BaptismService {
       throw new Error('Baptism resume configuration not complete');
     }
 
-    const now = new Date().toISOString();
+    const now = nowCentral();
     await this.mp!.updateTableRecords(
       'Group_Participants',
       [{ Group_Participant_ID: currentGroupParticipantId, End_Date: now }],
@@ -377,7 +396,7 @@ export class BaptismService {
   // ---------------------------------------------------------------
 
   private async getApplicantsForGroup(groupId: number, isPaused: boolean): Promise<BaptismCard[]> {
-    const now = new Date().toISOString();
+    const now = nowCentral();
 
     const groupParticipants = await this.mp!.getTableRecords<GroupParticipantRecord>({
       table: 'Group_Participants',
