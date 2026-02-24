@@ -11,7 +11,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 ### Features
 - [Redesign Dashboard Layout: Discipleship Pathway Sections (#42)](#redesign-dashboard-layout-discipleship-pathway-sections-42)
 - ~~[Baptism Processing (#17)](#baptism-processing-17)~~ ✅
-- [Membership Applications (#47)](#membership-applications-47)
+- ~~[Membership Applications (#47)](#membership-applications-47)~~ ✅
 - [Pastoral Interface for Contact Logs (#19)](#pastoral-interface-for-contact-logs-19)
 - [Volunteer Processing Search Bar (#49)](#volunteer-processing-search-bar-49)
 - [Volunteer Processing: Show In-Process Volunteers on Active Tab (#50)](#volunteer-processing-show-in-process-volunteers-on-active-tab-50)
@@ -66,7 +66,7 @@ A dedicated interface for tracking and managing the baptism journey/process in M
 
 **Config**: Program_ID 306, Group_Role_ID 2, all milestone IDs via env vars. Production-visible from day one.
 
-### Membership Applications ([#47](https://github.com/The-Moody-Church/mp-charts/issues/47))
+### ~~Membership Applications ([#47](https://github.com/The-Moody-Church/mp-charts/issues/47))~~ ✅ COMPLETED
 A dedicated interface for tracking and managing church membership applications. Simplest of the three processing features — single group (1025), purely milestone-based, no tabs.
 
 **Implementation plan**: [`.claude/plan-membership-processing.md`](plan-membership-processing.md)
