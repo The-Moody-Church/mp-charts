@@ -489,31 +489,41 @@ export function BaptismDetailModal({
           </div>
         </DialogHeader>
 
-        {/* Contact info */}
-        {detail && (detail.info.Email_Address || detail.info.Mobile_Phone) && (
+        {/* Contact info — show immediately from card data, prefer detail when loaded */}
+        {((detail?.info ?? info).Email_Address || (detail?.info ?? info).Mobile_Phone) && (
           <div className="flex flex-wrap gap-2">
-            {detail.info.Email_Address && (
+            {(detail?.info ?? info).Email_Address && (
               <a
-                href={`mailto:${detail.info.Email_Address}`}
+                href={`mailto:${(detail?.info ?? info).Email_Address}`}
                 className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
               >
                 <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
                 </svg>
-                {detail.info.Email_Address}
+                {(detail?.info ?? info).Email_Address}
               </a>
             )}
-            {detail.info.Mobile_Phone && (
+            {(detail?.info ?? info).Mobile_Phone && (
               <a
-                href={`tel:${detail.info.Mobile_Phone}`}
+                href={`tel:${(detail?.info ?? info).Mobile_Phone}`}
                 className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
               >
                 <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
                 </svg>
-                {detail.info.Mobile_Phone}
+                {(detail?.info ?? info).Mobile_Phone}
               </a>
             )}
+          </div>
+        )}
+
+        {/* End date alert */}
+        {(detail?.endDate || applicant.endDate) && (
+          <div className="flex items-center gap-2 rounded-md border border-orange-200 bg-orange-50 p-2.5 text-sm text-orange-800">
+            <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+            </svg>
+            Group membership ends {formatDate(detail?.endDate ?? applicant.endDate)}
           </div>
         )}
 

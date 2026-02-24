@@ -60,6 +60,12 @@ Reviewed all open/merged upstream PRs through PR #42. Status:
 
 When committing changes, if `.claude/settings.local.json` has pending modifications, include it in the commit. This file tracks Claude Code permission settings and should stay in sync.
 
+### Always Push After Committing
+
+This is a single-developer fork. Every commit to `main` (or any branch) must be followed immediately by a `git push`. There is no reason to leave commits unpushed — unpushed commits miss CI (Docker build, image scan) and risk diverging from the remote.
+
+**Rule**: After every successful `git commit`, run `git push` in the same operation. If on a new branch, use `git push -u origin <branch>`.
+
 ### Handling `package-lock.json` and `next-env.d.ts`
 
 Both files are committed to the repo and must NOT be added to `.gitignore`.
@@ -343,6 +349,7 @@ When displaying actionable contact information (email, phone, links to external 
 
 Components using this pattern:
 - `BaptismDetailModal` — email and phone links
+- `MembershipDetailModal` — email and phone links
 
 ## Key Development Practices
 

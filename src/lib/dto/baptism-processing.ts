@@ -29,6 +29,8 @@ export interface BaptismCard {
   totalCount: number;
   isPaused: boolean;
   isFullyComplete: boolean;
+  /** Non-null when the participant's only group record has a future End_Date (no active record without an End_Date). */
+  endDate: string | null;
 }
 
 export interface BaptismMilestoneDetail {

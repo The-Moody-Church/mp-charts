@@ -39,9 +39,14 @@ function StatusIcon({ item }: { item: BaptismChecklistItem }) {
   );
 }
 
+function formatEndDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 export function BaptismCard({ applicant, onClick }: BaptismCardProps) {
   const { mpFileUrl } = useRuntimeConfig();
-  const { info, checklist, completedCount, totalCount, isPaused, isFullyComplete } = applicant;
+  const { info, checklist, completedCount, totalCount, isPaused, isFullyComplete, endDate } = applicant;
   const displayName = getDisplayName(info.First_Name, info.Nickname);
 
   return (
@@ -51,7 +56,7 @@ export function BaptismCard({ applicant, onClick }: BaptismCardProps) {
     >
       <CardContent className="flex flex-col items-center px-3">
         {/* Status badges (top-right) */}
-        {(isFullyComplete || isPaused) && (
+        {(isFullyComplete || isPaused || endDate) && (
           <div className="absolute top-2 right-2 flex items-center gap-1">
             {isFullyComplete && (
               <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700">
@@ -61,6 +66,14 @@ export function BaptismCard({ applicant, onClick }: BaptismCardProps) {
             {isPaused && (
               <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] font-medium text-yellow-700">
                 Paused
+              </span>
+            )}
+            {endDate && (
+              <span
+                className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-700"
+                title={`End Date: ${formatEndDate(endDate)}`}
+              >
+                Ends {formatEndDate(endDate)}
               </span>
             )}
           </div>

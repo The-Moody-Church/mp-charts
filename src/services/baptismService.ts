@@ -197,6 +197,15 @@ export class BaptismService {
 
     const writeBackConfig = this.getWriteBackConfig();
 
+    // Check if this group participant record has a future End_Date (no active record)
+    const gpRecords = await this.mp!.getTableRecords<{ End_Date: string | null }>({
+      table: 'Group_Participants',
+      select: 'End_Date',
+      filter: `Group_Participant_ID = ${groupParticipantId}`,
+      top: 1
+    });
+    const endDate = gpRecords[0]?.End_Date ?? null;
+
     return {
       info,
       checklist,
@@ -204,6 +213,7 @@ export class BaptismService {
       totalCount: checklist.length,
       isPaused: hasPauseMilestone,
       isFullyComplete: checklist.every(c => c.status === 'complete'),
+      endDate,
       milestones: milestoneDetails,
       writeBackConfig,
     };
@@ -406,13 +416,43 @@ export class BaptismService {
 
     if (groupParticipants.length === 0) return [];
 
-    const participantIds = [...new Set(groupParticipants.map(gp => gp.Participant_ID))];
+    // Deduplicate by Participant_ID: prefer the record with no End_Date (active).
+    // If a participant only has records with future End_Dates, keep the latest one.
+    const bestByParticipant = new Map<number, GroupParticipantRecord>();
+    for (const gp of groupParticipants) {
+      const existing = bestByParticipant.get(gp.Participant_ID);
+      if (!existing) {
+        bestByParticipant.set(gp.Participant_ID, gp);
+      } else if (gp.End_Date === null && existing.End_Date !== null) {
+        bestByParticipant.set(gp.Participant_ID, gp);
+      } else if (gp.End_Date !== null && existing.End_Date !== null && gp.End_Date > existing.End_Date) {
+        bestByParticipant.set(gp.Participant_ID, gp);
+      }
+    }
+
+    // Track which participants have NO active (null End_Date) record
+    const participantsWithNullEndDate = new Set(
+      groupParticipants.filter(gp => gp.End_Date === null).map(gp => gp.Participant_ID)
+    );
+
+    const deduped = [...bestByParticipant.values()];
+
+    // Build map of Participant_ID → End_Date for participants that need an alert
+    // (only those with no active/null-End_Date record)
+    const endDateAlerts = new Map<number, string>();
+    for (const gp of deduped) {
+      if (!participantsWithNullEndDate.has(gp.Participant_ID) && gp.End_Date) {
+        endDateAlerts.set(gp.Participant_ID, gp.End_Date);
+      }
+    }
+
+    const participantIds = deduped.map(gp => gp.Participant_ID);
     const contacts = await this.getContactsForParticipants(participantIds);
 
-    const applicants = this.buildApplicantInfoList(groupParticipants, contacts);
+    const applicants = this.buildApplicantInfoList(deduped, contacts);
     if (applicants.length === 0) return [];
 
-    return this.assembleApplicantCards(applicants, isPaused);
+    return this.assembleApplicantCards(applicants, isPaused, endDateAlerts);
   }
 
   private async getContactsForParticipants(
@@ -505,7 +545,8 @@ export class BaptismService {
 
   private async assembleApplicantCards(
     applicants: BaptismApplicantInfo[],
-    isPaused: boolean
+    isPaused: boolean,
+    endDateAlerts: Map<number, string>
   ): Promise<BaptismCard[]> {
     const participantIds = [...new Set(applicants.map(a => a.Participant_ID))];
     const milestones = await this.fetchMilestones(participantIds);
@@ -520,6 +561,7 @@ export class BaptismService {
         totalCount: checklist.length,
         isPaused,
         isFullyComplete: checklist.every(c => c.status === 'complete'),
+        endDate: endDateAlerts.get(applicant.Participant_ID) ?? null,
       };
     });
   }

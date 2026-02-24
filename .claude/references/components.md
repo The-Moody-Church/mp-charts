@@ -8,13 +8,16 @@ This document provides detailed context about the `src/components/` folder struc
 src/components/
 ├── shared-actions/             # Shared server actions
 ├── ui/                         # shadcn/ui components (19 components)
+├── baptism-processing/         # Baptism applicant workflow
 ├── contact-logs/               # Contact log CRUD feature
 ├── contact-lookup/             # Contact search feature
 ├── contact-lookup-details/     # Contact details view
 ├── dashboard/                  # Executive dashboard feature
+├── membership-processing/      # Membership applicant workflow
 ├── tool/                       # Tool layout components (ToolContainer, ToolHeader, ToolFooter, ToolParamsDebug)
 ├── user-tools-debug/           # Debug: User permissions display (dev only)
 ├── user-menu/                  # User dropdown menu
+├── volunteer-processing/       # Volunteer onboarding workflow
 └── layout/                     # Layout components with barrel export
     ├── index.ts                # Barrel export for all layout components
     ├── auth-wrapper.tsx        # Authentication wrapper (Server Component)
@@ -39,12 +42,32 @@ src/components/
 
 | Folder | Purpose | Has Actions |
 |--------|---------|-------------|
+| `baptism-processing/` | Baptism applicant milestone tracking with pause/resume | Yes |
 | `contact-logs/` | Contact log CRUD with modal forms | Yes |
 | `contact-lookup/` | Contact search with results display | Yes |
 | `contact-lookup-details/` | Contact profile and logs view | Yes |
 | `dashboard/` | Executive dashboard with charts and filters | Yes |
+| `membership-processing/` | Membership applicant milestone tracking with completion | Yes |
 | `user-menu/` | User dropdown with sign-out | Yes |
+| `volunteer-processing/` | Volunteer onboarding with background checks, certifications, group assignment | Yes |
 | `tool/` | Tool layout components (ToolContainer, ToolHeader, ToolFooter, ToolParamsDebug) | No |
+
+### Processing Features — Shared Architecture
+
+All three processing features (`baptism-processing`, `membership-processing`, `volunteer-processing`) follow the same pattern:
+
+```
+feature-processing/
+├── index.ts                      # Barrel export
+├── actions.ts                    # Server actions calling service singleton
+├── feature-processing.tsx        # "use client" wrapper with tabs/grid + modal state
+├── feature-card.tsx              # "use client" card for grid display
+└── feature-detail-modal.tsx      # "use client" detail modal with milestones, quick actions
+```
+
+**Data flow**: Component → Server Action → Service (singleton) → MPHelper → Ministry Platform API
+
+**Common capabilities**: Contact photo upload (1MB limit), file attachments on milestones, deep link support (`?applicant=ID`), milestone progress checklist, "View in MP" links, bordered pill-style email/phone buttons.
 
 ### Debug Components (Development Only)
 
@@ -70,12 +93,15 @@ Actions are co-located with their feature components:
 
 | Feature | Actions File | Functions |
 |---------|--------------|-----------|
+| baptism-processing | `baptism-processing/actions.ts` | `getCurrentApplicants`, `getPausedApplicants`, `getApplicantDetail`, `createBaptismMilestone`, `updateBaptismMilestone`, `getBaptismMilestoneFiles`, `uploadApplicantPhoto`, `pauseApplicant`, `resumeApplicant` |
 | contact-logs | `contact-logs/actions.ts` | `getContactLogTypes`, `createContactLog`, `updateContactLog`, `deleteContactLog`, `getContactLogsByContactId`, `getContactLogById` |
 | contact-lookup | `contact-lookup/actions.ts` | `searchContacts` |
 | contact-lookup-details | `contact-lookup-details/actions.ts` | `getContactDetails`, `getContactLogsByContactId` |
 | dashboard | `dashboard/actions.ts` | `getDashboardMetrics`, `getFullRangeDashboardMetrics`, `refreshDashboardCache` |
+| membership-processing | `membership-processing/actions.ts` | `getApplicants`, `getApplicantDetail`, `createMembershipMilestone`, `updateMembershipMilestone`, `confirmMembershipCompletion`, `getMembershipMilestoneFiles`, `uploadApplicantPhoto` |
 | user-menu | `user-menu/actions.ts` | `handleSignOut` |
 | user-tools-debug | `user-tools-debug/actions.ts` | `getUserTools` |
+| volunteer-processing | `volunteer-processing/actions.ts` | `getInProcessVolunteers`, `getApprovedVolunteers`, `getVolunteerDetail`, `getMilestoneFiles`, `getCertificationFiles`, `getFormResponseFiles`, `createFormResponse`, `uploadVolunteerPhoto`, `createVolunteerMilestone`, `updateVolunteerMilestone`, `updateVolunteerCertification`, `updateVolunteerFormResponse`, `getApprovedGroupRoles`, `getApprovedGroupsList`, `assignVolunteerToGroup` |
 | **shared** | `shared-actions/user.ts` | `getCurrentUserProfile` |
 
 **Shared Actions Folder**: `src/components/shared-actions/` contains actions used across multiple features. See the README in that folder for guidelines on when to use shared vs co-located actions.
@@ -86,6 +112,9 @@ Actions are co-located with their feature components:
 // Feature components (use barrel exports)
 import { ContactLookup } from '@/components/contact-lookup';
 import { ContactLogs } from '@/components/contact-logs';
+import { BaptismProcessing } from '@/components/baptism-processing';
+import { MembershipProcessing } from '@/components/membership-processing';
+import { VolunteerProcessing } from '@/components/volunteer-processing';
 import { UserMenu } from '@/components/user-menu';
 
 // Tool components (use barrel export)
@@ -152,6 +181,27 @@ import { ToolParamsDebug } from '@/components/tool';
 
 ## Quick Reference: Component Responsibilities
 
+### baptism-processing
+- **Purpose**: Track baptism applicants through a 9-step milestone workflow
+- **Components**: `BaptismProcessing` (tabs + grid), `BaptismCard` (grid card), `BaptismDetailModal` (detail view)
+- **Features**: Two tabs (Current / Paused), pause/resume workflow, milestone checklist with progress bar, approval decision after interview, deep link support, contact photo upload, file attachments, end date alert for group participants with future End_Date
+- **DTOs**: `BaptismApplicantInfo`, `BaptismChecklistItem`, `BaptismCard`, `BaptismDetail`, `BaptismMilestoneDetail`, `BaptismMilestoneFileInfo`, `BaptismWriteBackConfig`
+- **Environment**: 13 env vars (group IDs, program ID, role ID, 9 milestone IDs, pause milestone ID)
+
+### membership-processing
+- **Purpose**: Track membership applicants through an 8-step milestone workflow
+- **Components**: `MembershipProcessing` (grid), `MembershipCard` (grid card), `MembershipDetailModal` (detail view)
+- **Features**: Single group (no tabs), milestone checklist with progress bar, completion confirmation (sets End_Date on Group_Participant), deep link support, contact photo upload, file attachments
+- **DTOs**: `MembershipApplicantInfo`, `MembershipChecklistItem`, `MembershipCard`, `MembershipDetail`, `MembershipMilestoneDetail`, `MembershipMilestoneFileInfo`, `MembershipWriteBackConfig`
+- **Environment**: 10 env vars (group ID, program ID, 8 milestone IDs)
+
+### volunteer-processing
+- **Purpose**: Track volunteer onboarding with background checks, certifications, and group assignment
+- **Components**: `VolunteerProcessing` (tabs + grid), `VolunteerCard` (grid card), `VolunteerDetailModal` (detail view)
+- **Features**: Two tabs (In Process / Approved Active), rich checklist statuses (complete, in_progress, expired, expiring_soon, not_started, presumed_complete), background check tracking, certification expiration monitoring (30-day warning), form response creation, group assignment with role selection, group filter dropdown on approved tab, deep link support, contact photo upload
+- **DTOs**: `VolunteerInfo`, `ChecklistItemStatus`, `VolunteerCard`, `VolunteerDetail`, `BackgroundCheckDetail`, `CertificationDetail`, `FormResponseDetail`, `MilestoneDetail`, `MilestoneFileInfo`, `WriteBackConfig`, `GroupFilterOption`, `GroupRoleOption`, `ApprovedVolunteersResult`
+- **Environment**: 12+ env vars (group IDs, program ID, milestone IDs, form ID)
+
 ### contact-logs
 - **Purpose**: CRUD interface for contact log entries
 - **Features**: Create/edit modals, delete confirmation, log type filtering
@@ -193,10 +243,13 @@ Components interact with these service classes:
 
 | Service | Location | Used By |
 |---------|----------|---------|
+| BaptismService | `@/services/baptismService` | baptism-processing |
 | ContactService | `@/services/contactService` | contact-lookup, contact-lookup-details |
 | ContactLogService | `@/services/contactLogService` | contact-logs |
+| DashboardService | `@/services/dashboardService` | dashboard |
+| MembershipService | `@/services/membershipService` | membership-processing |
 | ToolService | `@/services/toolService` | user-tools-debug |
 | UserService | `@/services/userService` | user-menu |
-| DashboardService | `@/services/dashboardService` | dashboard |
+| VolunteerService | `@/services/volunteerService` | volunteer-processing |
 
-All services ultimately use `MPHelper` from `@/lib/providers/ministry-platform` for API calls.
+All services are singletons using `getInstance()` and ultimately use `MPHelper` from `@/lib/providers/ministry-platform` for API calls.
