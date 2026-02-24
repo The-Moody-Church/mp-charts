@@ -10,7 +10,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 
 ### Features
 - [Redesign Dashboard Layout: Discipleship Pathway Sections (#42)](#redesign-dashboard-layout-discipleship-pathway-sections-42)
-- [Baptism Processing (#17)](#baptism-processing-17)
+- ~~[Baptism Processing (#17)](#baptism-processing-17)~~ ✅
 - [Membership Applications (#47)](#membership-applications-47)
 - [Pastoral Interface for Contact Logs (#19)](#pastoral-interface-for-contact-logs-19)
 - [Volunteer Processing Search Bar (#49)](#volunteer-processing-search-bar-49)
@@ -53,7 +53,7 @@ Redesign the executive dashboard from a flat chart grid into a structured layout
 
 Full specification with data sources, MP schema relationships, phased implementation plan, and layout wireframe: [`.claude/draft-issue-dashboard-redesign.md`](draft-issue-dashboard-redesign.md)
 
-### Baptism Processing ([#17](https://github.com/The-Moody-Church/mp-charts/issues/17))
+### ~~Baptism Processing ([#17](https://github.com/The-Moody-Church/mp-charts/issues/17))~~ ✅ COMPLETED
 A dedicated interface for tracking and managing the baptism journey/process in Ministry Platform. Mirrors the volunteer processing pattern but simplified — purely milestone-based with 9 ordered steps.
 
 **Implementation plan**: [`.claude/plan-baptism-processing.md`](plan-baptism-processing.md)
