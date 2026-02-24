@@ -41,6 +41,8 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Images are not showing on the volunteers. Perhaps a permssions issue? (#30)](#images-are-not-showing-on-the-volunteers-perhaps-a-permssions-issue-30)~~ ✅
 - ~~[Links to MP are not showing in production in the volunteer processing pages. (#31)](#links-to-mp-are-not-showing-in-production-in-the-volunteer-processing-pages-31)~~ ✅
 - ~~[Review upstream pr 39 (#34)](#review-upstream-pr-39-34)~~ ✅
+- [IDOR Mitigation — Per-Record Authorization (#57)](#idor-mitigation-per-record-authorization-57)
+- [Role-Based Access Control (RBAC) (#58)](#role-based-access-control-rbac-58)
 
 ---
 
@@ -177,7 +179,7 @@ Same root cause as #30. Fixed in the same PR.
 ### ~~Review upstream pr 39 ([#34](https://github.com/The-Moody-Church/mp-charts/issues/34))~~ ✅ COMPLETED
 Compare to changes already made in our development and cherrypick individual changes or merge all of appropriate.
 
-### IDOR Mitigation — Per-Record Authorization
+### IDOR Mitigation — Per-Record Authorization ([#57](https://github.com/The-Moody-Church/mp-charts/issues/57))
 Server actions accept record IDs from clients (contactId, participantId, etc.) and only check session presence — not whether the requesting user should access that specific record. An authenticated user could enumerate IDs to access any contact's details, volunteer background check data, or membership information.
 
 **Options to evaluate:**
@@ -187,7 +189,7 @@ Server actions accept record IDs from clients (contactId, participantId, etc.) a
 
 From security audit finding #10 (2026-02-24).
 
-### Role-Based Access Control (RBAC)
+### Role-Based Access Control (RBAC) ([#58](https://github.com/The-Moody-Church/mp-charts/issues/58))
 All authenticated users currently have identical access to all features and data. The proxy only checks session cookie presence, not roles. Any church member with MP OAuth access can view volunteer background checks, baptism applicant data, membership records, and the executive dashboard.
 
 **Options to evaluate:**
