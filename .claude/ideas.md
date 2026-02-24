@@ -176,3 +176,23 @@ Same root cause as #30. Fixed in the same PR.
 
 ### ~~Review upstream pr 39 ([#34](https://github.com/The-Moody-Church/mp-charts/issues/34))~~ ✅ COMPLETED
 Compare to changes already made in our development and cherrypick individual changes or merge all of appropriate.
+
+### IDOR Mitigation — Per-Record Authorization
+Server actions accept record IDs from clients (contactId, participantId, etc.) and only check session presence — not whether the requesting user should access that specific record. An authenticated user could enumerate IDs to access any contact's details, volunteer background check data, or membership information.
+
+**Options to evaluate:**
+1. **Per-user access tokens**: Use the user's OIDC access token instead of client credentials so Ministry Platform enforces its own security model per-user. Requires token refresh logic and per-user MPHelper instances.
+2. **Relationship checks**: Verify the requesting user's relationship to the record (e.g., are they a group leader for this volunteer's group?).
+3. **Audit logging** (interim): Log user ID + accessed record IDs for abuse detection while a proper authorization model is designed.
+
+From security audit finding #10 (2026-02-24).
+
+### Role-Based Access Control (RBAC)
+All authenticated users currently have identical access to all features and data. The proxy only checks session cookie presence, not roles. Any church member with MP OAuth access can view volunteer background checks, baptism applicant data, membership records, and the executive dashboard.
+
+**Options to evaluate:**
+1. **MP Security Groups**: Check the user's Ministry Platform security groups at login, store group memberships in the session, and gate features accordingly (e.g., only "Volunteer Coordinators" group can access volunteer processing).
+2. **Page-level authorization**: Add role checks in server actions before data access.
+3. **Leverage `$userId` more**: Use access-token-based MPHelper instances so MP's built-in permission model governs data access transparently.
+
+From security audit finding #13 (2026-02-24).
