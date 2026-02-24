@@ -233,42 +233,21 @@ export class MembershipService {
   }
 
   // ---------------------------------------------------------------
-  // Complete Membership (creates milestone 48 + ends group participation)
+  // End Group Participation (sets End_Date on Group_Participant)
   // ---------------------------------------------------------------
 
-  public async completeMembership(params: {
-    participantId: number;
+  public async endGroupParticipation(params: {
     groupParticipantId: number;
-    date?: string;
-    notes?: string;
     userId?: number;
-  }): Promise<number> {
-    const { participantId, groupParticipantId, date, notes, userId } = params;
-    const registeredMilestoneId = getEnvId('MEMBERSHIP_REGISTERED_MEMBER_MILESTONE_ID');
-    const programId = getEnvId('MEMBERSHIP_PROGRAM_ID');
-
-    if (!registeredMilestoneId || !programId) {
-      throw new Error('Membership completion configuration not complete');
-    }
-
-    // Create the Registered Member milestone
-    const milestoneRecordId = await this.createMilestone({
-      Participant_ID: participantId,
-      Milestone_ID: registeredMilestoneId,
-      Program_ID: programId,
-      Date_Accomplished: date,
-      Notes: notes,
-    }, userId);
-
-    // End group participation (removes from active list)
-    const now = new Date().toISOString();
+  }): Promise<void> {
+    const { groupParticipantId, userId } = params;
+    // Format as Central Time so MP stores the correct local date
+    const now = new Date().toLocaleString('sv-SE', { timeZone: 'America/Chicago' }).replace(' ', 'T');
     await this.mp!.updateTableRecords(
       'Group_Participants',
       [{ Group_Participant_ID: groupParticipantId, End_Date: now }],
       { $userId: userId }
     );
-
-    return milestoneRecordId;
   }
 
   // ---------------------------------------------------------------
@@ -499,7 +478,6 @@ export class MembershipService {
     return {
       programId: getEnvId('MEMBERSHIP_PROGRAM_ID'),
       groupId: getEnvId('MEMBERSHIP_GROUP_ID'),
-      registeredMemberMilestoneId: getEnvId('MEMBERSHIP_REGISTERED_MEMBER_MILESTONE_ID'),
       milestoneIds,
     };
   }

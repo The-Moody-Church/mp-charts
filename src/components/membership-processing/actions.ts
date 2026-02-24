@@ -96,46 +96,27 @@ export async function updateMembershipMilestone(formData: FormData): Promise<{ s
   }
 }
 
-export async function completeMembership(formData: FormData): Promise<{ success: boolean; error?: string }> {
+export async function confirmMembershipCompletion(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
     const session = await requireSession();
 
-    const participantId = Number(formData.get("Participant_ID"));
     const groupParticipantId = Number(formData.get("Group_Participant_ID"));
-    const date = formData.get("Date_Accomplished") as string || undefined;
-    const notes = formData.get("Notes") as string || undefined;
-
-    if (!participantId || !groupParticipantId) {
-      return { success: false, error: "Missing required fields" };
+    if (!groupParticipantId || isNaN(groupParticipantId)) {
+      return { success: false, error: "Missing Group_Participant_ID" };
     }
 
     const userId = getMpUserId(session);
 
     const service = await MembershipService.getInstance();
-    const milestoneRecordId = await service.completeMembership({
-      participantId,
+    await service.endGroupParticipation({
       groupParticipantId,
-      date,
-      notes,
       userId,
     });
 
-    // Attach files if included
-    const files: File[] = [];
-    for (const [key, value] of formData.entries()) {
-      if (key === "files" && value instanceof File && value.size > 0) {
-        files.push(value);
-      }
-    }
-
-    if (files.length > 0) {
-      await service.uploadDocument('Participant_Milestones', milestoneRecordId, files, userId);
-    }
-
     return { success: true };
   } catch (error) {
-    console.error("Error completing membership:", error);
-    return { success: false, error: "Failed to complete membership" };
+    console.error("Error confirming membership completion:", error);
+    return { success: false, error: "Failed to confirm membership completion" };
   }
 }
 

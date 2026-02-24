@@ -1,5 +1,17 @@
 # Work in Progress
 
+## Membership Processing (2026-02-23) — Branch: `feature/membership-processing`
+
+### Status: ⚠️ IN PROGRESS (PR #55 open, awaiting merge)
+
+Feature complete with completion refactor. All 8 milestones treated uniformly via Quick Actions. "Confirm Membership Completion" button end-dates Group_Participant (Central Time). Applicants with End_Date automatically removed from view.
+
+**PR**: https://github.com/The-Moody-Church/mp-charts/pull/55
+
+**Files**: 12 new, 8+ modified. Key files: `src/services/membershipService.ts`, `src/components/membership-processing/`, `src/lib/dto/membership-processing.ts`
+
+---
+
 ## Upstream PR Review (2026-02-20) — Issues #22, #34, #35
 
 ### Status: ✅ COMPLETED (Full sync achieved)

@@ -111,3 +111,38 @@ Route (app)
 - `.claude/plan-baptism-processing.md` — updated page pattern note
 - `.claude/draft-issue-dashboard-redesign.md` — added caching architecture section
 - `.claude/session-summary-2026-02-23.md` — this file
+
+---
+
+## Membership Processing: Completion Refactor (Branch: `feature/membership-processing`)
+
+### Task
+Tested the membership processing feature (tests 1-3 passed), then refactored the completion workflow per user feedback:
+1. Decouple the "Registered Member" milestone from the group participation end-dating
+2. Treat all 8 milestones uniformly (including Registered Member) via Quick Actions
+3. Add a standalone "Confirm Membership Completion" button to end-date the Group_Participant
+
+### Changes Made
+
+**`src/lib/dto/membership-processing.ts`**:
+- Removed `registeredMemberMilestoneId` from `MembershipWriteBackConfig` (no longer needed)
+
+**`src/services/membershipService.ts`**:
+- Replaced `completeMembership()` (created milestone + end-dated GP) with `endGroupParticipation()` (only sets End_Date)
+- End_Date formatted in Central Time via `toLocaleString('sv-SE', { timeZone: 'America/Chicago' })` to avoid UTC offset in MP
+- Removed `registeredMemberMilestoneId` from `getWriteBackConfig()`
+
+**`src/components/membership-processing/actions.ts`**:
+- Replaced `completeMembership` server action with `confirmMembershipCompletion` — only needs `Group_Participant_ID`
+- Removed milestone creation, file handling, and `Participant_ID`/`Date_Accomplished`/`Notes` params
+
+**`src/components/membership-processing/membership-detail-modal.tsx`**:
+- Removed: "Complete Membership" green box (date/notes/file form), `completeConfirm`/`completeDate`/`completeNotes`/`completeFileInputRef` state, `handleCompleteMembership` handler, `priorMilestonesComplete`/`showCompleteMembership` computed values
+- Added: "Confirm Membership Completion" button bar (right-aligned, between header and content), inline confirmation ("Remove from processing group?" → Yes/Cancel)
+- Ungated `registered_member` from Quick Actions dropdown — all 8 milestones now selectable
+- Updated "all complete" message (removed "use Complete Membership above" reference)
+
+### PR
+- **PR #55**: https://github.com/The-Moody-Church/mp-charts/pull/55
+- Branch: `feature/membership-processing` → `main`
+- Build passes, lint clean (pre-existing issues in signin page and volunteer modal unrelated)

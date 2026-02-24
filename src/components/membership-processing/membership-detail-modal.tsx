@@ -23,7 +23,7 @@ import {
   getApplicantDetail,
   createMembershipMilestone,
   updateMembershipMilestone,
-  completeMembership,
+  confirmMembershipCompletion,
   getMembershipMilestoneFiles,
   uploadApplicantPhoto,
 } from "./actions";
@@ -97,13 +97,10 @@ export function MembershipDetailModal({
   const [editNotes, setEditNotes] = useState("");
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
-  const [completeConfirm, setCompleteConfirm] = useState(false);
-  const [completeDate, setCompleteDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [completeNotes, setCompleteNotes] = useState("");
+  const [confirmingCompletion, setConfirmingCompletion] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
-  const completeFileInputRef = useRef<HTMLInputElement>(null);
   const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1 MB
 
   useEffect(() => {
@@ -116,8 +113,7 @@ export function MembershipDetailModal({
       setLinkCopied(false);
       setEditingKey(null);
       setEditError(null);
-      setCompleteConfirm(false);
-      setCompleteNotes("");
+      setConfirmingCompletion(false);
       getApplicantDetail(
         applicant.info.Contact_ID,
         applicant.info.Participant_ID,
@@ -207,34 +203,22 @@ export function MembershipDetailModal({
     }
   };
 
-  const handleCompleteMembership = async () => {
+  const handleConfirmCompletion = async () => {
     if (!applicant) return;
-    setActionLoading("complete-membership");
+    setActionLoading("confirm-completion");
     try {
       const formData = new FormData();
-      formData.set("Participant_ID", String(applicant.info.Participant_ID));
       formData.set("Group_Participant_ID", String(applicant.info.Group_Participant_ID));
-      formData.set("Date_Accomplished", new Date(completeDate + "T12:00:00").toISOString());
-      if (completeNotes) {
-        formData.set("Notes", completeNotes);
-      }
-      const files = completeFileInputRef.current?.files;
-      if (files) {
-        for (const file of Array.from(files)) {
-          formData.append("files", file);
-        }
-      }
-      const result = await completeMembership(formData);
+      const result = await confirmMembershipCompletion(formData);
       if (!result.success) {
-        console.error("Failed to complete membership:", result.error);
+        console.error("Failed to confirm membership completion:", result.error);
         return;
       }
-      setCompleteConfirm(false);
-      setCompleteNotes("");
+      setConfirmingCompletion(false);
       onUpdate();
       onOpenChange(false);
     } catch (err) {
-      console.error("Failed to complete membership:", err);
+      console.error("Failed to confirm membership completion:", err);
     } finally {
       setActionLoading(null);
     }
@@ -362,13 +346,6 @@ export function MembershipDetailModal({
   const mpBaseOrigin = mpFileUrl ? new URL(mpFileUrl).origin : null;
   const mpParticipantUrl = mpBaseOrigin ? `${mpBaseOrigin}/mp/355/${info.Participant_ID}` : null;
 
-  // Check if all milestones EXCEPT registered_member are complete
-  const priorMilestonesComplete = checklist
-    .filter(c => c.key !== "registered_member")
-    .every(c => c.status === "complete");
-  const registeredMilestone = checklist.find(c => c.key === "registered_member");
-  const showCompleteMembership = priorMilestonesComplete && registeredMilestone && registeredMilestone.status !== "complete";
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -476,6 +453,43 @@ export function MembershipDetailModal({
           </div>
         </DialogHeader>
 
+        {/* Confirm Membership Completion action bar */}
+        {!loading && detail && (
+          <div className="flex items-center justify-end gap-2 -mt-2">
+            {!confirmingCompletion ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setConfirmingCompletion(true)}
+                className="text-xs border-green-300 text-green-700 hover:bg-green-50 hover:text-green-800"
+              >
+                Confirm Membership Completion
+              </Button>
+            ) : (
+              <>
+                <span className="text-xs text-muted-foreground">Remove from processing group?</span>
+                <Button
+                  size="sm"
+                  onClick={handleConfirmCompletion}
+                  disabled={actionLoading === "confirm-completion"}
+                  className="text-xs bg-green-600 hover:bg-green-700"
+                >
+                  {actionLoading === "confirm-completion" ? "Completing..." : "Yes, Confirm"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setConfirmingCompletion(false)}
+                  disabled={actionLoading === "confirm-completion"}
+                  className="text-xs"
+                >
+                  Cancel
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+
         {loading ? (
           <div className="py-8 text-center text-muted-foreground">
             Loading applicant details...
@@ -500,79 +514,6 @@ export function MembershipDetailModal({
                     </svg>
                     {info.Mobile_Phone}
                   </a>
-                )}
-              </div>
-            )}
-
-            {/* Complete Membership section */}
-            {showCompleteMembership && (
-              <div className="space-y-2 rounded-lg border-2 border-green-300 bg-green-50/50 p-3">
-                <h3 className="text-sm font-semibold text-green-800">Complete Membership</h3>
-                <p className="text-xs text-green-700">
-                  All prior milestones are complete. Completing membership will create the Registered Member milestone and end group participation.
-                </p>
-                {!completeConfirm ? (
-                  <Button
-                    size="sm"
-                    onClick={() => setCompleteConfirm(true)}
-                    className="bg-green-600 hover:bg-green-700"
-                  >
-                    Complete Membership
-                  </Button>
-                ) : (
-                  <div className="space-y-2 pt-1">
-                    <div className="flex gap-3">
-                      <div className="w-36">
-                        <Label htmlFor="complete-date" className="text-xs">Date</Label>
-                        <Input
-                          id="complete-date"
-                          type="date"
-                          value={completeDate}
-                          onChange={(e) => setCompleteDate(e.target.value)}
-                          className="text-xs h-8"
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <Label htmlFor="complete-notes" className="text-xs">Notes (optional)</Label>
-                        <Textarea
-                          id="complete-notes"
-                          value={completeNotes}
-                          onChange={(e) => setCompleteNotes(e.target.value)}
-                          placeholder="Optional notes..."
-                          className="text-xs"
-                          rows={2}
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <Label htmlFor="complete-file" className="text-xs">Attachment (optional)</Label>
-                      <Input
-                        id="complete-file"
-                        type="file"
-                        ref={completeFileInputRef}
-                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                        className="text-xs h-8"
-                      />
-                    </div>
-                    <div className="flex items-center gap-2 pt-1">
-                      <Button
-                        size="sm"
-                        onClick={handleCompleteMembership}
-                        disabled={actionLoading === "complete-membership"}
-                        className="bg-green-600 hover:bg-green-700"
-                      >
-                        {actionLoading === "complete-membership" ? "Completing..." : "Confirm Complete Membership"}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setCompleteConfirm(false)}
-                        disabled={actionLoading === "complete-membership"}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
                 )}
               </div>
             )}
@@ -821,12 +762,12 @@ export function MembershipDetailModal({
                 </div>
                 {(() => {
                   const availableItems = detail?.writeBackConfig
-                    ? checklist.filter((item) => item.status === "not_started" && item.key !== "registered_member")
+                    ? checklist.filter((item) => item.status === "not_started")
                     : [];
                   if (availableItems.length === 0) {
                     return (
                       <p className="text-xs text-muted-foreground">
-                        All milestones are complete (use Complete Membership above for the final step).
+                        All milestones are complete.
                       </p>
                     );
                   }

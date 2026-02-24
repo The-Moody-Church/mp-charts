@@ -48,7 +48,6 @@ export interface MembershipMilestoneFileInfo {
 export interface MembershipWriteBackConfig {
   programId: number | null;
   groupId: number | null;
-  registeredMemberMilestoneId: number | null;
   milestoneIds: Record<string, number | null>;
 }
 
