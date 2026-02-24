@@ -1,5 +1,15 @@
 # Work in Progress
 
+## Shared Processing Components (2026-02-24) — Issue #60
+
+### Status: ✅ COMPLETED
+
+Extracted ~1,400 lines of duplicated code across volunteer, baptism, and membership processing into shared components. Created 12 new files: base DTOs (`processing-shared.ts`), utilities (`processing-utils.ts`), shared server actions (`shared-actions/processing.ts`), and 8 shared UI components in `src/components/processing/` (PersonAvatar, DetailModalPhotoUpload, ContactLinks, ProcessingGrid, FileTypeIcon, MilestoneExpandedView, MilestoneEditForm, QuickActionsPanel). Modified 16 existing files to use shared components. Build and lint pass clean.
+
+**Key files**: `src/components/processing/`, `src/lib/processing-utils.ts`, `src/lib/dto/processing-shared.ts`, `src/components/shared-actions/processing.ts`
+
+---
+
 ## Baptism Processing (2026-02-23) — Branch: `feature/baptism-processing`
 
 ### Status: ✅ COMPLETED — Merged to main (PR #54)

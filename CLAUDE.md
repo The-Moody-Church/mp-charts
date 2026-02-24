@@ -269,6 +269,7 @@ The web layout wraps `AuthWrapper` (which uses `headers()`) in a Suspense bounda
 src/components/
 ├── shared-actions/       # Shared actions used across features
 ├── ui/                   # shadcn/ui components
+├── processing/           # Shared processing UI components (barrel export)
 ├── layout/               # Layout components with barrel export (index.ts)
 │   ├── auth-wrapper.tsx  # Authentication wrapper (Server Component)
 │   ├── header.tsx        # App header with navigation
@@ -341,8 +342,15 @@ import { searchContacts } from './actions';
 // Layout components (barrel export)
 import { AuthWrapper, Header, Sidebar, DynamicBreadcrumb } from '@/components/layout';
 
+// Shared processing components (barrel export)
+import { PersonAvatar, ProcessingGrid, MilestoneEditForm } from '@/components/processing';
+
+// Shared processing utilities
+import { getDisplayName, formatDate, MAX_FILE_SIZE } from '@/lib/processing-utils';
+
 // Shared actions (used across multiple features)
 import { getCurrentUserProfile } from '@/components/shared-actions/user';
+import { extractValidatedFiles, uploadContactPhoto } from '@/components/shared-actions/processing';
 
 // Named exports (required)
 export function MyComponent() { ... }  // ✅ Correct

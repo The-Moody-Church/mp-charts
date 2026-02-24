@@ -1,13 +1,6 @@
-export interface VolunteerInfo {
-  Contact_ID: number;
-  Participant_ID: number;
-  Nickname: string | null;
-  Last_Name: string;
-  First_Name: string;
-  Image_GUID: string | null;
-  Group_Participant_ID: number;
-  Start_Date: string;
-}
+import { BasePersonInfo, BaseCardData, BaseFileInfo, BaseMilestoneDetail } from './processing-shared';
+
+export type VolunteerInfo = BasePersonInfo;
 
 export interface ChecklistItemStatus {
   key: string;
@@ -19,11 +12,7 @@ export interface ChecklistItemStatus {
   detail: string | null;
 }
 
-export interface VolunteerCard {
-  info: VolunteerInfo;
-  checklist: ChecklistItemStatus[];
-  completedCount: number;
-  totalCount: number;
+export interface VolunteerCard extends BaseCardData<VolunteerInfo, ChecklistItemStatus> {
   fullyApproved: boolean;
   elderApprovedTeacher: boolean;
   groupIds: number[];
@@ -73,21 +62,11 @@ export interface FormResponseDetail {
   type: 'application' | 'child_protection';
 }
 
-export interface MilestoneDetail {
-  Participant_Milestone_ID: number;
-  Milestone_ID: number;
-  Date_Accomplished: string | null;
-  Notes: string | null;
+export interface MilestoneDetail extends BaseMilestoneDetail {
   type: 'interview' | 'reference' | 'fully_approved' | 'elder_approved_teacher';
 }
 
-export interface MilestoneFileInfo {
-  fileId: number;
-  fileName: string;
-  fileUrl: string;
-  isPdf: boolean;
-  isImage: boolean;
-}
+export type MilestoneFileInfo = BaseFileInfo;
 
 export interface WriteBackConfig {
   applicationFormId: number | null;

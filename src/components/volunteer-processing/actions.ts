@@ -4,9 +4,7 @@ import { requireSession, getMpUserId } from "@/lib/auth-helpers";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { VolunteerService } from "@/services/volunteerService";
 import { VolunteerCard, VolunteerDetail, MilestoneFileInfo, ApprovedVolunteersResult, GroupRoleOption, GroupFilterOption } from "@/lib/dto";
-
-const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-const ALLOWED_DOCUMENT_TYPES = [...ALLOWED_IMAGE_TYPES, 'application/pdf'];
+import { extractValidatedFiles, extractValidatedFilesResult, uploadContactPhoto } from "@/components/shared-actions/processing";
 
 export async function getInProcessVolunteers(): Promise<VolunteerCard[]> {
   try {
@@ -91,16 +89,7 @@ export async function createFormResponse(formData: FormData): Promise<void> {
       Response_Date: formData.get("Response_Date") as string || undefined,
     }, userId);
 
-    // If files were included, attach them to the newly created form response
-    const files: File[] = [];
-    for (const [key, value] of formData.entries()) {
-      if (key === "files" && value instanceof File && value.size > 0) {
-        if (!ALLOWED_DOCUMENT_TYPES.includes(value.type)) {
-          throw new Error(`Invalid file type: ${value.type}. Allowed: JPEG, PNG, GIF, WebP, PDF`);
-        }
-        files.push(value);
-      }
-    }
+    const files = await extractValidatedFiles(formData);
 
     if (files.length > 0) {
       await service.uploadDocument('Form_Responses', newFormResponseId, files, userId);
@@ -112,38 +101,7 @@ export async function createFormResponse(formData: FormData): Promise<void> {
 }
 
 export async function uploadVolunteerPhoto(formData: FormData): Promise<{ success: boolean; error?: string }> {
-  try {
-    const session = await requireSession();
-    enforceRateLimit(session.user.id, "upload");
-
-    const contactId = Number(formData.get("Contact_ID"));
-    if (!contactId || isNaN(contactId)) {
-      return { success: false, error: "Invalid Contact_ID" };
-    }
-
-    const file = formData.get("photo");
-    if (!(file instanceof File) || file.size === 0) {
-      return { success: false, error: "No file provided" };
-    }
-
-    const MAX_FILE_SIZE = 1 * 1024 * 1024;
-    if (file.size > MAX_FILE_SIZE) {
-      return { success: false, error: `File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum 1 MB.` };
-    }
-
-    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-      return { success: false, error: "Invalid file type. Allowed: JPEG, PNG, GIF, WebP" };
-    }
-
-    const userId = getMpUserId(session);
-
-    const service = await VolunteerService.getInstance();
-    await service.uploadContactPhoto(contactId, file, userId);
-    return { success: true };
-  } catch (error) {
-    console.error("Error uploading volunteer photo:", error);
-    return { success: false, error: "Failed to upload photo" };
-  }
+  return uploadContactPhoto(formData, () => VolunteerService.getInstance());
 }
 
 export async function createVolunteerMilestone(formData: FormData): Promise<void> {
@@ -161,16 +119,7 @@ export async function createVolunteerMilestone(formData: FormData): Promise<void
       Notes: formData.get("Notes") as string || undefined,
     }, userId);
 
-    // If files were included, attach them to the newly created milestone
-    const files: File[] = [];
-    for (const [key, value] of formData.entries()) {
-      if (key === "files" && value instanceof File && value.size > 0) {
-        if (!ALLOWED_DOCUMENT_TYPES.includes(value.type)) {
-          throw new Error(`Invalid file type: ${value.type}. Allowed: JPEG, PNG, GIF, WebP, PDF`);
-        }
-        files.push(value);
-      }
-    }
+    const files = await extractValidatedFiles(formData);
 
     if (files.length > 0) {
       await service.uploadDocument('Participant_Milestones', newMilestoneId, files, userId);
@@ -200,19 +149,11 @@ export async function updateVolunteerMilestone(formData: FormData): Promise<{ su
       Notes: formData.get("Notes") as string || undefined,
     }, userId);
 
-    // If files were included, attach them to the milestone
-    const files: File[] = [];
-    for (const [key, value] of formData.entries()) {
-      if (key === "files" && value instanceof File && value.size > 0) {
-        if (!ALLOWED_DOCUMENT_TYPES.includes(value.type)) {
-          return { success: false, error: `Invalid file type: ${value.type}. Allowed: JPEG, PNG, GIF, WebP, PDF` };
-        }
-        files.push(value);
-      }
-    }
+    const result = await extractValidatedFilesResult(formData);
+    if ("error" in result) return { success: false, error: result.error };
 
-    if (files.length > 0) {
-      await service.uploadDocument('Participant_Milestones', milestoneRecordId, files, userId);
+    if (result.files.length > 0) {
+      await service.uploadDocument('Participant_Milestones', milestoneRecordId, result.files, userId);
     }
 
     return { success: true };
@@ -241,19 +182,11 @@ export async function updateVolunteerCertification(formData: FormData): Promise<
       Notes: formData.get("Notes") as string || undefined,
     }, userId);
 
-    // If files were included, attach them to the certification
-    const files: File[] = [];
-    for (const [key, value] of formData.entries()) {
-      if (key === "files" && value instanceof File && value.size > 0) {
-        if (!ALLOWED_DOCUMENT_TYPES.includes(value.type)) {
-          return { success: false, error: `Invalid file type: ${value.type}. Allowed: JPEG, PNG, GIF, WebP, PDF` };
-        }
-        files.push(value);
-      }
-    }
+    const result = await extractValidatedFilesResult(formData);
+    if ("error" in result) return { success: false, error: result.error };
 
-    if (files.length > 0) {
-      await service.uploadDocument('Participant_Certifications', certId, files, userId);
+    if (result.files.length > 0) {
+      await service.uploadDocument('Participant_Certifications', certId, result.files, userId);
     }
 
     return { success: true };
@@ -281,19 +214,11 @@ export async function updateVolunteerFormResponse(formData: FormData): Promise<{
       Response_Date: formData.get("Response_Date") as string || undefined,
     }, userId);
 
-    // If files were included, attach them to the form response
-    const files: File[] = [];
-    for (const [key, value] of formData.entries()) {
-      if (key === "files" && value instanceof File && value.size > 0) {
-        if (!ALLOWED_DOCUMENT_TYPES.includes(value.type)) {
-          return { success: false, error: `Invalid file type: ${value.type}. Allowed: JPEG, PNG, GIF, WebP, PDF` };
-        }
-        files.push(value);
-      }
-    }
+    const result = await extractValidatedFilesResult(formData);
+    if ("error" in result) return { success: false, error: result.error };
 
-    if (files.length > 0) {
-      await service.uploadDocument('Form_Responses', frId, files, userId);
+    if (result.files.length > 0) {
+      await service.uploadDocument('Form_Responses', frId, result.files, userId);
     }
 
     return { success: true };

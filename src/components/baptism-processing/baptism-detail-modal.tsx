@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
-import Image from "next/image";
 import {
   Dialog,
   DialogContent,
@@ -10,10 +9,17 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { BaptismCard as BaptismCardData, BaptismDetail, BaptismChecklistItem, BaptismMilestoneFileInfo, BaptismMilestoneDetail } from "@/lib/dto";
+import { getDisplayName, formatDate, MAX_FILE_SIZE } from "@/lib/processing-utils";
+import {
+  DetailModalPhotoUpload,
+  ContactLinks,
+  MilestoneExpandedView,
+  MilestoneEditForm,
+  QuickActionsPanel,
+} from "@/components/processing";
 import {
   getApplicantDetail,
   createBaptismMilestone,
@@ -33,30 +39,6 @@ interface BaptismDetailModalProps {
   isCurrentTab?: boolean;
 }
 
-function getDisplayName(firstName: string, nickname: string | null): string {
-  return nickname && nickname.trim() ? nickname : firstName;
-}
-
-function getInitials(firstName: string, nickname: string | null, lastName: string): string {
-  const displayFirst = getDisplayName(firstName, nickname);
-  const first = displayFirst?.charAt(0)?.toUpperCase() || "";
-  const last = lastName?.charAt(0)?.toUpperCase() || "";
-  return first + last;
-}
-
-function getImageUrl(baseUrl: string, imageGuid: string): string {
-  return `${baseUrl}/${imageGuid}?$thumbnail=true`;
-}
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return "\u2014";
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
 
 function StatusBadge({ item }: { item: BaptismChecklistItem }) {
   if (item.status === "complete") {
@@ -104,7 +86,6 @@ export function BaptismDetailModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
-  const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1 MB
 
   useEffect(() => {
     if (open && applicant) {
@@ -405,59 +386,16 @@ export function BaptismDetailModal({
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-4">
-            {/* Clickable photo for upload */}
-            <div
-              className="w-14 h-14 rounded-full overflow-hidden relative flex-shrink-0 cursor-pointer group"
-              onClick={() => photoInputRef.current?.click()}
-              title={photoUploading ? "Uploading..." : "Upload photo"}
-            >
-              {currentImageGuid && mpFileUrl ? (
-                <>
-                  <Image
-                    src={getImageUrl(mpFileUrl, currentImageGuid)}
-                    alt={`${displayName} ${info.Last_Name}`}
-                    fill
-                    className="object-cover"
-                    unoptimized
-                  />
-                  {photoUploading ? (
-                    <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center">
-                      <span className="text-xs text-white font-medium">...</span>
-                    </div>
-                  ) : (
-                    <div className="absolute inset-0 bg-black/30 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-                      </svg>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="w-full h-full bg-gray-300 rounded-full flex items-center justify-center text-gray-600 text-lg font-medium relative">
-                  {photoUploading ? (
-                    <span className="text-xs text-gray-500">...</span>
-                  ) : (
-                    <>
-                      {getInitials(info.First_Name, info.Nickname, info.Last_Name)}
-                      <div className="absolute inset-0 bg-black/30 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-                        </svg>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-              <input
-                ref={photoInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/gif"
-                className="hidden"
-                onChange={handlePhotoUpload}
-              />
-            </div>
+            <DetailModalPhotoUpload
+              imageGuid={currentImageGuid}
+              mpFileUrl={mpFileUrl}
+              firstName={info.First_Name}
+              nickname={info.Nickname}
+              lastName={info.Last_Name}
+              uploading={photoUploading}
+              onUpload={handlePhotoUpload}
+              photoInputRef={photoInputRef}
+            />
             <div>
               <DialogTitle>
                 {displayName} {info.Last_Name}
@@ -490,32 +428,10 @@ export function BaptismDetailModal({
         </DialogHeader>
 
         {/* Contact info — show immediately from card data, prefer detail when loaded */}
-        {((detail?.info ?? info).Email_Address || (detail?.info ?? info).Mobile_Phone) && (
-          <div className="flex flex-wrap gap-2">
-            {(detail?.info ?? info).Email_Address && (
-              <a
-                href={`mailto:${(detail?.info ?? info).Email_Address}`}
-                className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
-              >
-                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-                </svg>
-                {(detail?.info ?? info).Email_Address}
-              </a>
-            )}
-            {(detail?.info ?? info).Mobile_Phone && (
-              <a
-                href={`tel:${(detail?.info ?? info).Mobile_Phone}`}
-                className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
-              >
-                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
-                </svg>
-                {(detail?.info ?? info).Mobile_Phone}
-              </a>
-            )}
-          </div>
-        )}
+        <ContactLinks
+          email={(detail?.info ?? info).Email_Address}
+          phone={(detail?.info ?? info).Mobile_Phone}
+        />
 
         {/* End date alert */}
         {(detail?.endDate || applicant.endDate) && (
@@ -703,81 +619,27 @@ export function BaptismDetailModal({
 
                     {/* Edit mode */}
                     {isEditing && milestoneRecord && (
-                      <div className="px-3 pb-3 border-t bg-blue-50/50 space-y-2">
-                        <div className="grid grid-cols-2 gap-2 pt-2">
-                          <div>
-                            <Label htmlFor="editDate" className="text-xs">Date</Label>
-                            <Input
-                              id="editDate"
-                              type="date"
-                              value={editDate}
-                              onChange={(e) => setEditDate(e.target.value)}
-                              className="text-sm"
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <Label htmlFor="editNotes" className="text-xs">Notes</Label>
-                          <Textarea
-                            id="editNotes"
-                            value={editNotes}
-                            onChange={(e) => setEditNotes(e.target.value)}
-                            rows={2}
-                            className="text-sm"
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="editFile" className="text-xs">
-                            Attach File
-                          </Label>
-                          <Input
-                            id="editFile"
-                            type="file"
-                            ref={editFileInputRef}
-                            className="text-sm"
-                          />
-                        </div>
-                        {files && files.length > 0 && (
-                          <div className="text-xs text-muted-foreground">
-                            <span className="font-medium">Existing files:</span>
-                            {files.map(f => (
-                              <a key={f.fileId} href={f.fileUrl} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-600 hover:underline">
-                                {f.isPdf ? "\uD83D\uDCC4" : f.isImage ? "\uD83D\uDDBC\uFE0F" : "\uD83D\uDCCE"} {f.fileName}
-                              </a>
-                            ))}
-                          </div>
-                        )}
-                        {editError && <div className="text-xs text-red-600">{editError}</div>}
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="outline" onClick={handleCancelEdit} disabled={editSaving}>Cancel</Button>
-                          <Button size="sm" onClick={handleSaveEdit} disabled={editSaving}>
-                            {editSaving ? "Saving..." : "Save"}
-                          </Button>
-                        </div>
-                      </div>
+                      <MilestoneEditForm
+                        editDate={editDate}
+                        onEditDateChange={setEditDate}
+                        editNotes={editNotes}
+                        onEditNotesChange={setEditNotes}
+                        editFileInputRef={editFileInputRef}
+                        existingFiles={files}
+                        error={editError}
+                        saving={editSaving}
+                        onSave={handleSaveEdit}
+                        onCancel={handleCancelEdit}
+                      />
                     )}
 
                     {/* Expanded read-only */}
                     {isExpanded && !isEditing && hasExpandableContent && (
-                      <div className="px-3 pb-3 border-t bg-white space-y-1.5">
-                        {milestoneRecord?.Notes && (
-                          <div className="text-xs text-muted-foreground pt-2">
-                            <span className="font-medium">Notes:</span> {milestoneRecord.Notes}
-                          </div>
-                        )}
-                        {files && files.length > 0 && (
-                          <div className="text-xs pt-1">
-                            {files.map(f => (
-                              <a key={f.fileId} href={f.fileUrl} target="_blank" rel="noopener noreferrer" className="block text-blue-600 hover:underline">
-                                {f.isPdf ? "\uD83D\uDCC4" : f.isImage ? "\uD83D\uDDBC\uFE0F" : "\uD83D\uDCCE"} {f.fileName}
-                              </a>
-                            ))}
-                          </div>
-                        )}
-                        {filesLoading === milestoneRecord?.Participant_Milestone_ID && (
-                          <div className="text-xs text-muted-foreground">Loading files...</div>
-                        )}
-                      </div>
+                      <MilestoneExpandedView
+                        notes={milestoneRecord?.Notes ?? null}
+                        files={files}
+                        filesLoading={filesLoading === milestoneRecord?.Participant_Milestone_ID}
+                      />
                     )}
                   </div>
                 );
@@ -785,72 +647,21 @@ export function BaptismDetailModal({
             </div>
 
             {/* Quick Actions */}
-            {availableMilestones.length > 0 && (
-              <div className="space-y-2 rounded-lg border p-3">
-                <h3 className="text-sm font-semibold">Quick Actions</h3>
-                <div className="space-y-2">
-                  <div>
-                    <Label htmlFor="milestoneSelect" className="text-xs">Select milestone to complete</Label>
-                    <select
-                      id="milestoneSelect"
-                      value={selectedMilestoneKey}
-                      onChange={(e) => setSelectedMilestoneKey(e.target.value)}
-                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                    >
-                      <option value="">Choose...</option>
-                      {availableMilestones.map(item => (
-                        <option key={item.key} value={item.key}>{item.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  {selectedMilestoneKey && (
-                    <>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <Label htmlFor="milestoneDate" className="text-xs">Date</Label>
-                          <Input
-                            id="milestoneDate"
-                            type="date"
-                            value={milestoneDate}
-                            onChange={(e) => setMilestoneDate(e.target.value)}
-                            className="text-sm"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <Label htmlFor="milestoneNotes" className="text-xs">Notes (optional)</Label>
-                        <Textarea
-                          id="milestoneNotes"
-                          value={milestoneNotes}
-                          onChange={(e) => setMilestoneNotes(e.target.value)}
-                          rows={2}
-                          placeholder="Optional notes..."
-                          className="text-sm"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="milestoneFile" className="text-xs">
-                          Attach File (optional)
-                        </Label>
-                        <Input
-                          id="milestoneFile"
-                          type="file"
-                          ref={fileInputRef}
-                          className="text-sm"
-                        />
-                      </div>
-                      <Button
-                        size="sm"
-                        onClick={handleMarkMilestoneComplete}
-                        disabled={!!actionLoading}
-                      >
-                        {actionLoading ? "Saving..." : "Mark Complete"}
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
+            <QuickActionsPanel
+              availableItems={availableMilestones}
+              selectedKey={selectedMilestoneKey}
+              onSelectedKeyChange={setSelectedMilestoneKey}
+              date={milestoneDate}
+              onDateChange={setMilestoneDate}
+              notes={milestoneNotes}
+              onNotesChange={setMilestoneNotes}
+              fileInputRef={fileInputRef}
+              fileError={fileError}
+              onFileError={setFileError}
+              canSubmit={!!selectedMilestoneKey && !!detail?.writeBackConfig.milestoneIds[selectedMilestoneKey] && !!detail?.writeBackConfig.programId}
+              submitting={!!actionLoading}
+              onSubmit={handleMarkMilestoneComplete}
+            />
           </div>
         )}
       </DialogContent>

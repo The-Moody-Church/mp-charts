@@ -142,3 +142,84 @@ Consolidated session summary files so there is exactly one file per day. Merged 
 - `.claude/session-summary-2026-02-20.md` — consolidated from 2 files
 - `.claude/session-summary-2026-02-23.md` — consolidated from 2 files
 - `.claude/session-summary-2026-02-24.md` — added this entry
+
+---
+
+## Extract Shared Processing Components (Issue #60)
+
+### Status: ✅ COMPLETED (all 6 phases)
+
+Refactored ~1,400 lines of duplicated code across the volunteer, baptism, and membership processing features into shared components, utilities, DTOs, and server action helpers.
+
+### Phase 1: Foundation (base DTOs, utilities, shared actions)
+- Created `src/lib/dto/processing-shared.ts` — `BasePersonInfo`, `BaseCardData<T,C>`, `BaseFileInfo`, `BaseMilestoneDetail`
+- Updated 3 existing DTO files to extend base interfaces (non-breaking)
+- Created `src/lib/processing-utils.ts` — `getDisplayName()`, `getInitials()`, `getImageUrl()`, `formatDate()`, `ALLOWED_IMAGE_TYPES`, `ALLOWED_DOCUMENT_TYPES`, `MAX_FILE_SIZE`
+- Created `src/components/shared-actions/processing.ts` — `extractValidatedFiles()`, `extractValidatedFilesResult()`, `uploadContactPhoto()`
+
+### Phase 2: Shared UI Components
+Created 8 components in `src/components/processing/` with barrel export:
+- `person-avatar.tsx` — photo circle with initials fallback
+- `detail-modal-photo-upload.tsx` — clickable photo with upload overlay
+- `contact-links.tsx` — bordered pill-style email/phone buttons
+- `processing-grid.tsx` — card grid with skeleton loading/error/empty states
+- `file-type-icon.tsx` — PDF/image/generic file icon
+- `milestone-expanded-view.tsx` — read-only notes + downloadable file list
+- `milestone-edit-form.tsx` — edit mode: date, notes, file input, save/cancel (with `hideNotes` prop)
+- `quick-actions-panel.tsx` — milestone dropdown + date/notes/file/submit
+
+### Phase 3: Migrate Cards + Grids
+- All 3 card components → `PersonAvatar` + `getDisplayName` from shared utils
+- All 3 main page components → `ProcessingGrid`
+
+### Phase 4: Migrate Detail Modals
+- `MembershipDetailModal` (825→579 lines) → `DetailModalPhotoUpload`, `ContactLinks`, `MilestoneEditForm`, `MilestoneExpandedView`, `QuickActionsPanel`
+- `BaptismDetailModal` (860→reduced) → same shared components; kept pause/resume sections
+- `VolunteerDetailModal` (1082→reduced) → `DetailModalPhotoUpload`, `MilestoneEditForm` (with `hideNotes`), `MilestoneExpandedView`; kept volunteer-specific quick actions
+
+### Phase 5: Migrate Server Actions
+- All 3 `actions.ts` files → `extractValidatedFiles()`, `extractValidatedFilesResult()`, `uploadContactPhoto()`
+- Removed duplicate `ALLOWED_IMAGE_TYPES`/`ALLOWED_DOCUMENT_TYPES` constants from each actions file
+- Photo upload functions reduced to one-liners: `return uploadContactPhoto(formData, () => Service.getInstance())`
+- Fixed Next.js "Server Actions must be async" error — made `extractValidatedFiles` and `extractValidatedFilesResult` async with `Promise<>` return types
+
+### Phase 6: Cleanup, Build, Lint, Documentation
+- Fixed 6 lint errors: converted empty `interface X extends Base {}` to `type X = Base` in all 3 DTO files
+- Build passes clean, lint passes clean
+- Updated `CLAUDE.md` — added `processing/` to Component Organization tree, added shared processing imports to Import Patterns
+- Updated `.claude/references/components.md` — added full Shared Processing Components section with component table, import patterns, shared actions row
+
+### Files Created (12)
+- `src/lib/dto/processing-shared.ts`
+- `src/lib/processing-utils.ts`
+- `src/components/shared-actions/processing.ts`
+- `src/components/processing/index.ts`
+- `src/components/processing/person-avatar.tsx`
+- `src/components/processing/detail-modal-photo-upload.tsx`
+- `src/components/processing/contact-links.tsx`
+- `src/components/processing/processing-grid.tsx`
+- `src/components/processing/file-type-icon.tsx`
+- `src/components/processing/milestone-expanded-view.tsx`
+- `src/components/processing/milestone-edit-form.tsx`
+- `src/components/processing/quick-actions-panel.tsx`
+
+### Files Modified (19)
+- `src/lib/dto/volunteer-processing.ts` — `type VolunteerInfo = BasePersonInfo`, `type MilestoneFileInfo = BaseFileInfo`
+- `src/lib/dto/baptism-processing.ts` — `type BaptismMilestoneDetail = BaseMilestoneDetail`, `type BaptismMilestoneFileInfo = BaseFileInfo`
+- `src/lib/dto/membership-processing.ts` — `type MembershipMilestoneDetail = BaseMilestoneDetail`, `type MembershipMilestoneFileInfo = BaseFileInfo`
+- `src/lib/dto/index.ts` — re-exports from processing-shared
+- `src/components/volunteer-processing/volunteer-card.tsx` — uses `PersonAvatar`, `getDisplayName` from shared
+- `src/components/baptism-processing/baptism-card.tsx` — uses `PersonAvatar`, `getDisplayName`, `formatDate`
+- `src/components/membership-processing/membership-card.tsx` — uses `PersonAvatar`, `getDisplayName`
+- `src/components/volunteer-processing/volunteer-processing.tsx` — uses `ProcessingGrid`
+- `src/components/baptism-processing/baptism-processing.tsx` — uses `ProcessingGrid`
+- `src/components/membership-processing/membership-processing.tsx` — uses `ProcessingGrid`
+- `src/components/volunteer-processing/volunteer-detail-modal.tsx` — uses `DetailModalPhotoUpload`, `MilestoneEditForm`, `MilestoneExpandedView`
+- `src/components/baptism-processing/baptism-detail-modal.tsx` — uses all 5 shared modal components
+- `src/components/membership-processing/membership-detail-modal.tsx` — uses all 5 shared modal components
+- `src/components/volunteer-processing/actions.ts` — uses `extractValidatedFiles`, `extractValidatedFilesResult`, `uploadContactPhoto`
+- `src/components/baptism-processing/actions.ts` — uses `extractValidatedFiles`, `extractValidatedFilesResult`, `uploadContactPhoto`
+- `src/components/membership-processing/actions.ts` — uses `extractValidatedFiles`, `extractValidatedFilesResult`, `uploadContactPhoto`
+- `CLAUDE.md` — updated Component Organization and Import Patterns
+- `.claude/references/components.md` — added Shared Processing Components section
+- `.claude/session-summary-2026-02-24.md` — this entry

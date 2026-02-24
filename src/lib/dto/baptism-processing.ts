@@ -1,12 +1,6 @@
-export interface BaptismApplicantInfo {
-  Contact_ID: number;
-  Participant_ID: number;
-  Nickname: string | null;
-  Last_Name: string;
-  First_Name: string;
-  Image_GUID: string | null;
-  Group_Participant_ID: number;
-  Start_Date: string;
+import { BasePersonInfo, BaseCardData, BaseFileInfo, BaseMilestoneDetail } from './processing-shared';
+
+export interface BaptismApplicantInfo extends BasePersonInfo {
   Email_Address: string | null;
   Mobile_Phone: string | null;
 }
@@ -22,31 +16,16 @@ export interface BaptismChecklistItem {
   order: number;
 }
 
-export interface BaptismCard {
-  info: BaptismApplicantInfo;
-  checklist: BaptismChecklistItem[];
-  completedCount: number;
-  totalCount: number;
+export interface BaptismCard extends BaseCardData<BaptismApplicantInfo, BaptismChecklistItem> {
   isPaused: boolean;
   isFullyComplete: boolean;
   /** Non-null when the participant's only group record has a future End_Date (no active record without an End_Date). */
   endDate: string | null;
 }
 
-export interface BaptismMilestoneDetail {
-  Participant_Milestone_ID: number;
-  Milestone_ID: number;
-  Date_Accomplished: string | null;
-  Notes: string | null;
-}
+export type BaptismMilestoneDetail = BaseMilestoneDetail;
 
-export interface BaptismMilestoneFileInfo {
-  fileId: number;
-  fileName: string;
-  fileUrl: string;
-  isPdf: boolean;
-  isImage: boolean;
-}
+export type BaptismMilestoneFileInfo = BaseFileInfo;
 
 export interface BaptismWriteBackConfig {
   programId: number | null;

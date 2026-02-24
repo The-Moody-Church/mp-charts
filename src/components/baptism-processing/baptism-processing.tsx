@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BaptismCard as BaptismCardData } from "@/lib/dto";
+import { ProcessingGrid } from "@/components/processing";
 import { BaptismCard } from "./baptism-card";
 import { BaptismDetailModal } from "./baptism-detail-modal";
 import { getCurrentApplicants, getPausedApplicants } from "./actions";
@@ -123,22 +124,30 @@ export function BaptismProcessing({ initialApplicantId }: { initialApplicantId?:
         </TabsList>
 
         <TabsContent value="current">
-          <ApplicantGrid
-            applicants={currentApplicants}
+          <ProcessingGrid
+            items={currentApplicants}
             loading={loading && activeTab === "current"}
             error={error}
             emptyMessage="No current baptism applicants."
-            onCardClick={handleCardClick}
+            keyExtractor={(a) => a.info.Group_Participant_ID}
+            renderCard={(applicant) => (
+              <BaptismCard applicant={applicant} onClick={() => handleCardClick(applicant)} />
+            )}
+            marginTop
           />
         </TabsContent>
 
         <TabsContent value="paused">
-          <ApplicantGrid
-            applicants={pausedApplicants}
+          <ProcessingGrid
+            items={pausedApplicants}
             loading={loading && activeTab === "paused"}
             error={error}
             emptyMessage="No paused baptism applicants."
-            onCardClick={handleCardClick}
+            keyExtractor={(a) => a.info.Group_Participant_ID}
+            renderCard={(applicant) => (
+              <BaptismCard applicant={applicant} onClick={() => handleCardClick(applicant)} />
+            )}
+            marginTop
           />
         </TabsContent>
       </Tabs>
@@ -150,56 +159,6 @@ export function BaptismProcessing({ initialApplicantId }: { initialApplicantId?:
         onUpdate={handleUpdate}
         isCurrentTab={activeTab === "current"}
       />
-    </div>
-  );
-}
-
-function ApplicantGrid({
-  applicants,
-  loading,
-  error,
-  emptyMessage,
-  onCardClick,
-}: {
-  applicants: BaptismCardData[];
-  loading: boolean;
-  error: string | null;
-  emptyMessage: string;
-  onCardClick: (applicant: BaptismCardData) => void;
-}) {
-  if (loading) {
-    return (
-      <div className="py-12 text-center text-muted-foreground">
-        Loading applicants...
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="py-8 text-center text-red-500 bg-red-50 rounded-md">
-        {error}
-      </div>
-    );
-  }
-
-  if (applicants.length === 0) {
-    return (
-      <div className="py-12 text-center text-muted-foreground">
-        {emptyMessage}
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mt-4">
-      {applicants.map((applicant) => (
-        <BaptismCard
-          key={applicant.info.Group_Participant_ID}
-          applicant={applicant}
-          onClick={() => onCardClick(applicant)}
-        />
-      ))}
     </div>
   );
 }
