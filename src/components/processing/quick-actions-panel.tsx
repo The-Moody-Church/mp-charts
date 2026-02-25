@@ -49,7 +49,7 @@ export function QuickActionsPanel({
     <div className="space-y-2 pt-2 border-t">
       <h3 className="text-sm font-semibold text-gray-900">Quick Actions</h3>
       <div className="space-y-2">
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1">
             <Label htmlFor="milestone-notes" className="text-xs">Notes (optional)</Label>
             <Textarea
@@ -61,7 +61,7 @@ export function QuickActionsPanel({
               rows={2}
             />
           </div>
-          <div className="w-36">
+          <div className="w-full sm:w-36">
             <Label htmlFor="milestone-date" className="text-xs">Date</Label>
             <Input
               id="milestone-date"

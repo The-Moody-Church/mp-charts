@@ -375,6 +375,110 @@ Charts that follow this standard:
 
 When adding new time-series charts, use the same `toLocaleDateString('en-US', ...)` pattern with the options above.
 
+## Mobile & Responsive Guidelines
+
+All features must work on mobile (375px+). Use **mobile-first** Tailwind classes and test at iPhone SE width (375px) in Chrome DevTools.
+
+### Viewport Configuration
+
+The `viewport` export in `src/app/(web)/layout.tsx` must include `width: "device-width"` and `initialScale: 1`:
+
+```typescript
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#000000",
+}
+```
+
+### Responsive Hook
+
+Use `useIsMobile()` from `@/hooks/use-mobile` when component **behavior** must change by screen size (e.g., Recharts prop values, conditional rendering). For **layout-only** changes, use Tailwind responsive prefixes (`sm:`, `md:`, `lg:`).
+
+```typescript
+import { useIsMobile } from '@/hooks/use-mobile';
+const isMobile = useIsMobile(); // true when viewport < 768px (md breakpoint)
+```
+
+### Padding & Spacing
+
+| Context | Classes | Rationale |
+|---------|---------|-----------|
+| Page containers | `p-4 sm:p-6 lg:p-8` | Never `p-8` alone — wastes 64px on a 375px screen |
+| Page titles | `text-2xl sm:text-4xl` | `text-4xl` is too large for narrow screens |
+| Dialog/modal content | Base is `p-4 sm:p-6` | Set in `dialog.tsx` base component |
+
+### Chart Standards (Recharts)
+
+All chart components must follow these mobile patterns:
+
+| Pattern | Implementation |
+|---------|---------------|
+| **Touch-friendly tooltips** | `<Tooltip trigger={isMobile ? 'click' : 'hover'} />` — tap to show, tap elsewhere to dismiss |
+| **Tooltip max-width** | Add `maxWidth: '85vw'` to `contentStyle` — prevents tooltip from exceeding viewport |
+| **Responsive margins** | `margin={{ top: 5, right: isMobile ? 5 : 20, left: isMobile ? 5 : 20, bottom: 5 }}` |
+| **Hide legend on mobile** | `{!isMobile && <Legend />}` — lines are identifiable by color; legend wastes vertical space |
+| **Hide secondary Y-axis** | For dual-axis charts: `{!isMobile && <YAxis yAxisId="right" ... />}` |
+| **Hide pie chart labels** | `label={isMobile ? false : renderLabel}` — labels overlap on small screens |
+| **Horizontal bar Y-axis width** | `width={isMobile ? 80 : 150}` — 150px is 40% of a 375px screen |
+| **Empty state heights** | Use `style={{ height }}`, **not** `` h-[${height}px] `` — Tailwind can't compile dynamic values |
+
+### Dialog & Modal Standards
+
+| Pattern | Implementation |
+|---------|---------------|
+| **Base padding** | `p-4 sm:p-6` (set in `dialog.tsx`) |
+| **Wide modals (max-w-2xl)** | Add `w-[calc(100vw-1rem)]` before `sm:max-w-2xl` to prevent overflow |
+| **Modal close button** | Base `DialogContent` includes an X button at `right-4 top-4` — always accessible |
+
+### Form Layout Standards
+
+| Pattern | Implementation |
+|---------|---------------|
+| **Side-by-side fields** | `flex flex-col sm:flex-row` — stacks vertically on mobile |
+| **Fixed-width inputs** | `w-full sm:w-36` — full width on mobile, fixed on desktop |
+| **Badge/icon rows** | Always include `flex-wrap` — prevents horizontal overflow |
+
+### Touch Interaction Standards
+
+- **Never rely solely on `:hover`** for critical UI. Use `opacity-60 sm:opacity-0 sm:group-hover:opacity-100` for reveal buttons.
+- **Interactive SVG elements** need `onClick` alongside `onMouseEnter`/`onMouseLeave` for tap support.
+- **Recharts tooltips** must use `trigger={isMobile ? 'click' : 'hover'}` — default hover tooltips are unusable on touch devices.
+
+### Anti-Patterns to Avoid
+
+```typescript
+// ❌ Dynamic Tailwind classes — won't be compiled
+<div className={`h-[${height}px]`}>
+
+// ✅ Use inline style for dynamic values
+<div style={{ height }}>
+
+// ❌ Fixed padding on all breakpoints
+<div className="p-8">
+
+// ✅ Mobile-first responsive padding
+<div className="p-4 sm:p-6 lg:p-8">
+
+// ❌ Wide modal without mobile constraint
+<DialogContent className="max-w-2xl">
+
+// ✅ Viewport-aware modal width
+<DialogContent className="w-[calc(100vw-1rem)] sm:max-w-2xl">
+
+// ❌ Fixed Y-axis width on horizontal bar chart
+<YAxis width={150} />
+
+// ✅ Responsive Y-axis width
+<YAxis width={isMobile ? 80 : 150} />
+
+// ❌ Hover-only button visibility
+className="opacity-0 group-hover:opacity-100"
+
+// ✅ Touch-friendly visibility
+className="opacity-60 sm:opacity-0 sm:group-hover:opacity-100"
+```
+
 ## UI Style Guide
 
 ### Contact Action Links (Email, Phone, External URLs)

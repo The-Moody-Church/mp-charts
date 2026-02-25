@@ -335,6 +335,7 @@ export function VennDiagram({ data }: VennDiagramProps) {
                 key={id}
                 onMouseEnter={() => setHovered(id)}
                 onMouseLeave={() => setHovered(null)}
+                onClick={() => setHovered(prev => prev === id ? null : id)}
                 className="cursor-pointer"
               >
                 <rect
@@ -411,6 +412,7 @@ export function VennDiagram({ data }: VennDiagramProps) {
                   }}
                   onMouseEnter={() => setHovered(id)}
                   onMouseLeave={() => setHovered(null)}
+                  onClick={() => setHovered(prev => prev === id ? null : id)}
                 >
                   <td className="py-1.5 px-3" style={{ color: clr?.text, fontWeight: isHovered ? 600 : undefined }}>{label}</td>
                   <td className="text-right py-1.5 px-3 tabular-nums">{count.toLocaleString()}</td>

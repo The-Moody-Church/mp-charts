@@ -2,6 +2,7 @@
 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { MonthlyAttendanceTrend } from '@/lib/dto';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface AttendanceChartProps {
   currentYear: MonthlyAttendanceTrend[];
@@ -10,6 +11,8 @@ interface AttendanceChartProps {
 }
 
 export function AttendanceChart({ currentYear, previousYear, height = 300 }: AttendanceChartProps) {
+  const isMobile = useIsMobile();
+
   // Filter out months with 0 average and combine data by month name
   const currentFiltered = currentYear.filter(item => item.averageTotalAttendance > 0);
   const previousFiltered = previousYear.filter(item => item.averageTotalAttendance > 0);
@@ -83,7 +86,7 @@ export function AttendanceChart({ currentYear, previousYear, height = 300 }: Att
 
   if (chartData.length === 0) {
     return (
-      <div className={`h-[${height}px] flex items-center justify-center text-muted-foreground`}>
+      <div className="flex items-center justify-center text-muted-foreground" style={{ height }}>
         No attendance data available
       </div>
     );
@@ -91,23 +94,25 @@ export function AttendanceChart({ currentYear, previousYear, height = 300 }: Att
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={chartData} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+      <LineChart data={chartData} margin={{ top: 5, right: isMobile ? 5 : 20, left: isMobile ? 5 : 20, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
         <XAxis
           dataKey="name"
           className="text-xs"
-          padding={{ left: 20, right: 20 }}
+          padding={{ left: isMobile ? 5 : 20, right: isMobile ? 5 : 20 }}
         />
         <YAxis className="text-xs" />
         <Tooltip
+          trigger={isMobile ? 'click' : 'hover'}
           contentStyle={{
             backgroundColor: 'rgba(255, 255, 255, 0.95)',
             border: '1px solid rgba(0, 0, 0, 0.1)',
             borderRadius: '6px',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+            maxWidth: '85vw',
           }}
         />
-        <Legend />
+        {!isMobile && <Legend />}
         <Line dataKey="currentInPerson" stroke="#3b82f6" strokeWidth={2} name={isWeekly ? 'In-Person' : 'In-Person (Current)'} />
         {!isWeekly && <Line dataKey="previousInPerson" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" name="In-Person (Previous)" />}
         <Line dataKey="currentOnline" stroke="#10b981" strokeWidth={2} name={isWeekly ? 'Online' : 'Online (Current)'} />

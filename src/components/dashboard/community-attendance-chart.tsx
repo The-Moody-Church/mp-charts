@@ -2,6 +2,7 @@
 
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { CommunityAttendanceTrend } from '@/lib/dto';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface CommunityAttendanceChartProps {
   data: CommunityAttendanceTrend[];
@@ -38,7 +39,8 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
         border: '1px solid rgba(0, 0, 0, 0.1)',
         borderRadius: '6px',
         padding: '10px',
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+        maxWidth: '85vw',
       }}
     >
       <p style={{ marginBottom: '8px', fontWeight: 'bold' }}>{label}</p>
@@ -63,9 +65,11 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
 };
 
 export function CommunityAttendanceChart({ data, height = 400 }: CommunityAttendanceChartProps) {
+  const isMobile = useIsMobile();
+
   if (data.length === 0) {
     return (
-      <div className={`h-[${height}px] flex items-center justify-center text-muted-foreground`}>
+      <div className="flex items-center justify-center text-muted-foreground" style={{ height }}>
         No community attendance data available
       </div>
     );
@@ -110,7 +114,7 @@ export function CommunityAttendanceChart({ data, height = 400 }: CommunityAttend
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+      <AreaChart data={chartData} margin={{ top: 5, right: isMobile ? 5 : 30, left: isMobile ? 5 : 20, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
         <XAxis
           dataKey="date"
@@ -119,12 +123,13 @@ export function CommunityAttendanceChart({ data, height = 400 }: CommunityAttend
           height={60}
           className="text-xs"
         />
-        <YAxis className="text-xs" label={{ value: 'Attendance', angle: -90, position: 'insideLeft' }} />
+        <YAxis className="text-xs" label={isMobile ? undefined : { value: 'Attendance', angle: -90, position: 'insideLeft' }} />
         <Tooltip
+          trigger={isMobile ? 'click' : 'hover'}
           content={<CustomTooltip />}
           wrapperStyle={{ zIndex: 1000 }}
         />
-        <Legend />
+        {!isMobile && <Legend />}
         {sortedCommunityNames.map((communityName, index) => (
           <Area
             key={communityName}

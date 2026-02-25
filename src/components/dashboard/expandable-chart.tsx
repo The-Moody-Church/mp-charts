@@ -31,7 +31,7 @@ export function ExpandableChart({
         <Button
           variant="ghost"
           size="icon"
-          className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+          className="absolute top-2 right-2 z-10 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
           onClick={() => setIsExpanded(true)}
           aria-label="Expand chart"
         >

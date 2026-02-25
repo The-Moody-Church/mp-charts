@@ -2,6 +2,7 @@
 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { SmallGroupTrend } from '@/lib/dto';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface SmallGroupTrendsProps {
   data: SmallGroupTrend[];
@@ -24,6 +25,8 @@ function formatMonthLabel(month: string): string {
 }
 
 export function SmallGroupTrends({ data, previousYear = [], height = 300 }: SmallGroupTrendsProps) {
+  const isMobile = useIsMobile();
+
   // Build a map keyed by month name, merging current and previous year data
   const monthsMap = new Map<string, {
     name: string;       // display label for X-axis
@@ -69,7 +72,7 @@ export function SmallGroupTrends({ data, previousYear = [], height = 300 }: Smal
 
   if (chartData.length === 0) {
     return (
-      <div className={`h-[${height}px] flex items-center justify-center text-muted-foreground`}>
+      <div className="flex items-center justify-center text-muted-foreground" style={{ height }}>
         No small group trend data available
       </div>
     );
@@ -77,22 +80,24 @@ export function SmallGroupTrends({ data, previousYear = [], height = 300 }: Smal
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={chartData} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+      <LineChart data={chartData} margin={{ top: 5, right: isMobile ? 5 : 20, left: isMobile ? 5 : 20, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-        <XAxis dataKey="name" className="text-xs" padding={{ left: 20, right: 20 }} />
+        <XAxis dataKey="name" className="text-xs" padding={{ left: isMobile ? 5 : 20, right: isMobile ? 5 : 20 }} />
         <YAxis yAxisId="left" className="text-xs" />
-        <YAxis yAxisId="right" orientation="right" className="text-xs" />
+        {!isMobile && <YAxis yAxisId="right" orientation="right" className="text-xs" />}
         <Tooltip
+          trigger={isMobile ? 'click' : 'hover'}
           contentStyle={{
             backgroundColor: 'rgba(255, 255, 255, 0.95)',
             border: '1px solid rgba(0, 0, 0, 0.1)',
             borderRadius: '6px',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+            maxWidth: '85vw',
           }}
         />
-        <Legend />
+        {!isMobile && <Legend />}
         <Line
-          yAxisId="left"
+          yAxisId={isMobile ? 'left' : 'left'}
           type="monotone"
           dataKey="groups"
           stroke="#3b82f6"
@@ -101,7 +106,7 @@ export function SmallGroupTrends({ data, previousYear = [], height = 300 }: Smal
         />
         {hasPrevious && (
           <Line
-            yAxisId="left"
+            yAxisId={isMobile ? 'left' : 'left'}
             type="monotone"
             dataKey="previousGroups"
             stroke="#3b82f6"
@@ -111,7 +116,7 @@ export function SmallGroupTrends({ data, previousYear = [], height = 300 }: Smal
           />
         )}
         <Line
-          yAxisId="right"
+          yAxisId={isMobile ? 'left' : 'right'}
           type="monotone"
           dataKey="participants"
           stroke="#10b981"
@@ -120,7 +125,7 @@ export function SmallGroupTrends({ data, previousYear = [], height = 300 }: Smal
         />
         {hasPrevious && (
           <Line
-            yAxisId="right"
+            yAxisId={isMobile ? 'left' : 'right'}
             type="monotone"
             dataKey="previousParticipants"
             stroke="#10b981"

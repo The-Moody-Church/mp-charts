@@ -505,7 +505,7 @@ export function VolunteerDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100vw-1rem)] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-4">
             <DetailModalPhotoUpload
@@ -670,7 +670,7 @@ export function VolunteerDetailModal({
                       onClick={hasExpandableContent ? () => handleToggleExpand(item.key) : undefined}
                     >
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className="text-sm font-medium">{item.label}</span>
                           {files && files.length > 0 && (
                             <svg className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -812,7 +812,7 @@ export function VolunteerDetailModal({
             <div className="space-y-2 pt-2 border-t">
               <h3 className="text-sm font-semibold text-gray-900">Quick Actions</h3>
               <div className="space-y-2">
-                <div className="flex gap-3">
+                <div className="flex flex-col sm:flex-row gap-3">
                   {selectedMilestoneKey !== "application" && (
                     <div className="flex-1">
                       <Label htmlFor="milestone-notes" className="text-xs">Notes (optional)</Label>
@@ -826,7 +826,7 @@ export function VolunteerDetailModal({
                       />
                     </div>
                   )}
-                  <div className={selectedMilestoneKey === "application" ? "flex-1" : "w-36"}>
+                  <div className={selectedMilestoneKey === "application" ? "flex-1" : "w-full sm:w-36"}>
                     <Label htmlFor="milestone-date" className="text-xs">Date</Label>
                     <Input
                       id="milestone-date"
