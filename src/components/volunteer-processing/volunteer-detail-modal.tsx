@@ -886,7 +886,7 @@ export function VolunteerDetailModal({
                           id="milestone-select"
                           value={selectedMilestoneKey}
                           onChange={(e) => setSelectedMilestoneKey(e.target.value)}
-                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                         >
                           <option value="">Select an item...</option>
                           {availableItems.map((item) => (

@@ -8,7 +8,7 @@ interface VolunteerProcessingPageProps {
 export default function VolunteerProcessingPage({ searchParams }: VolunteerProcessingPageProps) {
   return (
     <Suspense fallback={
-      <div className="container mx-auto p-8">
+      <div className="container mx-auto p-4 sm:p-6 lg:p-8">
         <div className="text-muted-foreground">Loading volunteers...</div>
       </div>
     }>
@@ -23,7 +23,7 @@ async function VolunteerProcessingContent({ searchParams }: VolunteerProcessingP
   const initialVolunteerId = volunteerParam && !isNaN(volunteerParam) ? volunteerParam : null;
 
   return (
-    <div className="container mx-auto p-8">
+    <div className="container mx-auto p-4 sm:p-6 lg:p-8">
       <VolunteerProcessing initialVolunteerId={initialVolunteerId} />
     </div>
   );

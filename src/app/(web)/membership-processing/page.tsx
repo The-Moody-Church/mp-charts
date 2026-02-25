@@ -8,7 +8,7 @@ interface MembershipProcessingPageProps {
 export default function MembershipProcessingPage({ searchParams }: MembershipProcessingPageProps) {
   return (
     <Suspense fallback={
-      <div className="container mx-auto p-8">
+      <div className="container mx-auto p-4 sm:p-6 lg:p-8">
         <div className="text-muted-foreground">Loading membership applicants...</div>
       </div>
     }>
@@ -23,7 +23,7 @@ async function MembershipProcessingContent({ searchParams }: MembershipProcessin
   const initialApplicantId = applicantParam && !isNaN(applicantParam) ? applicantParam : null;
 
   return (
-    <div className="container mx-auto p-8">
+    <div className="container mx-auto p-4 sm:p-6 lg:p-8">
       <MembershipProcessing initialApplicantId={initialApplicantId} />
     </div>
   );
