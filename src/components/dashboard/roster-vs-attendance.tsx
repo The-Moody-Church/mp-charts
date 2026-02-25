@@ -2,6 +2,7 @@
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { RosterVsAttendance as RosterVsAttendanceData } from '@/lib/dto';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface RosterVsAttendanceChartProps {
   data: RosterVsAttendanceData[];
@@ -9,9 +10,11 @@ interface RosterVsAttendanceChartProps {
 }
 
 export function RosterVsAttendanceChart({ data, height = 300 }: RosterVsAttendanceChartProps) {
+  const isMobile = useIsMobile();
+
   if (data.length === 0) {
     return (
-      <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+      <div className="flex items-center justify-center text-muted-foreground" style={{ height: 300 }}>
         No roster/attendance data available
       </div>
     );
@@ -25,19 +28,21 @@ export function RosterVsAttendanceChart({ data, height = 300 }: RosterVsAttendan
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={chartData}>
+      <BarChart data={chartData} margin={{ top: 5, right: isMobile ? 5 : 20, left: isMobile ? 5 : 20, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" />
         <XAxis dataKey="name" tick={{ fontSize: 12 }} />
         <YAxis tick={{ fontSize: 12 }} />
         <Tooltip
+          trigger={isMobile ? 'click' : 'hover'}
           contentStyle={{
             backgroundColor: 'rgba(255, 255, 255, 0.95)',
             border: '1px solid rgba(0, 0, 0, 0.1)',
             borderRadius: '6px',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+            maxWidth: '85vw',
           }}
         />
-        <Legend />
+        {!isMobile && <Legend />}
         <Bar dataKey="Roster" fill="#3b82f6" radius={[4, 4, 0, 0]} />
         <Bar dataKey="Attendance" fill="#10b981" radius={[4, 4, 0, 0]} />
       </BarChart>

@@ -117,8 +117,8 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="in-process">
+        <TabsList className="w-full sm:w-fit h-auto">
+          <TabsTrigger value="in-process" className="flex-1 sm:flex-initial whitespace-normal sm:whitespace-nowrap text-xs sm:text-sm py-1.5">
             New Volunteers In Process
             {inProcessVolunteers.length > 0 && (
               <span className="ml-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs">
@@ -126,7 +126,7 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="approved">
+          <TabsTrigger value="approved" className="flex-1 sm:flex-initial whitespace-normal sm:whitespace-nowrap text-xs sm:text-sm py-1.5">
             Approved Active Volunteers
             {approvedVolunteers.length > 0 && (
               <span className="ml-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs">

@@ -6,6 +6,7 @@ import {
   BarChart, Bar,
 } from 'recharts';
 import { ServingTrend, ServingByRoleType, ServingByMinistry } from '@/lib/dto';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
@@ -19,9 +20,11 @@ interface ServingTrendsChartProps {
 }
 
 export function ServingTrendsChart({ data, height = 300 }: ServingTrendsChartProps) {
+  const isMobile = useIsMobile();
+
   if (data.length === 0) {
     return (
-      <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+      <div className="flex items-center justify-center text-muted-foreground" style={{ height: 300 }}>
         No serving trend data available
       </div>
     );
@@ -36,19 +39,21 @@ export function ServingTrendsChart({ data, height = 300 }: ServingTrendsChartPro
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={chartData}>
+      <LineChart data={chartData} margin={{ top: 5, right: isMobile ? 5 : 20, left: isMobile ? 5 : 20, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" />
         <XAxis dataKey="name" tick={{ fontSize: 11 }} />
         <YAxis tick={{ fontSize: 12 }} />
         <Tooltip
+          trigger={isMobile ? 'click' : 'hover'}
           contentStyle={{
             backgroundColor: 'rgba(255, 255, 255, 0.95)',
             border: '1px solid rgba(0, 0, 0, 0.1)',
             borderRadius: '6px',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+            maxWidth: '85vw',
           }}
         />
-        <Legend />
+        {!isMobile && <Legend />}
         <Line type="monotone" dataKey="Serving" stroke="#3b82f6" strokeWidth={2} dot={false} />
         <Line type="monotone" dataKey="Leading" stroke="#f59e0b" strokeWidth={2} dot={false} />
         <Line type="monotone" dataKey="Total" stroke="#6b7280" strokeWidth={1} strokeDasharray="5 5" dot={false} />
@@ -67,9 +72,11 @@ interface ServingByRoleTypeChartProps {
 }
 
 export function ServingByRoleTypeChart({ data, height = 300 }: ServingByRoleTypeChartProps) {
+  const isMobile = useIsMobile();
+
   if (data.length === 0) {
     return (
-      <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+      <div className="flex items-center justify-center text-muted-foreground" style={{ height: 300 }}>
         No role type data available
       </div>
     );
@@ -88,7 +95,7 @@ export function ServingByRoleTypeChart({ data, height = 300 }: ServingByRoleType
           cx="50%"
           cy="50%"
           labelLine={false}
-          label={({ name, percent }) => `${name} ${percent ? (percent * 100).toFixed(0) : 0}%`}
+          label={isMobile ? false : ({ name, percent }) => `${name} ${percent ? (percent * 100).toFixed(0) : 0}%`}
           outerRadius={80}
           fill="#8884d8"
           dataKey="value"
@@ -98,11 +105,13 @@ export function ServingByRoleTypeChart({ data, height = 300 }: ServingByRoleType
           ))}
         </Pie>
         <Tooltip
+          trigger={isMobile ? 'click' : 'hover'}
           contentStyle={{
             backgroundColor: 'rgba(255, 255, 255, 0.95)',
             border: '1px solid rgba(0, 0, 0, 0.1)',
             borderRadius: '6px',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+            maxWidth: '85vw',
           }}
         />
         <Legend />
@@ -121,17 +130,20 @@ interface ServingByMinistryChartProps {
 }
 
 export function ServingByMinistryChart({ data, height = 300 }: ServingByMinistryChartProps) {
+  const isMobile = useIsMobile();
+
   if (data.length === 0) {
     return (
-      <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+      <div className="flex items-center justify-center text-muted-foreground" style={{ height: 300 }}>
         No ministry data available
       </div>
     );
   }
 
-  // Take top 10 ministries
+  // Take top 10 ministries, truncate more aggressively on mobile
+  const maxLabelLen = isMobile ? 15 : 25;
   const chartData = data.slice(0, 10).map(d => ({
-    name: d.ministryName.length > 25 ? d.ministryName.slice(0, 22) + '...' : d.ministryName,
+    name: d.ministryName.length > maxLabelLen ? d.ministryName.slice(0, maxLabelLen - 3) + '...' : d.ministryName,
     fullName: d.ministryName,
     People: d.uniqueContacts,
   }));
@@ -140,16 +152,18 @@ export function ServingByMinistryChart({ data, height = 300 }: ServingByMinistry
 
   return (
     <ResponsiveContainer width="100%" height={dynamicHeight}>
-      <BarChart data={chartData} layout="vertical" margin={{ left: 20 }}>
+      <BarChart data={chartData} layout="vertical" margin={{ left: isMobile ? 5 : 20 }}>
         <CartesianGrid strokeDasharray="3 3" />
         <XAxis type="number" tick={{ fontSize: 12 }} />
-        <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={150} />
+        <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={isMobile ? 80 : 150} />
         <Tooltip
+          trigger={isMobile ? 'click' : 'hover'}
           contentStyle={{
             backgroundColor: 'rgba(255, 255, 255, 0.95)',
             border: '1px solid rgba(0, 0, 0, 0.1)',
             borderRadius: '6px',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+            maxWidth: '85vw',
           }}
           formatter={(value: number | undefined) => [(value ?? 0).toLocaleString(), 'People']}
           labelFormatter={(label) => {

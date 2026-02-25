@@ -121,8 +121,8 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
     <div className="space-y-8">
       {/* Header */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-4xl font-bold tracking-tight">Executive Dashboard</h1>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <h1 className="text-2xl sm:text-4xl font-bold tracking-tight">Executive Dashboard</h1>
           <div className="flex items-center gap-2">
             {lastRefresh && (
               <p className="text-xs text-muted-foreground">

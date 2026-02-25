@@ -253,7 +253,7 @@ export function DateRangeFilter({
         </div>
 
         {/* Separator */}
-        <div className="h-5 w-px bg-border mx-1" />
+        <div className="hidden sm:block h-5 w-px bg-border mx-1" />
 
         {/* Preset buttons */}
         <Button
@@ -294,7 +294,7 @@ export function DateRangeFilter({
         </Button>
 
         {/* Separator */}
-        <div className="h-5 w-px bg-border mx-1" />
+        <div className="hidden sm:block h-5 w-px bg-border mx-1" />
 
         {/* Compare toggle */}
         <div className="flex items-center gap-1.5">
@@ -311,7 +311,7 @@ export function DateRangeFilter({
       </div>
 
       {/* Hint text */}
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground hidden sm:block">
         Hold Ctrl/Cmd to select multiple months or years
       </p>
     </div>

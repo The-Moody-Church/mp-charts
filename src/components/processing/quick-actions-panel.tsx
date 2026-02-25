@@ -49,7 +49,7 @@ export function QuickActionsPanel({
     <div className="space-y-2 pt-2 border-t">
       <h3 className="text-sm font-semibold text-gray-900">Quick Actions</h3>
       <div className="space-y-2">
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1">
             <Label htmlFor="milestone-notes" className="text-xs">Notes (optional)</Label>
             <Textarea
@@ -61,7 +61,7 @@ export function QuickActionsPanel({
               rows={2}
             />
           </div>
-          <div className="w-36">
+          <div className="w-full sm:w-36">
             <Label htmlFor="milestone-date" className="text-xs">Date</Label>
             <Input
               id="milestone-date"
@@ -105,7 +105,7 @@ export function QuickActionsPanel({
                 id="milestone-select"
                 value={selectedKey}
                 onChange={(e) => onSelectedKeyChange(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
                 <option value="">Select a milestone...</option>
                 {availableItems.map((item) => (

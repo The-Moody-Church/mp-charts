@@ -36,7 +36,7 @@ export function MilestoneEditForm({
 }: MilestoneEditFormProps) {
   return (
     <div className="px-3 pb-3 border-t bg-blue-50/50 space-y-2">
-      <div className="pt-2 flex items-center gap-2">
+      <div className="pt-2 flex flex-col sm:flex-row sm:items-center gap-2">
         <div className="flex-1">
           <Label className="text-xs">Date</Label>
           <Input

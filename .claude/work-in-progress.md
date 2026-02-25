@@ -1,5 +1,23 @@
 # Work in Progress
 
+## Mobile & Responsive Improvements (2026-02-25) — Issues #13, #33
+
+### Status: ✅ COMPLETED — Branch: `claude/mobile-responsive-guidelines-QL6XD`
+
+Full-codebase audit and implementation of mobile/responsive improvements. Addresses Issue #13 (dashboard charts unusable on mobile) and Issue #33 (volunteer modal overflows phone screens).
+
+**Changes**: 30+ files modified/created across 6 phases:
+1. Foundation: viewport meta, dynamic height fix, `useIsMobile` hook
+2. Dashboard: touch tooltips (`trigger="click"`), responsive margins/legends, Y-axis widths, expand button visibility, venn diagram touch
+3. Modals: base dialog padding, responsive max-width on all 3 processing modals, stack forms, flex-wrap badges
+4. Polish: home page responsive padding/title
+5. Page refinements: responsive padding on all page containers, responsive tab navigation, form select font sizing (iOS auto-zoom prevention), chart tooltip dismiss on outside tap
+6. Guidelines: CLAUDE.md "Mobile & Responsive Guidelines" section with tab navigation, form select, and ExpandableChart patterns
+
+**Key files**: `src/hooks/use-mobile.ts`, all `src/components/dashboard/*.tsx`, all `*-detail-modal.tsx`, `src/components/ui/dialog.tsx`, `src/components/dashboard/expandable-chart.tsx`, `CLAUDE.md`
+
+---
+
 ## Shared Processing Components (2026-02-24) — Issue #60
 
 ### Status: ✅ COMPLETED

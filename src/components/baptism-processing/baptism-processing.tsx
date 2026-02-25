@@ -104,8 +104,8 @@ export function BaptismProcessing({ initialApplicantId }: { initialApplicantId?:
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="current">
+        <TabsList className="w-full sm:w-fit h-auto">
+          <TabsTrigger value="current" className="flex-1 sm:flex-initial whitespace-normal sm:whitespace-nowrap text-xs sm:text-sm py-1.5">
             Current Baptism Applicants
             {currentApplicants.length > 0 && (
               <span className="ml-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs">
@@ -113,7 +113,7 @@ export function BaptismProcessing({ initialApplicantId }: { initialApplicantId?:
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="paused">
+          <TabsTrigger value="paused" className="flex-1 sm:flex-initial whitespace-normal sm:whitespace-nowrap text-xs sm:text-sm py-1.5">
             Paused Baptism Applicants
             {pausedApplicants.length > 0 && (
               <span className="ml-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs">

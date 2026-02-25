@@ -8,7 +8,7 @@ interface BaptismProcessingPageProps {
 export default function BaptismProcessingPage({ searchParams }: BaptismProcessingPageProps) {
   return (
     <Suspense fallback={
-      <div className="container mx-auto p-8">
+      <div className="container mx-auto p-4 sm:p-6 lg:p-8">
         <div className="text-muted-foreground">Loading baptism applicants...</div>
       </div>
     }>
@@ -23,7 +23,7 @@ async function BaptismProcessingContent({ searchParams }: BaptismProcessingPageP
   const initialApplicantId = applicantParam && !isNaN(applicantParam) ? applicantParam : null;
 
   return (
-    <div className="container mx-auto p-8">
+    <div className="container mx-auto p-4 sm:p-6 lg:p-8">
       <BaptismProcessing initialApplicantId={initialApplicantId} />
     </div>
   );
