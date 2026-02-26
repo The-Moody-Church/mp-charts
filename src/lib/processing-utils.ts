@@ -96,11 +96,12 @@ export function filterByName<T extends { info: { First_Name: string; Nickname: s
       (nick && `${nick} ${last}`.includes(q))
     ) return true;
 
-    // Soundex matching for spelling variants (Jonny/Johnny, Cathy/Kathy, etc.)
+    // Soundex matching for spelling variants (Jonny/Johnny, Catherine/Katherine, etc.)
+    // Compare digit portions only — the first letter is dropped so C/K, F/Ph, etc. match.
     const queryWords = q.split(/\s+/).filter(Boolean);
-    const nameCodes = [first, nick, last].filter(Boolean).map(soundex);
+    const nameDigits = [first, nick, last].filter(Boolean).map(n => soundex(n).slice(1));
     return queryWords.length > 0 && queryWords.every(
-      word => nameCodes.some(nc => nc === soundex(word))
+      word => nameDigits.some(nd => nd === soundex(word).slice(1))
     );
   });
 }
