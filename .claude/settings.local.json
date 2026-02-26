@@ -75,7 +75,10 @@
       "Bash(git mv .claude/draft-issue-dashboard-redesign.md .claude/plans/)",
       "Bash(git mv .claude/community-attendance-debugging.md .claude/notes/)",
       "Bash(git mv .claude/security-audit-2026-02-24.md .claude/notes/)",
-      "Bash(git rm .claude/work-in-progress.md)"
+      "Bash(git rm .claude/work-in-progress.md)",
+      "Bash(python3 -c \":*)",
+      "Bash(gh api repos/MinistryPlatform-Community/MPNext/pulls/51/comments)",
+      "Bash(gh api repos/MinistryPlatform-Community/MPNext/issues/51/comments)"
     ],
     "deny": [],
     "ask": [],
