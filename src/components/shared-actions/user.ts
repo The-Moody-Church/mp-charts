@@ -9,9 +9,8 @@ import { UserService } from '@/services/userService';
  * @param id - The user's GUID
  * @returns The user's profile data
  */
-export async function getCurrentUserProfile(id: string): Promise<MPUserProfile> {
+export async function getCurrentUserProfile(id: string): Promise<MPUserProfile | undefined> {
   await requireSession();
   const userService = await UserService.getInstance();
-  const userProfile = await userService.getUserProfile(id);
-  return userProfile;
+  return userService.getUserProfile(id);
 }

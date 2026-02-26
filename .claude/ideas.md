@@ -154,6 +154,8 @@ Server actions accept record IDs from clients (contactId, participantId, etc.) a
 2. **Relationship checks**: Verify the requesting user's relationship to the record (e.g., are they a group leader for this volunteer's group?).
 3. **Audit logging** (interim): Log user ID + accessed record IDs for abuse detection while a proper authorization model is designed.
 
+**Update (2026-02-26)**: Upstream PR #50 added `roles` and `userGroups` to `MPUserProfile`, now available via `useUser()` context. This enables role-based gating of features (see #58), which reduces IDOR surface area by restricting who can reach record-accessing endpoints in the first place. Full per-record authorization (e.g., "can this user see *this* contact?") still requires additional work beyond roles — either per-user access tokens or relationship checks.
+
 From security audit finding #10 (2026-02-24).
 
 ### Role-Based Access Control (RBAC) ([#58](https://github.com/The-Moody-Church/mp-charts/issues/58))
@@ -163,6 +165,8 @@ All authenticated users currently have identical access to all features and data
 1. **MP Security Groups**: Check the user's Ministry Platform security groups at login, store group memberships in the session, and gate features accordingly (e.g., only "Volunteer Coordinators" group can access volunteer processing).
 2. **Page-level authorization**: Add role checks in server actions before data access.
 3. **Leverage `$userId` more**: Use access-token-based MPHelper instances so MP's built-in permission model governs data access transparently.
+
+**Update (2026-02-26)**: Upstream PR #50 incorporated — `MPUserProfile` now includes `roles` (from `dp_User_Roles`) and `userGroups` (from `dp_User_User_Groups`), loaded at login and available via `useUser()` context. This is the foundational data layer needed for RBAC. Next steps: define role-to-feature mappings, add authorization checks in server actions, gate UI elements client-side, and optionally add route-level protection in the proxy.
 
 From security audit finding #13 (2026-02-24).
 
