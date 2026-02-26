@@ -13,10 +13,6 @@ Quick-reference snapshot of current project state. Read this first at session st
 | 2026-02-24 | Shared processing components extraction + security audit | #60 | [session](sessions/session-summary-2026-02-24.md) |
 | 2026-02-23 | Baptism processing + membership processing | #17, #47 | [session](sessions/session-summary-2026-02-23.md) |
 
-## In Progress / Needs Testing
-
-- **Better Auth migration** (code complete, needs live testing) — OAuth login flow, audit log attribution, session persistence, sign-out. See [2026-02-20 session](sessions/session-summary-2026-02-20.md).
-
 ## Open Issues
 
 - **#52** — Active Communities and Small Groups chart needs work
