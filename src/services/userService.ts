@@ -89,7 +89,7 @@ export class UserService {
       this.mp!.getTableRecords<{ User_Group_ID: number; User_Group_Name: string }>({
         table: "dp_User_User_Groups",
         filter: `User_ID = ${sanitizeIds([profile.User_ID])}`,
-        select: "User_Group_ID, User_Group_ID_TABLE.User_Group_Name",
+        select: "User_Group_ID_TABLE.User_Group_ID, User_Group_ID_TABLE.User_Group_Name",
       }),
     ]);
 

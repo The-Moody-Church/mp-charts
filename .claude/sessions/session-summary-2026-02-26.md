@@ -110,3 +110,38 @@ Full RBAC implementation with admin-managed feature-to-User-Group mapping, serve
 - `.claude/plans/plan-rbac.md` — Status updated to "Implemented"
 - `.claude/ideas.md` — #58 marked completed
 - `.claude/status.md` — Updated with RBAC completion
+
+## Post-Commit Bugfixes & Improvements
+
+### Bug: Ambiguous column name in User Groups query
+The `dp_User_User_Groups` query used bare `User_Group_ID` in the select, which MP's API rejected as ambiguous (exists in both base and joined table). Fixed by qualifying as `User_Group_ID_TABLE.User_Group_ID`.
+
+**File modified:** `src/services/userService.ts:92` — Changed select from `"User_Group_ID, ..."` to `"User_Group_ID_TABLE.User_Group_ID, ..."`
+
+### Bug: Turbopack env var not available in server component renders
+`process.env.ADMIN_USER_GROUP_IDS` is `undefined` during server component rendering (GET requests) in Turbopack, though it works in server actions (POST requests). The admin page's server component called `requireFeatureAccess("admin")` during render, which failed because `isSuperAdmin` couldn't read the env var.
+
+**Fix:** Refactored admin page from server-component data fetching to client-side data fetching via `useEffect` → server actions (POST). The `next.config.ts` `env` approach was tried first but didn't work (config evaluates before `.env.local` is loaded).
+
+**Files modified:**
+- `src/app/(web)/admin/page.tsx` — Simplified to just render `<AdminPage />` (removed `AdminContent` server component and Suspense wrapper)
+- `src/components/admin/admin-page.tsx` — Now fetches data in `useEffect` via `getFeatureAccessConfig()` and `getAvailableUserGroups()` server actions; handles loading/error states inline
+
+### Rename "Access Control" → "Setup"
+- `src/components/layout/sidebar.tsx` — Nav item label changed to "Setup"
+- `src/components/home/home-cards.tsx` — Card title changed to "Setup", button text to "Open Setup"
+- `src/components/admin/admin-page.tsx` — Page heading changed to "Setup"
+
+### Promote Contact Lookup from dev-only to RBAC-gated
+- `src/components/layout/sidebar.tsx` — Removed `devOnly: true` from Contact Lookup nav item
+- `src/components/home/home-cards.tsx` — Removed `devOnly: true`, updated description and button text
+
+### Add search/filter to Setup page group lists
+Each feature card's User Group checkbox list now has a search input ("Filter groups...") that filters by group name or ID. Extracted `FilteredGroupList` component with `useMemo` filtering.
+
+**File modified:** `src/components/admin/admin-page.tsx` — Added `searchTerms` state, `Input` for per-card filtering, `FilteredGroupList` component
+
+### Debug logging (temporary)
+Added dev-only `console.log` statements to diagnose RBAC issues:
+- `src/components/shared-actions/user.ts` — `[RBAC debug]` logs userGroupIds and userGroups
+- `src/lib/authorization.ts` — `[RBAC requireFeatureAccess]` logs feature, profile, adminEnv, isSuperAdmin

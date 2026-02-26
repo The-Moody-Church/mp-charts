@@ -27,9 +27,9 @@ const navigation: NavItem[] = [
   { name: "Volunteer Processing", href: "/volunteer-processing", icon: ClipboardDocumentCheckIcon, feature: "volunteer-processing" },
   { name: "Baptism Processing", href: "/baptism-processing", icon: ClipboardDocumentCheckIcon, feature: "baptism-processing" },
   { name: "Membership Processing", href: "/membership-processing", icon: UserGroupIcon, feature: "membership-processing" },
-  { name: "Contact Lookup", href: "/contactlookup", icon: UsersIcon, feature: "contact-lookup", devOnly: true },
+  { name: "Contact Lookup", href: "/contactlookup", icon: UsersIcon, feature: "contact-lookup" },
   { name: "Template Tool", href: "/tools/template", icon: WrenchScrewdriverIcon, devOnly: true },
-  { name: "Access Control", href: "/admin", icon: ShieldCheckIcon, adminOnly: true },
+  { name: "Setup", href: "/admin", icon: ShieldCheckIcon, adminOnly: true },
 ];
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {

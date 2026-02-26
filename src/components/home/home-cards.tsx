@@ -49,11 +49,10 @@ const featureCards: FeatureCard[] = [
   },
   {
     title: "Contact Lookup",
-    description: "Contact Lookup shows an example of the full CRUD power of the MP API and quickly accessing data from the platform",
+    description: "Search and view contact records from Ministry Platform",
     href: "/contactlookup",
-    buttonText: "View Demo",
+    buttonText: "View Contacts",
     feature: "contact-lookup",
-    devOnly: true,
   },
   {
     title: "Template Tool",
@@ -63,10 +62,10 @@ const featureCards: FeatureCard[] = [
     devOnly: true,
   },
   {
-    title: "Access Control",
+    title: "Setup",
     description: "Manage which User Groups can access each feature",
     href: "/admin",
-    buttonText: "Manage Access",
+    buttonText: "Open Setup",
     adminOnly: true,
   },
 ];
