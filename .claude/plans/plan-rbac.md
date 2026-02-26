@@ -14,17 +14,66 @@ Upstream PR #50 incorporated — `MPUserProfile` now loads `roles` (from `dp_Use
 
 ## Architecture Decision
 
-**Approach: Server-action authorization + client-side UI gating**
+**Approach: Admin-managed feature-to-User-Group mapping + server-action enforcement + client-side UI gating**
 
-- **Server actions** are the enforcement boundary — every action checks roles before data access
-- **Client UI** hides features the user can't access (sidebar, home page cards) — this is UX polish, not security
-- **Proxy** stays unchanged (session presence only) — role checks in the proxy would require a DB lookup on every request, adding latency; server actions already run per-operation
+### Core Concepts
 
-Why not per-user access tokens? That's a bigger architectural change (token refresh, per-request MPHelper instances, MP permission model alignment). It could be a future enhancement but RBAC via roles is simpler, gives us explicit control, and addresses the immediate security gap.
+1. **Features** are the app's protected areas (dashboard, volunteer-processing, baptism-processing, etc.)
+2. **User Groups** (from `dp_User_User_Groups`) gate access — each feature has a list of allowed User Group IDs
+3. **Super-admin group(s)** defined in `.env` (`ADMIN_USER_GROUP_IDS`) always have access to everything, including the admin tool itself
+4. **Admin page** at `/admin` lets super-admins manage which User Group IDs are allowed for each feature
+5. **Server actions** are the security boundary — every action checks the user's group memberships against the feature's allowed groups
+6. **Client UI** hides features the user can't access (sidebar, home page cards) — UX polish, not security
+7. **Proxy** stays unchanged (session presence only)
 
-## Role-to-Feature Mapping
+### Why User Group IDs (not names)?
 
-Define a central config mapping MP roles/groups to features. This avoids scattering role names across server actions.
+- IDs are stable — group names can be renamed in MP without breaking authorization
+- IDs are numeric, easy to store and compare
+- The `dp_User_User_Groups` table has `User_Group_ID` as the foreign key — we need to add this to the profile fetch
+
+### Why an admin page (not hardcoded config)?
+
+- Feature-to-group mappings change as staff roles evolve — no code deploy needed
+- Church admins can self-service without developer involvement
+- The mapping is stored in a simple config (JSON file or DB table) that persists across deploys
+
+## Data Model Changes
+
+### MPUserProfile — add User Group IDs
+
+Currently we fetch group *names*. We also need group *IDs* for authorization checks:
+
+```typescript
+export interface MPUserProfile {
+  // ... existing fields ...
+  roles: string[];
+  userGroups: string[];
+  userGroupIds: number[];  // NEW — User_Group_IDs for authorization
+}
+```
+
+Update `UserService.getUserProfile` to also select `User_Group_ID` from `dp_User_User_Groups`:
+
+```typescript
+// Current select: "User_Group_ID_TABLE.User_Group_Name"
+// New select:     "User_Group_ID, User_Group_ID_TABLE.User_Group_Name"
+```
+
+### Environment Variable
+
+```env
+# Super-admin User Group IDs — comma-separated list
+# Users in ANY of these groups have access to ALL features including the admin page
+# User Group ID 29 = Administrators (example)
+ADMIN_USER_GROUP_IDS=29
+```
+
+This is an `IN`-style list — multiple IDs can be specified (e.g., `29,42`). A user matching ANY of these groups is a super-admin.
+
+### Feature Access Configuration
+
+Stored as a JSON structure (initially loaded from a config file, later manageable via admin UI):
 
 ```typescript
 // src/lib/authorization.ts
@@ -35,94 +84,152 @@ export type Feature =
   | "baptism-processing"
   | "membership-processing"
   | "contact-lookup"
-  | "contact-logs";
+  | "contact-logs"
+  | "admin";
 
-// Map features to the MP roles OR userGroups that grant access.
-// A user needs at least one matching role or group for the feature.
-export const FEATURE_ACCESS: Record<Feature, { roles: string[]; userGroups: string[] }> = {
-  "dashboard": {
-    roles: ["Administrators"],
-    userGroups: ["Dashboard Viewers"],  // example — TBD based on actual MP setup
-  },
-  "volunteer-processing": {
-    roles: ["Administrators"],
-    userGroups: ["Volunteer Coordinators"],
-  },
-  "baptism-processing": {
-    roles: ["Administrators"],
-    userGroups: ["Baptism Coordinators"],
-  },
-  "membership-processing": {
-    roles: ["Administrators"],
-    userGroups: ["Membership Coordinators"],
-  },
-  "contact-lookup": {
-    roles: ["Administrators"],
-    userGroups: [],
-  },
-  "contact-logs": {
-    roles: ["Administrators"],
-    userGroups: ["Pastoral Staff"],
-  },
-};
+interface FeatureAccessConfig {
+  [feature: string]: {
+    label: string;           // Display name for admin UI
+    description: string;     // What this feature does
+    allowedGroupIds: number[]; // User Group IDs that can access this feature
+  };
+}
 ```
 
-**Important**: The exact role and group names must be confirmed against the actual Ministry Platform configuration. The names above are placeholders — the real names come from `dp_User_Roles.Role_Name` and `dp_User_User_Groups.User_Group_Name`.
+### Storage Strategy
+
+**Phase 1 (MVP)**: Store feature-group mappings in a JSON file on disk (`data/feature-access.json`). Simple, no DB dependency, works with Docker volumes.
+
+**Phase 2 (future)**: If Ministry Platform has a suitable config table, migrate there for centralized management.
+
+```json
+// data/feature-access.json
+{
+  "dashboard": {
+    "label": "Executive Dashboard",
+    "description": "View ministry metrics and attendance data",
+    "allowedGroupIds": [29, 45]
+  },
+  "volunteer-processing": {
+    "label": "Volunteer Processing",
+    "description": "Manage volunteer onboarding and approvals",
+    "allowedGroupIds": [29, 52]
+  },
+  "baptism-processing": {
+    "label": "Baptism Processing",
+    "description": "Manage baptism applicants and milestones",
+    "allowedGroupIds": [29, 53]
+  },
+  "membership-processing": {
+    "label": "Membership Processing",
+    "description": "Manage membership applications",
+    "allowedGroupIds": [29, 54]
+  },
+  "contact-lookup": {
+    "label": "Contact Lookup",
+    "description": "Search and view contact records",
+    "allowedGroupIds": [29]
+  },
+  "contact-logs": {
+    "label": "Contact Logs",
+    "description": "Create and manage pastoral contact logs",
+    "allowedGroupIds": [29]
+  }
+}
+```
+
+**Note**: The `admin` feature is NOT stored in the config file — it's exclusively gated by `ADMIN_USER_GROUP_IDS` from `.env`. This prevents admins from accidentally locking themselves out.
 
 ## Implementation Steps
 
 ### Phase 1: Authorization Infrastructure
 
-**1a. Create `src/lib/authorization.ts`**
+**1a. Update `MPUserProfile` and `UserService`**
+
+Add `userGroupIds: number[]` to the interface and update `getUserProfile` to also select `User_Group_ID` from the groups query.
+
+**1b. Create `src/lib/authorization.ts`**
 
 Central module with:
-- `Feature` type and `FEATURE_ACCESS` config (as above)
-- `hasFeatureAccess(profile: MPUserProfile, feature: Feature): boolean` — checks if user's roles/groups match
-- `requireFeatureAccess(feature: Feature): Promise<void>` — server-side check that fetches profile and throws if unauthorized
 
 ```typescript
-export function hasFeatureAccess(
-  profile: { roles: string[]; userGroups: string[] },
-  feature: Feature
-): boolean {
-  const access = FEATURE_ACCESS[feature];
-  return (
-    profile.roles.some((r) => access.roles.includes(r)) ||
-    profile.userGroups.some((g) => access.userGroups.includes(g))
-  );
+import { readFileSync, writeFileSync, existsSync } from "fs";
+import { join } from "path";
+
+const CONFIG_PATH = join(process.cwd(), "data", "feature-access.json");
+
+// Parse ADMIN_USER_GROUP_IDS from .env (comma-separated)
+function getAdminGroupIds(): number[] {
+  const raw = process.env.ADMIN_USER_GROUP_IDS || "";
+  return raw.split(",").map(Number).filter((n) => !isNaN(n) && n > 0);
 }
 
-export async function requireFeatureAccess(feature: Feature): Promise<void> {
+// Check if user is a super-admin
+export function isSuperAdmin(userGroupIds: number[]): boolean {
+  const adminIds = getAdminGroupIds();
+  return userGroupIds.some((id) => adminIds.includes(id));
+}
+
+// Load feature access config from disk
+export function loadFeatureAccess(): FeatureAccessConfig { ... }
+
+// Save feature access config to disk
+export function saveFeatureAccess(config: FeatureAccessConfig): void { ... }
+
+// Check if user can access a feature
+export function hasFeatureAccess(
+  userGroupIds: number[],
+  feature: Feature
+): boolean {
+  // Super-admins can access everything
+  if (isSuperAdmin(userGroupIds)) return true;
+
+  // "admin" feature is super-admin only
+  if (feature === "admin") return false;
+
+  const config = loadFeatureAccess();
+  const featureConfig = config[feature];
+  if (!featureConfig) return false;
+
+  return userGroupIds.some((id) => featureConfig.allowedGroupIds.includes(id));
+}
+
+// Server-side enforcement — throws if unauthorized
+export async function requireFeatureAccess(feature: Feature): Promise<Session> {
   const session = await requireSession();
   const userGuid = getUserGuid(session);
   if (!userGuid) throw new Error("Unauthorized");
 
   const userService = await UserService.getInstance();
   const profile = await userService.getUserProfile(userGuid);
-  if (!profile || !hasFeatureAccess(profile, feature)) {
+  if (!profile || !hasFeatureAccess(profile.userGroupIds, feature)) {
     throw new Error("Forbidden: insufficient permissions");
   }
+  return session;
 }
 ```
 
-**Performance note**: `requireFeatureAccess` makes 3 MP API calls (user lookup + roles + groups) per server action invocation. Options to mitigate:
-- Cache the profile in-memory per user for a short TTL (e.g., 5 minutes)
-- Or accept the overhead since these are lightweight lookups and server actions are already rate-limited
+**1c. Add `ADMIN_USER_GROUP_IDS` to `.env.example`**
 
-**1b. Add caching to `UserService.getUserProfile`**
+```env
+# RBAC Configuration
+# Super-admin User Group IDs — comma-separated
+# Users in ANY of these groups have full access to all features + admin page
+ADMIN_USER_GROUP_IDS=29
+```
 
-Add a short-lived in-memory cache (Map with TTL) keyed by user GUID:
+**1d. Add profile caching to `UserService`**
+
+Short-lived in-memory cache (5-min TTL) keyed by user GUID to avoid 3 MP API calls per server action:
 
 ```typescript
 private profileCache = new Map<string, { profile: MPUserProfile; expiresAt: number }>();
 private static CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 ```
 
-This ensures repeated `requireFeatureAccess` calls within a session don't re-query MP every time.
-
 ### Phase 2: Server-Side Enforcement
 
-Add `requireFeatureAccess(feature)` to every server action. This is the actual security boundary.
+Replace `requireSession()` with `requireFeatureAccess(feature)` in every server action. `requireFeatureAccess` calls `requireSession()` internally.
 
 | File | Feature | Actions to protect |
 |------|---------|-------------------|
@@ -134,20 +241,38 @@ Add `requireFeatureAccess(feature)` to every server action. This is the actual s
 | `src/components/contact-lookup-details/actions.ts` | `"contact-lookup"` | Both actions |
 | `src/components/contact-logs/actions.ts` | `"contact-logs"` | All 6 actions |
 
-**Pattern per action:**
+**Pattern:**
 ```typescript
 export async function getInProcessVolunteers() {
   "use server";
-  await requireFeatureAccess("volunteer-processing");
-  // ... existing logic
+  const session = await requireFeatureAccess("volunteer-processing");
+  const mpUserId = getMpUserId(session);
+  // ... existing logic using session/mpUserId
 }
 ```
 
-**Note**: `requireFeatureAccess` calls `requireSession()` internally, so we can replace the existing `requireSession()` call in each action (not add a second one).
+### Phase 3: Admin Page
 
-### Phase 3: Client-Side UI Gating
+**Route**: `/admin` (production-visible, but gated to super-admins only)
 
-**3a. Create `useAuthorization` hook**
+**UI**: A simple page listing all features. Each feature shows:
+- Feature name and description
+- A multi-select of User Groups (fetched from `dp_User_User_Groups` or a known list)
+- Save button that writes to `data/feature-access.json`
+
+**Components**:
+- `src/app/(web)/admin/page.tsx` — Suspense wrapper
+- `src/components/admin/admin-page.tsx` — client component with the form
+- `src/components/admin/actions.ts` — server actions:
+  - `getFeatureAccessConfig()` — reads config (requires `"admin"` feature access)
+  - `updateFeatureAccess(feature, allowedGroupIds)` — writes config
+  - `getAvailableUserGroups()` — fetches all User Groups from MP for the picker
+
+**Admin is always gated by `ADMIN_USER_GROUP_IDS`** — not by the feature-access config file. This is a safety measure: the admin page cannot be used to lock out admins.
+
+### Phase 4: Client-Side UI Gating
+
+**4a. Create `useAuthorization` hook**
 
 ```typescript
 // src/hooks/use-authorization.ts
@@ -159,77 +284,86 @@ export function useAuthorization() {
 
   return {
     canAccess: (feature: Feature) =>
-      userProfile ? hasFeatureAccess(userProfile, feature) : false,
+      userProfile ? hasFeatureAccess(userProfile.userGroupIds, feature) : false,
+    isSuperAdmin: userProfile ? isSuperAdmin(userProfile.userGroupIds) : false,
   };
 }
 ```
 
-**3b. Gate sidebar nav items**
+**Note**: `hasFeatureAccess` reads the config file server-side. For client-side usage, we need to either:
+- Expose the user's accessible features as a list via a server action called once at login
+- Or move the check to a server action that the hook calls
 
-In `sidebar.tsx`, conditionally render nav items:
+Recommended: add a `getAccessibleFeatures(userGuid)` server action that returns `Feature[]`, called by `UserProvider` alongside `getCurrentUserProfile`. Store in context so `useAuthorization` is synchronous.
+
+**4b. Gate sidebar and home page**
 
 ```tsx
-const { canAccess } = useAuthorization();
+// sidebar.tsx
+const { canAccess, isSuperAdmin } = useAuthorization();
 
-// Only show items the user can access
 const visibleItems = navItems.filter((item) => {
   if (item.devOnly && !isDev) return false;
   if (item.feature && !canAccess(item.feature)) return false;
+  if (item.adminOnly && !isSuperAdmin) return false;
   return true;
 });
 ```
 
-**3c. Gate home page cards**
+Add admin link to sidebar (only visible to super-admins).
 
-Same pattern in `page.tsx` — hide cards for features the user can't access. Since home page is a Server Component, this would need to either:
-- Become a client component (simple but loses SSR)
-- Or pass authorized features as props from a server-side check
+### Phase 5: Unauthorized Access UX
 
-Recommended: wrap just the card grid in a client component that uses `useAuthorization()`.
+When a user navigates directly to a URL they don't have access to:
 
-### Phase 4: Unauthorized Access UX
+- Server actions throw "Forbidden" errors
+- Add an error boundary that catches authorization errors and shows a friendly "Access Denied" message
+- Consider redirect to home with a toast notification
 
-When a user navigates directly to a URL they don't have access to (e.g., bookmarked `/volunteer-processing`):
-
-- Server actions will throw "Forbidden" errors
-- Add a generic "Access Denied" error boundary or page that catches these and shows a friendly message
-- Consider a redirect to home with a toast notification
-
-### Phase 5: Testing
+### Phase 6: Testing
 
 | Test | What it verifies |
 |------|-----------------|
-| `authorization.test.ts` | `hasFeatureAccess` logic with various role/group combinations |
+| `authorization.test.ts` | `hasFeatureAccess` with various group ID combinations |
+| `authorization.test.ts` | `isSuperAdmin` with env var parsing |
 | `authorization.test.ts` | `requireFeatureAccess` throws for unauthorized users |
-| Update each `actions.test.ts` | Actions reject when user lacks required role |
-| `sidebar.test.tsx` | Nav items filtered by role |
+| `authorization.test.ts` | Config file read/write |
+| Update each `actions.test.ts` | Actions reject when user lacks required group |
+| `admin/actions.test.ts` | Admin actions gated to super-admins |
 
 ## File Changes Summary
 
 | File | Change Type | Description |
 |------|------------|-------------|
-| `src/lib/authorization.ts` | **New** | Feature access config, `hasFeatureAccess`, `requireFeatureAccess` |
+| `src/lib/providers/ministry-platform/types/user-profile.types.ts` | **Modify** | Add `userGroupIds: number[]` |
+| `src/services/userService.ts` | **Modify** | Select `User_Group_ID` in groups query, add profile cache |
+| `src/lib/authorization.ts` | **New** | Feature type, config loading, `hasFeatureAccess`, `isSuperAdmin`, `requireFeatureAccess` |
+| `data/feature-access.json` | **New** | Default feature-to-group config |
+| `.env.example` | **Modify** | Add `ADMIN_USER_GROUP_IDS` |
 | `src/hooks/use-authorization.ts` | **New** | `useAuthorization` hook for client-side gating |
-| `src/services/userService.ts` | **Modify** | Add profile cache with TTL |
-| `src/components/dashboard/actions.ts` | **Modify** | Add `requireFeatureAccess("dashboard")` |
-| `src/components/volunteer-processing/actions.ts` | **Modify** | Add `requireFeatureAccess("volunteer-processing")` |
-| `src/components/baptism-processing/actions.ts` | **Modify** | Add `requireFeatureAccess("baptism-processing")` |
-| `src/components/membership-processing/actions.ts` | **Modify** | Add `requireFeatureAccess("membership-processing")` |
-| `src/components/contact-lookup/actions.ts` | **Modify** | Add `requireFeatureAccess("contact-lookup")` |
-| `src/components/contact-lookup-details/actions.ts` | **Modify** | Add `requireFeatureAccess("contact-lookup")` |
-| `src/components/contact-logs/actions.ts` | **Modify** | Add `requireFeatureAccess("contact-logs")` |
-| `src/components/layout/sidebar.tsx` | **Modify** | Filter nav items by feature access |
+| `src/app/(web)/admin/page.tsx` | **New** | Admin page route |
+| `src/components/admin/admin-page.tsx` | **New** | Admin UI component |
+| `src/components/admin/actions.ts` | **New** | Admin server actions |
+| `src/components/admin/index.ts` | **New** | Barrel export |
+| `src/components/dashboard/actions.ts` | **Modify** | Replace `requireSession()` with `requireFeatureAccess("dashboard")` |
+| `src/components/volunteer-processing/actions.ts` | **Modify** | Replace `requireSession()` with `requireFeatureAccess("volunteer-processing")` |
+| `src/components/baptism-processing/actions.ts` | **Modify** | Replace `requireSession()` with `requireFeatureAccess("baptism-processing")` |
+| `src/components/membership-processing/actions.ts` | **Modify** | Replace `requireSession()` with `requireFeatureAccess("membership-processing")` |
+| `src/components/contact-lookup/actions.ts` | **Modify** | Replace `requireSession()` with `requireFeatureAccess("contact-lookup")` |
+| `src/components/contact-lookup-details/actions.ts` | **Modify** | Replace `requireSession()` with `requireFeatureAccess("contact-lookup")` |
+| `src/components/contact-logs/actions.ts` | **Modify** | Replace `requireSession()` with `requireFeatureAccess("contact-logs")` |
+| `src/components/layout/sidebar.tsx` | **Modify** | Filter nav items by feature access, add admin link |
 | `src/app/(web)/page.tsx` | **Modify** | Gate home page cards by feature access |
 | `src/lib/authorization.test.ts` | **New** | Tests for authorization logic |
 
 ## Open Questions
 
-1. **What are the actual MP role and group names?** The `FEATURE_ACCESS` config needs real names from Ministry Platform's `dp_User_Roles` and `dp_User_User_Groups` tables. We could log/display the current user's roles during dev to discover them.
-2. **Should "Administrators" have blanket access?** The plan assumes yes — Administrators role grants access to everything. Confirm this is the desired behavior.
-3. **Should unauthorized users see a disabled nav item or no item at all?** Plan assumes hidden (no item). An alternative is greyed-out with a tooltip explaining why.
-4. **Dashboard access**: Should the dashboard be open to all authenticated users or restricted? It shows aggregate data (not PII), so broader access may be appropriate.
-5. **Profile cache TTL**: 5 minutes means role changes take up to 5 minutes to take effect. Is this acceptable?
+1. **Config storage for Docker**: `data/feature-access.json` needs to persist across container restarts. Options: Docker volume mount on `data/`, or store in MP as a config record. Volume mount is simplest for Phase 1.
+2. **Should unauthorized users see a disabled nav item or no item at all?** Plan assumes hidden. An alternative is greyed-out with a tooltip.
+3. **Dashboard access**: Should the dashboard be open to all authenticated users or restricted? It shows aggregate data (not PII), so broader access may be appropriate.
+4. **Profile cache TTL**: 5 minutes means group changes take up to 5 minutes to take effect. Is this acceptable?
+5. **User Group picker in admin UI**: Should it fetch all groups from MP dynamically, or show a fixed list based on what exists in the current config?
 
 ## Relationship to #57 (IDOR Mitigation)
 
-RBAC reduces IDOR surface area by restricting *who can reach* record-accessing endpoints. However, RBAC alone doesn't solve IDOR — a user with "Volunteer Coordinator" role could still enumerate volunteer IDs to access records from groups they don't manage. Full IDOR mitigation requires per-record checks (Phase 2 of a separate effort) or per-user access tokens.
+RBAC reduces IDOR surface area by restricting *who can reach* record-accessing endpoints. However, RBAC alone doesn't solve IDOR — a user in a "Volunteer Coordinators" group could still enumerate volunteer IDs to access records from groups they don't manage. Full IDOR mitigation requires per-record checks (Phase 2 of a separate effort) or per-user access tokens.
