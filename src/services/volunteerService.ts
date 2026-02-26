@@ -218,24 +218,7 @@ export class VolunteerService {
 
     if (groupParticipants.length === 0) return { volunteers: [], groups: [] };
 
-    // Exclude anyone currently in the in-process group(s)
-    const processingGroupIds = getEnvIds('VOLUNTEER_PROCESSING_GROUP_IDS');
-    let filteredParticipants = groupParticipants;
-
-    if (processingGroupIds.length > 0) {
-      const inProcessGPs = await this.mp!.getTableRecords<{ Participant_ID: number }>({
-        table: 'Group_Participants',
-        select: 'Participant_ID',
-        filter: `Group_ID IN (${sanitizeIds(processingGroupIds)}) AND (End_Date IS NULL OR End_Date >= '${now}')`
-      });
-
-      const inProcessParticipantIds = new Set(inProcessGPs.map(gp => gp.Participant_ID));
-      filteredParticipants = groupParticipants.filter(
-        gp => !inProcessParticipantIds.has(gp.Participant_ID)
-      );
-    }
-
-    if (filteredParticipants.length === 0) return { volunteers: [], groups: [] };
+    const filteredParticipants = groupParticipants;
 
     // Deduplicate by Participant_ID but collect ALL Group_IDs per participant
     const participantGroupIds = new Map<number, Set<number>>();

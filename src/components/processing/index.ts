@@ -6,3 +6,4 @@ export { FileTypeIcon } from './file-type-icon';
 export { MilestoneExpandedView } from './milestone-expanded-view';
 export { MilestoneEditForm } from './milestone-edit-form';
 export { QuickActionsPanel } from './quick-actions-panel';
+export { ProcessingSearchBar } from './processing-search-bar';

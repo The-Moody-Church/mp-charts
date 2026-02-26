@@ -1,5 +1,19 @@
 # Work in Progress
 
+## Processing Search Bar & Non-Exclusionary Groups (2026-02-26) — Issues #49, #50
+
+### Status: ✅ COMPLETED — Branch: `claude/add-processing-search-bar-Ss3pZ`
+
+**Issue #49**: Added `ProcessingSearchBar` shared component to all processing pages (volunteer, baptism, membership). Filters cards by name across all tabs. New `filterByName()` utility in `processing-utils.ts`.
+
+**Issue #50**: Removed exclusionary group filter in `volunteerService.ts` — volunteers in both processing and active groups now appear on both tabs.
+
+**Also confirmed completed**: Issues #13, #33, #51 (previously implemented, marked in ideas.md).
+
+**Key files**: `src/components/processing/processing-search-bar.tsx` (new), `src/lib/processing-utils.ts`, `src/services/volunteerService.ts`, all 3 processing component files
+
+---
+
 ## Mobile & Responsive Improvements (2026-02-25) — Issues #13, #33
 
 ### Status: ✅ COMPLETED — Branch: `claude/mobile-responsive-guidelines-QL6XD`

@@ -52,7 +52,8 @@
       "Bash(brew install:*)",
       "Bash(gh auth status:*)",
       "Edit(**)",
-      "Write(**)"
+      "Write(**)",
+      "Bash(git rev-list --left-right --count main...HEAD)"
     ],
     "deny": [],
     "ask": []

@@ -3,10 +3,11 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VolunteerCard as VolunteerCardData, GroupFilterOption } from "@/lib/dto";
-import { ProcessingGrid } from "@/components/processing";
+import { ProcessingGrid, ProcessingSearchBar } from "@/components/processing";
 import { VolunteerCard } from "./volunteer-card";
 import { VolunteerDetailModal } from "./volunteer-detail-modal";
 import { getInProcessVolunteers, getApprovedVolunteers } from "./actions";
+import { filterByName } from "@/lib/processing-utils";
 
 export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId?: number | null }) {
   const [activeTab, setActiveTab] = useState("in-process");
@@ -14,24 +15,24 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
   const [approvedVolunteers, setApprovedVolunteers] = useState<VolunteerCardData[]>([]);
   const [approvedGroups, setApprovedGroups] = useState<GroupFilterOption[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedVolunteer, setSelectedVolunteer] = useState<VolunteerCardData | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [hasAutoOpened, setHasAutoOpened] = useState(false);
 
-  const fetchData = useCallback(async (tab: string) => {
+  const fetchAllData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      if (tab === "in-process") {
-        const data = await getInProcessVolunteers();
-        setInProcessVolunteers(data);
-      } else {
-        const result = await getApprovedVolunteers();
-        setApprovedVolunteers(result.volunteers);
-        setApprovedGroups(result.groups);
-      }
+      const [inProcessData, approvedResult] = await Promise.all([
+        getInProcessVolunteers(),
+        getApprovedVolunteers(),
+      ]);
+      setInProcessVolunteers(inProcessData);
+      setApprovedVolunteers(approvedResult.volunteers);
+      setApprovedGroups(approvedResult.groups);
     } catch (err) {
       console.error("Failed to fetch volunteers:", err);
       setError("Failed to load volunteers. Please try again.");
@@ -41,14 +42,13 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
   }, []);
 
   useEffect(() => {
-    fetchData(activeTab);
-  }, [activeTab, fetchData]);
+    fetchAllData();
+  }, [fetchAllData]);
 
   // Auto-open modal when navigating via deep link
   useEffect(() => {
     if (!initialVolunteerId || hasAutoOpened || loading) return;
 
-    // Search in-process volunteers first
     const inProcessMatch = inProcessVolunteers.find(
       v => v.info.Group_Participant_ID === initialVolunteerId
     );
@@ -59,7 +59,6 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
       return;
     }
 
-    // Search approved volunteers (may already be loaded)
     const approvedMatch = approvedVolunteers.find(
       v => v.info.Group_Participant_ID === initialVolunteerId
     );
@@ -71,24 +70,8 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
       return;
     }
 
-    // If in-process loaded but no match anywhere, try fetching approved tab
-    if (inProcessVolunteers.length >= 0 && approvedVolunteers.length === 0) {
-      getApprovedVolunteers().then(result => {
-        setApprovedVolunteers(result.volunteers);
-        setApprovedGroups(result.groups);
-        const match = result.volunteers.find(
-          v => v.info.Group_Participant_ID === initialVolunteerId
-        );
-        if (match) {
-          setActiveTab("approved");
-          setSelectedVolunteer(match);
-          setModalOpen(true);
-        }
-        setHasAutoOpened(true);
-      }).catch(() => setHasAutoOpened(true));
-    } else {
-      setHasAutoOpened(true);
-    }
+    // Both tabs loaded but no match found
+    setHasAutoOpened(true);
   }, [initialVolunteerId, inProcessVolunteers, approvedVolunteers, loading, hasAutoOpened]);
 
   const handleCardClick = (volunteer: VolunteerCardData) => {
@@ -97,7 +80,7 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
   };
 
   const handleUpdate = () => {
-    fetchData(activeTab);
+    fetchAllData();
   };
 
   const filteredApprovedVolunteers = useMemo(() => {
@@ -105,7 +88,17 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
     return approvedVolunteers.filter(v => v.groupIds.includes(selectedGroupId));
   }, [approvedVolunteers, selectedGroupId]);
 
-  const currentVolunteers = activeTab === "in-process" ? inProcessVolunteers : filteredApprovedVolunteers;
+  const filteredInProcess = useMemo(
+    () => filterByName(inProcessVolunteers, searchQuery),
+    [inProcessVolunteers, searchQuery]
+  );
+
+  const filteredApproved = useMemo(
+    () => filterByName(filteredApprovedVolunteers, searchQuery),
+    [filteredApprovedVolunteers, searchQuery]
+  );
+
+  const currentVolunteers = activeTab === "in-process" ? filteredInProcess : filteredApproved;
 
   return (
     <div className="space-y-6">
@@ -117,31 +110,34 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="w-full sm:w-fit h-auto">
-          <TabsTrigger value="in-process" className="flex-1 sm:flex-initial whitespace-normal sm:whitespace-nowrap text-xs sm:text-sm py-1.5">
-            New Volunteers In Process
-            {inProcessVolunteers.length > 0 && (
-              <span className="ml-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs">
-                {inProcessVolunteers.length}
-              </span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="approved" className="flex-1 sm:flex-initial whitespace-normal sm:whitespace-nowrap text-xs sm:text-sm py-1.5">
-            Approved Active Volunteers
-            {approvedVolunteers.length > 0 && (
-              <span className="ml-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs">
-                {approvedVolunteers.length}
-              </span>
-            )}
-          </TabsTrigger>
-        </TabsList>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <TabsList className="w-full sm:w-fit h-auto">
+            <TabsTrigger value="in-process" className="flex-1 sm:flex-initial whitespace-normal sm:whitespace-nowrap text-xs sm:text-sm py-1.5">
+              New Volunteers In Process
+              {inProcessVolunteers.length > 0 && (
+                <span className="ml-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs">
+                  {inProcessVolunteers.length}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="approved" className="flex-1 sm:flex-initial whitespace-normal sm:whitespace-nowrap text-xs sm:text-sm py-1.5">
+              Approved Active Volunteers
+              {approvedVolunteers.length > 0 && (
+                <span className="ml-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs">
+                  {approvedVolunteers.length}
+                </span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+          <ProcessingSearchBar value={searchQuery} onChange={setSearchQuery} />
+        </div>
 
         <TabsContent value="in-process">
           <ProcessingGrid
             items={currentVolunteers}
-            loading={loading && activeTab === "in-process"}
+            loading={loading}
             error={error}
-            emptyMessage="No volunteers currently in process."
+            emptyMessage={searchQuery ? "No matching volunteers found." : "No volunteers currently in process."}
             keyExtractor={(v) => v.info.Group_Participant_ID}
             renderCard={(volunteer) => (
               <VolunteerCard volunteer={volunteer} onClick={() => handleCardClick(volunteer)} />
@@ -176,9 +172,9 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
           )}
           <ProcessingGrid
             items={currentVolunteers}
-            loading={loading && activeTab === "approved"}
+            loading={loading}
             error={error}
-            emptyMessage="No approved volunteers found."
+            emptyMessage={searchQuery ? "No matching volunteers found." : "No approved volunteers found."}
             keyExtractor={(v) => v.info.Group_Participant_ID}
             renderCard={(volunteer) => (
               <VolunteerCard volunteer={volunteer} onClick={() => handleCardClick(volunteer)} />
