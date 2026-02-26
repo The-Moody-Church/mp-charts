@@ -24,6 +24,6 @@ Quick-reference snapshot of current project state. Read this first at session st
 ## Key Architecture Notes
 
 - Next.js 16 with PPR/Cache Components, Better Auth, Zod v4
-- Upstream sync current through PR #50 / release v2026.02.26.1751 (reviewed 2026-02-26)
+- Upstream sync current through PR #51 / release v2026.02.26.1827 (reviewed 2026-02-26)
 - Docker CI/CD via GitHub Actions → GitLab Container Registry
 - All processing features (volunteer, baptism, membership) use shared components in `src/components/processing/`

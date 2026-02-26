@@ -97,7 +97,7 @@ Or review PRs at: https://github.com/MinistryPlatform-Community/MPNext/pulls
 
 #### Last Review: 2026-02-26
 
-Reviewed all open/merged upstream PRs through PR #50 (release v2026.02.26.1751). Status:
+Reviewed all open/merged upstream PRs through PR #51 (release v2026.02.26.1827). Status:
 
 | PR | Title | Action | Notes |
 |----|-------|--------|-------|
@@ -112,6 +112,7 @@ Reviewed all open/merged upstream PRs through PR #50 (release v2026.02.26.1751).
 | #47 | GitHub Actions test workflow + Codecov | Skipped | Upstream-specific CI infrastructure |
 | #49 | Restore CODECOV_TOKEN | Skipped | Only relevant with #47 |
 | #50 | Load user roles/groups into MPUserProfile | Incorporated | Added `roles`/`userGroups` to MPUserProfile, parallel fetch from `dp_User_Roles`/`dp_User_User_Groups`; kept our `sanitizeGuid()` + `sanitizeIds()` security (upstream doesn't sanitize); kept `requireSession()` in shared action |
+| #51 | Update deps + fix security vulns | Incorporated | `npm audit fix` resolved 3 CVEs: rollup CVE-2026-27606 (High), minimatch GHSA-3ppc-4f35-3m26 (High), ajv GHSA-2g4f-4pwh-qvx6 (Moderate). Lockfile-only changes, no `package.json` updates needed |
 
 **GitHub will show "N commits behind"** — this is expected and harmless. It reflects diverged commit history, not missing changes.
 
