@@ -1,13 +1,13 @@
 'use server';
 
-import { requireSession } from '@/lib/auth-helpers';
+import { requireFeatureAccess } from '@/lib/authorization';
 import { ContactLookupDetails, ContactLogDisplay } from '@/lib/dto';
 import { ContactService } from '@/services/contactService';
 import { ContactLogService } from '@/services/contactLogService';
 
 export async function getContactDetails(guid: string): Promise<ContactLookupDetails> {
   try {
-    await requireSession();
+    await requireFeatureAccess("contact-lookup");
 
     if (!guid || guid.trim().length === 0) {
       throw new Error('GUID is required');
@@ -29,7 +29,7 @@ export async function getContactDetails(guid: string): Promise<ContactLookupDeta
 
 export async function getContactLogsByContactId(contactId: number): Promise<ContactLogDisplay[]> {
   try {
-    await requireSession();
+    await requireFeatureAccess("contact-lookup");
 
     if (!contactId || contactId <= 0) {
       throw new Error('Valid contact ID is required');

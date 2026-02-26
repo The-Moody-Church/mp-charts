@@ -2,7 +2,7 @@
 
 **Issue**: [#58 — Role-Based Access Control](https://github.com/The-Moody-Church/mp-charts/issues/58)
 **Date**: 2026-02-26
-**Status**: Plan — awaiting implementation
+**Status**: Implemented (2026-02-26)
 
 ## Problem
 

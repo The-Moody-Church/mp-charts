@@ -1,6 +1,7 @@
 "use server";
 
-import { requireSession, getMpUserId } from "@/lib/auth-helpers";
+import { getMpUserId } from "@/lib/auth-helpers";
+import { requireFeatureAccess } from "@/lib/authorization";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { MembershipService } from "@/services/membershipService";
 import { MembershipCard, MembershipDetail, MembershipMilestoneFileInfo } from "@/lib/dto";
@@ -8,7 +9,7 @@ import { extractValidatedFiles, extractValidatedFilesResult, uploadContactPhoto 
 
 export async function getApplicants(): Promise<MembershipCard[]> {
   try {
-    await requireSession();
+    await requireFeatureAccess("membership-processing");
     const service = await MembershipService.getInstance();
     return await service.getApplicants();
   } catch (error) {
@@ -23,7 +24,7 @@ export async function getApplicantDetail(
   groupParticipantId: number
 ): Promise<MembershipDetail | null> {
   try {
-    await requireSession();
+    await requireFeatureAccess("membership-processing");
     const service = await MembershipService.getInstance();
     return await service.getApplicantDetail(contactId, participantId, groupParticipantId);
   } catch (error) {
@@ -34,7 +35,7 @@ export async function getApplicantDetail(
 
 export async function createMembershipMilestone(formData: FormData): Promise<void> {
   try {
-    const session = await requireSession();
+    const session = await requireFeatureAccess("membership-processing");
     enforceRateLimit(session.user.id, "write");
     const userId = getMpUserId(session);
 
@@ -60,7 +61,7 @@ export async function createMembershipMilestone(formData: FormData): Promise<voi
 
 export async function updateMembershipMilestone(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await requireSession();
+    const session = await requireFeatureAccess("membership-processing");
     enforceRateLimit(session.user.id, "write");
 
     const milestoneRecordId = Number(formData.get("Participant_Milestone_ID"));
@@ -93,7 +94,7 @@ export async function updateMembershipMilestone(formData: FormData): Promise<{ s
 
 export async function confirmMembershipCompletion(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await requireSession();
+    const session = await requireFeatureAccess("membership-processing");
     enforceRateLimit(session.user.id, "write");
 
     const groupParticipantId = Number(formData.get("Group_Participant_ID"));
@@ -118,7 +119,7 @@ export async function confirmMembershipCompletion(formData: FormData): Promise<{
 
 export async function getMembershipMilestoneFiles(milestoneRecordId: number): Promise<MembershipMilestoneFileInfo[]> {
   try {
-    await requireSession();
+    await requireFeatureAccess("membership-processing");
     const service = await MembershipService.getInstance();
     return await service.getMilestoneFiles(milestoneRecordId);
   } catch (error) {
@@ -128,5 +129,6 @@ export async function getMembershipMilestoneFiles(milestoneRecordId: number): Pr
 }
 
 export async function uploadApplicantPhoto(formData: FormData): Promise<{ success: boolean; error?: string }> {
+  await requireFeatureAccess("membership-processing");
   return uploadContactPhoto(formData, () => MembershipService.getInstance());
 }

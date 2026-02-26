@@ -3,10 +3,13 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { authClient } from "@/lib/auth-client";
 import { MPUserProfile } from "@/lib/providers/ministry-platform/types";
-import { getCurrentUserProfile } from "@/components/shared-actions/user";
+import { getCurrentUserProfile, getUserAuthorization } from "@/components/shared-actions/user";
+import type { Feature } from "@/lib/authorization";
 
 interface UserContextValue {
   userProfile: MPUserProfile | null;
+  accessibleFeatures: Feature[];
+  isSuperAdmin: boolean;
   isLoading: boolean;
   error: Error | null;
   refreshUserProfile: () => Promise<void>;
@@ -21,6 +24,8 @@ interface UserProviderProps {
 export function UserProvider({ children }: UserProviderProps) {
   const { data: session, isPending } = authClient.useSession();
   const [userProfile, setUserProfile] = useState<MPUserProfile | null>(null);
+  const [accessibleFeatures, setAccessibleFeatures] = useState<Feature[]>([]);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -29,6 +34,8 @@ export function UserProvider({ children }: UserProviderProps) {
   const loadUserProfile = useCallback(async () => {
     if (!userGuid) {
       setUserProfile(null);
+      setAccessibleFeatures([]);
+      setIsSuperAdmin(false);
       setIsLoading(false);
       return;
     }
@@ -36,11 +43,18 @@ export function UserProvider({ children }: UserProviderProps) {
     try {
       setIsLoading(true);
       setError(null);
-      const profile = await getCurrentUserProfile(userGuid);
+      const [profile, auth] = await Promise.all([
+        getCurrentUserProfile(userGuid),
+        getUserAuthorization(userGuid),
+      ]);
       setUserProfile(profile ?? null);
+      setAccessibleFeatures(auth.accessibleFeatures);
+      setIsSuperAdmin(auth.isSuperAdmin);
     } catch (err) {
       setError(err instanceof Error ? err : new Error("Failed to load user profile"));
       setUserProfile(null);
+      setAccessibleFeatures([]);
+      setIsSuperAdmin(false);
     } finally {
       setIsLoading(false);
     }
@@ -51,6 +65,8 @@ export function UserProvider({ children }: UserProviderProps) {
       loadUserProfile();
     } else if (!isPending && !session?.user) {
       setUserProfile(null);
+      setAccessibleFeatures([]);
+      setIsSuperAdmin(false);
       setIsLoading(false);
     }
   }, [userGuid, isPending, session?.user, loadUserProfile]);
@@ -60,7 +76,7 @@ export function UserProvider({ children }: UserProviderProps) {
   };
 
   return (
-    <UserContext.Provider value={{ userProfile, isLoading, error, refreshUserProfile }}>
+    <UserContext.Provider value={{ userProfile, accessibleFeatures, isSuperAdmin, isLoading, error, refreshUserProfile }}>
       {children}
     </UserContext.Provider>
   );

@@ -1,6 +1,7 @@
 "use server";
 
-import { requireSession, getMpUserId } from "@/lib/auth-helpers";
+import { getMpUserId } from "@/lib/auth-helpers";
+import { requireFeatureAccess } from "@/lib/authorization";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { VolunteerService } from "@/services/volunteerService";
 import { VolunteerCard, VolunteerDetail, MilestoneFileInfo, ApprovedVolunteersResult, GroupRoleOption, GroupFilterOption } from "@/lib/dto";
@@ -8,7 +9,7 @@ import { extractValidatedFiles, extractValidatedFilesResult, uploadContactPhoto 
 
 export async function getInProcessVolunteers(): Promise<VolunteerCard[]> {
   try {
-    await requireSession();
+    await requireFeatureAccess("volunteer-processing");
     const service = await VolunteerService.getInstance();
     return await service.getInProcessVolunteers();
   } catch (error) {
@@ -19,7 +20,7 @@ export async function getInProcessVolunteers(): Promise<VolunteerCard[]> {
 
 export async function getApprovedVolunteers(): Promise<ApprovedVolunteersResult> {
   try {
-    await requireSession();
+    await requireFeatureAccess("volunteer-processing");
     const service = await VolunteerService.getInstance();
     return await service.getApprovedVolunteers();
   } catch (error) {
@@ -34,7 +35,7 @@ export async function getVolunteerDetail(
   groupParticipantId: number
 ): Promise<VolunteerDetail | null> {
   try {
-    await requireSession();
+    await requireFeatureAccess("volunteer-processing");
     const service = await VolunteerService.getInstance();
     return await service.getVolunteerDetail(contactId, participantId, groupParticipantId);
   } catch (error) {
@@ -45,7 +46,7 @@ export async function getVolunteerDetail(
 
 export async function getMilestoneFiles(milestoneRecordId: number): Promise<MilestoneFileInfo[]> {
   try {
-    await requireSession();
+    await requireFeatureAccess("volunteer-processing");
     const service = await VolunteerService.getInstance();
     return await service.getMilestoneFiles(milestoneRecordId);
   } catch (error) {
@@ -56,7 +57,7 @@ export async function getMilestoneFiles(milestoneRecordId: number): Promise<Mile
 
 export async function getCertificationFiles(certificationRecordId: number): Promise<MilestoneFileInfo[]> {
   try {
-    await requireSession();
+    await requireFeatureAccess("volunteer-processing");
     const service = await VolunteerService.getInstance();
     return await service.getCertificationFiles(certificationRecordId);
   } catch (error) {
@@ -67,7 +68,7 @@ export async function getCertificationFiles(certificationRecordId: number): Prom
 
 export async function getFormResponseFiles(formResponseId: number): Promise<MilestoneFileInfo[]> {
   try {
-    await requireSession();
+    await requireFeatureAccess("volunteer-processing");
     const service = await VolunteerService.getInstance();
     return await service.getFormResponseFiles(formResponseId);
   } catch (error) {
@@ -78,7 +79,7 @@ export async function getFormResponseFiles(formResponseId: number): Promise<Mile
 
 export async function createFormResponse(formData: FormData): Promise<void> {
   try {
-    const session = await requireSession();
+    const session = await requireFeatureAccess("volunteer-processing");
     enforceRateLimit(session.user.id, "write");
     const userId = getMpUserId(session);
 
@@ -101,12 +102,13 @@ export async function createFormResponse(formData: FormData): Promise<void> {
 }
 
 export async function uploadVolunteerPhoto(formData: FormData): Promise<{ success: boolean; error?: string }> {
+  await requireFeatureAccess("volunteer-processing");
   return uploadContactPhoto(formData, () => VolunteerService.getInstance());
 }
 
 export async function createVolunteerMilestone(formData: FormData): Promise<void> {
   try {
-    const session = await requireSession();
+    const session = await requireFeatureAccess("volunteer-processing");
     enforceRateLimit(session.user.id, "write");
     const userId = getMpUserId(session);
 
@@ -132,7 +134,7 @@ export async function createVolunteerMilestone(formData: FormData): Promise<void
 
 export async function updateVolunteerMilestone(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await requireSession();
+    const session = await requireFeatureAccess("volunteer-processing");
     enforceRateLimit(session.user.id, "write");
 
     const milestoneRecordId = Number(formData.get("Participant_Milestone_ID"));
@@ -165,7 +167,7 @@ export async function updateVolunteerMilestone(formData: FormData): Promise<{ su
 
 export async function updateVolunteerCertification(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await requireSession();
+    const session = await requireFeatureAccess("volunteer-processing");
     enforceRateLimit(session.user.id, "write");
 
     const certId = Number(formData.get("Participant_Certification_ID"));
@@ -198,7 +200,7 @@ export async function updateVolunteerCertification(formData: FormData): Promise<
 
 export async function updateVolunteerFormResponse(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await requireSession();
+    const session = await requireFeatureAccess("volunteer-processing");
     enforceRateLimit(session.user.id, "write");
 
     const frId = Number(formData.get("Form_Response_ID"));
@@ -230,7 +232,7 @@ export async function updateVolunteerFormResponse(formData: FormData): Promise<{
 
 export async function getApprovedGroupRoles(): Promise<GroupRoleOption[]> {
   try {
-    await requireSession();
+    await requireFeatureAccess("volunteer-processing");
     const service = await VolunteerService.getInstance();
     return await service.getApprovedGroupRoles();
   } catch (error) {
@@ -241,7 +243,7 @@ export async function getApprovedGroupRoles(): Promise<GroupRoleOption[]> {
 
 export async function getApprovedGroupsList(): Promise<GroupFilterOption[]> {
   try {
-    await requireSession();
+    await requireFeatureAccess("volunteer-processing");
     const service = await VolunteerService.getInstance();
     return await service.getApprovedGroupsList();
   } catch (error) {
@@ -252,7 +254,7 @@ export async function getApprovedGroupsList(): Promise<GroupFilterOption[]> {
 
 export async function assignVolunteerToGroup(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await requireSession();
+    const session = await requireFeatureAccess("volunteer-processing");
     enforceRateLimit(session.user.id, "write");
 
     const currentGroupParticipantId = Number(formData.get("currentGroupParticipantId"));

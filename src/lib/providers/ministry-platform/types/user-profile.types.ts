@@ -10,4 +10,5 @@ export interface MPUserProfile {
   Image_GUID: string | null;
   roles: string[];
   userGroups: string[];
+  userGroupIds: number[];
 }

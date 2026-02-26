@@ -1,6 +1,7 @@
 "use server";
 
-import { requireSession, getMpUserId } from "@/lib/auth-helpers";
+import { getMpUserId } from "@/lib/auth-helpers";
+import { requireFeatureAccess } from "@/lib/authorization";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { BaptismService } from "@/services/baptismService";
 import { BaptismCard, BaptismDetail, BaptismMilestoneFileInfo } from "@/lib/dto";
@@ -8,7 +9,7 @@ import { extractValidatedFiles, extractValidatedFilesResult, uploadContactPhoto 
 
 export async function getCurrentApplicants(): Promise<BaptismCard[]> {
   try {
-    await requireSession();
+    await requireFeatureAccess("baptism-processing");
     const service = await BaptismService.getInstance();
     return await service.getCurrentApplicants();
   } catch (error) {
@@ -19,7 +20,7 @@ export async function getCurrentApplicants(): Promise<BaptismCard[]> {
 
 export async function getPausedApplicants(): Promise<BaptismCard[]> {
   try {
-    await requireSession();
+    await requireFeatureAccess("baptism-processing");
     const service = await BaptismService.getInstance();
     return await service.getPausedApplicants();
   } catch (error) {
@@ -34,7 +35,7 @@ export async function getApplicantDetail(
   groupParticipantId: number
 ): Promise<BaptismDetail | null> {
   try {
-    await requireSession();
+    await requireFeatureAccess("baptism-processing");
     const service = await BaptismService.getInstance();
     return await service.getApplicantDetail(contactId, participantId, groupParticipantId);
   } catch (error) {
@@ -45,7 +46,7 @@ export async function getApplicantDetail(
 
 export async function createBaptismMilestone(formData: FormData): Promise<void> {
   try {
-    const session = await requireSession();
+    const session = await requireFeatureAccess("baptism-processing");
     enforceRateLimit(session.user.id, "write");
     const userId = getMpUserId(session);
 
@@ -71,7 +72,7 @@ export async function createBaptismMilestone(formData: FormData): Promise<void> 
 
 export async function updateBaptismMilestone(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await requireSession();
+    const session = await requireFeatureAccess("baptism-processing");
     enforceRateLimit(session.user.id, "write");
 
     const milestoneRecordId = Number(formData.get("Participant_Milestone_ID"));
@@ -104,7 +105,7 @@ export async function updateBaptismMilestone(formData: FormData): Promise<{ succ
 
 export async function getBaptismMilestoneFiles(milestoneRecordId: number): Promise<BaptismMilestoneFileInfo[]> {
   try {
-    await requireSession();
+    await requireFeatureAccess("baptism-processing");
     const service = await BaptismService.getInstance();
     return await service.getMilestoneFiles(milestoneRecordId);
   } catch (error) {
@@ -114,12 +115,13 @@ export async function getBaptismMilestoneFiles(milestoneRecordId: number): Promi
 }
 
 export async function uploadApplicantPhoto(formData: FormData): Promise<{ success: boolean; error?: string }> {
+  await requireFeatureAccess("baptism-processing");
   return uploadContactPhoto(formData, () => BaptismService.getInstance());
 }
 
 export async function pauseApplicant(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await requireSession();
+    const session = await requireFeatureAccess("baptism-processing");
     enforceRateLimit(session.user.id, "write");
 
     const participantId = Number(formData.get("Participant_ID"));
@@ -149,7 +151,7 @@ export async function pauseApplicant(formData: FormData): Promise<{ success: boo
 
 export async function resumeApplicant(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await requireSession();
+    const session = await requireFeatureAccess("baptism-processing");
     enforceRateLimit(session.user.id, "write");
 
     const participantId = Number(formData.get("Participant_ID"));

@@ -1,7 +1,7 @@
 'use server';
 
 import { cacheLife, cacheTag, revalidatePath, revalidateTag } from 'next/cache';
-import { requireSession } from '@/lib/auth-helpers';
+import { requireFeatureAccess } from '@/lib/authorization';
 import { enforceRateLimit } from '@/lib/rate-limit';
 import { DashboardService } from '@/services/dashboardService';
 import { DashboardData } from '@/lib/dto';
@@ -52,6 +52,7 @@ async function getCachedFullRangeData(earliestYear: number, endDateIso: string):
 export async function getDashboardMetrics(
   year?: number
 ): Promise<DashboardData> {
+  await requireFeatureAccess("dashboard");
   const currentYear = year || getCurrentMinistryYear();
   return getCachedDashboardData(currentYear);
 }
@@ -64,6 +65,7 @@ export async function getDashboardMetrics(
  * @returns Promise<DashboardData> - Complete dashboard metrics for the full range
  */
 export async function getFullRangeDashboardMetrics(): Promise<DashboardData> {
+  await requireFeatureAccess("dashboard");
   const currentYear = getCurrentMinistryYear();
   const earliestYear = currentYear - 4;
 
@@ -110,6 +112,7 @@ async function getCachedExtendedData(
  * Cached for 6 hours with manual invalidation support.
  */
 export async function getExtendedDashboardMetrics(): Promise<Partial<DashboardData>> {
+  await requireFeatureAccess("dashboard");
   const currentYear = getCurrentMinistryYear();
   const earliestYear = currentYear - 4;
 
@@ -160,6 +163,7 @@ async function getCachedEngagementData(
  * Cached for 6 hours with manual invalidation support.
  */
 export async function getEngagementDashboardMetrics(): Promise<Partial<DashboardData>> {
+  await requireFeatureAccess("dashboard");
   const currentYear = getCurrentMinistryYear();
   const earliestYear = currentYear - 4;
 
@@ -206,7 +210,7 @@ export async function refreshDashboardCache(): Promise<{
   timestamp: Date;
 }> {
   try {
-    const session = await requireSession();
+    const session = await requireFeatureAccess("dashboard");
     enforceRateLimit(session.user.id, "cacheRefresh");
 
     revalidatePath('/dashboard');

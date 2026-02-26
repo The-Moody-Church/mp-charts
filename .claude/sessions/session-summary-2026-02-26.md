@@ -47,3 +47,66 @@ Reorganized `.claude/` into subfolders and rewrote the Memory & Context Manageme
 
 ### Other files modified:
 - `.claude/ideas.md` — Updated 3 plan file links to new `.claude/plans/` paths
+
+---
+
+## Upstream Sync
+
+### PR #50: Load User Roles/Groups into MPUserProfile — Incorporated
+- Added `roles: string[]` and `userGroups: string[]` to `MPUserProfile` interface
+- Updated `UserService.getUserProfile()` to fetch roles/groups in parallel from `dp_User_Roles` and `dp_User_User_Groups`
+- Kept our security improvements (sanitizeGuid, sanitizeIds) that upstream doesn't have
+- Changed return type to `MPUserProfile | undefined`
+- Created `src/services/userService.test.ts` with 6 tests
+
+### PR #51: Security Vulnerability Fixes — Incorporated
+- Resolved 3 CVEs via `npm audit fix` (lockfile-only changes):
+  - rollup CVE-2026-27606 (High)
+  - minimatch GHSA-3ppc-4f35-3m26 (High)
+  - ajv GHSA-2g4f-4pwh-qvx6 (Moderate)
+
+## Issue #58: Role-Based Access Control (RBAC) — ✅ COMPLETED
+
+Full RBAC implementation with admin-managed feature-to-User-Group mapping, server-action enforcement, and client-side UI gating.
+
+### Architecture
+- Features gated by User Group IDs stored in `data/feature-access.json`
+- Super-admin groups defined in `ADMIN_USER_GROUP_IDS` env var (comma-separated, IN-style)
+- Admin page at `/admin` for managing feature-to-group mappings (super-admin only)
+- `requireFeatureAccess(feature)` replaces `requireSession()` in all server actions
+- `useAuthorization()` hook for client-side UI gating
+- Profile data cached 15 minutes with admin flush button
+- Error boundary shows "Access Denied" for unauthorized access
+
+### Files created:
+- `src/lib/authorization.ts` — Feature type, config loading, hasFeatureAccess, isSuperAdmin, requireFeatureAccess, getAccessibleFeatures
+- `src/lib/authorization.test.ts` — 23 tests for authorization logic
+- `data/feature-access.json` — Default feature-access config (all allowedGroupIds empty)
+- `src/app/(web)/admin/page.tsx` — Admin page route with Suspense wrapper
+- `src/components/admin/admin-page.tsx` — Client component with User Group checkboxes per feature + cache flush button
+- `src/components/admin/actions.ts` — Server actions: getFeatureAccessConfig, updateFeatureAccess, getAvailableUserGroups, flushProfileCaches
+- `src/components/admin/index.ts` — Barrel export
+- `src/hooks/use-authorization.ts` — useAuthorization hook (canAccess, isSuperAdmin)
+- `src/components/home/home-cards.tsx` — Client component for feature cards with authorization gating
+- `src/components/home/index.ts` — Barrel export
+- `src/app/(web)/error.tsx` — Error boundary with "Access Denied" UX for forbidden errors
+
+### Files modified:
+- `src/lib/providers/ministry-platform/types/user-profile.types.ts` — Added `userGroupIds: number[]`
+- `src/services/userService.ts` — Select `User_Group_ID` in groups query, added 15-min profile cache with `flushProfileCache()`
+- `src/services/userService.test.ts` — Updated for userGroupIds, added cache and flush tests (8 tests total)
+- `src/components/shared-actions/user.ts` — Added `getUserAuthorization()` server action
+- `src/contexts/user-context.tsx` — Added `accessibleFeatures` and `isSuperAdmin` to context, loads via `getUserAuthorization()` in parallel with profile
+- `src/components/layout/sidebar.tsx` — Nav items now have `feature`/`devOnly`/`adminOnly` properties, filtered by `useAuthorization()`; added "Access Control" link
+- `src/app/(web)/page.tsx` — Replaced hardcoded cards with `<HomeCards />` client component
+- `.env.example` — Added `ADMIN_USER_GROUP_IDS=29`
+- `src/components/dashboard/actions.ts` — All 5 exported functions now use `requireFeatureAccess("dashboard")`
+- `src/components/volunteer-processing/actions.ts` — All 14 actions use `requireFeatureAccess("volunteer-processing")`
+- `src/components/baptism-processing/actions.ts` — All 10 actions use `requireFeatureAccess("baptism-processing")`
+- `src/components/membership-processing/actions.ts` — All 8 actions use `requireFeatureAccess("membership-processing")`
+- `src/components/contact-lookup/actions.ts` — Uses `requireFeatureAccess("contact-lookup")`
+- `src/components/contact-lookup-details/actions.ts` — Both actions use `requireFeatureAccess("contact-lookup")`
+- `src/components/contact-logs/actions.ts` — All 6 actions use `requireFeatureAccess("contact-logs")`
+- `.claude/plans/plan-rbac.md` — Status updated to "Implemented"
+- `.claude/ideas.md` — #58 marked completed
+- `.claude/status.md` — Updated with RBAC completion

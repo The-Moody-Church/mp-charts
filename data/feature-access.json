@@ -1,0 +1,32 @@
+{
+  "dashboard": {
+    "label": "Executive Dashboard",
+    "description": "View ministry metrics and attendance data",
+    "allowedGroupIds": []
+  },
+  "volunteer-processing": {
+    "label": "Volunteer Processing",
+    "description": "Manage volunteer onboarding and approvals",
+    "allowedGroupIds": []
+  },
+  "baptism-processing": {
+    "label": "Baptism Processing",
+    "description": "Manage baptism applicants and milestones",
+    "allowedGroupIds": []
+  },
+  "membership-processing": {
+    "label": "Membership Processing",
+    "description": "Manage membership applications",
+    "allowedGroupIds": []
+  },
+  "contact-lookup": {
+    "label": "Contact Lookup",
+    "description": "Search and view contact records",
+    "allowedGroupIds": []
+  },
+  "contact-logs": {
+    "label": "Contact Logs",
+    "description": "Create and manage pastoral contact logs",
+    "allowedGroupIds": []
+  }
+}

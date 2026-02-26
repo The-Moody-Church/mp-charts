@@ -32,7 +32,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 ### Technical Debt
 - [BUG: Active Communities and Small Groups Chart Needs Work (#52)](#bug-active-communities-and-small-groups-chart-needs-work-52)
 - [IDOR Mitigation — Per-Record Authorization (#57)](#idor-mitigation-per-record-authorization-57)
-- [Role-Based Access Control (RBAC) (#58)](#role-based-access-control-rbac-58)
+- ~~[Role-Based Access Control (RBAC) (#58)](#role-based-access-control-rbac-58)~~ ✅
 - ~~[BUG: Baptism Counter Doesn't Respond to Date Range Changes (#51)](#bug-baptism-counter-doesnt-respond-to-date-range-changes-51)~~ ✅
 - ~~[Extract Shared Processing Components (Person Card, Milestone Checklist, Detail Modal) (#60)](#extract-shared-processing-components-person-card-milestone-checklist-detail-modal-60)~~ ✅
 - ~~[Migrate `unstable_cache` to Cache Components (`use cache`) (#21)](#migrate-unstable_cache-to-cache-components-use-cache-21)~~ ✅
@@ -158,15 +158,10 @@ Server actions accept record IDs from clients (contactId, participantId, etc.) a
 
 From security audit finding #10 (2026-02-24).
 
-### Role-Based Access Control (RBAC) ([#58](https://github.com/The-Moody-Church/mp-charts/issues/58))
-All authenticated users currently have identical access to all features and data. The proxy only checks session cookie presence, not roles. Any church member with MP OAuth access can view volunteer background checks, baptism applicant data, membership records, and the executive dashboard.
+### ~~Role-Based Access Control (RBAC) ([#58](https://github.com/The-Moody-Church/mp-charts/issues/58))~~ ✅ COMPLETED
+Implemented admin-managed feature-to-User-Group mapping with server-action enforcement and client-side UI gating. Features are gated by User Group IDs stored in `data/feature-access.json`, managed via an admin page at `/admin`. Super-admin groups defined in `ADMIN_USER_GROUP_IDS` env var always have full access. Server actions use `requireFeatureAccess(feature)` for enforcement, client-side uses `useAuthorization()` hook to hide inaccessible features from sidebar and home page. Profile data cached 15 minutes with admin flush button. 23 authorization tests + error boundary for "Access Denied" UX.
 
-**Options to evaluate:**
-1. **MP Security Groups**: Check the user's Ministry Platform security groups at login, store group memberships in the session, and gate features accordingly (e.g., only "Volunteer Coordinators" group can access volunteer processing).
-2. **Page-level authorization**: Add role checks in server actions before data access.
-3. **Leverage `$userId` more**: Use access-token-based MPHelper instances so MP's built-in permission model governs data access transparently.
-
-**Update (2026-02-26)**: Upstream PR #50 incorporated — `MPUserProfile` now includes `roles` (from `dp_User_Roles`) and `userGroups` (from `dp_User_User_Groups`), loaded at login and available via `useUser()` context. This is the foundational data layer needed for RBAC. Next steps: define role-to-feature mappings, add authorization checks in server actions, gate UI elements client-side, and optionally add route-level protection in the proxy.
+Implementation plan: [`.claude/plans/plan-rbac.md`](plans/plan-rbac.md)
 
 From security audit finding #13 (2026-02-24).
 

@@ -1,6 +1,7 @@
 'use server';
 
 import { requireSession } from "@/lib/auth-helpers";
+import { getAccessibleFeatures, isSuperAdmin, type Feature } from "@/lib/authorization";
 import { MPUserProfile } from "@/lib/providers/ministry-platform/types";
 import { UserService } from '@/services/userService';
 
@@ -13,4 +14,25 @@ export async function getCurrentUserProfile(id: string): Promise<MPUserProfile |
   await requireSession();
   const userService = await UserService.getInstance();
   return userService.getUserProfile(id);
+}
+
+/**
+ * Returns the list of features accessible to the current user,
+ * along with whether they are a super-admin.
+ * Called by UserProvider at login to populate client-side authorization context.
+ */
+export async function getUserAuthorization(id: string): Promise<{
+  accessibleFeatures: Feature[];
+  isSuperAdmin: boolean;
+}> {
+  await requireSession();
+  const userService = await UserService.getInstance();
+  const profile = await userService.getUserProfile(id);
+  if (!profile) {
+    return { accessibleFeatures: [], isSuperAdmin: false };
+  }
+  return {
+    accessibleFeatures: getAccessibleFeatures(profile.userGroupIds),
+    isSuperAdmin: isSuperAdmin(profile.userGroupIds),
+  };
 }
