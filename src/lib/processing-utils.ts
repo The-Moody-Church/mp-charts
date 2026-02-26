@@ -41,17 +41,32 @@ export const ALLOWED_DOCUMENT_TYPES = [...ALLOWED_IMAGE_TYPES, 'application/pdf'
 /** Maximum file size for uploads (1 MB). */
 export const MAX_FILE_SIZE = 1 * 1024 * 1024;
 
+/** Normalize apostrophe variants (curly quotes, modifier letter) to ASCII and strip them for comparison. */
+function normalizeApostrophes(s: string): string {
+  return s.replace(/[\u2018\u2019\u02BC']/g, "");
+}
+
 /** Filter processing cards by search query against person name fields. */
 export function filterByName<T extends { info: { First_Name: string; Nickname: string | null; Last_Name: string } }>(
   items: T[],
   query: string
 ): T[] {
-  const q = query.trim().toLowerCase();
+  const q = normalizeApostrophes(query.trim().toLowerCase());
   if (!q) return items;
   return items.filter((item) => {
     const { First_Name, Nickname, Last_Name } = item.info;
-    const display = getDisplayName(First_Name, Nickname).toLowerCase();
-    const full = `${display} ${Last_Name.toLowerCase()}`;
-    return full.includes(q) || Last_Name.toLowerCase().includes(q);
+    const first = normalizeApostrophes(First_Name.toLowerCase());
+    const nick = normalizeApostrophes(Nickname?.toLowerCase() ?? "");
+    const display = normalizeApostrophes(getDisplayName(First_Name, Nickname).toLowerCase());
+    const last = normalizeApostrophes(Last_Name.toLowerCase());
+    return (
+      first.includes(q) ||
+      nick.includes(q) ||
+      display.includes(q) ||
+      last.includes(q) ||
+      `${first} ${last}`.includes(q) ||
+      `${display} ${last}`.includes(q) ||
+      (nick && `${nick} ${last}`.includes(q))
+    );
   });
 }
