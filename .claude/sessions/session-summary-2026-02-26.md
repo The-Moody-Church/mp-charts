@@ -26,6 +26,24 @@ Removed the exclusion filter in `volunteerService.ts` that prevented in-process 
 - **#33** (Volunteer Processing Mobile Views): Dialog width responsive (`w-[calc(100vw-1rem)] sm:max-w-2xl`)
 - **#51** (Baptism Counter Date Range): Properly implemented via `countDatesInRange()` in `filterDashboardData()`
 
-### Documentation Updates
-- `.claude/ideas.md` — Marked #13, #33, #49, #50, #51 as completed with descriptions
-- `.claude/session-summary-2026-02-26.md` — This file
+## Reorganize .claude/ Folder & Update CLAUDE.md
+
+Reorganized `.claude/` into subfolders and rewrote the Memory & Context Management section of CLAUDE.md.
+
+### Folder reorganization:
+- **Created** `.claude/sessions/` — moved all 16 session-summary files here
+- **Created** `.claude/plans/` — moved `plan-baptism-processing.md`, `plan-membership-processing.md`, `draft-issue-dashboard-redesign.md`
+- **Created** `.claude/notes/` — moved `community-attendance-debugging.md`, `security-audit-2026-02-24.md`
+- **Created** `.claude/status.md` — lightweight project status snapshot (replaces work-in-progress.md)
+- **Removed** `.claude/work-in-progress.md` — redundant with session summaries (715 lines, 90% duplicated content)
+
+### CLAUDE.md changes:
+- Rewrote **Memory & Context Management** section with new folder structure, status file description, and streamlined session summary instructions
+- Changed session summary approach: write incrementally as you work, then review and polish at session end
+- Removed references to `work-in-progress.md` throughout
+- Added **Pre-PR Issue & Ideas Sync** section requiring issue/ideas.md check before creating PRs
+- Updated security audit path references to new `.claude/notes/` location
+- Added `status.md` and security audit to Reference Documents section
+
+### Other files modified:
+- `.claude/ideas.md` — Updated 3 plan file links to new `.claude/plans/` paths

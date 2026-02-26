@@ -64,7 +64,23 @@ gh pr create --title "..." --body "..."
 - **Notes**: (any medium-severity items or architectural observations)
 ```
 
-Refer to `.claude/security-audit-2026-02-24.md` for the full audit report and the "Security Best Practices" section below for detailed rules and code examples.
+Refer to `.claude/notes/security-audit-2026-02-24.md` for the full audit report and the "Security Best Practices" section below for detailed rules and code examples.
+
+### Pre-PR Issue & Ideas Sync
+
+**MANDATORY**: Before creating a PR, check whether the branch's changes close or advance any GitHub issues, and update `.claude/ideas.md` accordingly.
+
+**Steps:**
+1. Review the commits in the branch (`git log main..HEAD --oneline`) and identify which issues are addressed
+2. Check open issues: `gh issue list --repo The-Moody-Church/mp-charts --state open`
+3. For each issue that the branch **fully resolves**:
+   - Mark the corresponding entry in `.claude/ideas.md` as completed: `### ~~Title ([#N](url))~~ ✅ COMPLETED`
+   - Move it below all incomplete entries in its section
+   - Add or update the description to summarize what was done
+4. For issues that are **partially addressed** or need more detail, update the ideas.md entry body text to reflect current status
+5. Include the updated `ideas.md` in the PR's final commit
+
+This ensures ideas.md stays accurate and the GitHub Actions sync will close resolved issues on push to main.
 
 ### Upstream Sync
 
@@ -743,57 +759,61 @@ When adding new server actions:
 
 ### Security Audit Reference
 
-The full security audit report is at `.claude/security-audit-2026-02-24.md`. It documents all 15 findings, their status, and remaining open items (RBAC, IDOR mitigation).
+The full security audit report is at `.claude/notes/security-audit-2026-02-24.md`. It documents all 15 findings, their status, and remaining open items (RBAC, IDOR mitigation).
 
 ## Memory & Context Management
 
-AI assistants should maintain context files in `.claude/` to track project state:
+AI assistants maintain context files in `.claude/` to track project state across sessions.
 
-### Context Files
+### Folder Structure
 
-- **[work-in-progress.md](.claude/work-in-progress.md)** - Current implementation status, known issues, recent changes
-- **[session-summary-YYYY-MM-DD.md](.claude/)** - Dated session summaries (create new file per session)
-- **[community-attendance-debugging.md](.claude/community-attendance-debugging.md)** - Feature-specific debugging notes
-- **[ideas.md](.claude/ideas.md)** - Feature ideas & improvements, syncs bidirectionally with GitHub Issues
-- **[references/components.md](.claude/references/components.md)** - Component inventory
-- **[references/ministryplatform.schema.md](.claude/references/ministryplatform.schema.md)** - DB schema (auto-generated)
+```
+.claude/
+├── status.md             # Quick-reference project status (read first at session start)
+├── sessions/             # Dated session summaries (one per session)
+│   └── session-summary-YYYY-MM-DD.md
+├── plans/                # Implementation plans and draft issue specs
+├── notes/                # Debugging notes, audit reports, reference docs
+├── references/           # Auto-generated schema, component inventory
+│   ├── components.md
+│   └── ministryplatform.schema.md
+├── commands/             # Claude Code slash commands
+├── ideas.md              # Feature ideas & improvements (syncs with GitHub Issues)
+└── settings.local.json   # Claude Code permission settings
+```
 
-### Update Workflow
+### Status File
 
-**When to update context files:**
-1. **Before every commit (on ANY branch)** → Update `session-summary-YYYY-MM-DD.md` with what is being committed. Session notes are part of the commit, not an afterthought.
-2. **Before creating PRs** → Ensure `session-summary-YYYY-MM-DD.md` and `work-in-progress.md` are up to date and included in the PR
-3. **After completing significant features** → Update `work-in-progress.md` with current status
-4. **When fixing bugs** → Update feature-specific debugging docs
-5. **When patterns change** → Update this CLAUDE.md file
+`.claude/status.md` is a **lightweight snapshot** of current project state — recently completed work, in-progress items, and open issues. Read it first at session start to orient quickly without scanning all session summaries. Keep it short (under 50 lines). Update it when completing significant work or when the project state changes meaningfully.
 
-**Key rule**: Session notes are updated **incrementally as work happens**, not batched at the end. Every `git commit` — on any branch — must include updated session notes reflecting the changes in that commit. Do NOT commit code changes without including the session summary update in the same commit.
+### Session Summaries
+
+Each session gets a dated file at `.claude/sessions/session-summary-YYYY-MM-DD.md`. This is the primary record of what happened during a session.
+
+**Writing approach — incremental, then polished:**
+1. **As you work**: Append notes to the session summary incrementally — files changed, decisions made, issues encountered. Don't wait until the end.
+2. **Before each commit**: Ensure the session summary reflects what's being committed. Include it in the commit.
+3. **At session end**: Review and clean up the session summary for clarity. Remove noise, consolidate duplicate entries, ensure file lists are complete and accurate. The goal is a useful historical record, not a raw log.
+
+**What to include:**
+- Issues addressed (with `#N` references)
+- Files created / modified / removed (with line numbers for significant changes)
+- Key decisions and their rationale
+- Known issues or follow-ups
+- Status markers: ✅ COMPLETED, ⚠️ IN PROGRESS, ❌ BLOCKED
 
 **Detecting session end:**
-- AI assistants cannot automatically detect session end
-- **Respond to user cues**: "thanks", "that's all", "we're done", "end of session"
-- **User can request**: "Create a session summary" or "Update context files"
-- At session end, ensure the session summary is complete and committed
+- Respond to user cues: "thanks", "that's all", "we're done", "end of session"
+- User can request: "Create a session summary" or "Update context files"
 
-**What to include in session summaries:**
-- File paths with line numbers for changes
-- Algorithm/approach descriptions
-- Before/after comparisons for significant refactors
-- Known issues and their status
-- Testing notes and verification steps
-- Files modified organized by category (Core Logic, Components, Documentation)
+### Pre-Commit Checklist
 
-**Best practices:**
-- Keep dated session summaries separate (don't overwrite old ones)
-- Update `work-in-progress.md` as single source of truth for current state
-- Use clear status markers: ✅ COMPLETED, ⚠️ IN PROGRESS, ❌ BLOCKED
-- Session summaries are historical records; work-in-progress is living document
-- **MANDATORY**: Before every commit (on ANY branch), run through this checklist:
-  1. **CLAUDE.md check**: Do any of the changes introduce new patterns, conventions, workflows, naming standards, or architectural decisions that should be documented in CLAUDE.md? If so, update it in the same commit. Examples: new file naming conventions, new component patterns, new CLI commands, new environment variables, new label/section mappings, new API patterns.
-  2. Update `session-summary-YYYY-MM-DD.md` with what is being committed
-  3. Update `work-in-progress.md` if implementation status changed
-  4. Include all updated context files in the commit
-  5. This ensures documentation stays in sync with code changes at every commit, not just at session end
+Before every commit (on ANY branch):
+
+1. **CLAUDE.md check**: Do the changes introduce new patterns, conventions, or architectural decisions? If so, update CLAUDE.md in the same commit.
+2. **Session summary**: Update `.claude/sessions/session-summary-YYYY-MM-DD.md` with what's being committed.
+3. **ideas.md**: If any issues were completed, update `.claude/ideas.md` (see "Ideas & Issue Tracking" section).
+4. Include all updated context files in the commit.
 
 ## Ideas & Issue Tracking
 
@@ -826,7 +846,7 @@ This will close issue #5 on next push to main.
 - **Add new ideas**: Write a `### Title` entry under the appropriate section — no issue link needed, one will be created automatically on push
 - **Update progress**: Edit the body text of any entry freely
 - **Mark completed**: Wrap the title in `~~strikethrough~~` and add `✅ COMPLETED`
-- **ideas.md is included in session pushes** alongside session summaries and work-in-progress updates
+- **ideas.md is included in commits** alongside session summaries and other context files
 
 ### Entry Ordering
 
@@ -860,5 +880,7 @@ The workflow uses `[skip ci]` in bot commits and checks `github.actor` to preven
 
 For detailed context on specific areas, see:
 
+- **[Project Status](.claude/status.md)** - Quick-reference snapshot of current state (read first at session start)
 - **[Components Reference](.claude/references/components.md)** - Detailed inventory of all components, their purposes, server actions, and compliance status
 - **[Ministry Platform Schema](.claude/references/ministryplatform.schema.md)** - Auto-generated summary of Ministry Platform database tables, primary keys, and foreign key relationships
+- **[Security Audit](.claude/notes/security-audit-2026-02-24.md)** - Full security audit report with 15 findings

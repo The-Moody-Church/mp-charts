@@ -63,12 +63,12 @@ Redesign the executive dashboard from a flat chart grid into a structured layout
 
 **Know God**: Worship attendance (existing), baptisms (existing), membership milestone (new), unique event participants (new). **Feed Your Soul**: Community attendance (existing), small group trends (existing), group participation (existing), roster vs actual attendance (new). **Grow in Love**: Total serving/leading count (new), serving by role type (new), where people serve by ministry (new), serving trends (new). **Change Your World**: Program giving from Donation_Distributions (new), giving trends (new) — will expand with future survey data. **Other**: Year-over-year comparison and anything that doesn't fit.
 
-Full specification with data sources, MP schema relationships, phased implementation plan, and layout wireframe: [`.claude/draft-issue-dashboard-redesign.md`](draft-issue-dashboard-redesign.md)
+Full specification with data sources, MP schema relationships, phased implementation plan, and layout wireframe: [`.claude/plans/draft-issue-dashboard-redesign.md`](plans/draft-issue-dashboard-redesign.md)
 
 ### ~~Baptism Processing ([#17](https://github.com/The-Moody-Church/mp-charts/issues/17))~~ ✅ COMPLETED
 A dedicated interface for tracking and managing the baptism journey/process in Ministry Platform. Mirrors the volunteer processing pattern but simplified — purely milestone-based with 9 ordered steps.
 
-**Implementation plan**: [`.claude/plan-baptism-processing.md`](plan-baptism-processing.md)
+**Implementation plan**: [`.claude/plans/plan-baptism-processing.md`](plans/plan-baptism-processing.md)
 
 **Groups**: Current Applicants (Group 1023) / Paused Applicants (Group 1024)
 
@@ -81,7 +81,7 @@ A dedicated interface for tracking and managing the baptism journey/process in M
 ### ~~Membership Applications ([#47](https://github.com/The-Moody-Church/mp-charts/issues/47))~~ ✅ COMPLETED
 A dedicated interface for tracking and managing church membership applications. Simplest of the three processing features — single group (1025), purely milestone-based, no tabs.
 
-**Implementation plan**: [`.claude/plan-membership-processing.md`](plan-membership-processing.md)
+**Implementation plan**: [`.claude/plans/plan-membership-processing.md`](plans/plan-membership-processing.md)
 
 **Group**: Membership Applicants (Group 1025) — single list, no tabs
 

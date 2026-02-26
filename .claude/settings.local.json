@@ -53,9 +53,34 @@
       "Bash(gh auth status:*)",
       "Edit(**)",
       "Write(**)",
-      "Bash(git rev-list --left-right --count main...HEAD)"
+      "Bash(git rev-list --left-right --count main...HEAD)",
+      "Bash(git mv .claude/session-summary-2026-01-29.md .claude/sessions/)",
+      "Bash(git mv .claude/session-summary-2026-02-02.md .claude/sessions/)",
+      "Bash(git mv .claude/session-summary-2026-02-04.md .claude/sessions/)",
+      "Bash(git mv .claude/session-summary-2026-02-06.md .claude/sessions/)",
+      "Bash(git mv .claude/session-summary-2026-02-13.md .claude/sessions/)",
+      "Bash(git mv .claude/session-summary-2026-02-14.md .claude/sessions/)",
+      "Bash(git mv .claude/session-summary-2026-02-16.md .claude/sessions/)",
+      "Bash(git mv .claude/session-summary-2026-02-17.md .claude/sessions/)",
+      "Bash(git mv .claude/session-summary-2026-02-19.md .claude/sessions/)",
+      "Bash(git mv .claude/session-summary-2026-02-20.md .claude/sessions/)",
+      "Bash(git mv .claude/session-summary-2026-02-22.md .claude/sessions/)",
+      "Bash(git mv .claude/session-summary-2026-02-23.md .claude/sessions/)",
+      "Bash(git mv .claude/session-summary-2026-02-24.md .claude/sessions/)",
+      "Bash(git mv .claude/session-summary-2026-02-25.md .claude/sessions/)",
+      "Bash(git mv .claude/session-summary-2026-02-26.md .claude/sessions/)",
+      "Bash(git mv .claude/session-summary.md .claude/sessions/)",
+      "Bash(git mv .claude/plan-baptism-processing.md .claude/plans/)",
+      "Bash(git mv .claude/plan-membership-processing.md .claude/plans/)",
+      "Bash(git mv .claude/draft-issue-dashboard-redesign.md .claude/plans/)",
+      "Bash(git mv .claude/community-attendance-debugging.md .claude/notes/)",
+      "Bash(git mv .claude/security-audit-2026-02-24.md .claude/notes/)",
+      "Bash(git rm .claude/work-in-progress.md)"
     ],
     "deny": [],
-    "ask": []
+    "ask": [],
+    "additionalDirectories": [
+      "/Users/jonathon.huff/Claude/Code/mp-charts/mp-charts/.claude"
+    ]
   }
 }
