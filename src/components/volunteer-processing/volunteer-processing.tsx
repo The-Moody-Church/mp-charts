@@ -3,10 +3,11 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VolunteerCard as VolunteerCardData, GroupFilterOption } from "@/lib/dto";
-import { ProcessingGrid } from "@/components/processing";
+import { ProcessingGrid, ProcessingSearchBar } from "@/components/processing";
 import { VolunteerCard } from "./volunteer-card";
 import { VolunteerDetailModal } from "./volunteer-detail-modal";
 import { getInProcessVolunteers, getApprovedVolunteers } from "./actions";
+import { filterByName } from "@/lib/processing-utils";
 
 export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId?: number | null }) {
   const [activeTab, setActiveTab] = useState("in-process");
@@ -14,6 +15,7 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
   const [approvedVolunteers, setApprovedVolunteers] = useState<VolunteerCardData[]>([]);
   const [approvedGroups, setApprovedGroups] = useState<GroupFilterOption[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedVolunteer, setSelectedVolunteer] = useState<VolunteerCardData | null>(null);
@@ -105,7 +107,17 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
     return approvedVolunteers.filter(v => v.groupIds.includes(selectedGroupId));
   }, [approvedVolunteers, selectedGroupId]);
 
-  const currentVolunteers = activeTab === "in-process" ? inProcessVolunteers : filteredApprovedVolunteers;
+  const filteredInProcess = useMemo(
+    () => filterByName(inProcessVolunteers, searchQuery),
+    [inProcessVolunteers, searchQuery]
+  );
+
+  const filteredApproved = useMemo(
+    () => filterByName(filteredApprovedVolunteers, searchQuery),
+    [filteredApprovedVolunteers, searchQuery]
+  );
+
+  const currentVolunteers = activeTab === "in-process" ? filteredInProcess : filteredApproved;
 
   return (
     <div className="space-y-6">
@@ -117,31 +129,34 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="w-full sm:w-fit h-auto">
-          <TabsTrigger value="in-process" className="flex-1 sm:flex-initial whitespace-normal sm:whitespace-nowrap text-xs sm:text-sm py-1.5">
-            New Volunteers In Process
-            {inProcessVolunteers.length > 0 && (
-              <span className="ml-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs">
-                {inProcessVolunteers.length}
-              </span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="approved" className="flex-1 sm:flex-initial whitespace-normal sm:whitespace-nowrap text-xs sm:text-sm py-1.5">
-            Approved Active Volunteers
-            {approvedVolunteers.length > 0 && (
-              <span className="ml-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs">
-                {approvedVolunteers.length}
-              </span>
-            )}
-          </TabsTrigger>
-        </TabsList>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <TabsList className="w-full sm:w-fit h-auto">
+            <TabsTrigger value="in-process" className="flex-1 sm:flex-initial whitespace-normal sm:whitespace-nowrap text-xs sm:text-sm py-1.5">
+              New Volunteers In Process
+              {inProcessVolunteers.length > 0 && (
+                <span className="ml-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs">
+                  {inProcessVolunteers.length}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="approved" className="flex-1 sm:flex-initial whitespace-normal sm:whitespace-nowrap text-xs sm:text-sm py-1.5">
+              Approved Active Volunteers
+              {approvedVolunteers.length > 0 && (
+                <span className="ml-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs">
+                  {approvedVolunteers.length}
+                </span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+          <ProcessingSearchBar value={searchQuery} onChange={setSearchQuery} />
+        </div>
 
         <TabsContent value="in-process">
           <ProcessingGrid
             items={currentVolunteers}
             loading={loading && activeTab === "in-process"}
             error={error}
-            emptyMessage="No volunteers currently in process."
+            emptyMessage={searchQuery ? "No matching volunteers found." : "No volunteers currently in process."}
             keyExtractor={(v) => v.info.Group_Participant_ID}
             renderCard={(volunteer) => (
               <VolunteerCard volunteer={volunteer} onClick={() => handleCardClick(volunteer)} />
@@ -178,7 +193,7 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
             items={currentVolunteers}
             loading={loading && activeTab === "approved"}
             error={error}
-            emptyMessage="No approved volunteers found."
+            emptyMessage={searchQuery ? "No matching volunteers found." : "No approved volunteers found."}
             keyExtractor={(v) => v.info.Group_Participant_ID}
             renderCard={(volunteer) => (
               <VolunteerCard volunteer={volunteer} onClick={() => handleCardClick(volunteer)} />

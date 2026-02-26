@@ -1,14 +1,16 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { MembershipCard as MembershipCardData } from "@/lib/dto";
-import { ProcessingGrid } from "@/components/processing";
+import { ProcessingGrid, ProcessingSearchBar } from "@/components/processing";
 import { MembershipCard } from "./membership-card";
 import { MembershipDetailModal } from "./membership-detail-modal";
 import { getApplicants } from "./actions";
+import { filterByName } from "@/lib/processing-utils";
 
 export function MembershipProcessing({ initialApplicantId }: { initialApplicantId?: number | null }) {
   const [applicants, setApplicants] = useState<MembershipCardData[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedApplicant, setSelectedApplicant] = useState<MembershipCardData | null>(null);
@@ -52,16 +54,24 @@ export function MembershipProcessing({ initialApplicantId }: { initialApplicantI
     setModalOpen(true);
   };
 
+  const filteredApplicants = useMemo(
+    () => filterByName(applicants, searchQuery),
+    [applicants, searchQuery]
+  );
+
   return (
     <div className="space-y-6">
       <div>
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold tracking-tight">Membership Processing</h1>
-          {applicants.length > 0 && (
-            <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-sm font-medium">
-              {applicants.length}
-            </span>
-          )}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold tracking-tight">Membership Processing</h1>
+            {applicants.length > 0 && (
+              <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-sm font-medium">
+                {applicants.length}
+              </span>
+            )}
+          </div>
+          <ProcessingSearchBar value={searchQuery} onChange={setSearchQuery} />
         </div>
         <p className="text-muted-foreground">
           Track membership application progress and manage milestones.
@@ -69,10 +79,10 @@ export function MembershipProcessing({ initialApplicantId }: { initialApplicantI
       </div>
 
       <ProcessingGrid
-        items={applicants}
+        items={filteredApplicants}
         loading={loading}
         error={error}
-        emptyMessage="No membership applicants found."
+        emptyMessage={searchQuery ? "No matching applicants found." : "No membership applicants found."}
         keyExtractor={(a) => a.info.Group_Participant_ID}
         renderCard={(applicant) => (
           <MembershipCard

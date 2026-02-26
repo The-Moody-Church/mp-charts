@@ -40,3 +40,18 @@ export const ALLOWED_DOCUMENT_TYPES = [...ALLOWED_IMAGE_TYPES, 'application/pdf'
 
 /** Maximum file size for uploads (1 MB). */
 export const MAX_FILE_SIZE = 1 * 1024 * 1024;
+
+/** Filter processing cards by search query against person name fields. */
+export function filterByName<T extends { info: { First_Name: string; Nickname: string | null; Last_Name: string } }>(
+  items: T[],
+  query: string
+): T[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return items;
+  return items.filter((item) => {
+    const { First_Name, Nickname, Last_Name } = item.info;
+    const display = getDisplayName(First_Name, Nickname).toLowerCase();
+    const full = `${display} ${Last_Name.toLowerCase()}`;
+    return full.includes(q) || Last_Name.toLowerCase().includes(q);
+  });
+}

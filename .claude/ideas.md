@@ -10,8 +10,8 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 
 ### Features
 - [Pastoral Interface for Contact Logs (#19)](#pastoral-interface-for-contact-logs-19)
-- [Volunteer Processing Search Bar (#49)](#volunteer-processing-search-bar-49)
-- [Volunteer Processing: Show In-Process Volunteers on Active Tab (#50)](#volunteer-processing-show-in-process-volunteers-on-active-tab-50)
+- ~~[Processing Search Bar (#49)](#processing-search-bar-49)~~ ✅
+- ~~[Volunteer Processing: Show In-Process Volunteers on Active Tab (#50)](#volunteer-processing-show-in-process-volunteers-on-active-tab-50)~~ ✅
 - ~~[Redesign Dashboard Layout: Discipleship Pathway Sections (#42)](#redesign-dashboard-layout-discipleship-pathway-sections-42)~~ ✅
 - ~~[Baptism Processing (#17)](#baptism-processing-17)~~ ✅
 - ~~[Membership Applications (#47)](#membership-applications-47)~~ ✅
@@ -21,17 +21,17 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Add current groups list to volunteers already in a group (#36)](#add-current-groups-list-to-volunteers-already-in-a-group-36)~~ ✅
 
 ### Improvements
-- [Executive Dashboard: Mobile Views (#13)](#executive-dashboard-mobile-views-13)
 - [Small Group Trends Chart (#15)](#small-group-trends-chart-15)
-- [Volunteer Processing Mobile Views (#33)](#volunteer-processing-mobile-views-33)
+- ~~[Executive Dashboard: Mobile Views (#13)](#executive-dashboard-mobile-views-13)~~ ✅
+- ~~[Volunteer Processing Mobile Views (#33)](#volunteer-processing-mobile-views-33)~~ ✅
 - ~~[Executive Dashboard One Month Charts Fix (#12)](#executive-dashboard-one-month-charts-fix-12)~~ ✅
 - ~~[Hide Unused Modules in Production (#6)](#hide-unused-modules-in-production-6)~~ ✅
 - ~~[Update Webpage Title (#4)](#update-webpage-title-4)~~ ✅
 - ~~[Dashboard Date Range Selector (#20)](#dashboard-date-range-selector-20)~~ ✅
 
 ### Technical Debt
-- [BUG: Baptism Counter Doesn't Respond to Date Range Changes (#51)](#bug-baptism-counter-doesnt-respond-to-date-range-changes-51)
 - [BUG: Active Communities and Small Groups Chart Needs Work (#52)](#bug-active-communities-and-small-groups-chart-needs-work-52)
+- ~~[BUG: Baptism Counter Doesn't Respond to Date Range Changes (#51)](#bug-baptism-counter-doesnt-respond-to-date-range-changes-51)~~ ✅
 - [IDOR Mitigation — Per-Record Authorization (#57)](#idor-mitigation-per-record-authorization-57)
 - [Role-Based Access Control (RBAC) (#58)](#role-based-access-control-rbac-58)
 - ~~[Extract Shared Processing Components (Person Card, Milestone Checklist, Detail Modal) (#60)](#extract-shared-processing-components-person-card-milestone-checklist-detail-modal-60)~~ ✅
@@ -52,11 +52,11 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 ### Pastoral Interface for Contact Logs ([#19](https://github.com/The-Moody-Church/mp-charts/issues/19))
 A dedicated pastoral interface for viewing and managing contact logs.
 
-### Volunteer Processing Search Bar ([#49](https://github.com/The-Moody-Church/mp-charts/issues/49))
-Add a search bar to the top-right of both the "New Volunteers In Process" and "Approved Active Volunteers" tabs on the volunteer processing page. Allows staff to quickly filter the card grid by volunteer name instead of visually scanning through all cards.
+### ~~Processing Search Bar ([#49](https://github.com/The-Moody-Church/mp-charts/issues/49))~~ ✅ COMPLETED
+Added a shared `ProcessingSearchBar` component to all processing pages (volunteer, baptism, membership). Filters cards by name (first name, nickname, last name) across all tabs. Implemented as a reusable component in `src/components/processing/` with a `filterByName` utility in `src/lib/processing-utils.ts`.
 
-### Volunteer Processing: Show In-Process Volunteers on Active Tab ([#50](https://github.com/The-Moody-Church/mp-charts/issues/50))
-If a volunteer is in the "New Volunteers In Process" group but also already belongs to an active ministry group, they should still appear on the "Approved Active Volunteers" tab. Currently they are excluded from the active list while they remain in the in-process group.
+### ~~Volunteer Processing: Show In-Process Volunteers on Active Tab ([#50](https://github.com/The-Moody-Church/mp-charts/issues/50))~~ ✅ COMPLETED
+Removed the exclusionary group filter in `volunteerService.ts` that prevented in-process volunteers from appearing on the approved tab. Volunteers who are in the processing group AND an active ministry group now appear on both tabs.
 
 ### ~~Redesign Dashboard Layout: Discipleship Pathway Sections ([#42](https://github.com/The-Moody-Church/mp-charts/issues/42))~~ ✅ COMPLETED
 Redesign the executive dashboard from a flat chart grid into a structured layout organized around four discipleship pathway sections — **Know God**, **Feed Your Soul**, **Grow in Love**, **Change Your World** — plus an **Other** section. Add a 3-circle **Venn diagram** at the top showing engagement overlap (Any Activity ∩ Small Group/Community ∩ Serving/Leading) with person counts in all 7 intersection regions.
@@ -109,14 +109,14 @@ On the active volunteers tab of volunteer processing, on an individuals card, li
 
 ## Improvements
 
-### Executive Dashboard: Mobile Views ([#13](https://github.com/The-Moody-Church/mp-charts/issues/13))
-The mobile view needs redevelopment. Charts are squeezed and the data overlay when clicking on a data point is unruly and difficult to close. Redevelop and refine the mobile view strategy.
+### ~~Executive Dashboard: Mobile Views ([#13](https://github.com/The-Moody-Church/mp-charts/issues/13))~~ ✅ COMPLETED
+Comprehensive mobile support added: responsive chart margins, click-triggered tooltips on touch devices, expandable chart wrapper, hidden legends on mobile, viewport-aware tooltip widths, and touch-friendly dismiss behavior.
 
 ### Small Group Trends Chart ([#15](https://github.com/The-Moody-Church/mp-charts/issues/15))
 The Small Group Trends line chart may not be the best visualization for this data. Consider switching to a bar chart or removing it entirely if it doesn't add enough value to the dashboard.
 
-### Volunteer Processing Mobile Views  ([#33](https://github.com/The-Moody-Church/mp-charts/issues/33))
-When the modal is opened on a phone, it is wider than the screen. This includes when an item is in edit mode. Open to suggestions on solutions.
+### ~~Volunteer Processing Mobile Views  ([#33](https://github.com/The-Moody-Church/mp-charts/issues/33))~~ ✅ COMPLETED
+Fixed responsive dialog width (`w-[calc(100vw-1rem)] sm:max-w-2xl`), form layouts adapt to screen size, proper select sizing for touch targets.
 
 ### ~~Executive Dashboard One Month Charts Fix ([#12](https://github.com/The-Moody-Church/mp-charts/issues/12))~~ ✅ COMPLETED
 When only one month of data is selected on the executive dashboard, charts that normally show monthly averages should instead show individual data points. For example, if February is selected, the service attendance chart should show the four data points for February on their dates instead of a single average data point. This applies to all charts that show monthly averages.
@@ -143,8 +143,8 @@ Replace the hardcoded ministry year date ranges with an interactive date selecto
 
 ## Technical Debt
 
-### BUG: Baptism Counter Doesn't Respond to Date Range Changes ([#51](https://github.com/The-Moody-Church/mp-charts/issues/51))
-The baptism count on the executive dashboard does not update when the date range selector is changed. It always shows the same value regardless of the selected time period.
+### ~~BUG: Baptism Counter Doesn't Respond to Date Range Changes ([#51](https://github.com/The-Moody-Church/mp-charts/issues/51))~~ ✅ COMPLETED
+Baptism counter now properly responds to date range changes via `countDatesInRange()` in `filterDashboardData()`. The filtered data flows through `DashboardShell` → `useMemo` recompute → `MetricCard` display.
 
 ### BUG: Active Communities and Small Groups Chart Needs Work ([#52](https://github.com/The-Moody-Church/mp-charts/issues/52))
 The active communities and small groups chart on the executive dashboard needs improvement. The data or visualization is not accurately representing the information.
