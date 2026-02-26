@@ -22,18 +22,17 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
   const [modalOpen, setModalOpen] = useState(false);
   const [hasAutoOpened, setHasAutoOpened] = useState(false);
 
-  const fetchData = useCallback(async (tab: string) => {
+  const fetchAllData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      if (tab === "in-process") {
-        const data = await getInProcessVolunteers();
-        setInProcessVolunteers(data);
-      } else {
-        const result = await getApprovedVolunteers();
-        setApprovedVolunteers(result.volunteers);
-        setApprovedGroups(result.groups);
-      }
+      const [inProcessData, approvedResult] = await Promise.all([
+        getInProcessVolunteers(),
+        getApprovedVolunteers(),
+      ]);
+      setInProcessVolunteers(inProcessData);
+      setApprovedVolunteers(approvedResult.volunteers);
+      setApprovedGroups(approvedResult.groups);
     } catch (err) {
       console.error("Failed to fetch volunteers:", err);
       setError("Failed to load volunteers. Please try again.");
@@ -43,14 +42,13 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
   }, []);
 
   useEffect(() => {
-    fetchData(activeTab);
-  }, [activeTab, fetchData]);
+    fetchAllData();
+  }, [fetchAllData]);
 
   // Auto-open modal when navigating via deep link
   useEffect(() => {
     if (!initialVolunteerId || hasAutoOpened || loading) return;
 
-    // Search in-process volunteers first
     const inProcessMatch = inProcessVolunteers.find(
       v => v.info.Group_Participant_ID === initialVolunteerId
     );
@@ -61,7 +59,6 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
       return;
     }
 
-    // Search approved volunteers (may already be loaded)
     const approvedMatch = approvedVolunteers.find(
       v => v.info.Group_Participant_ID === initialVolunteerId
     );
@@ -73,24 +70,8 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
       return;
     }
 
-    // If in-process loaded but no match anywhere, try fetching approved tab
-    if (inProcessVolunteers.length >= 0 && approvedVolunteers.length === 0) {
-      getApprovedVolunteers().then(result => {
-        setApprovedVolunteers(result.volunteers);
-        setApprovedGroups(result.groups);
-        const match = result.volunteers.find(
-          v => v.info.Group_Participant_ID === initialVolunteerId
-        );
-        if (match) {
-          setActiveTab("approved");
-          setSelectedVolunteer(match);
-          setModalOpen(true);
-        }
-        setHasAutoOpened(true);
-      }).catch(() => setHasAutoOpened(true));
-    } else {
-      setHasAutoOpened(true);
-    }
+    // Both tabs loaded but no match found
+    setHasAutoOpened(true);
   }, [initialVolunteerId, inProcessVolunteers, approvedVolunteers, loading, hasAutoOpened]);
 
   const handleCardClick = (volunteer: VolunteerCardData) => {
@@ -99,7 +80,7 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
   };
 
   const handleUpdate = () => {
-    fetchData(activeTab);
+    fetchAllData();
   };
 
   const filteredApprovedVolunteers = useMemo(() => {
@@ -154,7 +135,7 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
         <TabsContent value="in-process">
           <ProcessingGrid
             items={currentVolunteers}
-            loading={loading && activeTab === "in-process"}
+            loading={loading}
             error={error}
             emptyMessage={searchQuery ? "No matching volunteers found." : "No volunteers currently in process."}
             keyExtractor={(v) => v.info.Group_Participant_ID}
@@ -191,7 +172,7 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
           )}
           <ProcessingGrid
             items={currentVolunteers}
-            loading={loading && activeTab === "approved"}
+            loading={loading}
             error={error}
             emptyMessage={searchQuery ? "No matching volunteers found." : "No approved volunteers found."}
             keyExtractor={(v) => v.info.Group_Participant_ID}

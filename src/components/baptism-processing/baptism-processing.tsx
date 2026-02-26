@@ -20,17 +20,16 @@ export function BaptismProcessing({ initialApplicantId }: { initialApplicantId?:
   const [modalOpen, setModalOpen] = useState(false);
   const [hasAutoOpened, setHasAutoOpened] = useState(false);
 
-  const fetchData = useCallback(async (tab: string) => {
+  const fetchAllData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      if (tab === "current") {
-        const data = await getCurrentApplicants();
-        setCurrentApplicants(data);
-      } else {
-        const data = await getPausedApplicants();
-        setPausedApplicants(data);
-      }
+      const [currentData, pausedData] = await Promise.all([
+        getCurrentApplicants(),
+        getPausedApplicants(),
+      ]);
+      setCurrentApplicants(currentData);
+      setPausedApplicants(pausedData);
     } catch (err) {
       console.error("Failed to fetch baptism applicants:", err);
       setError("Failed to load applicants. Please try again.");
@@ -40,8 +39,8 @@ export function BaptismProcessing({ initialApplicantId }: { initialApplicantId?:
   }, []);
 
   useEffect(() => {
-    fetchData(activeTab);
-  }, [activeTab, fetchData]);
+    fetchAllData();
+  }, [fetchAllData]);
 
   // Auto-open modal when navigating via deep link
   useEffect(() => {
@@ -68,23 +67,8 @@ export function BaptismProcessing({ initialApplicantId }: { initialApplicantId?:
       return;
     }
 
-    // If current loaded but no match, try fetching paused tab
-    if (currentApplicants.length >= 0 && pausedApplicants.length === 0) {
-      getPausedApplicants().then(data => {
-        setPausedApplicants(data);
-        const match = data.find(
-          a => a.info.Group_Participant_ID === initialApplicantId
-        );
-        if (match) {
-          setActiveTab("paused");
-          setSelectedApplicant(match);
-          setModalOpen(true);
-        }
-        setHasAutoOpened(true);
-      }).catch(() => setHasAutoOpened(true));
-    } else {
-      setHasAutoOpened(true);
-    }
+    // Both tabs loaded but no match found
+    setHasAutoOpened(true);
   }, [initialApplicantId, currentApplicants, pausedApplicants, loading, hasAutoOpened]);
 
   const handleCardClick = (applicant: BaptismCardData) => {
@@ -93,7 +77,7 @@ export function BaptismProcessing({ initialApplicantId }: { initialApplicantId?:
   };
 
   const handleUpdate = () => {
-    fetchData(activeTab);
+    fetchAllData();
   };
 
   const filteredCurrent = useMemo(
@@ -141,7 +125,7 @@ export function BaptismProcessing({ initialApplicantId }: { initialApplicantId?:
         <TabsContent value="current">
           <ProcessingGrid
             items={filteredCurrent}
-            loading={loading && activeTab === "current"}
+            loading={loading}
             error={error}
             emptyMessage={searchQuery ? "No matching applicants found." : "No current baptism applicants."}
             keyExtractor={(a) => a.info.Group_Participant_ID}
@@ -155,7 +139,7 @@ export function BaptismProcessing({ initialApplicantId }: { initialApplicantId?:
         <TabsContent value="paused">
           <ProcessingGrid
             items={filteredPaused}
-            loading={loading && activeTab === "paused"}
+            loading={loading}
             error={error}
             emptyMessage={searchQuery ? "No matching applicants found." : "No paused baptism applicants."}
             keyExtractor={(a) => a.info.Group_Participant_ID}
