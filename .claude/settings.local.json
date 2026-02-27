@@ -81,7 +81,13 @@
       "Bash(gh api repos/MinistryPlatform-Community/MPNext/issues/51/comments)",
       "Bash(git -c core.gitProxy=false log main..HEAD --oneline)",
       "Bash(/usr/bin/git log main..HEAD --oneline)",
-      "Bash(/opt/homebrew/bin/git log main..HEAD --oneline)"
+      "Bash(/opt/homebrew/bin/git log main..HEAD --oneline)",
+      "Bash(rm -rf src/app/\\\\\\(web\\\\\\)/tools/template)",
+      "Bash(rm -rf src/components/tool)",
+      "Bash(rm -rf src/components/user-tools-debug)",
+      "Bash(rm src/lib/tool-params.ts)",
+      "Bash(rm src/services/toolService.ts)",
+      "Bash(rm -rf src/app/\\\\\\(web\\\\\\)/tools)"
     ],
     "deny": [],
     "ask": [],

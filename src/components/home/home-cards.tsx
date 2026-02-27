@@ -6,15 +6,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useAuthorization } from "@/hooks/use-authorization";
 import type { Feature } from "@/lib/authorization";
 
-const isDev = process.env.NODE_ENV === "development";
-
 interface FeatureCard {
   title: string;
   description: string;
   href: string;
   buttonText: string;
   feature?: Feature;
-  devOnly?: boolean;
   adminOnly?: boolean;
 }
 
@@ -55,13 +52,6 @@ const featureCards: FeatureCard[] = [
     feature: "contact-lookup",
   },
   {
-    title: "Template Tool",
-    description: "An example of an approach to build tools for MP",
-    href: "/tools/template",
-    buttonText: "View Demo",
-    devOnly: true,
-  },
-  {
     title: "Setup",
     description: "Manage which User Groups can access each feature",
     href: "/admin",
@@ -74,7 +64,6 @@ export function HomeCards() {
   const { canAccess, isSuperAdmin } = useAuthorization();
 
   const visibleCards = featureCards.filter((card) => {
-    if (card.devOnly && !isDev) return false;
     if (card.adminOnly && !isSuperAdmin) return false;
     if (card.feature && !canAccess(card.feature)) return false;
     return true;

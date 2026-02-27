@@ -1,7 +1,7 @@
 "use client";
 
 import { XMarkIcon } from "@heroicons/react/24/outline";
-import { HomeIcon, UsersIcon, ChartBarIcon, ClipboardDocumentCheckIcon, UserGroupIcon, WrenchScrewdriverIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
+import { HomeIcon, UsersIcon, ChartBarIcon, ClipboardDocumentCheckIcon, UserGroupIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
 import { useAuthorization } from "@/hooks/use-authorization";
 import type { Feature } from "@/lib/authorization";
 
@@ -15,11 +15,8 @@ interface NavItem {
   href: string;
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   feature?: Feature;
-  devOnly?: boolean;
   adminOnly?: boolean;
 }
-
-const isDev = process.env.NODE_ENV === "development";
 
 const navigation: NavItem[] = [
   { name: "Home", href: "/", icon: HomeIcon },
@@ -28,7 +25,6 @@ const navigation: NavItem[] = [
   { name: "Baptism Processing", href: "/baptism-processing", icon: ClipboardDocumentCheckIcon, feature: "baptism-processing" },
   { name: "Membership Processing", href: "/membership-processing", icon: UserGroupIcon, feature: "membership-processing" },
   { name: "Contact Lookup", href: "/contactlookup", icon: UsersIcon, feature: "contact-lookup" },
-  { name: "Template Tool", href: "/tools/template", icon: WrenchScrewdriverIcon, devOnly: true },
   { name: "Setup", href: "/admin", icon: ShieldCheckIcon, adminOnly: true },
 ];
 
@@ -36,7 +32,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { canAccess, isSuperAdmin } = useAuthorization();
 
   const visibleItems = navigation.filter((item) => {
-    if (item.devOnly && !isDev) return false;
     if (item.adminOnly && !isSuperAdmin) return false;
     if (item.feature && !canAccess(item.feature)) return false;
     return true;

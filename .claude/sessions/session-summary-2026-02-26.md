@@ -141,7 +141,16 @@ Each feature card's User Group checkbox list now has a search input ("Filter gro
 
 **File modified:** `src/components/admin/admin-page.tsx` — Added `searchTerms` state, `Input` for per-card filtering, `FilteredGroupList` component
 
-### Debug logging (temporary)
-Added dev-only `console.log` statements to diagnose RBAC issues:
-- `src/components/shared-actions/user.ts` — `[RBAC debug]` logs userGroupIds and userGroups
-- `src/lib/authorization.ts` — `[RBAC requireFeatureAccess]` logs feature, profile, adminEnv, isSuperAdmin
+### Remove Template Tool and supporting infrastructure
+The Template Tool was an artifact from the initial fork — removed entirely along with its shared tool infrastructure (no other consumers).
+
+**Files removed:**
+- `src/app/(web)/tools/` — Template Tool route, page, layout
+- `src/components/tool/` — ToolContainer, ToolHeader, ToolFooter, ToolParamsDebug, barrel export
+- `src/components/user-tools-debug/` — UserToolsDebug component, actions, barrel export
+- `src/lib/tool-params.ts` — Tool parameter parsing utilities
+- `src/services/toolService.ts` — Tool service singleton
+
+**Files modified:**
+- `src/components/layout/sidebar.tsx` — Removed Template Tool nav item, removed `devOnly` property and `isDev` const (no remaining dev-only items)
+- `src/components/home/home-cards.tsx` — Removed Template Tool card, removed `devOnly` property and `isDev` const

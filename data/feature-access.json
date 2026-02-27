@@ -2,22 +2,30 @@
   "dashboard": {
     "label": "Executive Dashboard",
     "description": "View ministry metrics and attendance data",
-    "allowedGroupIds": []
+    "allowedGroupIds": [
+      30
+    ]
   },
   "volunteer-processing": {
     "label": "Volunteer Processing",
     "description": "Manage volunteer onboarding and approvals",
-    "allowedGroupIds": []
+    "allowedGroupIds": [
+      32
+    ]
   },
   "baptism-processing": {
     "label": "Baptism Processing",
     "description": "Manage baptism applicants and milestones",
-    "allowedGroupIds": []
+    "allowedGroupIds": [
+      31
+    ]
   },
   "membership-processing": {
     "label": "Membership Processing",
     "description": "Manage membership applications",
-    "allowedGroupIds": []
+    "allowedGroupIds": [
+      33
+    ]
   },
   "contact-lookup": {
     "label": "Contact Lookup",
