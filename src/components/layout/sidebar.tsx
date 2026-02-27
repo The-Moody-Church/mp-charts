@@ -1,8 +1,10 @@
 "use client";
 
+import { useMemo } from "react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
-import { HomeIcon, UsersIcon, ChartBarIcon, ClipboardDocumentCheckIcon, UserGroupIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
+import { HomeIcon, UsersIcon, ChartBarIcon, ClipboardDocumentCheckIcon, UserGroupIcon, ShieldCheckIcon, MapIcon } from "@heroicons/react/24/outline";
 import { useAuthorization } from "@/hooks/use-authorization";
+import { useUser } from "@/contexts/user-context";
 import type { Feature } from "@/lib/authorization";
 
 interface SidebarProps {
@@ -30,12 +32,29 @@ const navigation: NavItem[] = [
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { canAccess, isSuperAdmin } = useAuthorization();
+  const { journeyTools } = useUser();
 
-  const visibleItems = navigation.filter((item) => {
-    if (item.adminOnly && !isSuperAdmin) return false;
-    if (item.feature && !canAccess(item.feature)) return false;
-    return true;
-  });
+  const visibleItems = useMemo(() => {
+    const journeyNavItems: NavItem[] = journeyTools.map((tool) => ({
+      name: tool.name,
+      href: `/journey/${tool.slug}`,
+      icon: MapIcon,
+      feature: `journey:${tool.slug}` as Feature,
+    }));
+
+    const setupIndex = navigation.findIndex((item) => item.adminOnly);
+    const allItems = [
+      ...navigation.slice(0, setupIndex >= 0 ? setupIndex : navigation.length),
+      ...journeyNavItems,
+      ...(setupIndex >= 0 ? navigation.slice(setupIndex) : []),
+    ];
+
+    return allItems.filter((item) => {
+      if (item.adminOnly && !isSuperAdmin) return false;
+      if (item.feature && !canAccess(item.feature)) return false;
+      return true;
+    });
+  }, [journeyTools, canAccess, isSuperAdmin]);
 
   return (
     <div

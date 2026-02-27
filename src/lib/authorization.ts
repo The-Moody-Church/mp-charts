@@ -3,10 +3,11 @@ import { join } from "path";
 import { type Session } from "@/lib/auth";
 import { requireSession, getUserGuid } from "@/lib/auth-helpers";
 import { UserService } from "@/services/userService";
+import { getEnabledJourneyTools } from "@/lib/journey-tools-config";
 
 const CONFIG_PATH = join(process.cwd(), "data", "feature-access.json");
 
-export type Feature =
+export type StaticFeature =
   | "dashboard"
   | "volunteer-processing"
   | "baptism-processing"
@@ -14,6 +15,11 @@ export type Feature =
   | "contact-lookup"
   | "contact-logs"
   | "admin";
+
+/** Dynamic features follow the pattern "journey:{slug}" */
+export type DynamicFeature = `journey:${string}`;
+
+export type Feature = StaticFeature | DynamicFeature;
 
 export interface FeatureConfig {
   label: string;
@@ -82,17 +88,31 @@ export function isSuperAdmin(userGroupIds: number[]): boolean {
  * Returns the default config if the file doesn't exist yet.
  */
 export function loadFeatureAccess(): FeatureAccessConfig {
-  if (!existsSync(CONFIG_PATH)) {
-    return { ...DEFAULT_CONFIG };
-  }
-  const raw = readFileSync(CONFIG_PATH, "utf-8");
-  const parsed = JSON.parse(raw) as FeatureAccessConfig;
-
-  // Merge with defaults to ensure new features are always present
   const merged = { ...DEFAULT_CONFIG };
-  for (const [key, value] of Object.entries(parsed)) {
-    merged[key] = value;
+
+  if (existsSync(CONFIG_PATH)) {
+    const raw = readFileSync(CONFIG_PATH, "utf-8");
+    const parsed = JSON.parse(raw) as FeatureAccessConfig;
+
+    // Merge with defaults to ensure new features are always present
+    for (const [key, value] of Object.entries(parsed)) {
+      merged[key] = value;
+    }
   }
+
+  // Inject enabled journey tools as dynamic features
+  const journeyTools = getEnabledJourneyTools();
+  for (const tool of journeyTools) {
+    const featureKey = `journey:${tool.slug}`;
+    if (!merged[featureKey]) {
+      merged[featureKey] = {
+        label: tool.journeyName,
+        description: tool.description,
+        allowedGroupIds: [],
+      };
+    }
+  }
+
   return merged;
 }
 
@@ -134,7 +154,7 @@ export function hasFeatureAccess(
  * Used by the client to gate UI elements.
  */
 export function getAccessibleFeatures(userGroupIds: number[]): Feature[] {
-  const allFeatures: Feature[] = [
+  const staticFeatures: StaticFeature[] = [
     "dashboard",
     "volunteer-processing",
     "baptism-processing",
@@ -143,6 +163,14 @@ export function getAccessibleFeatures(userGroupIds: number[]): Feature[] {
     "contact-logs",
     "admin",
   ];
+
+  // Include dynamic journey features
+  const journeyTools = getEnabledJourneyTools();
+  const dynamicFeatures: DynamicFeature[] = journeyTools.map(
+    (t) => `journey:${t.slug}` as DynamicFeature
+  );
+
+  const allFeatures: Feature[] = [...staticFeatures, ...dynamicFeatures];
   return allFeatures.filter((f) => hasFeatureAccess(userGroupIds, f));
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -134,6 +135,20 @@ export function AdminPage() {
               : "Flush Profile Cache"}
         </Button>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Journey Tools</CardTitle>
+          <CardDescription>
+            Configure which Ministry Platform journeys are available as processing tools
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link href="/admin/journey-tools">
+            <Button variant="outline">Manage Journey Tools</Button>
+          </Link>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 md:grid-cols-2">
         {Object.entries(config).map(([feature, featureConfig]) => (

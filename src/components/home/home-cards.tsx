@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useMemo } from "react";
 import { useAuthorization } from "@/hooks/use-authorization";
+import { useUser } from "@/contexts/user-context";
 import type { Feature } from "@/lib/authorization";
 
 interface FeatureCard {
@@ -62,12 +64,30 @@ const featureCards: FeatureCard[] = [
 
 export function HomeCards() {
   const { canAccess, isSuperAdmin } = useAuthorization();
+  const { journeyTools } = useUser();
 
-  const visibleCards = featureCards.filter((card) => {
-    if (card.adminOnly && !isSuperAdmin) return false;
-    if (card.feature && !canAccess(card.feature)) return false;
-    return true;
-  });
+  const visibleCards = useMemo(() => {
+    const journeyCards: FeatureCard[] = journeyTools.map((tool) => ({
+      title: tool.name,
+      description: tool.description || `Track participants through the ${tool.name} journey`,
+      href: `/journey/${tool.slug}`,
+      buttonText: "View Participants",
+      feature: `journey:${tool.slug}` as Feature,
+    }));
+
+    const setupIndex = featureCards.findIndex((c) => c.adminOnly);
+    const allCards = [
+      ...featureCards.slice(0, setupIndex >= 0 ? setupIndex : featureCards.length),
+      ...journeyCards,
+      ...(setupIndex >= 0 ? featureCards.slice(setupIndex) : []),
+    ];
+
+    return allCards.filter((card) => {
+      if (card.adminOnly && !isSuperAdmin) return false;
+      if (card.feature && !canAccess(card.feature)) return false;
+      return true;
+    });
+  }, [journeyTools, canAccess, isSuperAdmin]);
 
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
