@@ -95,9 +95,9 @@ git log main..upstream/main --oneline
 
 Or review PRs at: https://github.com/MinistryPlatform-Community/MPNext/pulls
 
-#### Last Review: 2026-02-20
+#### Last Review: 2026-02-26
 
-Reviewed all open/merged upstream PRs through PR #42. Status:
+Reviewed all open/merged upstream PRs through PR #51 (release v2026.02.26.1827). Status:
 
 | PR | Title | Action | Notes |
 |----|-------|--------|-------|
@@ -107,6 +107,12 @@ Reviewed all open/merged upstream PRs through PR #42. Status:
 | #40 | Generator fix for digit-leading names | Incorporated | `sanitizeTypeName` prefixes `_` when result starts with a digit |
 | #41 | Upgrade to Next.js 16 + all deps | Incorporated | Already on Next.js 16; cherry-picked: `middleware.ts` → `proxy.ts` rename, removed unused `@eslint/eslintrc`. Bumped all deps to match upstream pins: zod v4, openai v6, dotenv v17, @types/node ^25, jsdom ^28, all Radix UI, tailwindcss ^4.2, typescript ^5.9.3, and 10+ more |
 | #42 | Docs + `@inquirer/prompts` v8 | Incorporated | Upgraded `@inquirer/prompts` ^7→^8; updated `components.md` layout import patterns. Cherry-picked CLAUDE.md additions: Next.js 16 Notes section, Services Layer + Contexts in Architecture, Data Flow section, service import patterns |
+| #45 | Improve test coverage (137→228 tests) | Skipped | Our test suite has diverged; upstream tests cover different features |
+| #46 | Testing reference guide | Skipped | We have our own testing docs and patterns |
+| #47 | GitHub Actions test workflow + Codecov | Skipped | Upstream-specific CI infrastructure |
+| #49 | Restore CODECOV_TOKEN | Skipped | Only relevant with #47 |
+| #50 | Load user roles/groups into MPUserProfile | Incorporated | Added `roles`/`userGroups` to MPUserProfile, parallel fetch from `dp_User_Roles`/`dp_User_User_Groups`; kept our `sanitizeGuid()` + `sanitizeIds()` security (upstream doesn't sanitize); kept `requireSession()` in shared action |
+| #51 | Update deps + fix security vulns | Incorporated | `npm audit fix` resolved 3 CVEs: rollup CVE-2026-27606 (High), minimatch GHSA-3ppc-4f35-3m26 (High), ajv GHSA-2g4f-4pwh-qvx6 (Moderate). Lockfile-only changes, no `package.json` updates needed |
 
 **GitHub will show "N commits behind"** — this is expected and harmless. It reflects diverged commit history, not missing changes.
 

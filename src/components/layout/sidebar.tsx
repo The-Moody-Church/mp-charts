@@ -1,31 +1,42 @@
 "use client";
 
 import { XMarkIcon } from "@heroicons/react/24/outline";
-import { HomeIcon, UsersIcon, ChartBarIcon, ClipboardDocumentCheckIcon, UserGroupIcon, WrenchScrewdriverIcon } from "@heroicons/react/24/outline";
+import { HomeIcon, UsersIcon, ChartBarIcon, ClipboardDocumentCheckIcon, UserGroupIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
+import { useAuthorization } from "@/hooks/use-authorization";
+import type { Feature } from "@/lib/authorization";
 
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-const isDev = process.env.NODE_ENV === "development";
+interface NavItem {
+  name: string;
+  href: string;
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  feature?: Feature;
+  adminOnly?: boolean;
+}
 
-const navigation = [
+const navigation: NavItem[] = [
   { name: "Home", href: "/", icon: HomeIcon },
-  { name: "Executive Dashboard", href: "/dashboard", icon: ChartBarIcon },
-  { name: "Volunteer Processing", href: "/volunteer-processing", icon: ClipboardDocumentCheckIcon },
-  { name: "Baptism Processing", href: "/baptism-processing", icon: ClipboardDocumentCheckIcon },
-  { name: "Membership Processing", href: "/membership-processing", icon: UserGroupIcon },
-  // Dev-only items
-  ...(isDev ? [
-    { name: "Contact Lookup", href: "/contactlookup", icon: UsersIcon },
-    { name: "Template Tool", href: "/tools/template", icon: WrenchScrewdriverIcon },
-  ] : []),
-  // { name: 'Calendar', href: '/calendar', icon: CalendarIcon },
-  // { name: 'Settings', href: '/settings', icon: CogIcon },
+  { name: "Executive Dashboard", href: "/dashboard", icon: ChartBarIcon, feature: "dashboard" },
+  { name: "Volunteer Processing", href: "/volunteer-processing", icon: ClipboardDocumentCheckIcon, feature: "volunteer-processing" },
+  { name: "Baptism Processing", href: "/baptism-processing", icon: ClipboardDocumentCheckIcon, feature: "baptism-processing" },
+  { name: "Membership Processing", href: "/membership-processing", icon: UserGroupIcon, feature: "membership-processing" },
+  { name: "Contact Lookup", href: "/contactlookup", icon: UsersIcon, feature: "contact-lookup" },
+  { name: "Setup", href: "/admin", icon: ShieldCheckIcon, adminOnly: true },
 ];
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
+  const { canAccess, isSuperAdmin } = useAuthorization();
+
+  const visibleItems = navigation.filter((item) => {
+    if (item.adminOnly && !isSuperAdmin) return false;
+    if (item.feature && !canAccess(item.feature)) return false;
+    return true;
+  });
+
   return (
     <div
       className={`fixed top-0 left-0 z-50 h-full w-64 bg-[#344767] shadow-lg transform transition-transform duration-300 ease-in-out ${
@@ -45,7 +56,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
       <nav className="mt-4">
         <ul className="space-y-1 px-2">
-          {navigation.map((item) => (
+          {visibleItems.map((item) => (
             <li key={item.name}>
               <a
                 href={item.href}

@@ -1,8 +1,4 @@
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-
-const isDev = process.env.NODE_ENV === "development";
+import { HomeCards } from "@/components/home";
 
 export default function Home() {
   return (
@@ -12,95 +8,7 @@ export default function Home() {
         <p className="text-lg text-muted-foreground">Explore Ministry Platform data with visual dashboards and interactive tools</p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Card className="flex flex-col">
-          <CardHeader>
-            <CardTitle>Executive Dashboard</CardTitle>
-            <CardDescription>
-              View ministry year metrics including attendance trends, group participation, and year-over-year comparisons
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="mt-auto">
-            <Link href="/dashboard">
-              <Button className="w-full">View Dashboard</Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        <Card className="flex flex-col">
-          <CardHeader>
-            <CardTitle>Volunteer Processing</CardTitle>
-            <CardDescription>
-              Track children&apos;s ministry volunteer onboarding, view requirement checklists, and manage approved volunteers
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="mt-auto">
-            <Link href="/volunteer-processing">
-              <Button className="w-full">View Volunteers</Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        <Card className="flex flex-col">
-          <CardHeader>
-            <CardTitle>Baptism Processing</CardTitle>
-            <CardDescription>
-              Track baptism applicants through the baptism journey, manage milestones, and handle approvals
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="mt-auto">
-            <Link href="/baptism-processing">
-              <Button className="w-full">View Baptisms</Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        <Card className="flex flex-col">
-          <CardHeader>
-            <CardTitle>Membership Processing</CardTitle>
-            <CardDescription>
-              Track membership application milestones, manage the approval process, and complete new member registrations
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="mt-auto">
-            <Link href="/membership-processing">
-              <Button className="w-full">View Applicants</Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        {isDev && (
-          <>
-            <Card className="flex flex-col">
-              <CardHeader>
-                <CardTitle>Contact Lookup</CardTitle>
-                <CardDescription>
-                  Contact Lookup shows an example of the full CRUD power of the MP API and quickly accessing data from the platform
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="mt-auto">
-                <Link href="/contactlookup">
-                  <Button className="w-full">View Demo</Button>
-                </Link>
-              </CardContent>
-            </Card>
-
-            <Card className="flex flex-col">
-              <CardHeader>
-                <CardTitle>Template Tool</CardTitle>
-                <CardDescription>
-                  An example of an approach to build tools for MP
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="mt-auto">
-                <Link href="/tools/template">
-                  <Button className="w-full">View Demo</Button>
-                </Link>
-              </CardContent>
-            </Card>
-          </>
-        )}
-      </div>
+      <HomeCards />
     </div>
   );
 }

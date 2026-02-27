@@ -4,12 +4,13 @@ import { ContactLog } from "@/lib/providers/ministry-platform/models/ContactLog"
 import { ContactLogTypes } from "@/lib/providers/ministry-platform/models/ContactLogTypes";
 import { ContactLogInput } from "@/lib/providers/ministry-platform/models/ContactLogSchema";
 import { ContactLogService } from "@/services/contactLogService";
-import { requireSession, getMpUserId } from "@/lib/auth-helpers";
+import { getMpUserId } from "@/lib/auth-helpers";
+import { requireFeatureAccess } from "@/lib/authorization";
 import { enforceRateLimit } from "@/lib/rate-limit";
 
 export async function getContactLogTypes(): Promise<ContactLogTypes[]> {
   try {
-    await requireSession();
+    await requireFeatureAccess("contact-logs");
 
     const contactLogService = await ContactLogService.getInstance();
     const types = await contactLogService.getContactLogTypes();
@@ -25,7 +26,7 @@ export async function createContactLog(
   contactLogData: Omit<ContactLogInput, "Contact_Log_ID" | "Made_By">
 ): Promise<ContactLog> {
   try {
-    const session = await requireSession();
+    const session = await requireFeatureAccess("contact-logs");
     enforceRateLimit(session.user.id, "write");
     const userId = getMpUserId(session);
 
@@ -58,7 +59,7 @@ export async function updateContactLog(
   contactLogData: Partial<Omit<ContactLogInput, "Contact_Log_ID" | "Made_By">>
 ): Promise<ContactLog> {
   try {
-    const session = await requireSession();
+    const session = await requireFeatureAccess("contact-logs");
     enforceRateLimit(session.user.id, "write");
     const userId = getMpUserId(session);
 
@@ -88,7 +89,7 @@ export async function updateContactLog(
 
 export async function deleteContactLog(contactLogId: number): Promise<void> {
   try {
-    const session = await requireSession();
+    const session = await requireFeatureAccess("contact-logs");
     enforceRateLimit(session.user.id, "write");
 
     if (!contactLogId || contactLogId <= 0) {
@@ -105,7 +106,7 @@ export async function deleteContactLog(contactLogId: number): Promise<void> {
 
 export async function getContactLogsByContactId(contactId: number): Promise<ContactLog[]> {
   try {
-    await requireSession();
+    await requireFeatureAccess("contact-logs");
 
     if (!contactId || contactId <= 0) {
       throw new Error("Valid contact ID is required");
@@ -123,7 +124,7 @@ export async function getContactLogsByContactId(contactId: number): Promise<Cont
 
 export async function getContactLogById(contactLogId: number): Promise<ContactLog | null> {
   try {
-    await requireSession();
+    await requireFeatureAccess("contact-logs");
 
     if (!contactLogId || contactLogId <= 0) {
       throw new Error("Valid contact log ID is required");

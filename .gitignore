@@ -411,6 +411,9 @@ FodyWeavers.xsd
 # Environment
 .env.local
 
+# Runtime RBAC config (managed via Setup page, not committed)
+data/feature-access.json
+
 # nextJS
 .next/*
 
