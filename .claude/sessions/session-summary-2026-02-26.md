@@ -154,3 +154,12 @@ The Template Tool was an artifact from the initial fork — removed entirely alo
 **Files modified:**
 - `src/components/layout/sidebar.tsx` — Removed Template Tool nav item, removed `devOnly` property and `isDev` const (no remaining dev-only items)
 - `src/components/home/home-cards.tsx` — Removed Template Tool card, removed `devOnly` property and `isDev` const
+
+### Persist feature-access.json in Docker
+The `data/` directory wasn't copied into the Docker image, and runtime writes were ephemeral. Fixed by:
+1. Adding `COPY --from=builder /app/data ./data` to Dockerfile runner stage (ships defaults)
+2. Enabling the `data:/app/data` named volume in docker-compose.yml (persists runtime changes)
+
+**Files modified:**
+- `Dockerfile` — Added `COPY --from=builder /app/data ./data` to runner stage
+- `docker-compose.yml` — Uncommented volume mount `data:/app/data` and `volumes:` declaration

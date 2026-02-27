@@ -6,14 +6,12 @@ services:
       - .env
     networks:
       - caddy_network
-    # Uncomment if you need persistent storage
-    # volumes:
-    #   - data:/app/data
+    volumes:
+      - data:/app/data
 
 networks:
   caddy_network:
     external: true
 
-# Uncomment if you need volumes
-# volumes:
-#   data:
+volumes:
+  data:
