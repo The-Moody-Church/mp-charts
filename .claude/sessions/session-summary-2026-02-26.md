@@ -161,5 +161,7 @@ The `data/` directory wasn't copied into the Docker image, and runtime writes we
 2. Enabling the `data:/app/data` named volume in docker-compose.yml (persists runtime changes)
 
 **Files modified:**
-- `Dockerfile` — Added `COPY --from=builder /app/data ./data` to runner stage
-- `docker-compose.yml` — Uncommented volume mount `data:/app/data` and `volumes:` declaration
+- `Dockerfile` — Replaced `COPY --from=builder /app/data ./data` with `RUN mkdir -p data` (don't ship dev config; `loadFeatureAccess()` returns defaults when file is absent)
+- `docker-compose.yml` — Enabled volume mount `data:/app/data` and `volumes:` declaration
+- `.gitignore` — Added `data/feature-access.json` (runtime config, not committed)
+- `data/feature-access.json` — Untracked from git (`git rm --cached`); stays on disk for local dev

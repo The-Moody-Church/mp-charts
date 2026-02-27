@@ -87,7 +87,8 @@
       "Bash(rm -rf src/components/user-tools-debug)",
       "Bash(rm src/lib/tool-params.ts)",
       "Bash(rm src/services/toolService.ts)",
-      "Bash(rm -rf src/app/\\\\\\(web\\\\\\)/tools)"
+      "Bash(rm -rf src/app/\\\\\\(web\\\\\\)/tools)",
+      "Bash(git rm --cached data/feature-access.json)"
     ],
     "deny": [],
     "ask": [],
