@@ -1,0 +1,526 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RequirementPicker } from "./requirement-picker";
+import { MilestonePicker } from "@/components/admin/journey-tools/milestone-picker";
+import {
+  getGroupRoleRequirements,
+  saveComplianceToolAction,
+} from "./actions";
+import {
+  getAvailableJourneys,
+  getJourneyMilestones,
+  getAvailablePrograms,
+  getAvailableGroups,
+  getAvailableGroupRoles,
+  type MPJourney,
+  type MPProgram,
+  type MPGroup,
+  type MPGroupRole,
+} from "@/components/admin/journey-tools/actions";
+import {
+  generateUniqueSlug,
+  type ComplianceToolConfig,
+  type ComplianceRequirementConfig,
+  type ComplianceMilestoneConfig,
+} from "@/lib/compliance-tools-config-types";
+import type { JourneyMilestoneConfig } from "@/lib/journey-tools-config-types";
+
+interface ComplianceToolEditorProps {
+  existingTool?: ComplianceToolConfig | null;
+  existingSlugs: string[];
+  onSaved: () => void;
+  onCancel: () => void;
+}
+
+function mapRequirementType(mpType: string): ComplianceRequirementConfig["type"] {
+  const typeMap: Record<string, ComplianceRequirementConfig["type"]> = {
+    "Background Check": "background_check",
+    "Certification": "certification",
+    "Milestone": "milestone",
+    "Form": "form",
+  };
+  return typeMap[mpType] || "milestone";
+}
+
+export function ComplianceToolEditor({ existingTool, existingSlugs, onSaved, onCancel }: ComplianceToolEditorProps) {
+  const isEditing = !!existingTool;
+
+  // MP reference data
+  const [journeys, setJourneys] = useState<MPJourney[]>([]);
+  const [programs, setPrograms] = useState<MPProgram[]>([]);
+  const [groups, setGroups] = useState<MPGroup[]>([]);
+  const [groupRoles, setGroupRoles] = useState<MPGroupRole[]>([]);
+  const [loadingRef, setLoadingRef] = useState(true);
+  const [groupSearch, setGroupSearch] = useState("");
+
+  // Form state
+  const [toolName, setToolName] = useState(existingTool?.toolName ?? "");
+  const [slug, setSlug] = useState(existingTool?.slug ?? "");
+  const [description, setDescription] = useState(existingTool?.description ?? "");
+  const [enabled, setEnabled] = useState(existingTool?.enabled ?? true);
+  const [selectedGroupRoleIds, setSelectedGroupRoleIds] = useState<number[]>(existingTool?.groupRoleIds ?? []);
+  const [requirements, setRequirements] = useState<ComplianceRequirementConfig[]>(existingTool?.requirements ?? []);
+  const [journeyId, setJourneyId] = useState<number | null>(existingTool?.journeyId ?? null);
+  const [journeyMilestones, setJourneyMilestones] = useState<ComplianceMilestoneConfig[]>(existingTool?.journeyMilestones ?? []);
+  const [programId, setProgramId] = useState<number | null>(existingTool?.programId ?? null);
+  const [trackingGroupId, setTrackingGroupId] = useState<number | null>(existingTool?.trackingGroupId ?? null);
+  const [defaultGroupRoleId, setDefaultGroupRoleId] = useState<number | null>(existingTool?.defaultGroupRoleId ?? null);
+  const [supportsPause, setSupportsPause] = useState(existingTool?.supportsPause ?? false);
+  const [pausedGroupId, setPausedGroupId] = useState<number | null>(existingTool?.pausedGroupId ?? null);
+  const [pauseMilestoneId, setPauseMilestoneId] = useState<number | null>(existingTool?.pauseMilestoneId ?? null);
+
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loadingRequirements, setLoadingRequirements] = useState(false);
+  const [loadingMilestones, setLoadingMilestones] = useState(false);
+
+  // Load reference data
+  useEffect(() => {
+    async function load() {
+      try {
+        const [j, p, g, gr] = await Promise.all([
+          getAvailableJourneys(),
+          getAvailablePrograms(),
+          getAvailableGroups(),
+          getAvailableGroupRoles(),
+        ]);
+        setJourneys(j);
+        setPrograms(p);
+        setGroups(g);
+        setGroupRoles(gr);
+      } catch (err) {
+        console.error("Failed to load reference data:", err);
+        setError("Failed to load configuration data from Ministry Platform.");
+      } finally {
+        setLoadingRef(false);
+      }
+    }
+    load();
+  }, []);
+
+  // When group role selection changes, fetch requirements
+  const handleGroupRoleToggle = async (roleId: number, checked: boolean) => {
+    const newIds = checked
+      ? [...selectedGroupRoleIds, roleId]
+      : selectedGroupRoleIds.filter(id => id !== roleId);
+    setSelectedGroupRoleIds(newIds);
+
+    if (newIds.length === 0) {
+      setRequirements([]);
+      return;
+    }
+
+    setLoadingRequirements(true);
+    try {
+      const mpReqs = await getGroupRoleRequirements(newIds);
+      // Merge with existing requirements (preserve user edits)
+      const existingMap = new Map(requirements.map(r => [r.requirementId, r]));
+      const merged: ComplianceRequirementConfig[] = mpReqs.map((mr, idx) => {
+        const existing = existingMap.get(mr.Participation_Requirement_ID);
+        if (existing) return existing;
+        return {
+          requirementId: mr.Participation_Requirement_ID,
+          label: mr.Requirement_Name,
+          type: mapRequirementType(mr.Requirement_Type),
+          sortOrder: mr.Sort_Order ?? idx + 1,
+          visible: true,
+        };
+      });
+      setRequirements(merged);
+    } catch (err) {
+      console.error("Failed to load requirements:", err);
+    } finally {
+      setLoadingRequirements(false);
+    }
+  };
+
+  // Load requirements on initial edit
+  useEffect(() => {
+    if (isEditing && selectedGroupRoleIds.length > 0 && requirements.length > 0) {
+      // Already have requirements from existing config, don't reload
+      return;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // When journey selection changes, fetch milestones
+  useEffect(() => {
+    if (!journeyId) {
+      setJourneyMilestones([]);
+      return;
+    }
+
+    // Don't reload if editing and journey hasn't changed
+    if (isEditing && journeyId === existingTool?.journeyId && journeyMilestones.length > 0) return;
+
+    setLoadingMilestones(true);
+    getJourneyMilestones(journeyId)
+      .then((mpMilestones) => {
+        const newMilestones: ComplianceMilestoneConfig[] = mpMilestones.map((m, idx) => ({
+          milestoneId: m.Milestone_ID,
+          label: m.Milestone_Title,
+          sortOrder: m.Sort_Order ?? idx + 1,
+          visible: true,
+        }));
+        setJourneyMilestones(newMilestones);
+      })
+      .catch((err) => console.error("Failed to load milestones:", err))
+      .finally(() => setLoadingMilestones(false));
+  }, [journeyId, isEditing, existingTool?.journeyId, journeyMilestones.length]);
+
+  // Auto-generate slug from tool name
+  const handleToolNameChange = (name: string) => {
+    setToolName(name);
+    if (!isEditing) {
+      setSlug(generateUniqueSlug(name, existingSlugs));
+    }
+  };
+
+  // Search groups
+  const handleGroupSearch = async () => {
+    try {
+      const results = await getAvailableGroups(groupSearch);
+      setGroups(results);
+    } catch (err) {
+      console.error("Failed to search groups:", err);
+    }
+  };
+
+  const handleSave = async () => {
+    setError(null);
+
+    if (!toolName.trim()) {
+      setError("Tool name is required.");
+      return;
+    }
+    if (!slug.trim()) {
+      setError("Slug is required.");
+      return;
+    }
+    if (selectedGroupRoleIds.length === 0) {
+      setError("At least one group role must be selected.");
+      return;
+    }
+    if (requirements.filter(r => r.visible).length === 0 && journeyMilestones.filter(m => m.visible).length === 0) {
+      setError("At least one requirement or milestone must be visible.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const now = new Date().toISOString();
+      const tool: ComplianceToolConfig = {
+        slug,
+        toolName: toolName.trim(),
+        description: description.trim(),
+        enabled,
+        groupRoleIds: selectedGroupRoleIds,
+        journeyId,
+        journeyMilestones,
+        requirements,
+        programId,
+        trackingGroupId,
+        defaultGroupRoleId,
+        supportsPause,
+        pausedGroupId: supportsPause ? pausedGroupId : null,
+        pauseMilestoneId: supportsPause ? pauseMilestoneId : null,
+        createdAt: existingTool?.createdAt ?? now,
+        updatedAt: now,
+      };
+
+      const result = await saveComplianceToolAction(tool);
+      if (!result.success) {
+        setError(result.error || "Failed to save.");
+        return;
+      }
+      onSaved();
+    } catch (err) {
+      console.error("Save failed:", err);
+      setError("Failed to save compliance tool.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Adapt ComplianceMilestoneConfig[] ↔ JourneyMilestoneConfig[] for the shared MilestonePicker
+  const milestonePickerData: JourneyMilestoneConfig[] = journeyMilestones.map(m => ({
+    milestoneId: m.milestoneId,
+    label: m.label,
+    sortOrder: m.sortOrder,
+    visible: m.visible,
+  }));
+
+  const handleMilestonesChange = (updated: JourneyMilestoneConfig[]) => {
+    setJourneyMilestones(updated.map(m => ({
+      milestoneId: m.milestoneId,
+      label: m.label,
+      sortOrder: m.sortOrder,
+      visible: m.visible,
+    })));
+  };
+
+  // All milestones from journey (for pause milestone select)
+  const allMilestones = journeyMilestones;
+
+  if (loadingRef) {
+    return <div className="text-sm text-muted-foreground">Loading configuration data...</div>;
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{isEditing ? "Edit Compliance Tool" : "Add Compliance Tool"}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {error && (
+          <div className="text-sm text-red-600 bg-red-50 rounded-md p-2">{error}</div>
+        )}
+
+        {/* Tool Name and Slug */}
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1 space-y-2">
+            <Label htmlFor="tool-name">Tool Name</Label>
+            <Input
+              id="tool-name"
+              value={toolName}
+              onChange={(e) => handleToolNameChange(e.target.value)}
+              placeholder="e.g., Volunteer Compliance"
+              className="text-base sm:text-sm"
+            />
+          </div>
+          <div className="w-full sm:w-48 space-y-2">
+            <Label htmlFor="tool-slug">URL Slug</Label>
+            <Input
+              id="tool-slug"
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
+              placeholder="e.g., volunteer-compliance"
+              disabled={isEditing}
+              className="text-base sm:text-sm"
+            />
+          </div>
+        </div>
+
+        {/* Description */}
+        <div className="space-y-2">
+          <Label htmlFor="tool-desc">Description</Label>
+          <Textarea
+            id="tool-desc"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={2}
+            placeholder="Short description shown on the home page card"
+            className="text-sm"
+          />
+        </div>
+
+        {/* Group Roles Selection */}
+        <div className="space-y-2">
+          <Label>Group Roles (which roles have compliance requirements)</Label>
+          <div className="max-h-48 overflow-y-auto space-y-2 rounded-md border p-3">
+            {groupRoles.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No group roles found</p>
+            ) : (
+              groupRoles.map((role) => (
+                <label
+                  key={role.Group_Role_ID}
+                  className="flex items-center gap-2 text-sm cursor-pointer"
+                >
+                  <Checkbox
+                    checked={selectedGroupRoleIds.includes(role.Group_Role_ID)}
+                    onCheckedChange={(checked) =>
+                      handleGroupRoleToggle(role.Group_Role_ID, checked === true)
+                    }
+                  />
+                  <span>{role.Role_Title}</span>
+                  <span className="text-muted-foreground">
+                    (ID: {role.Group_Role_ID})
+                  </span>
+                </label>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Requirements */}
+        <div className="space-y-2">
+          <Label>Requirements (toggle visibility, edit labels, reorder)</Label>
+          {loadingRequirements ? (
+            <div className="text-sm text-muted-foreground">Loading requirements...</div>
+          ) : (
+            <RequirementPicker requirements={requirements} onChange={setRequirements} />
+          )}
+        </div>
+
+        {/* Optional Journey */}
+        <div className="space-y-2">
+          <Label htmlFor="journey-select">Journey (optional — merge journey milestones into checklist)</Label>
+          <select
+            id="journey-select"
+            value={journeyId ?? ""}
+            onChange={(e) => setJourneyId(e.target.value ? Number(e.target.value) : null)}
+            className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
+          >
+            <option value="">No journey attached</option>
+            {journeys.map((j) => (
+              <option key={j.Journey_ID} value={j.Journey_ID}>
+                {j.Journey_Name} (ID: {j.Journey_ID})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Journey Milestones */}
+        {journeyId && (
+          <div className="space-y-2">
+            <Label>Journey Milestones (toggle visibility, edit labels, reorder)</Label>
+            {loadingMilestones ? (
+              <div className="text-sm text-muted-foreground">Loading milestones...</div>
+            ) : (
+              <MilestonePicker milestones={milestonePickerData} onChange={handleMilestonesChange} />
+            )}
+          </div>
+        )}
+
+        {/* Program */}
+        <div className="space-y-2">
+          <Label htmlFor="program-select">Program (for milestone writes)</Label>
+          <select
+            id="program-select"
+            value={programId ?? ""}
+            onChange={(e) => setProgramId(e.target.value ? Number(e.target.value) : null)}
+            className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
+          >
+            <option value="">None</option>
+            {programs.map((p) => (
+              <option key={p.Program_ID} value={p.Program_ID}>
+                {p.Program_Name} (ID: {p.Program_ID})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Tracking Group */}
+        <div className="space-y-2">
+          <Label>Tracking Group (filter participants by group membership)</Label>
+          <div className="flex gap-2">
+            <Input
+              value={groupSearch}
+              onChange={(e) => setGroupSearch(e.target.value)}
+              placeholder="Search groups..."
+              onKeyDown={(e) => e.key === "Enter" && handleGroupSearch()}
+              className="text-base sm:text-sm"
+            />
+            <Button variant="outline" size="sm" onClick={handleGroupSearch}>
+              Search
+            </Button>
+          </div>
+          <select
+            value={trackingGroupId ?? ""}
+            onChange={(e) => setTrackingGroupId(e.target.value ? Number(e.target.value) : null)}
+            className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
+          >
+            <option value="">No tracking group (required for processing)</option>
+            {groups.map((g) => (
+              <option key={g.Group_ID} value={g.Group_ID}>
+                {g.Group_Name} (ID: {g.Group_ID})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Default Group Role */}
+        <div className="space-y-2">
+          <Label htmlFor="default-role-select">Default Group Role (for group moves)</Label>
+          <select
+            id="default-role-select"
+            value={defaultGroupRoleId ?? ""}
+            onChange={(e) => setDefaultGroupRoleId(e.target.value ? Number(e.target.value) : null)}
+            className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
+          >
+            <option value="">None</option>
+            {groupRoles.map((r) => (
+              <option key={r.Group_Role_ID} value={r.Group_Role_ID}>
+                {r.Role_Title} (ID: {r.Group_Role_ID})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Pause Support */}
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <Checkbox
+              checked={supportsPause}
+              onCheckedChange={(checked) => setSupportsPause(checked === true)}
+            />
+            <span className="text-sm font-medium">Enable pause/resume</span>
+          </label>
+
+          {supportsPause && (
+            <div className="pl-6 space-y-3">
+              <div className="space-y-2">
+                <Label>Paused Group</Label>
+                <select
+                  value={pausedGroupId ?? ""}
+                  onChange={(e) => setPausedGroupId(e.target.value ? Number(e.target.value) : null)}
+                  className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
+                >
+                  <option value="">Select paused group...</option>
+                  {groups.map((g) => (
+                    <option key={g.Group_ID} value={g.Group_ID}>
+                      {g.Group_Name} (ID: {g.Group_ID})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {journeyId && allMilestones.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Pause Milestone</Label>
+                  <select
+                    value={pauseMilestoneId ?? ""}
+                    onChange={(e) => setPauseMilestoneId(e.target.value ? Number(e.target.value) : null)}
+                    className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
+                  >
+                    <option value="">Select milestone that marks paused...</option>
+                    {allMilestones.map((m) => (
+                      <option key={m.milestoneId} value={m.milestoneId}>
+                        {m.label} (ID: {m.milestoneId})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Enabled toggle */}
+        <label className="flex items-center gap-2 cursor-pointer">
+          <Checkbox
+            checked={enabled}
+            onCheckedChange={(checked) => setEnabled(checked === true)}
+          />
+          <span className="text-sm font-medium">Enabled</span>
+        </label>
+
+        {/* Actions */}
+        <div className="flex gap-2 pt-2">
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? "Saving..." : isEditing ? "Update" : "Create"}
+          </Button>
+          <Button variant="outline" onClick={onCancel} disabled={saving}>
+            Cancel
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

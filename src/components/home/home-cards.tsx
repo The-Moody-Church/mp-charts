@@ -64,7 +64,7 @@ const featureCards: FeatureCard[] = [
 
 export function HomeCards() {
   const { canAccess, isSuperAdmin } = useAuthorization();
-  const { journeyTools } = useUser();
+  const { journeyTools, complianceTools } = useUser();
 
   const visibleCards = useMemo(() => {
     const journeyCards: FeatureCard[] = journeyTools.map((tool) => ({
@@ -75,10 +75,19 @@ export function HomeCards() {
       feature: `journey:${tool.slug}` as Feature,
     }));
 
+    const complianceCards: FeatureCard[] = complianceTools.map((tool) => ({
+      title: tool.name,
+      description: tool.description || `Track compliance for ${tool.name}`,
+      href: `/compliance/${tool.slug}`,
+      buttonText: "View Compliance",
+      feature: `compliance:${tool.slug}` as Feature,
+    }));
+
     const setupIndex = featureCards.findIndex((c) => c.adminOnly);
     const allCards = [
       ...featureCards.slice(0, setupIndex >= 0 ? setupIndex : featureCards.length),
       ...journeyCards,
+      ...complianceCards,
       ...(setupIndex >= 0 ? featureCards.slice(setupIndex) : []),
     ];
 
@@ -87,7 +96,7 @@ export function HomeCards() {
       if (card.feature && !canAccess(card.feature)) return false;
       return true;
     });
-  }, [journeyTools, canAccess, isSuperAdmin]);
+  }, [journeyTools, complianceTools, canAccess, isSuperAdmin]);
 
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

@@ -4,6 +4,7 @@ import { type Session } from "@/lib/auth";
 import { requireSession, getUserGuid } from "@/lib/auth-helpers";
 import { UserService } from "@/services/userService";
 import { getEnabledJourneyTools } from "@/lib/journey-tools-config";
+import { getEnabledComplianceTools } from "@/lib/compliance-tools-config";
 
 const CONFIG_PATH = join(process.cwd(), "data", "feature-access.json");
 
@@ -16,8 +17,8 @@ export type StaticFeature =
   | "contact-logs"
   | "admin";
 
-/** Dynamic features follow the pattern "journey:{slug}" */
-export type DynamicFeature = `journey:${string}`;
+/** Dynamic features follow the pattern "journey:{slug}" or "compliance:{slug}" */
+export type DynamicFeature = `journey:${string}` | `compliance:${string}`;
 
 export type Feature = StaticFeature | DynamicFeature;
 
@@ -113,6 +114,19 @@ export function loadFeatureAccess(): FeatureAccessConfig {
     }
   }
 
+  // Inject enabled compliance tools as dynamic features
+  const complianceTools = getEnabledComplianceTools();
+  for (const tool of complianceTools) {
+    const featureKey = `compliance:${tool.slug}`;
+    if (!merged[featureKey]) {
+      merged[featureKey] = {
+        label: tool.toolName,
+        description: tool.description,
+        allowedGroupIds: [],
+      };
+    }
+  }
+
   return merged;
 }
 
@@ -166,11 +180,17 @@ export function getAccessibleFeatures(userGroupIds: number[]): Feature[] {
 
   // Include dynamic journey features
   const journeyTools = getEnabledJourneyTools();
-  const dynamicFeatures: DynamicFeature[] = journeyTools.map(
+  const journeyFeatures: DynamicFeature[] = journeyTools.map(
     (t) => `journey:${t.slug}` as DynamicFeature
   );
 
-  const allFeatures: Feature[] = [...staticFeatures, ...dynamicFeatures];
+  // Include dynamic compliance features
+  const complianceTools = getEnabledComplianceTools();
+  const complianceFeatures: DynamicFeature[] = complianceTools.map(
+    (t) => `compliance:${t.slug}` as DynamicFeature
+  );
+
+  const allFeatures: Feature[] = [...staticFeatures, ...journeyFeatures, ...complianceFeatures];
   return allFeatures.filter((f) => hasFeatureAccess(userGroupIds, f));
 }
 

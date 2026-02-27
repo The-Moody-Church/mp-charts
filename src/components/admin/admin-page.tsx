@@ -150,6 +150,20 @@ export function AdminPage() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Compliance Tools</CardTitle>
+          <CardDescription>
+            Configure group role compliance requirements as processing tools
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link href="/admin/compliance-tools">
+            <Button variant="outline">Manage Compliance Tools</Button>
+          </Link>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-6 md:grid-cols-2">
         {Object.entries(config).map(([feature, featureConfig]) => (
           <Card key={feature}>

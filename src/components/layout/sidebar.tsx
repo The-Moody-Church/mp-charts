@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
-import { HomeIcon, UsersIcon, ChartBarIcon, ClipboardDocumentCheckIcon, UserGroupIcon, ShieldCheckIcon, MapIcon } from "@heroicons/react/24/outline";
+import { HomeIcon, UsersIcon, ChartBarIcon, ClipboardDocumentCheckIcon, UserGroupIcon, ShieldCheckIcon, MapIcon, CheckBadgeIcon } from "@heroicons/react/24/outline";
 import { useAuthorization } from "@/hooks/use-authorization";
 import { useUser } from "@/contexts/user-context";
 import type { Feature } from "@/lib/authorization";
@@ -32,7 +32,7 @@ const navigation: NavItem[] = [
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { canAccess, isSuperAdmin } = useAuthorization();
-  const { journeyTools } = useUser();
+  const { journeyTools, complianceTools } = useUser();
 
   const visibleItems = useMemo(() => {
     const journeyNavItems: NavItem[] = journeyTools.map((tool) => ({
@@ -42,10 +42,18 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       feature: `journey:${tool.slug}` as Feature,
     }));
 
+    const complianceNavItems: NavItem[] = complianceTools.map((tool) => ({
+      name: tool.name,
+      href: `/compliance/${tool.slug}`,
+      icon: CheckBadgeIcon,
+      feature: `compliance:${tool.slug}` as Feature,
+    }));
+
     const setupIndex = navigation.findIndex((item) => item.adminOnly);
     const allItems = [
       ...navigation.slice(0, setupIndex >= 0 ? setupIndex : navigation.length),
       ...journeyNavItems,
+      ...complianceNavItems,
       ...(setupIndex >= 0 ? navigation.slice(setupIndex) : []),
     ];
 
@@ -54,7 +62,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       if (item.feature && !canAccess(item.feature)) return false;
       return true;
     });
-  }, [journeyTools, canAccess, isSuperAdmin]);
+  }, [journeyTools, complianceTools, canAccess, isSuperAdmin]);
 
   return (
     <div
