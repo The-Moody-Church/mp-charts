@@ -823,7 +823,7 @@ async function runInteractiveSetup(options: SetupOptions): Promise<number> {
   console.log(chalk.bold.blue('\nMPNext Setup'));
   console.log(chalk.blue('============'));
 
-  const totalSteps = 10;
+  const totalSteps = 9;
   let passedSteps = 0;
   let warnings = 0;
   let failedSteps = 0;
@@ -1235,7 +1235,7 @@ async function runInteractiveSetup(options: SetupOptions): Promise<number> {
     failedSteps++;
   }
 
-  // Step 9: Summary
+  // Summary
   console.log(chalk.bold.blue('\n\nSetup Complete!'));
   console.log(chalk.blue('==============='));
 
