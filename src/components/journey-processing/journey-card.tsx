@@ -27,7 +27,7 @@ function StatusIcon({ item }: { item: JourneyChecklistItem }) {
 
 export function JourneyCard({ participant, onClick }: JourneyCardProps) {
   const { mpFileUrl } = useRuntimeConfig();
-  const { info, checklist, completedCount, totalCount, isPaused, isFullyComplete, endDate } = participant;
+  const { info, checklist, completedCount, totalCount, isPaused, isFullyComplete, isDiscontinued, endDate } = participant;
   const displayName = getDisplayName(info.First_Name, info.Nickname);
 
   return (
@@ -37,9 +37,14 @@ export function JourneyCard({ participant, onClick }: JourneyCardProps) {
     >
       <CardContent className="flex flex-col items-center px-3">
         {/* Status badges (top-right) */}
-        {(isFullyComplete || isPaused || endDate) && (
+        {(isFullyComplete || isDiscontinued || isPaused || endDate) && (
           <div className="absolute top-2 right-2 flex items-center gap-1">
-            {isFullyComplete && (
+            {isDiscontinued && (
+              <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700">
+                Discontinued
+              </span>
+            )}
+            {isFullyComplete && !isDiscontinued && (
               <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700">
                 Complete
               </span>

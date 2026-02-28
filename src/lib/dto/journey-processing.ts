@@ -19,6 +19,7 @@ export interface JourneyChecklistItem {
 export interface JourneyCard extends BaseCardData<JourneyParticipantInfo, JourneyChecklistItem> {
   isPaused: boolean;
   isFullyComplete: boolean;
+  isDiscontinued: boolean;
   endDate: string | null;
 }
 
@@ -27,7 +28,7 @@ export type JourneyMilestoneDetail = BaseMilestoneDetail;
 export type JourneyMilestoneFileInfo = BaseFileInfo;
 
 export interface JourneyWriteBackConfig {
-  programId: number | null;
+  programId: number;
   trackingGroupId: number | null;
   pausedGroupId: number | null;
   defaultGroupRoleId: number | null;

@@ -362,7 +362,8 @@ export function JourneyDetailModal({
 
   const handleCopyLink = () => {
     if (!participant) return;
-    const url = `${window.location.origin}/journey/${slug}?applicant=${participant.info.Group_Participant_ID}`;
+    const linkId = participant.info.Group_Participant_ID ?? participant.info.Participant_ID;
+    const url = `${window.location.origin}/journey/${slug}?applicant=${linkId}`;
     navigator.clipboard.writeText(url).then(() => {
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2000);
@@ -378,8 +379,9 @@ export function JourneyDetailModal({
   const mpBaseOrigin = mpFileUrl ? new URL(mpFileUrl).origin : null;
   const mpParticipantUrl = mpBaseOrigin ? `${mpBaseOrigin}/mp/355/${info.Participant_ID}` : null;
 
-  // Paused tab — show resume button
-  const showResumeButton = supportsPause && !isCurrentTab && participant.isPaused;
+  // Pause/resume only applies in group mode
+  const showPauseControls = supportsPause && !!participant.info.Group_Participant_ID;
+  const showResumeButton = showPauseControls && !isCurrentTab && participant.isPaused;
 
   // Available milestones for quick action dropdown
   const availableMilestones = checklist.filter(item => item.status === "not_started");
@@ -404,10 +406,10 @@ export function JourneyDetailModal({
                 {displayName} {info.Last_Name}
               </DialogTitle>
               <DialogDescription>
-                Started {formatDate(info.Start_Date)}
+                {info.Start_Date && <>Started {formatDate(info.Start_Date)}</>}
                 {mpParticipantUrl && (
                   <>
-                    {" — "}
+                    {info.Start_Date && " — "}
                     <a
                       href={mpParticipantUrl}
                       target="_blank"
@@ -418,7 +420,7 @@ export function JourneyDetailModal({
                     </a>
                   </>
                 )}
-                {" — "}
+                {(info.Start_Date || mpParticipantUrl) && " — "}
                 <button
                   onClick={handleCopyLink}
                   className="text-blue-600 hover:underline"
@@ -436,8 +438,18 @@ export function JourneyDetailModal({
           phone={(detail?.info ?? info).Mobile_Phone}
         />
 
-        {/* End date alert */}
-        {(detail?.endDate || participant.endDate) && (
+        {/* Discontinued alert */}
+        {(detail?.isDiscontinued || participant.isDiscontinued) && (
+          <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-2.5 text-sm text-red-800">
+            <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
+            Journey discontinued
+          </div>
+        )}
+
+        {/* End date alert (group mode only) */}
+        {participant.info.Group_Participant_ID && (detail?.endDate || participant.endDate) && (
           <div className="flex items-center gap-2 rounded-md border border-orange-200 bg-orange-50 p-2.5 text-sm text-orange-800">
             <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
@@ -456,8 +468,8 @@ export function JourneyDetailModal({
           <div className="py-8 text-center text-sm text-muted-foreground">Loading details...</div>
         ) : (
           <div className="space-y-4">
-            {/* Pause Button — on current tab when pause is supported */}
-            {supportsPause && isCurrentTab && (
+            {/* Pause Button — on current tab when pause is supported (group mode only) */}
+            {showPauseControls && isCurrentTab && (
               <div className="space-y-2">
                 {!showPauseConfirm ? (
                   <Button

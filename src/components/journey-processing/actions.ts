@@ -29,6 +29,17 @@ export async function getJourneyParticipants(slug: string): Promise<JourneyCard[
   }
 }
 
+export async function getCompletedJourneyParticipants(slug: string): Promise<JourneyCard[]> {
+  try {
+    await requireJourneyAccess(slug);
+    const service = JourneyProcessingService.getInstance(slug);
+    return await service.getCompletedParticipants();
+  } catch (error) {
+    console.error("Error fetching completed journey participants:", error);
+    throw new Error("Failed to fetch completed participants");
+  }
+}
+
 export async function getPausedJourneyParticipants(slug: string): Promise<JourneyCard[]> {
   try {
     const { config } = await requireJourneyAccess(slug);
@@ -45,7 +56,7 @@ export async function getJourneyParticipantDetail(
   slug: string,
   contactId: number,
   participantId: number,
-  groupParticipantId: number
+  groupParticipantId: number | null
 ): Promise<JourneyDetail | null> {
   try {
     await requireJourneyAccess(slug);
@@ -134,8 +145,12 @@ export async function uploadJourneyParticipantPhoto(slug: string, formData: Form
 
 export async function pauseJourneyParticipant(slug: string, formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
-    const { session } = await requireJourneyAccess(slug);
+    const { session, config } = await requireJourneyAccess(slug);
     enforceRateLimit(session.user.id, "write");
+
+    if (!config.trackingGroupId) {
+      return { success: false, error: "Pause/resume requires a tracking group" };
+    }
 
     const participantId = Number(formData.get("Participant_ID"));
     const currentGroupParticipantId = Number(formData.get("Group_Participant_ID"));
@@ -164,8 +179,12 @@ export async function pauseJourneyParticipant(slug: string, formData: FormData):
 
 export async function resumeJourneyParticipant(slug: string, formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
-    const { session } = await requireJourneyAccess(slug);
+    const { session, config } = await requireJourneyAccess(slug);
     enforceRateLimit(session.user.id, "write");
+
+    if (!config.trackingGroupId) {
+      return { success: false, error: "Pause/resume requires a tracking group" };
+    }
 
     const participantId = Number(formData.get("Participant_ID"));
     const currentGroupParticipantId = Number(formData.get("Group_Participant_ID"));

@@ -123,7 +123,7 @@ export function VolunteerDetailModal({
       getVolunteerDetail(
         volunteer.info.Contact_ID,
         volunteer.info.Participant_ID,
-        volunteer.info.Group_Participant_ID
+        volunteer.info.Group_Participant_ID!
       )
         .then((d) => {
           setDetail(d);
@@ -277,7 +277,7 @@ export function VolunteerDetailModal({
       const updated = await getVolunteerDetail(
         volunteer.info.Contact_ID,
         volunteer.info.Participant_ID,
-        volunteer.info.Group_Participant_ID
+        volunteer.info.Group_Participant_ID!
       );
       setDetail(updated);
     } catch (err) {
@@ -311,7 +311,7 @@ export function VolunteerDetailModal({
       const updated = await getVolunteerDetail(
         volunteer.info.Contact_ID,
         volunteer.info.Participant_ID,
-        volunteer.info.Group_Participant_ID
+        volunteer.info.Group_Participant_ID!
       );
       setDetail(updated);
     } catch (err) {
@@ -345,7 +345,7 @@ export function VolunteerDetailModal({
       const updated = await getVolunteerDetail(
         volunteer.info.Contact_ID,
         volunteer.info.Participant_ID,
-        volunteer.info.Group_Participant_ID
+        volunteer.info.Group_Participant_ID!
       );
       setDetail(updated);
       onUpdate();
@@ -364,7 +364,7 @@ export function VolunteerDetailModal({
     setAssignError(null);
     try {
       const formData = new FormData();
-      formData.set("currentGroupParticipantId", String(volunteer.info.Group_Participant_ID));
+      formData.set("currentGroupParticipantId", String(volunteer.info.Group_Participant_ID!));
       formData.set("participantId", String(volunteer.info.Participant_ID));
       formData.set("targetGroupId", String(assignTargetGroupId));
       formData.set("targetRoleId", String(assignTargetRoleId));
@@ -465,7 +465,7 @@ export function VolunteerDetailModal({
       const updated = await getVolunteerDetail(
         volunteer.info.Contact_ID,
         volunteer.info.Participant_ID,
-        volunteer.info.Group_Participant_ID
+        volunteer.info.Group_Participant_ID!
       );
       setDetail(updated);
 

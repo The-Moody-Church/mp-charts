@@ -38,6 +38,7 @@ export function JourneyToolEditor({ existingTool, existingSlugs, onSaved, onCanc
   const [groups, setGroups] = useState<MPGroup[]>([]);
   const [groupRoles, setGroupRoles] = useState<MPGroupRole[]>([]);
   const [loadingRef, setLoadingRef] = useState(true);
+  const [programSearch, setProgramSearch] = useState("");
   const [groupSearch, setGroupSearch] = useState("");
 
   // Form state
@@ -115,6 +116,16 @@ export function JourneyToolEditor({ existingTool, existingSlugs, onSaved, onCanc
     }
   };
 
+  // Search programs
+  const handleProgramSearch = async () => {
+    try {
+      const results = await getAvailablePrograms(programSearch);
+      setPrograms(results);
+    } catch (err) {
+      console.error("Failed to search programs:", err);
+    }
+  };
+
   // Search groups
   const handleGroupSearch = async () => {
     try {
@@ -140,6 +151,10 @@ export function JourneyToolEditor({ existingTool, existingSlugs, onSaved, onCanc
       setError("Name is required.");
       return;
     }
+    if (!programId) {
+      setError("Program is required.");
+      return;
+    }
     if (milestones.filter((m) => m.visible).length === 0) {
       setError("At least one milestone must be visible.");
       return;
@@ -155,12 +170,12 @@ export function JourneyToolEditor({ existingTool, existingSlugs, onSaved, onCanc
         description: description.trim(),
         enabled,
         milestones,
-        programId,
+        programId: programId!,
         trackingGroupId,
-        pausedGroupId,
-        defaultGroupRoleId,
-        supportsPause,
-        pauseMilestoneId: supportsPause ? pauseMilestoneId : null,
+        pausedGroupId: trackingGroupId ? pausedGroupId : null,
+        defaultGroupRoleId: trackingGroupId ? defaultGroupRoleId : null,
+        supportsPause: trackingGroupId ? supportsPause : false,
+        pauseMilestoneId: trackingGroupId && supportsPause ? pauseMilestoneId : null,
         createdAt: existingTool?.createdAt ?? now,
         updatedAt: now,
       };
@@ -252,14 +267,25 @@ export function JourneyToolEditor({ existingTool, existingSlugs, onSaved, onCanc
 
         {/* Program */}
         <div className="space-y-2">
-          <Label htmlFor="program-select">Program (for milestone writes)</Label>
+          <Label>Program (required — for milestone writes)</Label>
+          <div className="flex gap-2">
+            <Input
+              value={programSearch}
+              onChange={(e) => setProgramSearch(e.target.value)}
+              placeholder="Search programs..."
+              onKeyDown={(e) => e.key === "Enter" && handleProgramSearch()}
+              className="text-base sm:text-sm"
+            />
+            <Button variant="outline" size="sm" onClick={handleProgramSearch}>
+              Search
+            </Button>
+          </div>
           <select
-            id="program-select"
             value={programId ?? ""}
             onChange={(e) => setProgramId(e.target.value ? Number(e.target.value) : null)}
             className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
           >
-            <option value="">None</option>
+            <option value="">Select a program...</option>
             {programs.map((p) => (
               <option key={p.Program_ID} value={p.Program_ID}>
                 {p.Program_Name} (ID: {p.Program_ID})
@@ -270,7 +296,11 @@ export function JourneyToolEditor({ existingTool, existingSlugs, onSaved, onCanc
 
         {/* Tracking Group */}
         <div className="space-y-2">
-          <Label>Tracking Group (filter participants by group membership)</Label>
+          <Label>Tracking Group (optional)</Label>
+          <p className="text-xs text-muted-foreground">
+            When set, participants are discovered from group membership (Current/Paused tabs).
+            When empty, participants are discovered from milestone records (In Progress/Completed tabs).
+          </p>
           <div className="flex gap-2">
             <Input
               value={groupSearch}
@@ -285,10 +315,19 @@ export function JourneyToolEditor({ existingTool, existingSlugs, onSaved, onCanc
           </div>
           <select
             value={trackingGroupId ?? ""}
-            onChange={(e) => setTrackingGroupId(e.target.value ? Number(e.target.value) : null)}
+            onChange={(e) => {
+              const id = e.target.value ? Number(e.target.value) : null;
+              setTrackingGroupId(id);
+              if (!id) {
+                setSupportsPause(false);
+                setPausedGroupId(null);
+                setPauseMilestoneId(null);
+                setDefaultGroupRoleId(null);
+              }
+            }}
             className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
           >
-            <option value="">No tracking group (required for processing)</option>
+            <option value="">None (milestone-based discovery)</option>
             {groups.map((g) => (
               <option key={g.Group_ID} value={g.Group_ID}>
                 {g.Group_Name} (ID: {g.Group_ID})
@@ -297,69 +336,74 @@ export function JourneyToolEditor({ existingTool, existingSlugs, onSaved, onCanc
           </select>
         </div>
 
-        {/* Default Group Role */}
-        <div className="space-y-2">
-          <Label htmlFor="role-select">Default Group Role (for group moves)</Label>
-          <select
-            id="role-select"
-            value={defaultGroupRoleId ?? ""}
-            onChange={(e) => setDefaultGroupRoleId(e.target.value ? Number(e.target.value) : null)}
-            className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
-          >
-            <option value="">None</option>
-            {groupRoles.map((r) => (
-              <option key={r.Group_Role_ID} value={r.Group_Role_ID}>
-                {r.Role_Title} (ID: {r.Group_Role_ID})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Pause Support */}
-        <div className="space-y-3">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <Checkbox
-              checked={supportsPause}
-              onCheckedChange={(checked) => setSupportsPause(checked === true)}
-            />
-            <span className="text-sm font-medium">Enable pause/resume</span>
-          </label>
-
-          {supportsPause && (
-            <div className="pl-6 space-y-3">
-              <div className="space-y-2">
-                <Label>Paused Group</Label>
-                <select
-                  value={pausedGroupId ?? ""}
-                  onChange={(e) => setPausedGroupId(e.target.value ? Number(e.target.value) : null)}
-                  className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
-                >
-                  <option value="">Select paused group...</option>
-                  {groups.map((g) => (
-                    <option key={g.Group_ID} value={g.Group_ID}>
-                      {g.Group_Name} (ID: {g.Group_ID})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label>Pause Milestone</Label>
-                <select
-                  value={pauseMilestoneId ?? ""}
-                  onChange={(e) => setPauseMilestoneId(e.target.value ? Number(e.target.value) : null)}
-                  className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
-                >
-                  <option value="">Select milestone that marks paused...</option>
-                  {milestones.map((m) => (
-                    <option key={m.milestoneId} value={m.milestoneId}>
-                      {m.label} (ID: {m.milestoneId})
-                    </option>
-                  ))}
-                </select>
-              </div>
+        {/* Group-mode options (only when tracking group is set) */}
+        {trackingGroupId && (
+          <>
+            {/* Default Group Role */}
+            <div className="space-y-2">
+              <Label htmlFor="role-select">Default Group Role (for group moves)</Label>
+              <select
+                id="role-select"
+                value={defaultGroupRoleId ?? ""}
+                onChange={(e) => setDefaultGroupRoleId(e.target.value ? Number(e.target.value) : null)}
+                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
+              >
+                <option value="">None</option>
+                {groupRoles.map((r) => (
+                  <option key={r.Group_Role_ID} value={r.Group_Role_ID}>
+                    {r.Role_Title} (ID: {r.Group_Role_ID})
+                  </option>
+                ))}
+              </select>
             </div>
-          )}
-        </div>
+
+            {/* Pause Support */}
+            <div className="space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Checkbox
+                  checked={supportsPause}
+                  onCheckedChange={(checked) => setSupportsPause(checked === true)}
+                />
+                <span className="text-sm font-medium">Enable pause/resume</span>
+              </label>
+
+              {supportsPause && (
+                <div className="pl-6 space-y-3">
+                  <div className="space-y-2">
+                    <Label>Paused Group</Label>
+                    <select
+                      value={pausedGroupId ?? ""}
+                      onChange={(e) => setPausedGroupId(e.target.value ? Number(e.target.value) : null)}
+                      className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
+                    >
+                      <option value="">Select paused group...</option>
+                      {groups.map((g) => (
+                        <option key={g.Group_ID} value={g.Group_ID}>
+                          {g.Group_Name} (ID: {g.Group_ID})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Pause Milestone</Label>
+                    <select
+                      value={pauseMilestoneId ?? ""}
+                      onChange={(e) => setPauseMilestoneId(e.target.value ? Number(e.target.value) : null)}
+                      className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
+                    >
+                      <option value="">Select milestone that marks paused...</option>
+                      {milestones.map((m) => (
+                        <option key={m.milestoneId} value={m.milestoneId}>
+                          {m.label} (ID: {m.milestoneId})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
 
         {/* Enabled toggle */}
         <label className="flex items-center gap-2 cursor-pointer">

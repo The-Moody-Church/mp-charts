@@ -54,6 +54,9 @@ export function DynamicBreadcrumb({ customSegments }: DynamicBreadcrumbProps) {
   );
 }
 
+// Path prefixes that are namespace-only (no standalone page exists)
+const NON_LINKABLE_PREFIXES = new Set(["journey", "compliance"]);
+
 function generateSegmentsFromPath(pathname: string): BreadcrumbSegment[] {
   const pathSegments = pathname.split("/").filter(Boolean);
 
@@ -61,10 +64,12 @@ function generateSegmentsFromPath(pathname: string): BreadcrumbSegment[] {
     const href = "/" + pathSegments.slice(0, index + 1).join("/");
     const label =
       segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, " ");
+    const isIntermediate = index < pathSegments.length - 1;
+    const isLinkable = isIntermediate && !NON_LINKABLE_PREFIXES.has(segment);
 
     return {
       label,
-      href: index < pathSegments.length - 1 ? href : undefined,
+      href: isLinkable ? href : undefined,
     };
   });
 }

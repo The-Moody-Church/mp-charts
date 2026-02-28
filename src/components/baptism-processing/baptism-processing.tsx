@@ -128,7 +128,7 @@ export function BaptismProcessing({ initialApplicantId }: { initialApplicantId?:
             loading={loading}
             error={error}
             emptyMessage={searchQuery ? "No matching applicants found." : "No current baptism applicants."}
-            keyExtractor={(a) => a.info.Group_Participant_ID}
+            keyExtractor={(a) => a.info.Group_Participant_ID ?? a.info.Participant_ID}
             renderCard={(applicant) => (
               <BaptismCard applicant={applicant} onClick={() => handleCardClick(applicant)} />
             )}
@@ -142,7 +142,7 @@ export function BaptismProcessing({ initialApplicantId }: { initialApplicantId?:
             loading={loading}
             error={error}
             emptyMessage={searchQuery ? "No matching applicants found." : "No paused baptism applicants."}
-            keyExtractor={(a) => a.info.Group_Participant_ID}
+            keyExtractor={(a) => a.info.Group_Participant_ID ?? a.info.Participant_ID}
             renderCard={(applicant) => (
               <BaptismCard applicant={applicant} onClick={() => handleCardClick(applicant)} />
             )}

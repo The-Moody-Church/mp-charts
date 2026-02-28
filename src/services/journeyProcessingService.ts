@@ -63,6 +63,7 @@ interface MilestoneRecord {
   Milestone_ID: number;
   Date_Accomplished: string | null;
   Notes: string | null;
+  Discontinue_Journey: boolean;
 }
 
 export class JourneyProcessingService {
@@ -104,8 +105,22 @@ export class JourneyProcessingService {
 
   public async getParticipants(): Promise<JourneyCard[]> {
     const groupId = this.config.trackingGroupId;
-    if (!groupId) return [];
-    return this.getParticipantsForGroup(groupId, false);
+    if (groupId) {
+      return this.getParticipantsForGroup(groupId, false);
+    }
+    // Milestone-based discovery: return in-progress participants
+    const result = await this.getParticipantsFromMilestones();
+    return result.inProgress;
+  }
+
+  // ---------------------------------------------------------------
+  // Completed Participants (milestone-based mode only)
+  // ---------------------------------------------------------------
+
+  public async getCompletedParticipants(): Promise<JourneyCard[]> {
+    if (this.config.trackingGroupId) return []; // Not applicable in group mode
+    const result = await this.getParticipantsFromMilestones();
+    return result.completed;
   }
 
   // ---------------------------------------------------------------
@@ -126,7 +141,7 @@ export class JourneyProcessingService {
   public async getParticipantDetail(
     contactId: number,
     participantId: number,
-    groupParticipantId: number
+    groupParticipantId: number | null
   ): Promise<JourneyDetail | null> {
     const contacts = await this.mp.getTableRecords<ContactRecord>({
       table: 'Contacts',
@@ -138,6 +153,17 @@ export class JourneyProcessingService {
     if (contacts.length === 0) return null;
     const contact = contacts[0];
 
+    const milestones = await this.fetchMilestones([participantId]);
+    const checklist = this.buildChecklistForParticipant(participantId, milestones);
+
+    // In milestone mode, use earliest Date_Accomplished as start date
+    const startDate = groupParticipantId
+      ? ''
+      : milestones
+          .filter(m => m.Participant_ID === participantId && m.Date_Accomplished)
+          .map(m => m.Date_Accomplished!)
+          .sort()[0] ?? null;
+
     const info: JourneyParticipantInfo = {
       Contact_ID: contactId,
       Participant_ID: participantId,
@@ -146,13 +172,10 @@ export class JourneyProcessingService {
       Last_Name: contact.Last_Name,
       Image_GUID: contact.Image_GUID,
       Group_Participant_ID: groupParticipantId,
-      Start_Date: '',
+      Start_Date: startDate,
       Email_Address: contact.Email_Address,
       Mobile_Phone: contact.Mobile_Phone,
     };
-
-    const milestones = await this.fetchMilestones([participantId]);
-    const checklist = this.buildChecklistForParticipant(participantId, milestones);
 
     const pauseMilestoneId = this.config.pauseMilestoneId;
     const hasPauseMilestone = pauseMilestoneId
@@ -160,6 +183,10 @@ export class JourneyProcessingService {
           m => m.Milestone_ID === pauseMilestoneId && m.Participant_ID === participantId && m.Date_Accomplished
         )
       : false;
+
+    const isDiscontinued = milestones.some(
+      m => m.Participant_ID === participantId && m.Discontinue_Journey
+    );
 
     const milestoneDetails: JourneyMilestoneDetail[] = milestones
       .filter(m => m.Participant_ID === participantId)
@@ -172,14 +199,17 @@ export class JourneyProcessingService {
 
     const writeBackConfig = this.getWriteBackConfig();
 
-    // Check if group participant record has a future End_Date
-    const gpRecords = await this.mp.getTableRecords<{ End_Date: string | null }>({
-      table: 'Group_Participants',
-      select: 'End_Date',
-      filter: `Group_Participant_ID = ${groupParticipantId}`,
-      top: 1
-    });
-    const endDate = gpRecords[0]?.End_Date ?? null;
+    // Check if group participant record has a future End_Date (group mode only)
+    let endDate: string | null = null;
+    if (groupParticipantId) {
+      const gpRecords = await this.mp.getTableRecords<{ End_Date: string | null }>({
+        table: 'Group_Participants',
+        select: 'End_Date',
+        filter: `Group_Participant_ID = ${groupParticipantId}`,
+        top: 1
+      });
+      endDate = gpRecords[0]?.End_Date ?? null;
+    }
 
     return {
       info,
@@ -188,6 +218,7 @@ export class JourneyProcessingService {
       totalCount: checklist.length,
       isPaused: hasPauseMilestone,
       isFullyComplete: checklist.every(c => c.status === 'complete'),
+      isDiscontinued,
       endDate,
       milestones: milestoneDetails,
       writeBackConfig,
@@ -384,6 +415,99 @@ export class JourneyProcessingService {
   // Private Helpers
   // ---------------------------------------------------------------
 
+  private async getParticipantsFromMilestones(): Promise<{
+    inProgress: JourneyCard[];
+    completed: JourneyCard[];
+  }> {
+    // Step 1: Get all milestone IDs for this journey (visible + invisible + pause)
+    const allMilestoneIds = this.config.milestones.map(m => m.milestoneId);
+    if (this.config.pauseMilestoneId) {
+      allMilestoneIds.push(this.config.pauseMilestoneId);
+    }
+    if (allMilestoneIds.length === 0) return { inProgress: [], completed: [] };
+
+    // Step 2: Query Participant_Milestones for all participants who have any of these milestones
+    const allRecords: MilestoneRecord[] = [];
+    // Query scoped by Program_ID for performance (programId is required)
+    const programFilter = `Program_ID = ${this.config.programId}`;
+    for (let i = 0; i < allMilestoneIds.length; i += BATCH_SIZE) {
+      const batchIds = allMilestoneIds.slice(i, i + BATCH_SIZE);
+      const batch = await this.mp.getTableRecords<MilestoneRecord>({
+        table: 'Participant_Milestones',
+        select: 'Participant_Milestone_ID,Participant_ID,Milestone_ID,Date_Accomplished,Notes,Discontinue_Journey',
+        filter: `Milestone_ID IN (${sanitizeIds(batchIds)}) AND ${programFilter}`,
+        orderBy: 'Date_Accomplished DESC'
+      });
+      allRecords.push(...batch);
+    }
+
+    if (allRecords.length === 0) return { inProgress: [], completed: [] };
+
+    // Step 3: Extract unique Participant_IDs
+    const participantIds = [...new Set(allRecords.map(r => r.Participant_ID))];
+
+    // Step 4: Fetch Contact records
+    const contacts = await this.getContactsForParticipants(participantIds);
+
+    // Step 5: Build participant info (no group membership)
+    const inProgress: JourneyCard[] = [];
+    const completed: JourneyCard[] = [];
+
+    for (const participantId of participantIds) {
+      const contact = contacts.get(participantId);
+      if (!contact) continue;
+
+      const participantMilestones = allRecords.filter(r => r.Participant_ID === participantId);
+
+      // Earliest milestone date as Start_Date
+      const earliestDate = participantMilestones
+        .filter(m => m.Date_Accomplished)
+        .map(m => m.Date_Accomplished!)
+        .sort()[0] ?? null;
+
+      const info: JourneyParticipantInfo = {
+        Contact_ID: contact.Contact_ID,
+        Participant_ID: participantId,
+        First_Name: contact.First_Name,
+        Nickname: contact.Nickname,
+        Last_Name: contact.Last_Name,
+        Image_GUID: contact.Image_GUID,
+        Group_Participant_ID: null,
+        Start_Date: earliestDate,
+        Email_Address: contact.Email_Address,
+        Mobile_Phone: contact.Mobile_Phone,
+      };
+
+      const checklist = this.buildChecklistForParticipant(participantId, allRecords);
+      const isDiscontinued = participantMilestones.some(m => m.Discontinue_Journey);
+      const allVisible = checklist.every(c => c.status === 'complete');
+
+      const card: JourneyCard = {
+        info,
+        checklist,
+        completedCount: checklist.filter(c => c.status === 'complete').length,
+        totalCount: checklist.length,
+        isPaused: false,
+        isFullyComplete: allVisible,
+        isDiscontinued,
+        endDate: null,
+      };
+
+      // Classify: completed if all visible milestones done OR discontinued
+      if (allVisible || isDiscontinued) {
+        completed.push(card);
+      } else {
+        inProgress.push(card);
+      }
+    }
+
+    // Sort by last name
+    inProgress.sort((a, b) => a.info.Last_Name.localeCompare(b.info.Last_Name));
+    completed.sort((a, b) => a.info.Last_Name.localeCompare(b.info.Last_Name));
+
+    return { inProgress, completed };
+  }
+
   private async getParticipantsForGroup(groupId: number, isPaused: boolean): Promise<JourneyCard[]> {
     const now = nowCentral();
 
@@ -512,6 +636,9 @@ export class JourneyProcessingService {
 
     return applicants.map(applicant => {
       const checklist = this.buildChecklistForParticipant(applicant.Participant_ID, milestones);
+      const isDiscontinued = milestones.some(
+        m => m.Participant_ID === applicant.Participant_ID && m.Discontinue_Journey
+      );
 
       return {
         info: applicant,
@@ -520,6 +647,7 @@ export class JourneyProcessingService {
         totalCount: checklist.length,
         isPaused,
         isFullyComplete: checklist.every(c => c.status === 'complete'),
+        isDiscontinued,
         endDate: endDateAlerts.get(applicant.Participant_ID) ?? null,
       };
     });
@@ -534,7 +662,7 @@ export class JourneyProcessingService {
       const batchIds = participantIds.slice(i, i + BATCH_SIZE);
       const batch = await this.mp.getTableRecords<MilestoneRecord>({
         table: 'Participant_Milestones',
-        select: 'Participant_Milestone_ID,Participant_ID,Milestone_ID,Date_Accomplished,Notes',
+        select: 'Participant_Milestone_ID,Participant_ID,Milestone_ID,Date_Accomplished,Notes,Discontinue_Journey',
         filter: `Milestone_ID IN (${sanitizeIds(milestoneIds)}) AND Participant_ID IN (${sanitizeIds(batchIds)})`,
         orderBy: 'Date_Accomplished DESC'
       });

@@ -95,7 +95,7 @@ export function MembershipDetailModal({
       getApplicantDetail(
         applicant.info.Contact_ID,
         applicant.info.Participant_ID,
-        applicant.info.Group_Participant_ID
+        applicant.info.Group_Participant_ID!
       )
         .then((d) => {
           setDetail(d);
@@ -171,7 +171,7 @@ export function MembershipDetailModal({
       const updated = await getApplicantDetail(
         applicant.info.Contact_ID,
         applicant.info.Participant_ID,
-        applicant.info.Group_Participant_ID
+        applicant.info.Group_Participant_ID!
       );
       setDetail(updated);
     } catch (err) {
@@ -186,7 +186,7 @@ export function MembershipDetailModal({
     setActionLoading("confirm-completion");
     try {
       const formData = new FormData();
-      formData.set("Group_Participant_ID", String(applicant.info.Group_Participant_ID));
+      formData.set("Group_Participant_ID", String(applicant.info.Group_Participant_ID!));
       const result = await confirmMembershipCompletion(formData);
       if (!result.success) {
         console.error("Failed to confirm membership completion:", result.error);
@@ -225,7 +225,7 @@ export function MembershipDetailModal({
       const updated = await getApplicantDetail(
         applicant.info.Contact_ID,
         applicant.info.Participant_ID,
-        applicant.info.Group_Participant_ID
+        applicant.info.Group_Participant_ID!
       );
       setDetail(updated);
       onUpdate();
@@ -295,7 +295,7 @@ export function MembershipDetailModal({
       const updated = await getApplicantDetail(
         applicant.info.Contact_ID,
         applicant.info.Participant_ID,
-        applicant.info.Group_Participant_ID
+        applicant.info.Group_Participant_ID!
       );
       setDetail(updated);
 

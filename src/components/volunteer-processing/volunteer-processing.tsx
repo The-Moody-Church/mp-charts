@@ -138,7 +138,7 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
             loading={loading}
             error={error}
             emptyMessage={searchQuery ? "No matching volunteers found." : "No volunteers currently in process."}
-            keyExtractor={(v) => v.info.Group_Participant_ID}
+            keyExtractor={(v) => v.info.Group_Participant_ID ?? v.info.Participant_ID}
             renderCard={(volunteer) => (
               <VolunteerCard volunteer={volunteer} onClick={() => handleCardClick(volunteer)} />
             )}
@@ -175,7 +175,7 @@ export function VolunteerProcessing({ initialVolunteerId }: { initialVolunteerId
             loading={loading}
             error={error}
             emptyMessage={searchQuery ? "No matching volunteers found." : "No approved volunteers found."}
-            keyExtractor={(v) => v.info.Group_Participant_ID}
+            keyExtractor={(v) => v.info.Group_Participant_ID ?? v.info.Participant_ID}
             renderCard={(volunteer) => (
               <VolunteerCard volunteer={volunteer} onClick={() => handleCardClick(volunteer)} />
             )}

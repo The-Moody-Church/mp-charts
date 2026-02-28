@@ -83,7 +83,7 @@ export function MembershipProcessing({ initialApplicantId }: { initialApplicantI
         loading={loading}
         error={error}
         emptyMessage={searchQuery ? "No matching applicants found." : "No membership applicants found."}
-        keyExtractor={(a) => a.info.Group_Participant_ID}
+        keyExtractor={(a) => a.info.Group_Participant_ID ?? a.info.Participant_ID}
         renderCard={(applicant) => (
           <MembershipCard
             applicant={applicant}

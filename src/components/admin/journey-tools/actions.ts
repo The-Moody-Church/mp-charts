@@ -29,7 +29,7 @@ export async function getAvailableJourneys(): Promise<MPJourney[]> {
   return mp.getTableRecords<MPJourney>({
     table: "Journeys",
     select: "Journey_ID,Journey_Name,Description,Active",
-    filter: "Active = 1",
+    filter: "Active = 1 OR Active IS NULL",
     orderBy: "Journey_Name",
   });
 }
@@ -50,7 +50,7 @@ export async function getJourneyMilestones(journeyId: number): Promise<MPMilesto
   return mp.getTableRecords<MPMilestone>({
     table: "Milestones",
     select: "Milestone_ID,Milestone_Title,Sort_Order,Discontinued",
-    filter: `Journey_ID = ${journeyId} AND Discontinued = 0`,
+    filter: `Journey_ID = ${journeyId} AND (Discontinued = 0 OR Discontinued IS NULL)`,
     orderBy: "Sort_Order",
   });
 }
@@ -60,14 +60,19 @@ export interface MPProgram {
   Program_Name: string;
 }
 
-export async function getAvailablePrograms(): Promise<MPProgram[]> {
+export async function getAvailablePrograms(search?: string): Promise<MPProgram[]> {
   await requireFeatureAccess("admin");
   const mp = new MPHelper();
+  let filter = "End_Date IS NULL";
+  if (search && search.trim()) {
+    filter += ` AND Program_Name LIKE '%${sanitizeFilterValue(search)}%'`;
+  }
   return mp.getTableRecords<MPProgram>({
     table: "Programs",
     select: "Program_ID,Program_Name",
-    filter: "End_Date IS NULL",
+    filter,
     orderBy: "Program_Name",
+    top: 50,
   });
 }
 

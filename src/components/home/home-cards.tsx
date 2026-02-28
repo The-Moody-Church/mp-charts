@@ -33,20 +33,6 @@ const featureCards: FeatureCard[] = [
     feature: "volunteer-processing",
   },
   {
-    title: "Baptism Processing",
-    description: "Track baptism applicants through the baptism journey, manage milestones, and handle approvals",
-    href: "/baptism-processing",
-    buttonText: "View Baptisms",
-    feature: "baptism-processing",
-  },
-  {
-    title: "Membership Processing",
-    description: "Track membership application milestones, manage the approval process, and complete new member registrations",
-    href: "/membership-processing",
-    buttonText: "View Applicants",
-    feature: "membership-processing",
-  },
-  {
     title: "Contact Lookup",
     description: "Search and view contact records from Ministry Platform",
     href: "/contactlookup",

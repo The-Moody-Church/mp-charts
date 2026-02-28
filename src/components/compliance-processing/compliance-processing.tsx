@@ -118,7 +118,7 @@ export function ComplianceProcessing({ slug, config, initialApplicantId }: Compl
           loading={loading}
           error={error}
           emptyMessage={searchQuery ? "No matching participants found." : "No participants."}
-          keyExtractor={(a) => a.info.Group_Participant_ID}
+          keyExtractor={(a) => a.info.Group_Participant_ID ?? a.info.Participant_ID}
           renderCard={(participant) => (
             <ComplianceCard participant={participant} onClick={() => handleCardClick(participant)} />
           )}
@@ -176,7 +176,7 @@ export function ComplianceProcessing({ slug, config, initialApplicantId }: Compl
             loading={loading}
             error={error}
             emptyMessage={searchQuery ? "No matching participants found." : "No current participants."}
-            keyExtractor={(a) => a.info.Group_Participant_ID}
+            keyExtractor={(a) => a.info.Group_Participant_ID ?? a.info.Participant_ID}
             renderCard={(participant) => (
               <ComplianceCard participant={participant} onClick={() => handleCardClick(participant)} />
             )}
@@ -190,7 +190,7 @@ export function ComplianceProcessing({ slug, config, initialApplicantId }: Compl
             loading={loading}
             error={error}
             emptyMessage={searchQuery ? "No matching participants found." : "No paused participants."}
-            keyExtractor={(a) => a.info.Group_Participant_ID}
+            keyExtractor={(a) => a.info.Group_Participant_ID ?? a.info.Participant_ID}
             renderCard={(participant) => (
               <ComplianceCard participant={participant} onClick={() => handleCardClick(participant)} />
             )}

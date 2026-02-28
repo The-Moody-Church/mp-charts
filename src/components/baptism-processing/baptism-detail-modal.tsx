@@ -103,7 +103,7 @@ export function BaptismDetailModal({
       getApplicantDetail(
         applicant.info.Contact_ID,
         applicant.info.Participant_ID,
-        applicant.info.Group_Participant_ID
+        applicant.info.Group_Participant_ID!
       )
         .then((d) => {
           setDetail(d);
@@ -181,7 +181,7 @@ export function BaptismDetailModal({
       const updated = await getApplicantDetail(
         applicant.info.Contact_ID,
         applicant.info.Participant_ID,
-        applicant.info.Group_Participant_ID
+        applicant.info.Group_Participant_ID!
       );
       setDetail(updated);
     } catch (err) {
@@ -214,7 +214,7 @@ export function BaptismDetailModal({
       const updated = await getApplicantDetail(
         applicant.info.Contact_ID,
         applicant.info.Participant_ID,
-        applicant.info.Group_Participant_ID
+        applicant.info.Group_Participant_ID!
       );
       setDetail(updated);
       onUpdate();
@@ -233,7 +233,7 @@ export function BaptismDetailModal({
     try {
       const formData = new FormData();
       formData.set("Participant_ID", String(applicant.info.Participant_ID));
-      formData.set("Group_Participant_ID", String(applicant.info.Group_Participant_ID));
+      formData.set("Group_Participant_ID", String(applicant.info.Group_Participant_ID!));
       if (pauseNotes) formData.set("Notes", pauseNotes);
       const result = await pauseApplicant(formData);
       if (!result.success) {
@@ -257,7 +257,7 @@ export function BaptismDetailModal({
     try {
       const formData = new FormData();
       formData.set("Participant_ID", String(applicant.info.Participant_ID));
-      formData.set("Group_Participant_ID", String(applicant.info.Group_Participant_ID));
+      formData.set("Group_Participant_ID", String(applicant.info.Group_Participant_ID!));
       const result = await resumeApplicant(formData);
       if (!result.success) {
         setFileError(result.error || "Resume failed");
@@ -332,7 +332,7 @@ export function BaptismDetailModal({
       const updated = await getApplicantDetail(
         applicant.info.Contact_ID,
         applicant.info.Participant_ID,
-        applicant.info.Group_Participant_ID
+        applicant.info.Group_Participant_ID!
       );
       setDetail(updated);
 
@@ -354,7 +354,7 @@ export function BaptismDetailModal({
 
   const handleCopyLink = () => {
     if (!applicant) return;
-    const url = `${window.location.origin}/baptism-processing?applicant=${applicant.info.Group_Participant_ID}`;
+    const url = `${window.location.origin}/baptism-processing?applicant=${applicant.info.Group_Participant_ID!}`;
     navigator.clipboard.writeText(url).then(() => {
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2000);
@@ -479,7 +479,7 @@ export function BaptismDetailModal({
                         const updated = await getApplicantDetail(
                           applicant.info.Contact_ID,
                           applicant.info.Participant_ID,
-                          applicant.info.Group_Participant_ID
+                          applicant.info.Group_Participant_ID!
                         );
                         setDetail(updated);
                       } catch (err) {

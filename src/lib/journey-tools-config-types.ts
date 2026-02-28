@@ -18,7 +18,7 @@ export interface JourneyToolConfig {
   description: string;
   enabled: boolean;
   milestones: JourneyMilestoneConfig[];
-  programId: number | null;
+  programId: number;
   trackingGroupId: number | null;
   pausedGroupId: number | null;
   defaultGroupRoleId: number | null;
@@ -50,7 +50,7 @@ const JourneyToolConfigSchema = z.object({
   description: z.string().max(500),
   enabled: z.boolean(),
   milestones: z.array(JourneyMilestoneConfigSchema),
-  programId: z.number().int().positive().nullable(),
+  programId: z.number().int().positive(),
   trackingGroupId: z.number().int().positive().nullable(),
   pausedGroupId: z.number().int().positive().nullable(),
   defaultGroupRoleId: z.number().int().positive().nullable(),
