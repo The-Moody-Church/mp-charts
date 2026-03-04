@@ -10,19 +10,23 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RequirementPicker } from "./requirement-picker";
 import { MilestonePicker } from "@/components/admin/journey-tools/milestone-picker";
 import {
-  getGroupRoleRequirements,
+  getDeduplicatedRequirements,
   saveComplianceToolAction,
 } from "./actions";
 import {
   getAvailableJourneys,
   getJourneyMilestones,
   getAvailablePrograms,
+  getProgramsByIds,
   getAvailableGroups,
+  getGroupsByIds,
   getAvailableGroupRoles,
+  getActiveMinistries,
   type MPJourney,
   type MPProgram,
   type MPGroup,
   type MPGroupRole,
+  type MPMinistry,
 } from "@/components/admin/journey-tools/actions";
 import {
   generateUniqueSlug,
@@ -40,16 +44,6 @@ interface ComplianceToolEditorProps {
   onCancel: () => void;
 }
 
-function mapRequirementType(mpType: string): ComplianceRequirementConfig["type"] {
-  const typeMap: Record<string, ComplianceRequirementConfig["type"]> = {
-    "Background Check": "background_check",
-    "Certification": "certification",
-    "Milestone": "milestone",
-    "Form": "form",
-  };
-  return typeMap[mpType] || "milestone";
-}
-
 export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyIds, onSaved, onCancel }: ComplianceToolEditorProps) {
   const isEditing = !!existingTool;
 
@@ -58,7 +52,10 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
   const [programs, setPrograms] = useState<MPProgram[]>([]);
   const [groups, setGroups] = useState<MPGroup[]>([]);
   const [groupRoles, setGroupRoles] = useState<MPGroupRole[]>([]);
+  const [ministries, setMinistries] = useState<MPMinistry[]>([]);
+  const [ministryFilter, setMinistryFilter] = useState<number | "all">("all");
   const [loadingRef, setLoadingRef] = useState(true);
+  const [programSearch, setProgramSearch] = useState("");
   const [groupSearch, setGroupSearch] = useState("");
   const [pausedGroupSearch, setPausedGroupSearch] = useState("");
   const [pausedGroups, setPausedGroups] = useState<MPGroup[]>([]);
@@ -98,24 +95,40 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
   useEffect(() => {
     async function load() {
       try {
-        const [j, p, g, gr] = await Promise.all([
+        const [j, p, g, gr, m] = await Promise.all([
           getAvailableJourneys(),
           getAvailablePrograms(),
           getAvailableGroups(),
           getAvailableGroupRoles(),
+          getActiveMinistries(),
         ]);
+        // Ensure existing program is in the list
+        if (existingTool?.programId && !p.some((x) => x.Program_ID === existingTool.programId)) {
+          const extra = await getProgramsByIds([existingTool.programId]);
+          p.unshift(...extra);
+        }
+
+        // Ensure existing tracking group is in the list
+        if (existingTool?.trackingGroupId && !g.some((x) => x.Group_ID === existingTool.trackingGroupId)) {
+          const extra = await getGroupsByIds([existingTool.trackingGroupId]);
+          g.unshift(...extra);
+        }
+
+        // Ensure existing paused group is in the list
+        if (existingTool?.pausedGroupId && !g.some((x) => x.Group_ID === existingTool.pausedGroupId)) {
+          const extra = await getGroupsByIds([existingTool.pausedGroupId]);
+          g.unshift(...extra);
+        }
+
         setJourneys(j);
         setPrograms(p);
         setGroups(g);
         setGroupRoles(gr);
+        setMinistries(m);
 
         // Pre-populate paused group dropdown with existing selection
         if (existingTool?.pausedGroupId) {
-          const allGroups = g;
-          if (!allGroups.some((x) => x.Group_ID === existingTool.pausedGroupId)) {
-            // Paused group not in initial load — it will show in search results
-          }
-          setPausedGroups(allGroups);
+          setPausedGroups(g);
         }
       } catch (err) {
         console.error("Failed to load reference data:", err);
@@ -143,17 +156,18 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
 
     setLoadingRequirements(true);
     try {
-      const mpReqs = await getGroupRoleRequirements(newIds);
-      // Merge with existing requirements (preserve user edits)
-      const existingMap = new Map(requirements.map(r => [r.requirementId, r]));
-      const merged: ComplianceRequirementConfig[] = mpReqs.map((mr, idx) => {
-        const existing = existingMap.get(mr.Participation_Requirement_ID);
+      const resolved = await getDeduplicatedRequirements(newIds);
+      // Merge with existing requirements (preserve user edits like labels, visibility, order)
+      const existingMap = new Map(requirements.map(r => [`${r.type}:${r.requirementId}`, r]));
+      const merged: ComplianceRequirementConfig[] = resolved.map((r, idx) => {
+        const key = `${r.type}:${r.requirementId}`;
+        const existing = existingMap.get(key);
         if (existing) return existing;
         return {
-          requirementId: mr.Participation_Requirement_ID,
-          label: mr.Requirement_Name,
-          type: mapRequirementType(mr.Requirement_Type),
-          sortOrder: mr.Sort_Order ?? idx + 1,
+          requirementId: r.requirementId,
+          label: r.label,
+          type: r.type,
+          sortOrder: idx + 1,
           visible: true,
         };
       });
@@ -181,8 +195,11 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
       return;
     }
 
-    // Don't reload if editing and journey hasn't changed
-    if (isEditing && journeyId === existingTool?.journeyId && journeyMilestones.length > 0) return;
+    // Switching back to the saved journey — restore saved milestones
+    if (isEditing && journeyId === existingTool?.journeyId) {
+      setJourneyMilestones(existingTool.journeyMilestones);
+      return;
+    }
 
     setLoadingMilestones(true);
     getJourneyMilestones(journeyId)
@@ -197,7 +214,8 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
       })
       .catch((err) => console.error("Failed to load milestones:", err))
       .finally(() => setLoadingMilestones(false));
-  }, [journeyId, isEditing, existingTool?.journeyId, journeyMilestones.length]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [journeyId]);
 
   // Auto-generate slug from tool name
   const handleToolNameChange = (name: string) => {
@@ -209,6 +227,15 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
   };
 
   // Search groups
+  const handleProgramSearch = async () => {
+    try {
+      const results = await getAvailablePrograms(programSearch);
+      setPrograms(results);
+    } catch (err) {
+      console.error("Failed to search programs:", err);
+    }
+  };
+
   const handleGroupSearch = async () => {
     try {
       const results = await getAvailableGroups(groupSearch);
@@ -300,6 +327,8 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
     label: m.label,
     sortOrder: m.sortOrder,
     visible: m.visible,
+    discontinuesJourney: m.discontinuesJourney,
+    completionBadge: m.completionBadge,
   }));
 
   const handleMilestonesChange = (updated: JourneyMilestoneConfig[]) => {
@@ -308,6 +337,8 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
       label: m.label,
       sortOrder: m.sortOrder,
       visible: m.visible,
+      discontinuesJourney: m.discontinuesJourney,
+      completionBadge: m.completionBadge,
     })));
     clearFieldError("requirements");
   };
@@ -387,29 +418,59 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
           {/* Group Roles Selection */}
           <div className="space-y-2">
             <Label>Group Roles (which roles have compliance requirements)</Label>
-            <div className={`max-h-48 overflow-y-auto space-y-2 rounded-md border p-3 ${fieldErrorClass("groupRoleIds")}`}>
-              {groupRoles.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No group roles found</p>
-              ) : (
-                groupRoles.map((role) => (
-                  <label
-                    key={role.Group_Role_ID}
-                    className="flex items-center gap-2 text-sm cursor-pointer"
-                  >
-                    <Checkbox
-                      checked={selectedGroupRoleIds.includes(role.Group_Role_ID)}
-                      onCheckedChange={(checked) =>
-                        handleGroupRoleToggle(role.Group_Role_ID, checked === true)
-                      }
-                    />
-                    <span>{role.Role_Title}</span>
-                    <span className="text-muted-foreground">
-                      (ID: {role.Group_Role_ID})
-                    </span>
-                  </label>
-                ))
-              )}
+            <div className="space-y-1">
+              <Label htmlFor="ministry-filter" className="text-xs text-muted-foreground font-normal">
+                Filter by Ministry
+              </Label>
+              <select
+                id="ministry-filter"
+                value={ministryFilter === "all" ? "all" : String(ministryFilter)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setMinistryFilter(val === "all" ? "all" : Number(val));
+                }}
+                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
+              >
+                <option value="all">All Ministries</option>
+                {ministries.map((m) => (
+                  <option key={m.Ministry_ID} value={m.Ministry_ID}>
+                    {m.Ministry_Name}
+                  </option>
+                ))}
+              </select>
             </div>
+            {(() => {
+              const filtered = ministryFilter === "all"
+                ? groupRoles
+                : groupRoles.filter((r) => r.Ministry_ID === ministryFilter);
+              return (
+                <div className={`max-h-48 overflow-y-auto space-y-2 rounded-md border p-3 ${fieldErrorClass("groupRoleIds")}`}>
+                  {filtered.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      {groupRoles.length === 0 ? "No group roles found" : "No roles match this ministry filter"}
+                    </p>
+                  ) : (
+                    filtered.map((role) => (
+                      <label
+                        key={role.Group_Role_ID}
+                        className="flex items-center gap-2 text-sm cursor-pointer"
+                      >
+                        <Checkbox
+                          checked={selectedGroupRoleIds.includes(role.Group_Role_ID)}
+                          onCheckedChange={(checked) =>
+                            handleGroupRoleToggle(role.Group_Role_ID, checked === true)
+                          }
+                        />
+                        <span>{role.Role_Title}</span>
+                        <span className="text-muted-foreground">
+                          (ID: {role.Group_Role_ID})
+                        </span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Requirements */}
@@ -457,15 +518,22 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
               )}
             </div>
           )}
-        </fieldset>
 
-        {/* ── Section: Groups ── */}
-        <fieldset className="space-y-4 rounded-lg border p-4">
-          <legend className="px-2 text-sm font-semibold">Groups</legend>
-
-          {/* Program */}
+          {/* Program (for milestone writes) */}
           <div className="space-y-2">
-            <Label htmlFor="program-select">Program (for milestone writes)</Label>
+            <Label>Program (for milestone writes)</Label>
+            <div className="flex gap-2">
+              <Input
+                value={programSearch}
+                onChange={(e) => setProgramSearch(e.target.value)}
+                placeholder="Search programs..."
+                onKeyDown={(e) => e.key === "Enter" && handleProgramSearch()}
+                className="text-base sm:text-sm"
+              />
+              <Button variant="outline" size="sm" onClick={handleProgramSearch}>
+                Search
+              </Button>
+            </div>
             <select
               id="program-select"
               value={programId ?? ""}
@@ -480,6 +548,11 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
               ))}
             </select>
           </div>
+        </fieldset>
+
+        {/* ── Section: Groups ── */}
+        <fieldset className="space-y-4 rounded-lg border p-4">
+          <legend className="px-2 text-sm font-semibold">Groups</legend>
 
           {/* Tracking Group */}
           <div className="space-y-2">

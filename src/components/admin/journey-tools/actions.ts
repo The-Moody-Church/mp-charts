@@ -101,6 +101,7 @@ export async function getAvailableGroups(search?: string): Promise<MPGroup[]> {
 export interface MPGroupRole {
   Group_Role_ID: number;
   Role_Title: string;
+  Ministry_ID: number | null;
 }
 
 export async function getAvailableGroupRoles(): Promise<MPGroupRole[]> {
@@ -108,8 +109,24 @@ export async function getAvailableGroupRoles(): Promise<MPGroupRole[]> {
   const mp = new MPHelper();
   return mp.getTableRecords<MPGroupRole>({
     table: "Group_Roles",
-    select: "Group_Role_ID,Role_Title",
+    select: "Group_Role_ID,Role_Title,Ministry_ID",
     orderBy: "Role_Title",
+  });
+}
+
+export interface MPMinistry {
+  Ministry_ID: number;
+  Ministry_Name: string;
+}
+
+export async function getActiveMinistries(): Promise<MPMinistry[]> {
+  await requireFeatureAccess("admin");
+  const mp = new MPHelper();
+  return mp.getTableRecords<MPMinistry>({
+    table: "Ministries",
+    select: "Ministry_ID,Ministry_Name",
+    filter: "End_Date IS NULL",
+    orderBy: "Ministry_Name",
   });
 }
 

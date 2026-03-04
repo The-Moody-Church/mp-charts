@@ -5,6 +5,17 @@ export interface ComplianceParticipantInfo extends BasePersonInfo {
   Mobile_Phone: string | null;
 }
 
+export interface BackgroundCheckDetail {
+  typeName: string | null;
+  status: string | null;
+  started: string | null;
+  submitted: string | null;
+  returned: string | null;
+  allClear: boolean | null;
+  expires: string | null;
+  reportUrl: string | null;
+}
+
 export interface ComplianceChecklistItem {
   key: string;
   label: string;
@@ -15,10 +26,15 @@ export interface ComplianceChecklistItem {
   status: 'complete' | 'in_progress' | 'expired' | 'expiring_soon' | 'not_started';
   detail: string | null;
   order: number;
+  /** Record ID for linking to the MP record (e.g., Background_Check_ID, Participant_Certification_ID) */
+  recordId: number | null;
+  /** Structured detail for background check items */
+  bgCheckDetail: BackgroundCheckDetail | null;
 }
 
 export interface ComplianceCard extends BaseCardData<ComplianceParticipantInfo, ComplianceChecklistItem> {
   isFullyCompliant: boolean;
+  isDiscontinued: boolean;
   isPaused: boolean;
   endDate: string | null;
   groupRoleNames: string[];
@@ -37,6 +53,10 @@ export interface ComplianceWriteBackConfig {
   supportsPause: boolean;
   /** Map of milestone key → milestone ID for journey milestones */
   milestoneIds: Record<string, number | null>;
+  /** Map of certification key → Certification_Type_ID for certification requirements */
+  certificationTypeIds: Record<string, number | null>;
+  /** Map of form key → Form_ID for form response requirements */
+  formIds: Record<string, number | null>;
 }
 
 export interface ComplianceDetail extends ComplianceCard {

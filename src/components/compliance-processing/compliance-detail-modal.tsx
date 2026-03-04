@@ -29,9 +29,13 @@ import {
 import {
   getComplianceParticipantDetail,
   createComplianceMilestone,
+  createComplianceCertification,
+  createComplianceFormResponse,
   updateComplianceMilestone,
   getComplianceMilestoneFiles,
+  getComplianceRequirementFiles,
   uploadComplianceParticipantPhoto,
+  completeComplianceParticipant,
   pauseComplianceParticipant,
   resumeComplianceParticipant,
 } from "./actions";
@@ -84,6 +88,69 @@ function ComplianceStatusBadge({ item }: { item: ComplianceChecklistItem }) {
   );
 }
 
+/** Map checklist item type → MP page ID for record links */
+function getMpPageId(type: ComplianceChecklistItem["type"]): number | null {
+  const pageIds: Record<ComplianceChecklistItem["type"], number | null> = {
+    milestone: 344,           // Participant_Milestones
+    journey_milestone: 344,   // Participant_Milestones
+    background_check: 279,    // Background_Checks
+    certification: 539,       // Participant_Certifications
+    form: 424,                // Form_Responses
+  };
+  return pageIds[type];
+}
+
+function BackgroundCheckDetailView({ item }: { item: ComplianceChecklistItem }) {
+  const bg = item.bgCheckDetail;
+  if (!bg) return null;
+
+  const rows: { label: string; value: React.ReactNode }[] = [
+    { label: "Type", value: bg.typeName || "—" },
+    { label: "Status", value: bg.status || "—" },
+    { label: "Started", value: bg.started ? formatDate(bg.started) : "—" },
+    { label: "Submitted", value: bg.submitted ? formatDate(bg.submitted) : "—" },
+    { label: "Returned", value: bg.returned ? formatDate(bg.returned) : "—" },
+    {
+      label: "All Clear",
+      value:
+        bg.allClear === true ? (
+          <span className="text-green-700 font-medium">Yes</span>
+        ) : bg.allClear === false ? (
+          <span className="text-red-700 font-medium">No</span>
+        ) : (
+          "—"
+        ),
+    },
+    { label: "Expires", value: bg.expires ? formatDate(bg.expires) : "—" },
+  ];
+
+  return (
+    <div className="border-t px-3 py-2 space-y-1">
+      <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5 text-xs">
+        {rows.map((row) => (
+          <React.Fragment key={row.label}>
+            <span className="text-muted-foreground">{row.label}</span>
+            <span>{row.value}</span>
+          </React.Fragment>
+        ))}
+      </div>
+      {bg.reportUrl && (
+        <a
+          href={bg.reportUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:underline mt-1"
+        >
+          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+          </svg>
+          View Report on Verified First
+        </a>
+      )}
+    </div>
+  );
+}
+
 function RequirementTypeLabel({ type }: { type: ComplianceChecklistItem["type"] }) {
   const labels: Record<ComplianceChecklistItem["type"], string> = {
     background_check: "Background Check",
@@ -118,7 +185,9 @@ export function ComplianceDetailModal({
   const [selectedMilestoneKey, setSelectedMilestoneKey] = useState("");
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [recordFiles, setRecordFiles] = useState<Record<number, ComplianceMilestoneFileInfo[]>>({});
+  const [reqFiles, setReqFiles] = useState<Record<string, ComplianceMilestoneFileInfo[]>>({});
   const [filesLoading, setFilesLoading] = useState<number | null>(null);
+  const [reqFilesLoading, setReqFilesLoading] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -128,6 +197,7 @@ export function ComplianceDetailModal({
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [pauseNotes, setPauseNotes] = useState("");
+  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const [showPauseConfirm, setShowPauseConfirm] = useState(false);
   const [showResumeConfirm, setShowResumeConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -140,10 +210,12 @@ export function ComplianceDetailModal({
       setDetail(null);
       setExpandedKey(null);
       setRecordFiles({});
+      setReqFiles({});
       setFileError(null);
       setLinkCopied(false);
       setEditingKey(null);
       setEditError(null);
+      setShowCompleteConfirm(false);
       setShowPauseConfirm(false);
       setShowResumeConfirm(false);
       setPauseNotes("");
@@ -162,6 +234,15 @@ export function ComplianceDetailModal({
                 .catch(() => setRecordFiles((prev) => ({ ...prev, [m.Participant_Milestone_ID]: [] })));
             }
           }
+          if (d?.checklist) {
+            for (const item of d.checklist) {
+              if (item.type !== "journey_milestone" && item.recordId) {
+                getComplianceRequirementFiles(slug, item.type, item.recordId)
+                  .then((files) => setReqFiles((prev) => ({ ...prev, [item.key]: files })))
+                  .catch(() => setReqFiles((prev) => ({ ...prev, [item.key]: [] })));
+              }
+            }
+          }
         })
         .catch((err) => console.error("Failed to load detail:", err))
         .finally(() => setLoading(false));
@@ -173,6 +254,26 @@ export function ComplianceDetailModal({
     const milestoneId = detail.writeBackConfig.milestoneIds[key];
     if (!milestoneId) return null;
     return detail.milestones.find(m => m.Milestone_ID === milestoneId) || null;
+  };
+
+  const handleToggleReqExpand = async (item: ComplianceChecklistItem) => {
+    if (expandedKey === item.key) {
+      setExpandedKey(null);
+      return;
+    }
+    setExpandedKey(item.key);
+
+    if (item.recordId && !(item.key in reqFiles)) {
+      setReqFilesLoading(item.key);
+      try {
+        const files = await getComplianceRequirementFiles(slug, item.type, item.recordId);
+        setReqFiles(prev => ({ ...prev, [item.key]: files }));
+      } catch {
+        setReqFiles(prev => ({ ...prev, [item.key]: [] }));
+      } finally {
+        setReqFilesLoading(null);
+      }
+    }
   };
 
   const handleToggleExpand = async (key: string) => {
@@ -196,30 +297,56 @@ export function ComplianceDetailModal({
     }
   };
 
-  const handleMarkMilestoneComplete = async () => {
+  const handleQuickActionSubmit = async () => {
     if (!participant || !selectedMilestoneKey || !detail) return;
 
-    const milestoneId = detail.writeBackConfig.milestoneIds[selectedMilestoneKey];
-    const programId = detail.writeBackConfig.programId;
-    if (!milestoneId || !programId) return;
+    const selectedItem = checklist.find(i => i.key === selectedMilestoneKey);
+    if (!selectedItem) return;
 
-    setActionLoading(`milestone-${milestoneId}`);
+    setActionLoading(`quick-action`);
     try {
       const formData = new FormData();
-      formData.set("Participant_ID", String(participant.info.Participant_ID));
-      formData.set("Milestone_ID", String(milestoneId));
-      formData.set("Program_ID", String(programId));
-      formData.set("Date_Accomplished", milestoneDate + "T12:00:00");
-      if (milestoneNotes) {
-        formData.set("Notes", milestoneNotes);
-      }
       const files = fileInputRef.current?.files;
       if (files) {
         for (const file of Array.from(files)) {
           formData.append("files", file);
         }
       }
-      await createComplianceMilestone(slug, formData);
+
+      switch (selectedItem.type) {
+        case 'journey_milestone': {
+          const milestoneId = detail.writeBackConfig.milestoneIds[selectedMilestoneKey];
+          const programId = detail.writeBackConfig.programId;
+          if (!milestoneId || !programId) return;
+          formData.set("Participant_ID", String(participant.info.Participant_ID));
+          formData.set("Milestone_ID", String(milestoneId));
+          formData.set("Program_ID", String(programId));
+          formData.set("Date_Accomplished", milestoneDate + "T12:00:00");
+          if (milestoneNotes) formData.set("Notes", milestoneNotes);
+          await createComplianceMilestone(slug, formData);
+          break;
+        }
+        case 'certification': {
+          const certTypeId = detail.writeBackConfig.certificationTypeIds[selectedMilestoneKey];
+          if (!certTypeId) return;
+          formData.set("Participant_ID", String(participant.info.Participant_ID));
+          formData.set("Certification_Type_ID", String(certTypeId));
+          formData.set("Certification_Completed", milestoneDate + "T12:00:00");
+          if (milestoneNotes) formData.set("Notes", milestoneNotes);
+          await createComplianceCertification(slug, formData);
+          break;
+        }
+        case 'form': {
+          const formId = detail.writeBackConfig.formIds[selectedMilestoneKey];
+          if (!formId) return;
+          formData.set("Form_ID", String(formId));
+          formData.set("Contact_ID", String(participant.info.Contact_ID));
+          formData.set("Response_Date", milestoneDate + "T12:00:00");
+          await createComplianceFormResponse(slug, formData);
+          break;
+        }
+      }
+
       setMilestoneNotes("");
       setMilestoneDate(new Date().toISOString().split("T")[0]);
       setSelectedMilestoneKey("");
@@ -233,7 +360,7 @@ export function ComplianceDetailModal({
       );
       setDetail(updated);
     } catch (err) {
-      console.error("Failed to create milestone:", err);
+      console.error("Failed to create record:", err);
     } finally {
       setActionLoading(null);
     }
@@ -273,6 +400,28 @@ export function ComplianceDetailModal({
     } finally {
       setPhotoUploading(false);
       if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  };
+
+  const handleComplete = async () => {
+    if (!participant) return;
+    setActionLoading("complete");
+    try {
+      const formData = new FormData();
+      formData.set("Group_Participant_ID", String(participant.info.Group_Participant_ID!));
+      const result = await completeComplianceParticipant(slug, formData);
+      if (!result.success) {
+        setFileError(result.error || "Complete failed");
+        return;
+      }
+      onUpdate();
+      onOpenChange(false);
+    } catch (err) {
+      console.error("Complete failed:", err);
+      setFileError("Failed to complete participant");
+    } finally {
+      setActionLoading(null);
+      setShowCompleteConfirm(false);
     }
   };
 
@@ -420,13 +569,22 @@ export function ComplianceDetailModal({
   const mpBaseOrigin = mpFileUrl ? new URL(mpFileUrl).origin : null;
   const mpParticipantUrl = mpBaseOrigin ? `${mpBaseOrigin}/mp/355/${info.Participant_ID}` : null;
 
+  // Current tab — show complete (remove from tracking group) button
+  const showCompleteButton = isCurrentTab && !!participant.info.Group_Participant_ID;
+  // Show pause controls only when not also showing complete confirm
+  const showPauseControls = supportsPause && !showCompleteConfirm;
   // Paused tab — show resume button
   const showResumeButton = supportsPause && !isCurrentTab && participant.isPaused;
 
-  // Only journey_milestone items can be quick-completed via the panel
-  const availableMilestones = checklist.filter(
-    item => item.type === "journey_milestone" && item.status === "not_started"
+  // Items available for quick-completion (milestones, certifications, forms — not background checks)
+  const availableQuickActionItems = checklist.filter(
+    item => item.status === "not_started" &&
+      (item.type === "journey_milestone" || item.type === "certification" || item.type === "form")
   );
+
+  // Determine notes visibility based on selected item type
+  const selectedQuickItem = availableQuickActionItems.find(i => i.key === selectedMilestoneKey);
+  const quickActionShowNotes = !selectedQuickItem || selectedQuickItem.type !== "form";
 
   // Separate requirement items from journey milestone items for display
   const requirementItems = checklist.filter(item => item.type !== "journey_milestone");
@@ -487,8 +645,18 @@ export function ComplianceDetailModal({
           phone={(detail?.info ?? info).Mobile_Phone}
         />
 
+        {/* Discontinued alert */}
+        {(detail?.isDiscontinued || participant.isDiscontinued) && (
+          <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-2.5 text-sm text-red-800">
+            <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
+            Journey discontinued
+          </div>
+        )}
+
         {/* Compliance status */}
-        {participant.isFullyCompliant && (
+        {participant.isFullyCompliant && !participant.isDiscontinued && (
           <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-2.5 text-sm text-green-800">
             <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -517,37 +685,63 @@ export function ComplianceDetailModal({
           <div className="py-8 text-center text-sm text-muted-foreground">Loading details...</div>
         ) : (
           <div className="space-y-4">
-            {/* Pause Button — on current tab when pause is supported */}
-            {supportsPause && isCurrentTab && (
-              <div className="space-y-2">
-                {!showPauseConfirm ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-yellow-500 text-yellow-700 hover:bg-yellow-50"
-                    disabled={!!actionLoading}
-                    onClick={() => setShowPauseConfirm(true)}
-                  >
-                    Pause Process
-                  </Button>
-                ) : (
-                  <div className="space-y-2 rounded-md border bg-yellow-50 p-2">
-                    <Label htmlFor="pauseNotes" className="text-xs font-medium text-yellow-800">Reason for pausing (optional)</Label>
-                    <Textarea
-                      id="pauseNotes"
-                      value={pauseNotes}
-                      onChange={(e) => setPauseNotes(e.target.value)}
-                      placeholder="Notes..."
-                      rows={2}
-                      className="text-sm"
-                    />
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => setShowPauseConfirm(false)} disabled={!!actionLoading}>Cancel</Button>
-                      <Button size="sm" className="bg-yellow-600 hover:bg-yellow-700 text-white" onClick={handlePause} disabled={!!actionLoading}>
-                        {actionLoading === "pause" ? "Pausing..." : "Confirm Pause"}
-                      </Button>
+            {/* Action buttons — inline when collapsed, stacked when confirm is open */}
+            {(showCompleteButton || (showPauseControls && isCurrentTab)) && (
+              <div className={showCompleteConfirm || showPauseConfirm ? "space-y-4" : "flex flex-wrap gap-2"}>
+                {showCompleteButton && (
+                  !showCompleteConfirm ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-blue-500 text-blue-700 hover:bg-blue-50"
+                      disabled={!!actionLoading}
+                      onClick={() => setShowCompleteConfirm(true)}
+                    >
+                      Remove from Tracking Group
+                    </Button>
+                  ) : (
+                    <div className="space-y-2 rounded-md border bg-blue-50 p-2">
+                      <p className="text-xs text-blue-800">This will end-date the participant&apos;s record in the tracking group.</p>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => setShowCompleteConfirm(false)} disabled={!!actionLoading}>Cancel</Button>
+                        <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleComplete} disabled={!!actionLoading}>
+                          {actionLoading === "complete" ? "Removing..." : "Confirm"}
+                        </Button>
+                      </div>
                     </div>
-                  </div>
+                  )
+                )}
+
+                {showPauseControls && isCurrentTab && (
+                  !showPauseConfirm ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-yellow-500 text-yellow-700 hover:bg-yellow-50"
+                      disabled={!!actionLoading}
+                      onClick={() => setShowPauseConfirm(true)}
+                    >
+                      Pause Process
+                    </Button>
+                  ) : (
+                    <div className="space-y-2 rounded-md border bg-yellow-50 p-2">
+                      <Label htmlFor="pauseNotes" className="text-xs font-medium text-yellow-800">Reason for pausing (optional)</Label>
+                      <Textarea
+                        id="pauseNotes"
+                        value={pauseNotes}
+                        onChange={(e) => setPauseNotes(e.target.value)}
+                        placeholder="Notes..."
+                        rows={2}
+                        className="text-sm"
+                      />
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => setShowPauseConfirm(false)} disabled={!!actionLoading}>Cancel</Button>
+                        <Button size="sm" className="bg-yellow-600 hover:bg-yellow-700 text-white" onClick={handlePause} disabled={!!actionLoading}>
+                          {actionLoading === "pause" ? "Pausing..." : "Confirm Pause"}
+                        </Button>
+                      </div>
+                    </div>
+                  )
                 )}
               </div>
             )}
@@ -580,15 +774,39 @@ export function ComplianceDetailModal({
             {requirementItems.length > 0 && (
               <div className="space-y-2">
                 <h3 className="text-sm font-semibold">Requirements</h3>
-                {requirementItems.map((item) => (
+                {requirementItems.map((item) => {
+                  const reqMpPageId = getMpPageId(item.type);
+                  const rFiles = reqFiles[item.key];
+                  const hasFiles = rFiles && rFiles.length > 0;
+                  const isReqExpanded = expandedKey === item.key;
+                  const hasBgDetail = item.type === "background_check" && !!item.bgCheckDetail;
+                  const isExpandable = hasBgDetail || (item.recordId && (hasFiles || !(item.key in reqFiles)));
+                  return (
                   <div key={item.key} className="rounded-lg border bg-gray-50/50">
-                    <div className="flex items-start justify-between gap-3 p-3">
+                    <div
+                      className={`flex items-start justify-between gap-3 p-3${isExpandable ? " cursor-pointer" : ""}`}
+                      onClick={() => isExpandable && handleToggleReqExpand(item)}
+                    >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium">{item.label}</span>
                           <RequirementTypeLabel type={item.type} />
+                          {item.recordId && reqMpPageId && mpBaseOrigin && (
+                            <a
+                              href={`${mpBaseOrigin}/mp/${reqMpPageId}/${item.recordId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-[10px] text-blue-600 hover:underline flex-shrink-0 inline-flex items-center gap-0.5"
+                            >
+                              <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 7h3a5 5 0 010 10h-3m-6 0H6A5 5 0 016 7h3M8 12h8" />
+                              </svg>
+                              MP
+                            </a>
+                          )}
                         </div>
-                        {item.date && (
+                        {item.date && !hasBgDetail && (
                           <div className="text-xs text-muted-foreground mt-0.5">
                             {formatDate(item.date)}
                             {item.expires && (
@@ -602,10 +820,43 @@ export function ComplianceDetailModal({
                           </div>
                         )}
                       </div>
-                      <ComplianceStatusBadge item={item} />
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {hasFiles && (
+                          <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
+                          </svg>
+                        )}
+                        <ComplianceStatusBadge item={item} />
+                        {isExpandable && (
+                          <svg
+                            className={`h-4 w-4 text-gray-400 transition-transform ${isReqExpanded ? "rotate-180" : ""}`}
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        )}
+                      </div>
                     </div>
+
+                    {/* Background check detail */}
+                    {isReqExpanded && hasBgDetail && (
+                      <BackgroundCheckDetailView item={item} />
+                    )}
+
+                    {/* Expanded file view */}
+                    {isReqExpanded && item.recordId && (hasFiles || !(item.key in reqFiles)) && (
+                      <MilestoneExpandedView
+                        notes={null}
+                        files={rFiles}
+                        filesLoading={reqFilesLoading === item.key}
+                      />
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -630,9 +881,9 @@ export function ComplianceDetailModal({
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium">{item.label}</span>
-                            {item.completed && milestoneRecord && mpBaseOrigin && (
+                            {item.recordId && mpBaseOrigin && (
                               <a
-                                href={`${mpBaseOrigin}/mp/344/${milestoneRecord.Participant_Milestone_ID}`}
+                                href={`${mpBaseOrigin}/mp/344/${item.recordId}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}
@@ -710,10 +961,10 @@ export function ComplianceDetailModal({
               </div>
             )}
 
-            {/* Quick Actions — only for journey milestones */}
-            {availableMilestones.length > 0 && (
+            {/* Quick Actions — milestones, certifications, forms */}
+            {availableQuickActionItems.length > 0 && (
               <QuickActionsPanel
-                availableItems={availableMilestones}
+                availableItems={availableQuickActionItems}
                 selectedKey={selectedMilestoneKey}
                 onSelectedKeyChange={setSelectedMilestoneKey}
                 date={milestoneDate}
@@ -723,9 +974,26 @@ export function ComplianceDetailModal({
                 fileInputRef={fileInputRef}
                 fileError={fileError}
                 onFileError={setFileError}
-                canSubmit={!!selectedMilestoneKey && !!detail?.writeBackConfig.milestoneIds[selectedMilestoneKey] && !!detail?.writeBackConfig.programId}
+                canSubmit={!!selectedMilestoneKey && (() => {
+                  if (!detail) return false;
+                  if (!selectedQuickItem) return false;
+                  switch (selectedQuickItem.type) {
+                    case 'journey_milestone':
+                      return !!detail.writeBackConfig.milestoneIds[selectedMilestoneKey] && !!detail.writeBackConfig.programId;
+                    case 'certification':
+                      return !!detail.writeBackConfig.certificationTypeIds[selectedMilestoneKey];
+                    case 'form':
+                      return !!detail.writeBackConfig.formIds[selectedMilestoneKey];
+                    default:
+                      return false;
+                  }
+                })()}
                 submitting={!!actionLoading}
-                onSubmit={handleMarkMilestoneComplete}
+                onSubmit={handleQuickActionSubmit}
+                showNotes={quickActionShowNotes}
+                itemLabel="Item"
+                notesMaxLength={500}
+                allCompleteMessage="All items are complete."
               />
             )}
           </div>

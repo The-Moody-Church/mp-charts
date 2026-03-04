@@ -88,7 +88,9 @@
       "Bash(rm src/lib/tool-params.ts)",
       "Bash(rm src/services/toolService.ts)",
       "Bash(rm -rf src/app/\\\\\\(web\\\\\\)/tools)",
-      "Bash(git rm --cached data/feature-access.json)"
+      "Bash(git rm --cached data/feature-access.json)",
+      "Bash(npx tsx -e \":*)",
+      "Bash(git diff main...HEAD --oneline)"
     ],
     "deny": [],
     "ask": [],

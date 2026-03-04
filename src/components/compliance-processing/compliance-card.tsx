@@ -48,8 +48,12 @@ function StatusIcon({ item }: { item: ComplianceChecklistItem }) {
 
 export function ComplianceCard({ participant, onClick }: ComplianceCardProps) {
   const { mpFileUrl } = useRuntimeConfig();
-  const { info, checklist, completedCount, totalCount, isFullyCompliant, isPaused, endDate } = participant;
+  const { info, checklist, completedCount, totalCount, isFullyCompliant, isDiscontinued, isPaused, endDate, groupRoleNames } = participant;
   const displayName = getDisplayName(info.First_Name, info.Nickname);
+
+  const hasExpired = checklist.some(c => c.status === "expired");
+  const hasExpiring = checklist.some(c => c.status === "expiring_soon");
+  const hasMissing = !isFullyCompliant && !isDiscontinued && checklist.some(c => c.status === "not_started");
 
   return (
     <Card
@@ -58,28 +62,46 @@ export function ComplianceCard({ participant, onClick }: ComplianceCardProps) {
     >
       <CardContent className="flex flex-col items-center px-3">
         {/* Status badges (top-right) */}
-        {(isFullyCompliant || isPaused || endDate) && (
-          <div className="absolute top-2 right-2 flex items-center gap-1">
-            {isFullyCompliant && (
-              <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700">
-                Compliant
-              </span>
-            )}
-            {isPaused && (
-              <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] font-medium text-yellow-700">
-                Paused
-              </span>
-            )}
-            {endDate && (
-              <span
-                className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-700"
-                title={`End Date: ${formatDate(endDate)}`}
-              >
-                Ends {formatDate(endDate)}
-              </span>
-            )}
-          </div>
-        )}
+        <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
+          {isDiscontinued && (
+            <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700">
+              Discontinued
+            </span>
+          )}
+          {isFullyCompliant && !isDiscontinued && (
+            <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700">
+              Compliant
+            </span>
+          )}
+          {hasExpired && !isDiscontinued && (
+            <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700">
+              Expired
+            </span>
+          )}
+          {hasExpiring && !hasExpired && !isDiscontinued && (
+            <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-700">
+              Expiring
+            </span>
+          )}
+          {hasMissing && !hasExpired && !hasExpiring && (
+            <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
+              Missing
+            </span>
+          )}
+          {isPaused && (
+            <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] font-medium text-yellow-700">
+              Paused
+            </span>
+          )}
+          {endDate && (
+            <span
+              className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-700"
+              title={`End Date: ${formatDate(endDate)}`}
+            >
+              Ends {formatDate(endDate)}
+            </span>
+          )}
+        </div>
 
         {/* Photo */}
         <div className="mb-2">
@@ -118,6 +140,17 @@ export function ComplianceCard({ participant, onClick }: ComplianceCardProps) {
             </div>
           ))}
         </div>
+
+        {/* Group name badges */}
+        {groupRoleNames.length > 0 && (
+          <div className="flex flex-wrap gap-0.5 w-full mt-2 pt-2 border-t">
+            {groupRoleNames.map(name => (
+              <span key={name} className="inline-flex items-center rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">
+                {name}
+              </span>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

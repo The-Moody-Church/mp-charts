@@ -415,6 +415,7 @@ FodyWeavers.xsd
 # Runtime RBAC config (managed via Setup page, not committed)
 data/feature-access.json
 data/journey-tools.json
+data/compliance-tools.json
 
 # nextJS
 .next/*

@@ -10,7 +10,6 @@ const CONFIG_PATH = join(process.cwd(), "data", "feature-access.json");
 
 export type StaticFeature =
   | "dashboard"
-  | "volunteer-processing"
   | "baptism-processing"
   | "membership-processing"
   | "contact-lookup"
@@ -34,11 +33,6 @@ const DEFAULT_CONFIG: FeatureAccessConfig = {
   "dashboard": {
     label: "Executive Dashboard",
     description: "View ministry metrics and attendance data",
-    allowedGroupIds: [],
-  },
-  "volunteer-processing": {
-    label: "Volunteer Processing",
-    description: "Manage volunteer onboarding and approvals",
     allowedGroupIds: [],
   },
   "baptism-processing": {
@@ -170,7 +164,6 @@ export function hasFeatureAccess(
 export function getAccessibleFeatures(userGroupIds: number[]): Feature[] {
   const staticFeatures: StaticFeature[] = [
     "dashboard",
-    "volunteer-processing",
     "baptism-processing",
     "membership-processing",
     "contact-lookup",

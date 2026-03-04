@@ -8,6 +8,7 @@ import {
   ComplianceMilestoneDetail,
   ComplianceMilestoneFileInfo,
   ComplianceWriteBackConfig,
+  BackgroundCheckDetail,
 } from '@/lib/dto';
 import { getComplianceToolBySlug, type ComplianceToolConfig } from '@/lib/compliance-tools-config';
 
@@ -80,9 +81,12 @@ interface BackgroundCheckRecord {
   Contact_ID: number;
   Background_Check_Status_ID: number | null;
   Background_Check_Started: string;
+  Background_Check_Submitted: string | null;
   Background_Check_Returned: string | null;
   All_Clear: boolean | null;
   Background_Check_Expires: string | null;
+  Report_Url: string | null;
+  Background_Check_Type_ID: number | null;
 }
 
 interface CertificationRecord {
@@ -134,13 +138,45 @@ export class ComplianceProcessingService {
   }
 
   // ---------------------------------------------------------------
+  // Discontinue / Complete badge logic
+  // ---------------------------------------------------------------
+
+  private getDiscontinueBadge(
+    participantMilestones: MilestoneRecord[]
+  ): { isDiscontinued: boolean; isCompletedByBadge: boolean } {
+    const configMap = new Map(this.config.journeyMilestones.map(m => [m.milestoneId, m]));
+
+    // Find accomplished milestones that are configured as "discontinues journey"
+    const discontinueAccomplished = participantMilestones.filter(m => {
+      const cfg = configMap.get(m.Milestone_ID);
+      return cfg?.discontinuesJourney && m.Date_Accomplished;
+    });
+
+    if (discontinueAccomplished.length === 0) {
+      return { isDiscontinued: false, isCompletedByBadge: false };
+    }
+
+    const hasCompletedBadge = discontinueAccomplished.some(m => {
+      const cfg = configMap.get(m.Milestone_ID);
+      return cfg?.completionBadge === "completed";
+    });
+    return {
+      isDiscontinued: !hasCompletedBadge,
+      isCompletedByBadge: hasCompletedBadge,
+    };
+  }
+
+  // ---------------------------------------------------------------
   // Participants (main tracking group or by group role)
   // ---------------------------------------------------------------
 
   public async getParticipants(): Promise<ComplianceCard[]> {
     const groupId = this.config.trackingGroupId;
-    if (!groupId) return [];
-    return this.getParticipantsForGroup(groupId, false);
+    if (groupId) return this.getParticipantsForGroup(groupId, false);
+
+    // No tracking group — fall back to querying by group role IDs
+    if (this.config.groupRoleIds.length === 0) return [];
+    return this.getParticipantsByGroupRole(this.config.groupRoleIds);
   }
 
   public async getPausedParticipants(): Promise<ComplianceCard[]> {
@@ -192,8 +228,10 @@ export class ComplianceProcessingService {
         this.config.journeyId ? this.fetchJourneyMilestones([participantId]) : Promise.resolve([]),
       ]);
 
+    const bgTypeNames = await this.fetchBgCheckTypeNames(bgChecks);
+
     const checklist = this.buildChecklistForParticipant(
-      contactId, participantId, bgChecks, certifications, formResponses, milestones, journeyMilestones
+      contactId, participantId, bgChecks, certifications, formResponses, milestones, journeyMilestones, bgTypeNames
     );
 
     const milestoneDetails: ComplianceMilestoneDetail[] = [
@@ -223,12 +261,16 @@ export class ComplianceProcessingService {
         )
       : false;
 
+    const participantJourneyMilestones = journeyMilestones.filter(m => m.Participant_ID === participantId);
+    const { isDiscontinued, isCompletedByBadge } = this.getDiscontinueBadge(participantJourneyMilestones);
+
     return {
       info,
       checklist,
       completedCount: checklist.filter(c => c.status === 'complete').length,
       totalCount: checklist.length,
-      isFullyCompliant: checklist.every(c => c.status === 'complete'),
+      isFullyCompliant: checklist.every(c => c.status === 'complete') || isCompletedByBadge,
+      isDiscontinued,
       isPaused: hasPauseMilestone,
       endDate,
       groupRoleNames: [],
@@ -248,10 +290,17 @@ export class ComplianceProcessingService {
     Date_Accomplished?: string;
     Notes?: string;
   }, userId?: number): Promise<number> {
-    const record = {
+    // Check if this milestone is configured to discontinue the journey
+    const milestoneConfig = this.config.journeyMilestones.find(m => m.milestoneId === data.Milestone_ID);
+    const discontinueJourney = milestoneConfig?.discontinuesJourney === true;
+
+    const record: Record<string, unknown> = {
       ...data,
       Date_Accomplished: data.Date_Accomplished || nowCentral(),
     };
+    if (discontinueJourney) {
+      record.Discontinue_Journey = true;
+    }
 
     const created = await this.mp.createTableRecords(
       'Participant_Milestones', [record], { $userId: userId }
@@ -272,6 +321,67 @@ export class ComplianceProcessingService {
     if (data.Notes !== undefined) record.Notes = data.Notes;
 
     await this.mp.updateTableRecords('Participant_Milestones', [record], { $userId: userId });
+  }
+
+  public async createCertification(data: {
+    Participant_ID: number;
+    Certification_Type_ID: number;
+    Certification_Completed: string;
+    Notes?: string;
+  }, userId?: number): Promise<number> {
+    const record: Record<string, unknown> = {
+      Participant_ID: data.Participant_ID,
+      Certification_Type_ID: data.Certification_Type_ID,
+      Certification_Submitted: nowCentral(),
+      Certification_Completed: data.Certification_Completed,
+    };
+    if (data.Notes) record.Notes = data.Notes;
+
+    const created = await this.mp.createTableRecords(
+      'Participant_Certifications', [record], { $userId: userId }
+    ) as unknown as { Participant_Certification_ID: number }[];
+
+    return created[0].Participant_Certification_ID;
+  }
+
+  public async createFormResponse(data: {
+    Form_ID: number;
+    Contact_ID: number;
+    Response_Date: string;
+  }, userId?: number): Promise<number> {
+    const record: Record<string, unknown> = {
+      Form_ID: data.Form_ID,
+      Contact_ID: data.Contact_ID,
+      Response_Date: data.Response_Date || nowCentral(),
+    };
+
+    const created = await this.mp.createTableRecords(
+      'Form_Responses', [record], { $userId: userId }
+    ) as unknown as { Form_Response_ID: number }[];
+
+    return created[0].Form_Response_ID;
+  }
+
+  // ---------------------------------------------------------------
+  // Complete (remove from tracking group)
+  // ---------------------------------------------------------------
+
+  public async completeParticipant(params: {
+    currentGroupParticipantId: number;
+    userId?: number;
+  }): Promise<void> {
+    const { currentGroupParticipantId, userId } = params;
+
+    if (!this.config.trackingGroupId) {
+      throw new Error('Complete requires a tracking group');
+    }
+
+    const now = nowCentral();
+    await this.mp.updateTableRecords(
+      'Group_Participants',
+      [{ Group_Participant_ID: currentGroupParticipantId, End_Date: now }],
+      { $userId: userId }
+    );
   }
 
   // ---------------------------------------------------------------
@@ -360,12 +470,9 @@ export class ComplianceProcessingService {
   // File Operations
   // ---------------------------------------------------------------
 
-  public async getMilestoneFiles(milestoneRecordId: number): Promise<ComplianceMilestoneFileInfo[]> {
+  public async getRecordFiles(table: string, recordId: number): Promise<ComplianceMilestoneFileInfo[]> {
     const fileBaseUrl = process.env.NEXT_PUBLIC_MINISTRY_PLATFORM_FILE_URL;
-    const files = await this.mp.getFilesByRecord({
-      table: 'Participant_Milestones',
-      recordId: milestoneRecordId
-    });
+    const files = await this.mp.getFilesByRecord({ table, recordId });
 
     return files.map(f => {
       const ext = (f.FileExtension || '').toLowerCase().replace('.', '');
@@ -377,6 +484,10 @@ export class ComplianceProcessingService {
         isImage: f.IsImage,
       };
     });
+  }
+
+  public async getMilestoneFiles(milestoneRecordId: number): Promise<ComplianceMilestoneFileInfo[]> {
+    return this.getRecordFiles('Participant_Milestones', milestoneRecordId);
   }
 
   public async uploadDocument(
@@ -461,6 +572,97 @@ export class ComplianceProcessingService {
     if (applicants.length === 0) return [];
 
     return this.assembleParticipantCards(applicants, isPaused, endDateAlerts);
+  }
+
+  private async getParticipantsByGroupRole(groupRoleIds: number[]): Promise<ComplianceCard[]> {
+    const now = nowCentral();
+
+    const allGroupParticipants: GroupParticipantRecord[] = [];
+    for (let i = 0; i < groupRoleIds.length; i += BATCH_SIZE) {
+      const batchIds = groupRoleIds.slice(i, i + BATCH_SIZE);
+      const batch = await this.mp.getTableRecords<GroupParticipantRecord>({
+        table: 'Group_Participants',
+        select: 'Group_Participant_ID,Participant_ID,Group_ID,Group_Role_ID,Start_Date,End_Date',
+        filter: `Group_Role_ID IN (${sanitizeIds(batchIds)}) AND Start_Date <= '${now}' AND (End_Date IS NULL OR End_Date >= '${now}')`,
+      });
+      allGroupParticipants.push(...batch);
+    }
+
+    if (allGroupParticipants.length === 0) return [];
+
+    // Deduplicate by Participant_ID (keep record with null End_Date or latest End_Date)
+    const bestByParticipant = new Map<number, GroupParticipantRecord>();
+    for (const gp of allGroupParticipants) {
+      const existing = bestByParticipant.get(gp.Participant_ID);
+      if (!existing) {
+        bestByParticipant.set(gp.Participant_ID, gp);
+      } else if (gp.End_Date === null && existing.End_Date !== null) {
+        bestByParticipant.set(gp.Participant_ID, gp);
+      } else if (gp.End_Date !== null && existing.End_Date !== null && gp.End_Date > existing.End_Date) {
+        bestByParticipant.set(gp.Participant_ID, gp);
+      }
+    }
+
+    const participantsWithNullEndDate = new Set(
+      allGroupParticipants.filter(gp => gp.End_Date === null).map(gp => gp.Participant_ID)
+    );
+
+    const deduped = [...bestByParticipant.values()];
+
+    const endDateAlerts = new Map<number, string>();
+    for (const gp of deduped) {
+      if (!participantsWithNullEndDate.has(gp.Participant_ID) && gp.End_Date) {
+        endDateAlerts.set(gp.Participant_ID, gp.End_Date);
+      }
+    }
+
+    const participantIds = deduped.map(gp => gp.Participant_ID);
+    const contacts = await this.getContactsForParticipants(participantIds);
+
+    const applicants = this.buildParticipantInfoList(deduped, contacts);
+    if (applicants.length === 0) return [];
+
+    // Build map of Participant_ID → Set of Group_IDs (before dedup, to capture all groups)
+    const groupIdsByParticipant = new Map<number, Set<number>>();
+    for (const gp of allGroupParticipants) {
+      const set = groupIdsByParticipant.get(gp.Participant_ID) ?? new Set();
+      set.add(gp.Group_ID);
+      groupIdsByParticipant.set(gp.Participant_ID, set);
+    }
+
+    // Fetch group names
+    const allGroupIds = [...new Set(allGroupParticipants.map(gp => gp.Group_ID))];
+    const groupNames = await this.fetchGroupNames(allGroupIds);
+
+    const cards = await this.assembleParticipantCards(applicants, false, endDateAlerts);
+
+    // Populate groupRoleNames from the group name lookup
+    for (const card of cards) {
+      const gIds = groupIdsByParticipant.get(card.info.Participant_ID);
+      if (gIds) {
+        card.groupRoleNames = [...gIds]
+          .map(id => groupNames.get(id))
+          .filter((n): n is string => !!n)
+          .sort();
+      }
+    }
+
+    return cards;
+  }
+
+  private async fetchGroupNames(groupIds: number[]): Promise<Map<number, string>> {
+    if (groupIds.length === 0) return new Map();
+    const allGroups: { Group_ID: number; Group_Name: string }[] = [];
+    for (let i = 0; i < groupIds.length; i += BATCH_SIZE) {
+      const batchIds = groupIds.slice(i, i + BATCH_SIZE);
+      const batch = await this.mp.getTableRecords<{ Group_ID: number; Group_Name: string }>({
+        table: 'Groups',
+        select: 'Group_ID,Group_Name',
+        filter: `Group_ID IN (${sanitizeIds(batchIds)})`,
+      });
+      allGroups.push(...batch);
+    }
+    return new Map(allGroups.map(g => [g.Group_ID, g.Group_Name]));
   }
 
   private async getContactsForParticipants(
@@ -552,18 +754,24 @@ export class ComplianceProcessingService {
         this.config.journeyId ? this.fetchJourneyMilestones(participantIds) : Promise.resolve([]),
       ]);
 
+    const bgTypeNames = await this.fetchBgCheckTypeNames(bgChecks);
+
     return applicants.map(applicant => {
       const checklist = this.buildChecklistForParticipant(
         applicant.Contact_ID, applicant.Participant_ID,
-        bgChecks, certifications, formResponses, milestones, journeyMilestones
+        bgChecks, certifications, formResponses, milestones, journeyMilestones, bgTypeNames
       );
+
+      const participantJourneyMilestones = journeyMilestones.filter(m => m.Participant_ID === applicant.Participant_ID);
+      const { isDiscontinued, isCompletedByBadge } = this.getDiscontinueBadge(participantJourneyMilestones);
 
       return {
         info: applicant,
         checklist,
         completedCount: checklist.filter(c => c.status === 'complete').length,
         totalCount: checklist.length,
-        isFullyCompliant: checklist.every(c => c.status === 'complete'),
+        isFullyCompliant: checklist.every(c => c.status === 'complete') || isCompletedByBadge,
+        isDiscontinued,
         isPaused,
         endDate: endDateAlerts.get(applicant.Participant_ID) ?? null,
         groupRoleNames: [],
@@ -582,13 +790,24 @@ export class ComplianceProcessingService {
       const batchIds = contactIds.slice(i, i + BATCH_SIZE);
       const batch = await this.mp.getTableRecords<BackgroundCheckRecord>({
         table: 'Background_Checks',
-        select: 'Background_Check_ID,Contact_ID,Background_Check_Status_ID,Background_Check_Started,Background_Check_Returned,All_Clear,Background_Check_Expires',
+        select: 'Background_Check_ID,Contact_ID,Background_Check_Status_ID,Background_Check_Started,Background_Check_Submitted,Background_Check_Returned,All_Clear,Background_Check_Expires,Report_Url,Background_Check_Type_ID',
         filter: `Contact_ID IN (${sanitizeIds(batchIds)})`,
         orderBy: 'Background_Check_Started DESC',
       });
       allResults.push(...batch);
     }
     return allResults;
+  }
+
+  private async fetchBgCheckTypeNames(bgChecks: BackgroundCheckRecord[]): Promise<Map<number, string>> {
+    const typeIds = [...new Set(bgChecks.map(b => b.Background_Check_Type_ID).filter((id): id is number => id !== null))];
+    if (typeIds.length === 0) return new Map();
+    const types = await this.mp.getTableRecords<{ Background_Check_Type_ID: number; Background_Check_Type: string }>({
+      table: 'Background_Check_Types',
+      select: 'Background_Check_Type_ID,Background_Check_Type',
+      filter: `Background_Check_Type_ID IN (${sanitizeIds(typeIds)})`,
+    });
+    return new Map(types.map(t => [t.Background_Check_Type_ID, t.Background_Check_Type]));
   }
 
   private async fetchCertifications(participantIds: number[]): Promise<CertificationRecord[]> {
@@ -682,6 +901,7 @@ export class ComplianceProcessingService {
     formResponses: FormResponseRecord[],
     milestones: MilestoneRecord[],
     journeyMilestones: MilestoneRecord[],
+    bgTypeNames: Map<number, string> = new Map(),
   ): ComplianceChecklistItem[] {
     const items: ComplianceChecklistItem[] = [];
 
@@ -693,6 +913,28 @@ export class ComplianceProcessingService {
           const completed = latestBg?.All_Clear === true;
           const expires = latestBg?.Background_Check_Expires ?? null;
           const status = !completed ? 'not_started' : getExpirationStatus(expires);
+
+          let bgDetail: BackgroundCheckDetail | null = null;
+          if (latestBg) {
+            // Derive status text from available fields
+            let bgStatus = 'Pending';
+            if (latestBg.All_Clear === true && latestBg.Background_Check_Returned) bgStatus = 'Completed';
+            else if (latestBg.Background_Check_Returned) bgStatus = 'Returned';
+            else if (latestBg.Background_Check_Submitted) bgStatus = 'Submitted';
+            else bgStatus = 'Started';
+
+            bgDetail = {
+              typeName: latestBg.Background_Check_Type_ID ? (bgTypeNames.get(latestBg.Background_Check_Type_ID) ?? null) : null,
+              status: bgStatus,
+              started: latestBg.Background_Check_Started,
+              submitted: latestBg.Background_Check_Submitted,
+              returned: latestBg.Background_Check_Returned,
+              allClear: latestBg.All_Clear,
+              expires: latestBg.Background_Check_Expires,
+              reportUrl: latestBg.Report_Url,
+            };
+          }
+
           items.push({
             key: `req-${req.requirementId}`,
             label: req.label,
@@ -703,6 +945,8 @@ export class ComplianceProcessingService {
             status,
             detail: latestBg ? (latestBg.All_Clear ? 'All Clear' : 'Pending') : null,
             order: req.sortOrder,
+            recordId: latestBg?.Background_Check_ID ?? null,
+            bgCheckDetail: bgDetail,
           });
           break;
         }
@@ -712,7 +956,9 @@ export class ComplianceProcessingService {
           );
           const completed = !!latestCert?.Certification_Completed && latestCert.Passed !== false;
           const expires = latestCert?.Certification_Expires ?? null;
-          const status = !completed ? 'not_started' : getExpirationStatus(expires);
+          const status = completed
+            ? getExpirationStatus(expires)
+            : latestCert ? 'in_progress' : 'not_started';
           items.push({
             key: `req-${req.requirementId}`,
             label: req.label,
@@ -723,6 +969,8 @@ export class ComplianceProcessingService {
             status,
             detail: latestCert?.Passed === false ? 'Failed' : null,
             order: req.sortOrder,
+            recordId: latestCert?.Participant_Certification_ID ?? null,
+            bgCheckDetail: null,
           });
           break;
         }
@@ -741,6 +989,8 @@ export class ComplianceProcessingService {
             status: completed ? 'complete' : 'not_started',
             detail: null,
             order: req.sortOrder,
+            recordId: milestone?.Participant_Milestone_ID ?? null,
+            bgCheckDetail: null,
           });
           break;
         }
@@ -761,6 +1011,8 @@ export class ComplianceProcessingService {
             status,
             detail: null,
             order: req.sortOrder,
+            recordId: latestForm?.Form_Response_ID ?? null,
+            bgCheckDetail: null,
           });
           break;
         }
@@ -783,6 +1035,8 @@ export class ComplianceProcessingService {
         status: completed ? 'complete' : 'not_started',
         detail: null,
         order: jm.sortOrder + 1000, // Sort after requirements
+        recordId: milestone?.Participant_Milestone_ID ?? null,
+        bgCheckDetail: null,
       });
     }
 
@@ -791,15 +1045,27 @@ export class ComplianceProcessingService {
 
   private getWriteBackConfig(): ComplianceWriteBackConfig {
     const milestoneIds: Record<string, number | null> = {};
+    const certificationTypeIds: Record<string, number | null> = {};
+    const formIds: Record<string, number | null> = {};
 
     // Journey milestones
     for (const jm of this.config.journeyMilestones) {
       milestoneIds[`jm-${jm.milestoneId}`] = jm.milestoneId;
     }
 
-    // Requirement milestones
-    for (const req of this.config.requirements.filter(r => r.type === 'milestone')) {
-      milestoneIds[`req-${req.requirementId}`] = req.requirementId;
+    // Requirements by type
+    for (const req of this.config.requirements) {
+      switch (req.type) {
+        case 'milestone':
+          milestoneIds[`req-${req.requirementId}`] = req.requirementId;
+          break;
+        case 'certification':
+          certificationTypeIds[`req-${req.requirementId}`] = req.requirementId;
+          break;
+        case 'form':
+          formIds[`req-${req.requirementId}`] = req.requirementId;
+          break;
+      }
     }
 
     return {
@@ -810,6 +1076,8 @@ export class ComplianceProcessingService {
       pauseMilestoneId: this.config.pauseMilestoneId,
       supportsPause: this.config.supportsPause,
       milestoneIds,
+      certificationTypeIds,
+      formIds,
     };
   }
 }

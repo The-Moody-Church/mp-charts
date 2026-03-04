@@ -6,4 +6,3 @@ export * from './dashboard';
 export * from './journey-processing';
 export * from './membership-processing';
 export * from './processing-shared';
-export * from './volunteer-processing';

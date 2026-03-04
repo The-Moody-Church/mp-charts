@@ -38,11 +38,6 @@ const mockConfig = {
     description: "View metrics",
     allowedGroupIds: [29, 45],
   },
-  "volunteer-processing": {
-    label: "Volunteer Processing",
-    description: "Manage volunteers",
-    allowedGroupIds: [52],
-  },
   "baptism-processing": {
     label: "Baptism Processing",
     description: "Manage baptism",
@@ -121,7 +116,6 @@ describe("authorization", () => {
       vi.mocked(existsSync).mockReturnValue(false);
       const config = loadFeatureAccess();
       expect(config).toHaveProperty("dashboard");
-      expect(config).toHaveProperty("volunteer-processing");
       expect(config.dashboard.allowedGroupIds).toEqual([]);
     });
 
@@ -131,7 +125,6 @@ describe("authorization", () => {
 
       const config = loadFeatureAccess();
       expect(config.dashboard.allowedGroupIds).toEqual([29, 45]);
-      expect(config["volunteer-processing"].allowedGroupIds).toEqual([52]);
     });
 
     it("should merge with defaults for new features not in config", () => {
@@ -146,7 +139,6 @@ describe("authorization", () => {
       const config = loadFeatureAccess();
       expect(config.dashboard.allowedGroupIds).toEqual([29]);
       // Default features should be present
-      expect(config).toHaveProperty("volunteer-processing");
       expect(config).toHaveProperty("contact-lookup");
     });
   });
@@ -212,7 +204,7 @@ describe("authorization", () => {
       const features = getAccessibleFeatures([99]);
       expect(features).toContain("dashboard");
       expect(features).toContain("admin");
-      expect(features).toContain("volunteer-processing");
+      expect(features).toContain("baptism-processing");
     });
 
     it("should return only allowed features for regular users", () => {
@@ -220,7 +212,7 @@ describe("authorization", () => {
       const features = getAccessibleFeatures([45]);
       expect(features).toContain("dashboard");
       expect(features).not.toContain("admin");
-      expect(features).not.toContain("volunteer-processing");
+      expect(features).not.toContain("baptism-processing");
     });
 
     it("should return empty for users with no matching groups", () => {

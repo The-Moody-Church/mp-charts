@@ -82,6 +82,53 @@ export async function createComplianceMilestone(slug: string, formData: FormData
   }
 }
 
+export async function createComplianceCertification(slug: string, formData: FormData): Promise<void> {
+  try {
+    const { session } = await requireComplianceAccess(slug);
+    enforceRateLimit(session.user.id, "write");
+    const userId = getMpUserId(session);
+
+    const service = ComplianceProcessingService.getInstance(slug);
+    const newCertId = await service.createCertification({
+      Participant_ID: Number(formData.get("Participant_ID")),
+      Certification_Type_ID: Number(formData.get("Certification_Type_ID")),
+      Certification_Completed: formData.get("Certification_Completed") as string || new Date().toISOString(),
+      Notes: formData.get("Notes") as string || undefined,
+    }, userId);
+
+    const files = await extractValidatedFiles(formData);
+    if (files.length > 0) {
+      await service.uploadDocument('Participant_Certifications', newCertId, files, userId);
+    }
+  } catch (error) {
+    console.error("Error creating compliance certification:", error);
+    throw new Error("Failed to create certification");
+  }
+}
+
+export async function createComplianceFormResponse(slug: string, formData: FormData): Promise<void> {
+  try {
+    const { session } = await requireComplianceAccess(slug);
+    enforceRateLimit(session.user.id, "write");
+    const userId = getMpUserId(session);
+
+    const service = ComplianceProcessingService.getInstance(slug);
+    const newFormResponseId = await service.createFormResponse({
+      Form_ID: Number(formData.get("Form_ID")),
+      Contact_ID: Number(formData.get("Contact_ID")),
+      Response_Date: formData.get("Response_Date") as string || new Date().toISOString(),
+    }, userId);
+
+    const files = await extractValidatedFiles(formData);
+    if (files.length > 0) {
+      await service.uploadDocument('Form_Responses', newFormResponseId, files, userId);
+    }
+  } catch (error) {
+    console.error("Error creating compliance form response:", error);
+    throw new Error("Failed to create form response");
+  }
+}
+
 export async function updateComplianceMilestone(slug: string, formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
     const { session } = await requireComplianceAccess(slug);
@@ -126,9 +173,59 @@ export async function getComplianceMilestoneFiles(slug: string, milestoneRecordI
   }
 }
 
+const requirementTableMap: Record<string, string> = {
+  background_check: 'Background_Checks',
+  certification: 'Participant_Certifications',
+  form: 'Form_Responses',
+  milestone: 'Participant_Milestones',
+};
+
+export async function getComplianceRequirementFiles(
+  slug: string,
+  type: string,
+  recordId: number
+): Promise<ComplianceMilestoneFileInfo[]> {
+  try {
+    await requireComplianceAccess(slug);
+    const table = requirementTableMap[type];
+    if (!table) throw new Error(`Unknown requirement type: ${type}`);
+    const service = ComplianceProcessingService.getInstance(slug);
+    return await service.getRecordFiles(table, recordId);
+  } catch (error) {
+    console.error("Error fetching requirement files:", error);
+    throw new Error("Failed to fetch requirement files");
+  }
+}
+
 export async function uploadComplianceParticipantPhoto(slug: string, formData: FormData): Promise<{ success: boolean; error?: string }> {
   await requireComplianceAccess(slug);
   return uploadContactPhoto(formData, async () => ComplianceProcessingService.getInstance(slug));
+}
+
+export async function completeComplianceParticipant(slug: string, formData: FormData): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { session } = await requireComplianceAccess(slug);
+    enforceRateLimit(session.user.id, "write");
+
+    const currentGroupParticipantId = Number(formData.get("Group_Participant_ID"));
+
+    if (!currentGroupParticipantId) {
+      return { success: false, error: "Missing required fields" };
+    }
+
+    const userId = getMpUserId(session);
+
+    const service = ComplianceProcessingService.getInstance(slug);
+    await service.completeParticipant({
+      currentGroupParticipantId,
+      userId,
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error completing compliance participant:", error);
+    return { success: false, error: "Failed to complete participant" };
+  }
 }
 
 export async function pauseComplianceParticipant(slug: string, formData: FormData): Promise<{ success: boolean; error?: string }> {

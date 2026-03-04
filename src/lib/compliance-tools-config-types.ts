@@ -17,6 +17,11 @@ export interface ComplianceMilestoneConfig {
   label: string;
   sortOrder: number;
   visible: boolean;
+  /** When true, creating this participant milestone in MP sets Discontinue_Journey = 1. */
+  discontinuesJourney?: boolean;
+  /** Badge shown when this milestone discontinues the journey.
+   *  "discontinued" (default) = red badge, "completed" = green badge. */
+  completionBadge?: "discontinued" | "completed";
 }
 
 export interface ComplianceToolConfig {
@@ -47,7 +52,7 @@ export interface ComplianceToolsConfig {
 // ---------------------------------------------------------------------------
 
 const ComplianceRequirementConfigSchema = z.object({
-  requirementId: z.number().int().positive(),
+  requirementId: z.number().int().nonnegative(), // 0 = generic "Background Check Required" (no specific type)
   label: z.string().min(1).max(200),
   type: z.enum(['background_check', 'certification', 'milestone', 'form']),
   sortOrder: z.number().int().min(0),
@@ -59,6 +64,8 @@ const ComplianceMilestoneConfigSchema = z.object({
   label: z.string().min(1).max(100),
   sortOrder: z.number().int().min(0),
   visible: z.boolean(),
+  discontinuesJourney: z.boolean().optional(),
+  completionBadge: z.enum(["discontinued", "completed"]).optional(),
 });
 
 const ComplianceToolConfigSchema = z.object({

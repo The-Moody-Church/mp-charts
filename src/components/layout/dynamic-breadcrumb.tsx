@@ -62,8 +62,10 @@ function generateSegmentsFromPath(pathname: string): BreadcrumbSegment[] {
 
   return pathSegments.map((segment, index) => {
     const href = "/" + pathSegments.slice(0, index + 1).join("/");
-    const label =
-      segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, " ");
+    const label = segment
+      .split("-")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
     const isIntermediate = index < pathSegments.length - 1;
     const isLinkable = isIntermediate && !NON_LINKABLE_PREFIXES.has(segment);
 

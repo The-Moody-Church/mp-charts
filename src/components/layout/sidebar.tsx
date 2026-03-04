@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
-import { HomeIcon, UsersIcon, ChartBarIcon, ClipboardDocumentCheckIcon, ShieldCheckIcon, MapIcon, CheckBadgeIcon } from "@heroicons/react/24/outline";
+import { HomeIcon, UsersIcon, ChartBarIcon, ShieldCheckIcon, MapIcon, CheckBadgeIcon } from "@heroicons/react/24/outline";
 import { useAuthorization } from "@/hooks/use-authorization";
 import { useUser } from "@/contexts/user-context";
 import type { Feature } from "@/lib/authorization";
@@ -23,7 +23,6 @@ interface NavItem {
 const navigation: NavItem[] = [
   { name: "Home", href: "/", icon: HomeIcon },
   { name: "Executive Dashboard", href: "/dashboard", icon: ChartBarIcon, feature: "dashboard" },
-  { name: "Volunteer Processing", href: "/volunteer-processing", icon: ClipboardDocumentCheckIcon, feature: "volunteer-processing" },
   { name: "Contact Lookup", href: "/contactlookup", icon: UsersIcon, feature: "contact-lookup" },
   { name: "Setup", href: "/admin", icon: ShieldCheckIcon, adminOnly: true },
 ];

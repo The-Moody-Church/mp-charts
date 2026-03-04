@@ -17,24 +17,114 @@ import { ComplianceProcessingService } from "@/services/complianceProcessingServ
 // MP Data Queries (reuse journey admin actions where possible)
 // ---------------------------------------------------------------------------
 
-export interface MPParticipationRequirement {
-  Participation_Requirement_ID: number;
-  Requirement_Name: string;
-  Requirement_Type: string;
-  Group_Role_ID: number;
-  Sort_Order: number | null;
+/** Resolved, deduplicated requirement ready for the editor. */
+export interface ResolvedRequirement {
+  /** The actual entity ID (Certification_Type_ID, Form_ID, Milestone_ID, or Background_Check_Type_ID) */
+  requirementId: number;
+  label: string;
+  type: "background_check" | "certification" | "milestone" | "form";
 }
 
-export async function getGroupRoleRequirements(groupRoleIds: number[]): Promise<MPParticipationRequirement[]> {
+/**
+ * Fetch participation requirements for the given group roles, deduplicate by
+ * the linked entity (form, certification type, milestone, or background check type),
+ * and resolve names from the corresponding MP tables.
+ */
+export async function getDeduplicatedRequirements(groupRoleIds: number[]): Promise<ResolvedRequirement[]> {
   await requireFeatureAccess("admin");
   if (groupRoleIds.length === 0) return [];
   const mp = new MPHelper();
-  return mp.getTableRecords<MPParticipationRequirement>({
-    table: "Participation_Requirements",
-    select: "Participation_Requirement_ID,Requirement_Name,Requirement_Type,Group_Role_ID,Sort_Order",
-    filter: `Group_Role_ID IN (${sanitizeIds(groupRoleIds)})`,
-    orderBy: "Sort_Order,Requirement_Name",
-  });
+
+  // 1. Fetch raw participation requirements + check Background_Check_Required on roles
+  const [raw, roles] = await Promise.all([
+    mp.getTableRecords<{
+      Background_Check_Type_ID: number | null;
+      Certification_Type_ID: number | null;
+      Milestone_ID: number | null;
+      Custom_Form_ID: number | null;
+    }>({
+      table: "Participation_Requirements",
+      select: "Background_Check_Type_ID,Certification_Type_ID,Milestone_ID,Custom_Form_ID",
+      filter: `Group_Role_ID IN (${sanitizeIds(groupRoleIds)})`,
+    }),
+    mp.getTableRecords<{ Group_Role_ID: number; Background_Check_Required: boolean }>({
+      table: "Group_Roles",
+      select: "Group_Role_ID,Background_Check_Required",
+      filter: `Group_Role_ID IN (${sanitizeIds(groupRoleIds)})`,
+    }),
+  ]);
+
+  const bgCheckRequired = roles.some(r => r.Background_Check_Required);
+
+  // 2. Collect unique entity IDs by type
+  const bgIds = new Set<number>();
+  const certIds = new Set<number>();
+  const milestoneIds = new Set<number>();
+  const formIds = new Set<number>();
+
+  for (const r of raw) {
+    if (r.Background_Check_Type_ID) bgIds.add(r.Background_Check_Type_ID);
+    else if (r.Certification_Type_ID) certIds.add(r.Certification_Type_ID);
+    else if (r.Milestone_ID) milestoneIds.add(r.Milestone_ID);
+    else if (r.Custom_Form_ID) formIds.add(r.Custom_Form_ID);
+  }
+
+  // 3. Resolve names in parallel (only fetch specific BG check types, not all)
+  const [bgTypes, certTypes, milestones, forms] = await Promise.all([
+    bgIds.size > 0
+      ? mp.getTableRecords<{ Background_Check_Type_ID: number; Background_Check_Type: string }>({
+          table: "Background_Check_Types",
+          select: "Background_Check_Type_ID,Background_Check_Type",
+          filter: `Background_Check_Type_ID IN (${sanitizeIds([...bgIds])})`,
+        })
+      : [],
+    certIds.size > 0
+      ? mp.getTableRecords<{ Certification_Type_ID: number; Certification_Type: string }>({
+          table: "Certification_Types",
+          select: "Certification_Type_ID,Certification_Type",
+          filter: `Certification_Type_ID IN (${sanitizeIds([...certIds])})`,
+        })
+      : [],
+    milestoneIds.size > 0
+      ? mp.getTableRecords<{ Milestone_ID: number; Milestone_Title: string }>({
+          table: "Milestones",
+          select: "Milestone_ID,Milestone_Title",
+          filter: `Milestone_ID IN (${sanitizeIds([...milestoneIds])})`,
+        })
+      : [],
+    formIds.size > 0
+      ? mp.getTableRecords<{ Form_ID: number; Form_Title: string }>({
+          table: "Forms",
+          select: "Form_ID,Form_Title",
+          filter: `Form_ID IN (${sanitizeIds([...formIds])})`,
+        })
+      : [],
+  ]);
+
+  // 4. Build deduplicated results
+  const results: ResolvedRequirement[] = [];
+
+  if (bgTypes.length > 0) {
+    // Specific BG check types from participation requirements — use those
+    for (const bg of bgTypes) {
+      results.push({ requirementId: bg.Background_Check_Type_ID, label: bg.Background_Check_Type, type: "background_check" });
+    }
+  } else if (bgCheckRequired) {
+    // Generic "Background Check Required" on role — single generic entry (ID 0)
+    results.push({ requirementId: 0, label: "Background Check", type: "background_check" });
+  }
+  for (const cert of certTypes) {
+    results.push({ requirementId: cert.Certification_Type_ID, label: cert.Certification_Type, type: "certification" });
+  }
+  for (const m of milestones) {
+    results.push({ requirementId: m.Milestone_ID, label: m.Milestone_Title, type: "milestone" });
+  }
+  for (const f of forms) {
+    results.push({ requirementId: f.Form_ID, label: f.Form_Title, type: "form" });
+  }
+
+  results.sort((a, b) => a.label.localeCompare(b.label));
+  return results;
 }
 
 // ---------------------------------------------------------------------------

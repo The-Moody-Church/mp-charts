@@ -26,13 +26,6 @@ const featureCards: FeatureCard[] = [
     feature: "dashboard",
   },
   {
-    title: "Volunteer Processing",
-    description: "Track children\u2019s ministry volunteer onboarding, view requirement checklists, and manage approved volunteers",
-    href: "/volunteer-processing",
-    buttonText: "View Volunteers",
-    feature: "volunteer-processing",
-  },
-  {
     title: "Contact Lookup",
     description: "Search and view contact records from Ministry Platform",
     href: "/contactlookup",
