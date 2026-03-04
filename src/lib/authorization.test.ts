@@ -8,6 +8,7 @@ import {
   hasFeatureAccess,
   getAccessibleFeatures,
 } from "@/lib/authorization";
+import type { Feature } from "@/lib/authorization";
 
 vi.mock(import("fs"), async (importOriginal) => {
   const actual = await importOriginal();
@@ -21,16 +22,21 @@ vi.mock(import("fs"), async (importOriginal) => {
   return { ...mocked, default: mocked };
 });
 
+vi.mock(import("@/lib/journey-tools-config"), async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    getEnabledJourneyTools: vi.fn().mockReturnValue([]),
+  };
+});
+
+const { getEnabledJourneyTools } = await import("@/lib/journey-tools-config");
+
 const mockConfig = {
   dashboard: {
     label: "Executive Dashboard",
     description: "View metrics",
     allowedGroupIds: [29, 45],
-  },
-  "volunteer-processing": {
-    label: "Volunteer Processing",
-    description: "Manage volunteers",
-    allowedGroupIds: [52],
   },
   "baptism-processing": {
     label: "Baptism Processing",
@@ -110,7 +116,6 @@ describe("authorization", () => {
       vi.mocked(existsSync).mockReturnValue(false);
       const config = loadFeatureAccess();
       expect(config).toHaveProperty("dashboard");
-      expect(config).toHaveProperty("volunteer-processing");
       expect(config.dashboard.allowedGroupIds).toEqual([]);
     });
 
@@ -120,7 +125,6 @@ describe("authorization", () => {
 
       const config = loadFeatureAccess();
       expect(config.dashboard.allowedGroupIds).toEqual([29, 45]);
-      expect(config["volunteer-processing"].allowedGroupIds).toEqual([52]);
     });
 
     it("should merge with defaults for new features not in config", () => {
@@ -135,7 +139,6 @@ describe("authorization", () => {
       const config = loadFeatureAccess();
       expect(config.dashboard.allowedGroupIds).toEqual([29]);
       // Default features should be present
-      expect(config).toHaveProperty("volunteer-processing");
       expect(config).toHaveProperty("contact-lookup");
     });
   });
@@ -201,7 +204,7 @@ describe("authorization", () => {
       const features = getAccessibleFeatures([99]);
       expect(features).toContain("dashboard");
       expect(features).toContain("admin");
-      expect(features).toContain("volunteer-processing");
+      expect(features).toContain("baptism-processing");
     });
 
     it("should return only allowed features for regular users", () => {
@@ -209,13 +212,87 @@ describe("authorization", () => {
       const features = getAccessibleFeatures([45]);
       expect(features).toContain("dashboard");
       expect(features).not.toContain("admin");
-      expect(features).not.toContain("volunteer-processing");
+      expect(features).not.toContain("baptism-processing");
     });
 
     it("should return empty for users with no matching groups", () => {
       process.env.ADMIN_USER_GROUP_IDS = "99";
       const features = getAccessibleFeatures([999]);
       expect(features).toEqual([]);
+    });
+  });
+
+  describe("dynamic journey features", () => {
+    const journeyTool = {
+      slug: "baptism-new",
+      journeyId: 3,
+      journeyName: "Baptism New",
+      description: "Test journey",
+      enabled: true,
+      milestones: [],
+      programId: null,
+      trackingGroupId: null,
+      pausedGroupId: null,
+      defaultGroupRoleId: null,
+      supportsPause: false,
+      pauseMilestoneId: null,
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+    };
+
+    it("should inject journey features into loadFeatureAccess", () => {
+      vi.mocked(existsSync).mockReturnValue(false);
+      vi.mocked(getEnabledJourneyTools).mockReturnValue([journeyTool]);
+
+      const config = loadFeatureAccess();
+      expect(config["journey:baptism-new"]).toBeDefined();
+      expect(config["journey:baptism-new"].label).toBe("Baptism New");
+    });
+
+    it("should not overwrite existing journey feature config", () => {
+      const configWithJourney = {
+        ...mockConfig,
+        "journey:baptism-new": {
+          label: "Custom Label",
+          description: "Custom desc",
+          allowedGroupIds: [10],
+        },
+      };
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithJourney));
+      vi.mocked(getEnabledJourneyTools).mockReturnValue([journeyTool]);
+
+      const config = loadFeatureAccess();
+      expect(config["journey:baptism-new"].label).toBe("Custom Label");
+      expect(config["journey:baptism-new"].allowedGroupIds).toEqual([10]);
+    });
+
+    it("should include journey features in getAccessibleFeatures for super-admins", () => {
+      process.env.ADMIN_USER_GROUP_IDS = "99";
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFileSync).mockReturnValue(JSON.stringify(mockConfig));
+      vi.mocked(getEnabledJourneyTools).mockReturnValue([journeyTool]);
+
+      const features = getAccessibleFeatures([99]);
+      expect(features).toContain("journey:baptism-new" as Feature);
+    });
+
+    it("should check journey feature access via allowedGroupIds", () => {
+      process.env.ADMIN_USER_GROUP_IDS = "99";
+      const configWithJourney = {
+        ...mockConfig,
+        "journey:baptism-new": {
+          label: "Baptism New",
+          description: "Test",
+          allowedGroupIds: [77],
+        },
+      };
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithJourney));
+      vi.mocked(getEnabledJourneyTools).mockReturnValue([journeyTool]);
+
+      expect(hasFeatureAccess([77], "journey:baptism-new")).toBe(true);
+      expect(hasFeatureAccess([88], "journey:baptism-new")).toBe(false);
     });
   });
 });

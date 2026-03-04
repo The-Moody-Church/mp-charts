@@ -1,8 +1,10 @@
 "use client";
 
+import { useMemo } from "react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
-import { HomeIcon, UsersIcon, ChartBarIcon, ClipboardDocumentCheckIcon, UserGroupIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
+import { HomeIcon, UsersIcon, ChartBarIcon, ShieldCheckIcon, MapIcon, CheckBadgeIcon } from "@heroicons/react/24/outline";
 import { useAuthorization } from "@/hooks/use-authorization";
+import { useUser } from "@/contexts/user-context";
 import type { Feature } from "@/lib/authorization";
 
 interface SidebarProps {
@@ -21,21 +23,43 @@ interface NavItem {
 const navigation: NavItem[] = [
   { name: "Home", href: "/", icon: HomeIcon },
   { name: "Executive Dashboard", href: "/dashboard", icon: ChartBarIcon, feature: "dashboard" },
-  { name: "Volunteer Processing", href: "/volunteer-processing", icon: ClipboardDocumentCheckIcon, feature: "volunteer-processing" },
-  { name: "Baptism Processing", href: "/baptism-processing", icon: ClipboardDocumentCheckIcon, feature: "baptism-processing" },
-  { name: "Membership Processing", href: "/membership-processing", icon: UserGroupIcon, feature: "membership-processing" },
   { name: "Contact Lookup", href: "/contactlookup", icon: UsersIcon, feature: "contact-lookup" },
   { name: "Setup", href: "/admin", icon: ShieldCheckIcon, adminOnly: true },
 ];
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { canAccess, isSuperAdmin } = useAuthorization();
+  const { journeyTools, complianceTools } = useUser();
 
-  const visibleItems = navigation.filter((item) => {
-    if (item.adminOnly && !isSuperAdmin) return false;
-    if (item.feature && !canAccess(item.feature)) return false;
-    return true;
-  });
+  const visibleItems = useMemo(() => {
+    const journeyNavItems: NavItem[] = journeyTools.map((tool) => ({
+      name: tool.name,
+      href: `/journey/${tool.slug}`,
+      icon: MapIcon,
+      feature: `journey:${tool.slug}` as Feature,
+    }));
+
+    const complianceNavItems: NavItem[] = complianceTools.map((tool) => ({
+      name: tool.name,
+      href: `/compliance/${tool.slug}`,
+      icon: CheckBadgeIcon,
+      feature: `compliance:${tool.slug}` as Feature,
+    }));
+
+    const setupIndex = navigation.findIndex((item) => item.adminOnly);
+    const allItems = [
+      ...navigation.slice(0, setupIndex >= 0 ? setupIndex : navigation.length),
+      ...journeyNavItems,
+      ...complianceNavItems,
+      ...(setupIndex >= 0 ? navigation.slice(setupIndex) : []),
+    ];
+
+    return allItems.filter((item) => {
+      if (item.adminOnly && !isSuperAdmin) return false;
+      if (item.feature && !canAccess(item.feature)) return false;
+      return true;
+    });
+  }, [journeyTools, complianceTools, canAccess, isSuperAdmin]);
 
   return (
     <div

@@ -3,12 +3,14 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { authClient } from "@/lib/auth-client";
 import { MPUserProfile } from "@/lib/providers/ministry-platform/types";
-import { getCurrentUserProfile, getUserAuthorization } from "@/components/shared-actions/user";
+import { getCurrentUserProfile, getUserAuthorization, type JourneyToolMeta, type ComplianceToolMeta } from "@/components/shared-actions/user";
 import type { Feature } from "@/lib/authorization";
 
 interface UserContextValue {
   userProfile: MPUserProfile | null;
   accessibleFeatures: Feature[];
+  journeyTools: JourneyToolMeta[];
+  complianceTools: ComplianceToolMeta[];
   isSuperAdmin: boolean;
   isLoading: boolean;
   error: Error | null;
@@ -25,6 +27,8 @@ export function UserProvider({ children }: UserProviderProps) {
   const { data: session, isPending } = authClient.useSession();
   const [userProfile, setUserProfile] = useState<MPUserProfile | null>(null);
   const [accessibleFeatures, setAccessibleFeatures] = useState<Feature[]>([]);
+  const [journeyTools, setJourneyTools] = useState<JourneyToolMeta[]>([]);
+  const [complianceTools, setComplianceTools] = useState<ComplianceToolMeta[]>([]);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -35,6 +39,8 @@ export function UserProvider({ children }: UserProviderProps) {
     if (!userGuid) {
       setUserProfile(null);
       setAccessibleFeatures([]);
+      setJourneyTools([]);
+      setComplianceTools([]);
       setIsSuperAdmin(false);
       setIsLoading(false);
       return;
@@ -49,11 +55,15 @@ export function UserProvider({ children }: UserProviderProps) {
       ]);
       setUserProfile(profile ?? null);
       setAccessibleFeatures(auth.accessibleFeatures);
+      setJourneyTools(auth.journeyTools);
+      setComplianceTools(auth.complianceTools);
       setIsSuperAdmin(auth.isSuperAdmin);
     } catch (err) {
       setError(err instanceof Error ? err : new Error("Failed to load user profile"));
       setUserProfile(null);
       setAccessibleFeatures([]);
+      setJourneyTools([]);
+      setComplianceTools([]);
       setIsSuperAdmin(false);
     } finally {
       setIsLoading(false);
@@ -66,6 +76,8 @@ export function UserProvider({ children }: UserProviderProps) {
     } else if (!isPending && !session?.user) {
       setUserProfile(null);
       setAccessibleFeatures([]);
+      setJourneyTools([]);
+      setComplianceTools([]);
       setIsSuperAdmin(false);
       setIsLoading(false);
     }
@@ -76,7 +88,7 @@ export function UserProvider({ children }: UserProviderProps) {
   };
 
   return (
-    <UserContext.Provider value={{ userProfile, accessibleFeatures, isSuperAdmin, isLoading, error, refreshUserProfile }}>
+    <UserContext.Provider value={{ userProfile, accessibleFeatures, journeyTools, complianceTools, isSuperAdmin, isLoading, error, refreshUserProfile }}>
       {children}
     </UserContext.Provider>
   );

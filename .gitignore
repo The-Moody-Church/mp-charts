@@ -410,9 +410,12 @@ FodyWeavers.xsd
 
 # Environment
 .env.local
+.env copy.local
 
 # Runtime RBAC config (managed via Setup page, not committed)
 data/feature-access.json
+data/journey-tools.json
+data/compliance-tools.json
 
 # nextJS
 .next/*
@@ -422,3 +425,4 @@ data/feature-access.json
 
 # Snyk Security Extension - AI Rules (auto-generated)
 .github\instructions\snyk_rules.instructions.md
+.claude/plans/test-plan-journey-compliance-admin.md

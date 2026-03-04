@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { BaptismCard as BaptismCardData, BaptismDetail, BaptismChecklistItem, BaptismMilestoneFileInfo, BaptismMilestoneDetail } from "@/lib/dto";
+import { JourneyCard as JourneyCardData, JourneyDetail, JourneyChecklistItem, JourneyMilestoneFileInfo, JourneyMilestoneDetail } from "@/lib/dto";
 import { getDisplayName, formatDate, MAX_FILE_SIZE } from "@/lib/processing-utils";
 import {
   DetailModalPhotoUpload,
@@ -21,26 +21,29 @@ import {
   QuickActionsPanel,
 } from "@/components/processing";
 import {
-  getApplicantDetail,
-  createBaptismMilestone,
-  updateBaptismMilestone,
-  getBaptismMilestoneFiles,
-  uploadApplicantPhoto,
-  pauseApplicant,
-  resumeApplicant,
+  getJourneyParticipantDetail,
+  createJourneyMilestone,
+  updateJourneyMilestone,
+  getJourneyMilestoneFiles,
+  uploadJourneyParticipantPhoto,
+  completeJourneyParticipant,
+  pauseJourneyParticipant,
+  resumeJourneyParticipant,
 } from "./actions";
 import { useRuntimeConfig } from "@/contexts";
 
-interface BaptismDetailModalProps {
-  applicant: BaptismCardData | null;
+interface JourneyDetailModalProps {
+  slug: string;
+  participant: JourneyCardData | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUpdate: () => void;
   isCurrentTab?: boolean;
+  supportsPause?: boolean;
+  journeyName: string;
 }
 
-
-function StatusBadge({ item }: { item: BaptismChecklistItem }) {
+function StatusBadge({ item }: { item: JourneyChecklistItem }) {
   if (item.status === "complete") {
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
@@ -55,22 +58,25 @@ function StatusBadge({ item }: { item: BaptismChecklistItem }) {
   );
 }
 
-export function BaptismDetailModal({
-  applicant,
+export function JourneyDetailModal({
+  slug,
+  participant,
   open,
   onOpenChange,
   onUpdate,
   isCurrentTab,
-}: BaptismDetailModalProps) {
+  supportsPause,
+  journeyName,
+}: JourneyDetailModalProps) {
   const { mpFileUrl } = useRuntimeConfig();
-  const [detail, setDetail] = useState<BaptismDetail | null>(null);
+  const [detail, setDetail] = useState<JourneyDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [milestoneNotes, setMilestoneNotes] = useState("");
   const [milestoneDate, setMilestoneDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [selectedMilestoneKey, setSelectedMilestoneKey] = useState("");
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
-  const [recordFiles, setRecordFiles] = useState<Record<number, BaptismMilestoneFileInfo[]>>({});
+  const [recordFiles, setRecordFiles] = useState<Record<number, JourneyMilestoneFileInfo[]>>({});
   const [filesLoading, setFilesLoading] = useState<number | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -81,6 +87,7 @@ export function BaptismDetailModal({
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [pauseNotes, setPauseNotes] = useState("");
+  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const [showPauseConfirm, setShowPauseConfirm] = useState(false);
   const [showResumeConfirm, setShowResumeConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -88,7 +95,7 @@ export function BaptismDetailModal({
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (open && applicant) {
+    if (open && participant) {
       setLoading(true);
       setDetail(null);
       setExpandedKey(null);
@@ -97,19 +104,21 @@ export function BaptismDetailModal({
       setLinkCopied(false);
       setEditingKey(null);
       setEditError(null);
+      setShowCompleteConfirm(false);
       setShowPauseConfirm(false);
       setShowResumeConfirm(false);
       setPauseNotes("");
-      getApplicantDetail(
-        applicant.info.Contact_ID,
-        applicant.info.Participant_ID,
-        applicant.info.Group_Participant_ID!
+      getJourneyParticipantDetail(
+        slug,
+        participant.info.Contact_ID,
+        participant.info.Participant_ID,
+        participant.info.Group_Participant_ID
       )
         .then((d) => {
           setDetail(d);
           if (d?.milestones) {
             for (const m of d.milestones) {
-              getBaptismMilestoneFiles(m.Participant_Milestone_ID)
+              getJourneyMilestoneFiles(slug, m.Participant_Milestone_ID)
                 .then((files) => setRecordFiles((prev) => ({ ...prev, [m.Participant_Milestone_ID]: files })))
                 .catch(() => setRecordFiles((prev) => ({ ...prev, [m.Participant_Milestone_ID]: [] })));
             }
@@ -118,12 +127,11 @@ export function BaptismDetailModal({
         .catch((err) => console.error("Failed to load detail:", err))
         .finally(() => setLoading(false));
     }
-  }, [open, applicant]);
+  }, [open, participant, slug]);
 
-  const findMilestoneRecord = (key: string): BaptismMilestoneDetail | null => {
+  const findMilestoneRecord = (key: string): JourneyMilestoneDetail | null => {
     if (!detail) return null;
-    const config = detail.writeBackConfig;
-    const milestoneId = config.milestoneIds[key];
+    const milestoneId = detail.writeBackConfig.milestoneIds[key];
     if (!milestoneId) return null;
     return detail.milestones.find(m => m.Milestone_ID === milestoneId) || null;
   };
@@ -139,7 +147,7 @@ export function BaptismDetailModal({
     if (milestoneRecord && !(milestoneRecord.Participant_Milestone_ID in recordFiles)) {
       setFilesLoading(milestoneRecord.Participant_Milestone_ID);
       try {
-        const files = await getBaptismMilestoneFiles(milestoneRecord.Participant_Milestone_ID);
+        const files = await getJourneyMilestoneFiles(slug, milestoneRecord.Participant_Milestone_ID);
         setRecordFiles(prev => ({ ...prev, [milestoneRecord.Participant_Milestone_ID]: files }));
       } catch {
         setRecordFiles(prev => ({ ...prev, [milestoneRecord.Participant_Milestone_ID]: [] }));
@@ -150,7 +158,7 @@ export function BaptismDetailModal({
   };
 
   const handleMarkMilestoneComplete = async () => {
-    if (!applicant || !selectedMilestoneKey || !detail) return;
+    if (!participant || !selectedMilestoneKey || !detail) return;
 
     const milestoneId = detail.writeBackConfig.milestoneIds[selectedMilestoneKey];
     const programId = detail.writeBackConfig.programId;
@@ -159,7 +167,7 @@ export function BaptismDetailModal({
     setActionLoading(`milestone-${milestoneId}`);
     try {
       const formData = new FormData();
-      formData.set("Participant_ID", String(applicant.info.Participant_ID));
+      formData.set("Participant_ID", String(participant.info.Participant_ID));
       formData.set("Milestone_ID", String(milestoneId));
       formData.set("Program_ID", String(programId));
       formData.set("Date_Accomplished", milestoneDate + "T12:00:00");
@@ -172,16 +180,17 @@ export function BaptismDetailModal({
           formData.append("files", file);
         }
       }
-      await createBaptismMilestone(formData);
+      await createJourneyMilestone(slug, formData);
       setMilestoneNotes("");
       setMilestoneDate(new Date().toISOString().split("T")[0]);
       setSelectedMilestoneKey("");
       if (fileInputRef.current) fileInputRef.current.value = "";
       onUpdate();
-      const updated = await getApplicantDetail(
-        applicant.info.Contact_ID,
-        applicant.info.Participant_ID,
-        applicant.info.Group_Participant_ID!
+      const updated = await getJourneyParticipantDetail(
+        slug,
+        participant.info.Contact_ID,
+        participant.info.Participant_ID,
+        participant.info.Group_Participant_ID
       );
       setDetail(updated);
     } catch (err) {
@@ -193,7 +202,7 @@ export function BaptismDetailModal({
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !applicant) return;
+    if (!file || !participant) return;
 
     if (file.size > MAX_FILE_SIZE) {
       setFileError(`Photo is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum 1 MB.`);
@@ -204,17 +213,18 @@ export function BaptismDetailModal({
     setFileError(null);
     try {
       const formData = new FormData();
-      formData.set("Contact_ID", String(applicant.info.Contact_ID));
+      formData.set("Contact_ID", String(participant.info.Contact_ID));
       formData.set("photo", file);
-      const result = await uploadApplicantPhoto(formData);
+      const result = await uploadJourneyParticipantPhoto(slug, formData);
       if (!result.success) {
         setFileError(result.error || "Upload failed");
         return;
       }
-      const updated = await getApplicantDetail(
-        applicant.info.Contact_ID,
-        applicant.info.Participant_ID,
-        applicant.info.Group_Participant_ID!
+      const updated = await getJourneyParticipantDetail(
+        slug,
+        participant.info.Contact_ID,
+        participant.info.Participant_ID,
+        participant.info.Group_Participant_ID
       );
       setDetail(updated);
       onUpdate();
@@ -227,15 +237,37 @@ export function BaptismDetailModal({
     }
   };
 
+  const handleComplete = async () => {
+    if (!participant) return;
+    setActionLoading("complete");
+    try {
+      const formData = new FormData();
+      formData.set("Group_Participant_ID", String(participant.info.Group_Participant_ID));
+      const result = await completeJourneyParticipant(slug, formData);
+      if (!result.success) {
+        setFileError(result.error || "Complete failed");
+        return;
+      }
+      onUpdate();
+      onOpenChange(false);
+    } catch (err) {
+      console.error("Complete failed:", err);
+      setFileError("Failed to complete participant");
+    } finally {
+      setActionLoading(null);
+      setShowCompleteConfirm(false);
+    }
+  };
+
   const handlePause = async () => {
-    if (!applicant) return;
+    if (!participant) return;
     setActionLoading("pause");
     try {
       const formData = new FormData();
-      formData.set("Participant_ID", String(applicant.info.Participant_ID));
-      formData.set("Group_Participant_ID", String(applicant.info.Group_Participant_ID!));
+      formData.set("Participant_ID", String(participant.info.Participant_ID));
+      formData.set("Group_Participant_ID", String(participant.info.Group_Participant_ID));
       if (pauseNotes) formData.set("Notes", pauseNotes);
-      const result = await pauseApplicant(formData);
+      const result = await pauseJourneyParticipant(slug, formData);
       if (!result.success) {
         setFileError(result.error || "Pause failed");
         return;
@@ -244,7 +276,7 @@ export function BaptismDetailModal({
       onOpenChange(false);
     } catch (err) {
       console.error("Pause failed:", err);
-      setFileError("Failed to pause applicant");
+      setFileError("Failed to pause participant");
     } finally {
       setActionLoading(null);
       setShowPauseConfirm(false);
@@ -252,13 +284,13 @@ export function BaptismDetailModal({
   };
 
   const handleResume = async () => {
-    if (!applicant) return;
+    if (!participant) return;
     setActionLoading("resume");
     try {
       const formData = new FormData();
-      formData.set("Participant_ID", String(applicant.info.Participant_ID));
-      formData.set("Group_Participant_ID", String(applicant.info.Group_Participant_ID!));
-      const result = await resumeApplicant(formData);
+      formData.set("Participant_ID", String(participant.info.Participant_ID));
+      formData.set("Group_Participant_ID", String(participant.info.Group_Participant_ID));
+      const result = await resumeJourneyParticipant(slug, formData);
       if (!result.success) {
         setFileError(result.error || "Resume failed");
         return;
@@ -267,7 +299,7 @@ export function BaptismDetailModal({
       onOpenChange(false);
     } catch (err) {
       console.error("Resume failed:", err);
-      setFileError("Failed to resume applicant");
+      setFileError("Failed to resume participant");
     } finally {
       setActionLoading(null);
       setShowResumeConfirm(false);
@@ -292,7 +324,7 @@ export function BaptismDetailModal({
   };
 
   const handleSaveEdit = async () => {
-    if (!editingKey || !applicant) return;
+    if (!editingKey || !participant) return;
     setEditSaving(true);
     setEditError(null);
 
@@ -322,22 +354,23 @@ export function BaptismDetailModal({
       formData.set("Notes", editNotes);
       for (const file of editFiles) formData.append("files", file);
 
-      const result = await updateBaptismMilestone(formData);
+      const result = await updateJourneyMilestone(slug, formData);
       if (!result.success) {
         setEditError(result.error || "Update failed");
         setEditSaving(false);
         return;
       }
 
-      const updated = await getApplicantDetail(
-        applicant.info.Contact_ID,
-        applicant.info.Participant_ID,
-        applicant.info.Group_Participant_ID!
+      const updated = await getJourneyParticipantDetail(
+        slug,
+        participant.info.Contact_ID,
+        participant.info.Participant_ID,
+        participant.info.Group_Participant_ID
       );
       setDetail(updated);
 
       if (editFiles.length > 0) {
-        const freshFiles = await getBaptismMilestoneFiles(milestoneRecord.Participant_Milestone_ID);
+        const freshFiles = await getJourneyMilestoneFiles(slug, milestoneRecord.Participant_Milestone_ID);
         setRecordFiles(prev => ({ ...prev, [milestoneRecord.Participant_Milestone_ID]: freshFiles }));
       }
 
@@ -353,30 +386,29 @@ export function BaptismDetailModal({
   };
 
   const handleCopyLink = () => {
-    if (!applicant) return;
-    const url = `${window.location.origin}/baptism-processing?applicant=${applicant.info.Group_Participant_ID!}`;
+    if (!participant) return;
+    const linkId = participant.info.Group_Participant_ID ?? participant.info.Participant_ID;
+    const url = `${window.location.origin}/journey/${slug}?applicant=${linkId}`;
     navigator.clipboard.writeText(url).then(() => {
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2000);
     });
   };
 
-  if (!applicant) return null;
+  if (!participant) return null;
 
-  const { info } = applicant;
+  const { info } = participant;
   const displayName = getDisplayName(info.First_Name, info.Nickname);
-  const checklist = detail?.checklist || applicant.checklist;
+  const checklist = detail?.checklist || participant.checklist;
   const currentImageGuid = detail?.info.Image_GUID ?? info.Image_GUID;
   const mpBaseOrigin = mpFileUrl ? new URL(mpFileUrl).origin : null;
   const mpParticipantUrl = mpBaseOrigin ? `${mpBaseOrigin}/mp/355/${info.Participant_ID}` : null;
 
-  // Interview completed but not yet approved — show approval/pause decision
-  const interviewComplete = checklist.find(c => c.key === "completed_interview")?.completed ?? false;
-  const approvedComplete = checklist.find(c => c.key === "approved")?.completed ?? false;
-  const showApprovalDecision = isCurrentTab && interviewComplete && !approvedComplete;
-
-  // Paused tab — show resume button
-  const showResumeButton = !isCurrentTab && applicant.isPaused;
+  // Complete button shows in group mode on the current tab
+  const showCompleteButton = !!participant.info.Group_Participant_ID && isCurrentTab;
+  // Pause/resume only applies in group mode
+  const showPauseControls = supportsPause && !!participant.info.Group_Participant_ID;
+  const showResumeButton = showPauseControls && !isCurrentTab && participant.isPaused;
 
   // Available milestones for quick action dropdown
   const availableMilestones = checklist.filter(item => item.status === "not_started");
@@ -401,10 +433,10 @@ export function BaptismDetailModal({
                 {displayName} {info.Last_Name}
               </DialogTitle>
               <DialogDescription>
-                Applied {formatDate(info.Start_Date)}
+                {info.Start_Date && <>Started {formatDate(info.Start_Date)}</>}
                 {mpParticipantUrl && (
                   <>
-                    {" \u2014 "}
+                    {info.Start_Date && " — "}
                     <a
                       href={mpParticipantUrl}
                       target="_blank"
@@ -415,7 +447,7 @@ export function BaptismDetailModal({
                     </a>
                   </>
                 )}
-                {" \u2014 "}
+                {(info.Start_Date || mpParticipantUrl) && " — "}
                 <button
                   onClick={handleCopyLink}
                   className="text-blue-600 hover:underline"
@@ -427,19 +459,29 @@ export function BaptismDetailModal({
           </div>
         </DialogHeader>
 
-        {/* Contact info — show immediately from card data, prefer detail when loaded */}
+        {/* Contact info */}
         <ContactLinks
           email={(detail?.info ?? info).Email_Address}
           phone={(detail?.info ?? info).Mobile_Phone}
         />
 
-        {/* End date alert */}
-        {(detail?.endDate || applicant.endDate) && (
+        {/* Discontinued alert */}
+        {(detail?.isDiscontinued || participant.isDiscontinued) && (
+          <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-2.5 text-sm text-red-800">
+            <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
+            Journey discontinued
+          </div>
+        )}
+
+        {/* End date alert (group mode only) */}
+        {participant.info.Group_Participant_ID && (detail?.endDate || participant.endDate) && (
           <div className="flex items-center gap-2 rounded-md border border-orange-200 bg-orange-50 p-2.5 text-sm text-orange-800">
             <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
             </svg>
-            Group membership ends {formatDate(detail?.endDate ?? applicant.endDate)}
+            Group membership ends {formatDate(detail?.endDate ?? participant.endDate)}
           </div>
         )}
 
@@ -453,72 +495,63 @@ export function BaptismDetailModal({
           <div className="py-8 text-center text-sm text-muted-foreground">Loading details...</div>
         ) : (
           <div className="space-y-4">
-            {/* Approval/Pause Decision — after interview completed, before approved */}
-            {showApprovalDecision && detail && (
-              <div className="space-y-2 rounded-lg border bg-blue-50/50 p-3">
-                <h3 className="text-sm font-semibold text-blue-900">Baptism Decision</h3>
-                <p className="text-xs text-blue-800">Interview is complete. Choose an action:</p>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    className="bg-green-600 hover:bg-green-700 text-white"
-                    disabled={!!actionLoading}
-                    onClick={async () => {
-                      const milestoneId = detail.writeBackConfig.milestoneIds["approved"];
-                      const programId = detail.writeBackConfig.programId;
-                      if (!milestoneId || !programId) return;
-                      setActionLoading("approve");
-                      try {
-                        const formData = new FormData();
-                        formData.set("Participant_ID", String(applicant.info.Participant_ID));
-                        formData.set("Milestone_ID", String(milestoneId));
-                        formData.set("Program_ID", String(programId));
-                        formData.set("Date_Accomplished", new Date().toLocaleString('sv-SE', { timeZone: 'America/Chicago' }).replace(' ', 'T'));
-                        await createBaptismMilestone(formData);
-                        onUpdate();
-                        const updated = await getApplicantDetail(
-                          applicant.info.Contact_ID,
-                          applicant.info.Participant_ID,
-                          applicant.info.Group_Participant_ID!
-                        );
-                        setDetail(updated);
-                      } catch (err) {
-                        console.error("Approval failed:", err);
-                      } finally {
-                        setActionLoading(null);
-                      }
-                    }}
-                  >
-                    {actionLoading === "approve" ? "Approving..." : "Approve for Baptism"}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-yellow-500 text-yellow-700 hover:bg-yellow-50"
-                    disabled={!!actionLoading}
-                    onClick={() => setShowPauseConfirm(true)}
-                  >
-                    Pause Process
-                  </Button>
-                </div>
-                {showPauseConfirm && (
-                  <div className="mt-2 space-y-2 rounded-md border bg-yellow-50 p-2">
-                    <Label htmlFor="pauseNotes" className="text-xs font-medium text-yellow-800">Reason for pausing (optional)</Label>
-                    <Textarea
-                      id="pauseNotes"
-                      value={pauseNotes}
-                      onChange={(e) => setPauseNotes(e.target.value)}
-                      placeholder="Notes..."
-                      rows={2}
-                      className="text-sm"
-                    />
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => setShowPauseConfirm(false)} disabled={!!actionLoading}>Cancel</Button>
-                      <Button size="sm" className="bg-yellow-600 hover:bg-yellow-700 text-white" onClick={handlePause} disabled={!!actionLoading}>
-                        {actionLoading === "pause" ? "Pausing..." : "Confirm Pause"}
-                      </Button>
+            {/* Action buttons — inline when collapsed, stacked when confirm is open */}
+            {(showCompleteButton || (showPauseControls && isCurrentTab)) && (
+              <div className={showCompleteConfirm || showPauseConfirm ? "space-y-4" : "flex flex-wrap gap-2"}>
+                {showCompleteButton && (
+                  !showCompleteConfirm ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-blue-500 text-blue-700 hover:bg-blue-50"
+                      disabled={!!actionLoading}
+                      onClick={() => setShowCompleteConfirm(true)}
+                    >
+                      Remove from Tracking Group
+                    </Button>
+                  ) : (
+                    <div className="space-y-2 rounded-md border bg-blue-50 p-2">
+                      <p className="text-xs text-blue-800">This will end-date the participant&apos;s record in the tracking group.</p>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => setShowCompleteConfirm(false)} disabled={!!actionLoading}>Cancel</Button>
+                        <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleComplete} disabled={!!actionLoading}>
+                          {actionLoading === "complete" ? "Removing..." : "Confirm"}
+                        </Button>
+                      </div>
                     </div>
-                  </div>
+                  )
+                )}
+
+                {showPauseControls && isCurrentTab && (
+                  !showPauseConfirm ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-yellow-500 text-yellow-700 hover:bg-yellow-50"
+                      disabled={!!actionLoading}
+                      onClick={() => setShowPauseConfirm(true)}
+                    >
+                      Pause Process
+                    </Button>
+                  ) : (
+                    <div className="space-y-2 rounded-md border bg-yellow-50 p-2">
+                      <Label htmlFor="pauseNotes" className="text-xs font-medium text-yellow-800">Reason for pausing (optional)</Label>
+                      <Textarea
+                        id="pauseNotes"
+                        value={pauseNotes}
+                        onChange={(e) => setPauseNotes(e.target.value)}
+                        placeholder="Notes..."
+                        rows={2}
+                        className="text-sm"
+                      />
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => setShowPauseConfirm(false)} disabled={!!actionLoading}>Cancel</Button>
+                        <Button size="sm" className="bg-yellow-600 hover:bg-yellow-700 text-white" onClick={handlePause} disabled={!!actionLoading}>
+                          {actionLoading === "pause" ? "Pausing..." : "Confirm Pause"}
+                        </Button>
+                      </div>
+                    </div>
+                  )
                 )}
               </div>
             )}
@@ -526,7 +559,7 @@ export function BaptismDetailModal({
             {/* Resume Button — on paused tab */}
             {showResumeButton && (
               <div className="space-y-2 rounded-lg border bg-green-50/50 p-3">
-                <h3 className="text-sm font-semibold text-green-900">Resume Baptism Process</h3>
+                <h3 className="text-sm font-semibold text-green-900">Resume {journeyName}</h3>
                 {!showResumeConfirm ? (
                   <Button
                     size="sm"

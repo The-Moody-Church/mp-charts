@@ -1,30 +1,11 @@
-import { Suspense } from 'react';
-import { BaptismProcessing } from '@/components/baptism-processing';
+import { redirect } from 'next/navigation';
 
 interface BaptismProcessingPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
-export default function BaptismProcessingPage({ searchParams }: BaptismProcessingPageProps) {
-  return (
-    <Suspense fallback={
-      <div className="container mx-auto p-4 sm:p-6 lg:p-8">
-        <div className="text-muted-foreground">Loading baptism applicants...</div>
-      </div>
-    }>
-      <BaptismProcessingContent searchParams={searchParams} />
-    </Suspense>
-  );
-}
-
-async function BaptismProcessingContent({ searchParams }: BaptismProcessingPageProps) {
+export default async function BaptismProcessingPage({ searchParams }: BaptismProcessingPageProps) {
   const params = await searchParams;
-  const applicantParam = typeof params.applicant === 'string' ? Number(params.applicant) : null;
-  const initialApplicantId = applicantParam && !isNaN(applicantParam) ? applicantParam : null;
-
-  return (
-    <div className="container mx-auto p-4 sm:p-6 lg:p-8">
-      <BaptismProcessing initialApplicantId={initialApplicantId} />
-    </div>
-  );
+  const applicant = typeof params.applicant === 'string' ? params.applicant : null;
+  redirect(`/journey/baptism${applicant ? `?applicant=${applicant}` : ''}`);
 }

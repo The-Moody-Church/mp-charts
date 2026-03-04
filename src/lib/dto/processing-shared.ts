@@ -6,8 +6,8 @@ export interface BasePersonInfo {
   Last_Name: string;
   First_Name: string;
   Image_GUID: string | null;
-  Group_Participant_ID: number;
-  Start_Date: string;
+  Group_Participant_ID: number | null;
+  Start_Date: string | null;
 }
 
 /** Fields shared by all card data types. */

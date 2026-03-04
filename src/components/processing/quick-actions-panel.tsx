@@ -27,6 +27,12 @@ interface QuickActionsPanelProps {
   submitting: boolean;
   onSubmit: () => void;
   allCompleteMessage?: string;
+  /** Hide the notes textarea (e.g., for form responses that have no notes field) */
+  showNotes?: boolean;
+  /** Label for the select dropdown (default: "Milestone") */
+  itemLabel?: string;
+  /** Max length for the notes textarea */
+  notesMaxLength?: number;
 }
 
 export function QuickActionsPanel({
@@ -44,24 +50,30 @@ export function QuickActionsPanel({
   submitting,
   onSubmit,
   allCompleteMessage = "All milestones are complete.",
+  showNotes = true,
+  itemLabel = "Milestone",
+  notesMaxLength,
 }: QuickActionsPanelProps) {
   return (
     <div className="space-y-2 pt-2 border-t">
       <h3 className="text-sm font-semibold text-gray-900">Quick Actions</h3>
       <div className="space-y-2">
         <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex-1">
-            <Label htmlFor="milestone-notes" className="text-xs">Notes (optional)</Label>
-            <Textarea
-              id="milestone-notes"
-              value={notes}
-              onChange={(e) => onNotesChange(e.target.value)}
-              placeholder="Add notes for the milestone..."
-              className="text-xs"
-              rows={2}
-            />
-          </div>
-          <div className="w-full sm:w-36">
+          {showNotes && (
+            <div className="flex-1">
+              <Label htmlFor="milestone-notes" className="text-xs">Notes (optional)</Label>
+              <Textarea
+                id="milestone-notes"
+                value={notes}
+                onChange={(e) => onNotesChange(e.target.value)}
+                placeholder={`Add notes...`}
+                className="text-xs"
+                rows={2}
+                maxLength={notesMaxLength}
+              />
+            </div>
+          )}
+          <div className={showNotes ? "w-full sm:w-36" : "w-full sm:w-48"}>
             <Label htmlFor="milestone-date" className="text-xs">Date</Label>
             <Input
               id="milestone-date"
@@ -100,14 +112,14 @@ export function QuickActionsPanel({
         ) : (
           <div className="flex items-end gap-2">
             <div className="flex-1">
-              <Label htmlFor="milestone-select" className="text-xs">Milestone</Label>
+              <Label htmlFor="milestone-select" className="text-xs">{itemLabel}</Label>
               <select
                 id="milestone-select"
                 value={selectedKey}
                 onChange={(e) => onSelectedKeyChange(e.target.value)}
                 className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                <option value="">Select a milestone...</option>
+                <option value="">Select...</option>
                 {availableItems.map((item) => (
                   <option key={item.key} value={item.key}>
                     {item.label}

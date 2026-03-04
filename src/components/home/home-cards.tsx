@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useMemo } from "react";
 import { useAuthorization } from "@/hooks/use-authorization";
+import { useUser } from "@/contexts/user-context";
 import type { Feature } from "@/lib/authorization";
 
 interface FeatureCard {
@@ -24,27 +26,6 @@ const featureCards: FeatureCard[] = [
     feature: "dashboard",
   },
   {
-    title: "Volunteer Processing",
-    description: "Track children\u2019s ministry volunteer onboarding, view requirement checklists, and manage approved volunteers",
-    href: "/volunteer-processing",
-    buttonText: "View Volunteers",
-    feature: "volunteer-processing",
-  },
-  {
-    title: "Baptism Processing",
-    description: "Track baptism applicants through the baptism journey, manage milestones, and handle approvals",
-    href: "/baptism-processing",
-    buttonText: "View Baptisms",
-    feature: "baptism-processing",
-  },
-  {
-    title: "Membership Processing",
-    description: "Track membership application milestones, manage the approval process, and complete new member registrations",
-    href: "/membership-processing",
-    buttonText: "View Applicants",
-    feature: "membership-processing",
-  },
-  {
     title: "Contact Lookup",
     description: "Search and view contact records from Ministry Platform",
     href: "/contactlookup",
@@ -62,12 +43,39 @@ const featureCards: FeatureCard[] = [
 
 export function HomeCards() {
   const { canAccess, isSuperAdmin } = useAuthorization();
+  const { journeyTools, complianceTools } = useUser();
 
-  const visibleCards = featureCards.filter((card) => {
-    if (card.adminOnly && !isSuperAdmin) return false;
-    if (card.feature && !canAccess(card.feature)) return false;
-    return true;
-  });
+  const visibleCards = useMemo(() => {
+    const journeyCards: FeatureCard[] = journeyTools.map((tool) => ({
+      title: tool.name,
+      description: tool.description || `Track participants through the ${tool.name} journey`,
+      href: `/journey/${tool.slug}`,
+      buttonText: "View Participants",
+      feature: `journey:${tool.slug}` as Feature,
+    }));
+
+    const complianceCards: FeatureCard[] = complianceTools.map((tool) => ({
+      title: tool.name,
+      description: tool.description || `Track compliance for ${tool.name}`,
+      href: `/compliance/${tool.slug}`,
+      buttonText: "View Compliance",
+      feature: `compliance:${tool.slug}` as Feature,
+    }));
+
+    const setupIndex = featureCards.findIndex((c) => c.adminOnly);
+    const allCards = [
+      ...featureCards.slice(0, setupIndex >= 0 ? setupIndex : featureCards.length),
+      ...journeyCards,
+      ...complianceCards,
+      ...(setupIndex >= 0 ? featureCards.slice(setupIndex) : []),
+    ];
+
+    return allCards.filter((card) => {
+      if (card.adminOnly && !isSuperAdmin) return false;
+      if (card.feature && !canAccess(card.feature)) return false;
+      return true;
+    });
+  }, [journeyTools, complianceTools, canAccess, isSuperAdmin]);
 
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
