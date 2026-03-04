@@ -143,6 +143,34 @@ export async function uploadJourneyParticipantPhoto(slug: string, formData: Form
   return uploadContactPhoto(formData, async () => JourneyProcessingService.getInstance(slug));
 }
 
+export async function completeJourneyParticipant(slug: string, formData: FormData): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { session, config } = await requireJourneyAccess(slug);
+    enforceRateLimit(session.user.id, "write");
+
+    if (!config.trackingGroupId) {
+      return { success: false, error: "Complete requires a tracking group" };
+    }
+
+    const currentGroupParticipantId = Number(formData.get("Group_Participant_ID"));
+    if (!currentGroupParticipantId) {
+      return { success: false, error: "Missing required fields" };
+    }
+
+    const userId = getMpUserId(session);
+    const service = JourneyProcessingService.getInstance(slug);
+    await service.completeParticipant({
+      currentGroupParticipantId,
+      userId,
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error completing journey participant:", error);
+    return { success: false, error: "Failed to complete participant" };
+  }
+}
+
 export async function pauseJourneyParticipant(slug: string, formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
     const { session, config } = await requireJourneyAccess(slug);

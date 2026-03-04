@@ -3,6 +3,7 @@
 import { requireFeatureAccess, loadFeatureAccess, saveFeatureAccess } from "@/lib/authorization";
 import { MPHelper } from "@/lib/providers/ministry-platform";
 import { sanitizeFilterValue } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
+import { z } from "zod";
 import {
   loadJourneyToolsConfig,
   saveJourneyToolsConfig,
@@ -112,6 +113,74 @@ export async function getAvailableGroupRoles(): Promise<MPGroupRole[]> {
   });
 }
 
+/** Fetch specific programs by ID (for pre-populating editor dropdowns). */
+export async function getProgramsByIds(ids: number[]): Promise<MPProgram[]> {
+  if (ids.length === 0) return [];
+  await requireFeatureAccess("admin");
+  const mp = new MPHelper();
+  return mp.getTableRecords<MPProgram>({
+    table: "Programs",
+    select: "Program_ID,Program_Name",
+    filter: `Program_ID IN (${ids.join(",")})`,
+  });
+}
+
+/** Fetch specific groups by ID (for pre-populating editor dropdowns). */
+export async function getGroupsByIds(ids: number[]): Promise<MPGroup[]> {
+  if (ids.length === 0) return [];
+  await requireFeatureAccess("admin");
+  const mp = new MPHelper();
+  return mp.getTableRecords<MPGroup>({
+    table: "Groups",
+    select: "Group_ID,Group_Name",
+    filter: `Group_ID IN (${ids.join(",")})`,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Batch name resolution for display cards
+// ---------------------------------------------------------------------------
+
+export interface ResolvedNames {
+  programs: Record<number, string>;
+  groups: Record<number, string>;
+}
+
+/** Resolve program and group names for display on admin cards. */
+export async function resolveToolNames(
+  programIds: number[],
+  groupIds: number[]
+): Promise<ResolvedNames> {
+  await requireFeatureAccess("admin");
+  const mp = new MPHelper();
+  const result: ResolvedNames = { programs: {}, groups: {} };
+
+  const uniquePrograms = [...new Set(programIds.filter(Boolean))];
+  const uniqueGroups = [...new Set(groupIds.filter(Boolean))];
+
+  const [programs, groups] = await Promise.all([
+    uniquePrograms.length > 0
+      ? mp.getTableRecords<{ Program_ID: number; Program_Name: string }>({
+          table: "Programs",
+          select: "Program_ID,Program_Name",
+          filter: `Program_ID IN (${uniquePrograms.join(",")})`,
+        })
+      : Promise.resolve([]),
+    uniqueGroups.length > 0
+      ? mp.getTableRecords<{ Group_ID: number; Group_Name: string }>({
+          table: "Groups",
+          select: "Group_ID,Group_Name",
+          filter: `Group_ID IN (${uniqueGroups.join(",")})`,
+        })
+      : Promise.resolve([]),
+  ]);
+
+  for (const p of programs) result.programs[p.Program_ID] = p.Program_Name;
+  for (const g of groups) result.groups[g.Group_ID] = g.Group_Name;
+
+  return result;
+}
+
 // ---------------------------------------------------------------------------
 // Journey Tool Config CRUD
 // ---------------------------------------------------------------------------
@@ -122,7 +191,8 @@ export async function getJourneyToolsConfigAction(): Promise<JourneyToolsConfig>
 }
 
 export async function saveJourneyToolAction(
-  tool: JourneyToolConfig
+  tool: JourneyToolConfig,
+  isNew?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   try {
     await requireFeatureAccess("admin");
@@ -132,6 +202,10 @@ export async function saveJourneyToolAction(
 
     const config = loadJourneyToolsConfig();
     const existingIndex = config.journeys.findIndex((j) => j.slug === tool.slug);
+
+    if (isNew && existingIndex >= 0) {
+      return { success: false, error: "slug: A tool with this slug already exists." };
+    }
 
     if (existingIndex >= 0) {
       config.journeys[existingIndex] = tool;
@@ -161,6 +235,13 @@ export async function saveJourneyToolAction(
     return { success: true };
   } catch (error) {
     console.error("Error saving journey tool:", error);
+    if (error instanceof z.ZodError) {
+      const messages = error.issues.map((i) => {
+        const field = i.path.length > 0 ? i.path.join(".") : "config";
+        return `${field}: ${i.message}`;
+      });
+      return { success: false, error: messages.join("; ") };
+    }
     return { success: false, error: error instanceof Error ? error.message : "Failed to save journey tool" };
   }
 }

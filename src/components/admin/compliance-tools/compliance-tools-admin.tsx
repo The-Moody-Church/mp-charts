@@ -83,6 +83,9 @@ export function ComplianceToolsAdmin() {
   }
 
   const existingSlugs = config?.tools.map((t) => t.slug) ?? [];
+  const usedJourneyIds = config?.tools
+    .filter((t) => (!editingTool || t.slug !== editingTool.slug) && t.journeyId != null)
+    .map((t) => t.journeyId!) ?? [];
 
   return (
     <div className="container mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
@@ -102,6 +105,7 @@ export function ComplianceToolsAdmin() {
         <ComplianceToolEditor
           existingTool={editingTool}
           existingSlugs={existingSlugs}
+          usedJourneyIds={usedJourneyIds}
           onSaved={handleSaved}
           onCancel={handleCancel}
         />

@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { JourneyToolEditor } from "./journey-tool-editor";
-import { getJourneyToolsConfigAction, deleteJourneyToolAction } from "./actions";
+import { getJourneyToolsConfigAction, deleteJourneyToolAction, resolveToolNames, type ResolvedNames } from "./actions";
 import type { JourneyToolConfig, JourneyToolsConfig } from "@/lib/journey-tools-config-types";
 
 export function JourneyToolsAdmin() {
@@ -15,11 +15,22 @@ export function JourneyToolsAdmin() {
   const [editingTool, setEditingTool] = useState<JourneyToolConfig | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [names, setNames] = useState<ResolvedNames>({ programs: {}, groups: {} });
 
   const loadConfig = useCallback(async () => {
     try {
       const data = await getJourneyToolsConfigAction();
       setConfig(data);
+
+      // Resolve program + group names for display
+      const programIds = data.journeys.map((j) => j.programId).filter(Boolean) as number[];
+      const groupIds = data.journeys.flatMap((j) =>
+        [j.trackingGroupId, j.pausedGroupId].filter(Boolean) as number[]
+      );
+      if (programIds.length > 0 || groupIds.length > 0) {
+        const resolved = await resolveToolNames(programIds, groupIds);
+        setNames(resolved);
+      }
     } catch {
       setError("Failed to load journey tools configuration.");
     } finally {
@@ -83,6 +94,9 @@ export function JourneyToolsAdmin() {
   }
 
   const existingSlugs = config?.journeys.map((j) => j.slug) ?? [];
+  const usedJourneyIds = config?.journeys
+    .filter((j) => !editingTool || j.slug !== editingTool.slug)
+    .map((j) => j.journeyId) ?? [];
 
   return (
     <div className="container mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
@@ -102,6 +116,7 @@ export function JourneyToolsAdmin() {
         <JourneyToolEditor
           existingTool={editingTool}
           existingSlugs={existingSlugs}
+          usedJourneyIds={usedJourneyIds}
           onSaved={handleSaved}
           onCancel={handleCancel}
         />
@@ -132,11 +147,16 @@ export function JourneyToolsAdmin() {
               <CardContent>
                 <div className="space-y-2 text-sm text-muted-foreground">
                   <div>Slug: <code className="bg-muted px-1 rounded">/journey/{tool.slug}</code></div>
-                  <div>Journey ID: {tool.journeyId}</div>
+                  <div>Journey: {tool.journeyName} (ID: {tool.journeyId})</div>
+                  <div>Program: {names.programs[tool.programId] ?? "Unknown"} (ID: {tool.programId})</div>
                   <div>Milestones: {tool.milestones.filter((m) => m.visible).length}/{tool.milestones.length} visible</div>
-                  {tool.trackingGroupId && <div>Tracking Group: {tool.trackingGroupId}</div>}
+                  {tool.trackingGroupId && (
+                    <div>Tracking Group: {names.groups[tool.trackingGroupId] ?? "Unknown"} (ID: {tool.trackingGroupId})</div>
+                  )}
+                  {tool.supportsPause && tool.pausedGroupId && (
+                    <div>Paused Group: {names.groups[tool.pausedGroupId] ?? "Unknown"} (ID: {tool.pausedGroupId})</div>
+                  )}
                   {tool.supportsPause && <div>Pause/Resume: enabled</div>}
-                  {tool.programId && <div>Program ID: {tool.programId}</div>}
                 </div>
                 <div className="flex gap-2 mt-4">
                   <Button size="sm" variant="outline" onClick={() => handleEdit(tool)}>

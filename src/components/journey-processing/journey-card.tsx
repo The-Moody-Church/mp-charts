@@ -32,13 +32,13 @@ export function JourneyCard({ participant, onClick }: JourneyCardProps) {
 
   return (
     <Card
-      className="cursor-pointer hover:shadow-md transition-shadow py-4 gap-3 relative"
+      className="cursor-pointer hover:shadow-md transition-shadow py-4 gap-3"
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center px-3">
-        {/* Status badges (top-right) */}
+        {/* Status badges */}
         {(isFullyComplete || isDiscontinued || isPaused || endDate) && (
-          <div className="absolute top-2 right-2 flex items-center gap-1">
+          <div className="flex flex-wrap justify-end gap-1 mb-1 w-full">
             {isDiscontinued && (
               <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700">
                 Discontinued

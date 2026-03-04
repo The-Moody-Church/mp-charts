@@ -99,6 +99,36 @@ export class JourneyProcessingService {
     }
   }
 
+  /**
+   * Determine badge flags for a participant based on their accomplished milestones
+   * and the admin config's discontinuesJourney + completionBadge settings.
+   */
+  private getDiscontinueBadge(
+    participantMilestones: MilestoneRecord[]
+  ): { isDiscontinued: boolean; isCompletedByBadge: boolean } {
+    const configMap = new Map(this.config.milestones.map(m => [m.milestoneId, m]));
+
+    // Find accomplished milestones that are configured as "discontinues journey"
+    const discontinueAccomplished = participantMilestones.filter(m => {
+      if (!m.Date_Accomplished) return false;
+      const cfg = configMap.get(m.Milestone_ID);
+      return cfg?.discontinuesJourney === true;
+    });
+
+    if (discontinueAccomplished.length === 0) {
+      return { isDiscontinued: false, isCompletedByBadge: false };
+    }
+
+    const hasCompletedBadge = discontinueAccomplished.some(m => {
+      const cfg = configMap.get(m.Milestone_ID);
+      return cfg?.completionBadge === "completed";
+    });
+    return {
+      isDiscontinued: !hasCompletedBadge,
+      isCompletedByBadge: hasCompletedBadge,
+    };
+  }
+
   // ---------------------------------------------------------------
   // Participants (main tracking group)
   // ---------------------------------------------------------------
@@ -184,12 +214,10 @@ export class JourneyProcessingService {
         )
       : false;
 
-    const isDiscontinued = milestones.some(
-      m => m.Participant_ID === participantId && m.Discontinue_Journey
-    );
+    const participantMilestones = milestones.filter(m => m.Participant_ID === participantId);
+    const { isDiscontinued, isCompletedByBadge } = this.getDiscontinueBadge(participantMilestones);
 
-    const milestoneDetails: JourneyMilestoneDetail[] = milestones
-      .filter(m => m.Participant_ID === participantId)
+    const milestoneDetails: JourneyMilestoneDetail[] = participantMilestones
       .map(m => ({
         Participant_Milestone_ID: m.Participant_Milestone_ID,
         Milestone_ID: m.Milestone_ID,
@@ -217,12 +245,34 @@ export class JourneyProcessingService {
       completedCount: checklist.filter(c => c.status === 'complete').length,
       totalCount: checklist.length,
       isPaused: hasPauseMilestone,
-      isFullyComplete: checklist.every(c => c.status === 'complete'),
+      isFullyComplete: checklist.every(c => c.status === 'complete') || isCompletedByBadge,
       isDiscontinued,
       endDate,
       milestones: milestoneDetails,
       writeBackConfig,
     };
+  }
+
+  // ---------------------------------------------------------------
+  // Complete: end-date group participant in tracking group
+  // ---------------------------------------------------------------
+
+  public async completeParticipant(params: {
+    currentGroupParticipantId: number;
+    userId?: number;
+  }): Promise<void> {
+    const { currentGroupParticipantId, userId } = params;
+
+    if (!this.config.trackingGroupId) {
+      throw new Error('Complete requires a tracking group');
+    }
+
+    const now = nowCentral();
+    await this.mp.updateTableRecords(
+      'Group_Participants',
+      [{ Group_Participant_ID: currentGroupParticipantId, End_Date: now }],
+      { $userId: userId }
+    );
   }
 
   // ---------------------------------------------------------------
@@ -236,10 +286,17 @@ export class JourneyProcessingService {
     Date_Accomplished?: string;
     Notes?: string;
   }, userId?: number): Promise<number> {
-    const record = {
+    // Check if this milestone is configured to discontinue the journey
+    const milestoneConfig = this.config.milestones.find(m => m.milestoneId === data.Milestone_ID);
+    const discontinueJourney = milestoneConfig?.discontinuesJourney === true;
+
+    const record: Record<string, unknown> = {
       ...data,
       Date_Accomplished: data.Date_Accomplished || nowCentral(),
     };
+    if (discontinueJourney) {
+      record.Discontinue_Journey = true;
+    }
 
     const created = await this.mp.createTableRecords(
       'Participant_Milestones', [record], {
@@ -479,7 +536,7 @@ export class JourneyProcessingService {
       };
 
       const checklist = this.buildChecklistForParticipant(participantId, allRecords);
-      const isDiscontinued = participantMilestones.some(m => m.Discontinue_Journey);
+      const { isDiscontinued, isCompletedByBadge } = this.getDiscontinueBadge(participantMilestones);
       const allVisible = checklist.every(c => c.status === 'complete');
 
       const card: JourneyCard = {
@@ -488,13 +545,13 @@ export class JourneyProcessingService {
         completedCount: checklist.filter(c => c.status === 'complete').length,
         totalCount: checklist.length,
         isPaused: false,
-        isFullyComplete: allVisible,
+        isFullyComplete: allVisible || isCompletedByBadge,
         isDiscontinued,
         endDate: null,
       };
 
-      // Classify: completed if all visible milestones done OR discontinued
-      if (allVisible || isDiscontinued) {
+      // Classify: completed if all visible milestones done OR discontinued/completed-by-badge
+      if (allVisible || isDiscontinued || isCompletedByBadge) {
         completed.push(card);
       } else {
         inProgress.push(card);
@@ -636,9 +693,8 @@ export class JourneyProcessingService {
 
     return applicants.map(applicant => {
       const checklist = this.buildChecklistForParticipant(applicant.Participant_ID, milestones);
-      const isDiscontinued = milestones.some(
-        m => m.Participant_ID === applicant.Participant_ID && m.Discontinue_Journey
-      );
+      const participantMilestones = milestones.filter(m => m.Participant_ID === applicant.Participant_ID);
+      const { isDiscontinued, isCompletedByBadge } = this.getDiscontinueBadge(participantMilestones);
 
       return {
         info: applicant,
@@ -646,7 +702,7 @@ export class JourneyProcessingService {
         completedCount: checklist.filter(c => c.status === 'complete').length,
         totalCount: checklist.length,
         isPaused,
-        isFullyComplete: checklist.every(c => c.status === 'complete'),
+        isFullyComplete: checklist.every(c => c.status === 'complete') || isCompletedByBadge,
         isDiscontinued,
         endDate: endDateAlerts.get(applicant.Participant_ID) ?? null,
       };

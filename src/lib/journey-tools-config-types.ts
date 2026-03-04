@@ -9,6 +9,11 @@ export interface JourneyMilestoneConfig {
   label: string;
   sortOrder: number;
   visible: boolean;
+  /** When true, creating this participant milestone in MP sets Discontinue_Journey = 1. */
+  discontinuesJourney?: boolean;
+  /** Badge shown when this milestone discontinues the journey.
+   *  "discontinued" (default) = red badge, "completed" = green badge. */
+  completionBadge?: "discontinued" | "completed";
 }
 
 export interface JourneyToolConfig {
@@ -41,6 +46,8 @@ const JourneyMilestoneConfigSchema = z.object({
   label: z.string().min(1).max(100),
   sortOrder: z.number().int().min(0),
   visible: z.boolean(),
+  discontinuesJourney: z.boolean().optional(),
+  completionBadge: z.enum(["discontinued", "completed"]).optional(),
 });
 
 const JourneyToolConfigSchema = z.object({

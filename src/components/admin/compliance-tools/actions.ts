@@ -3,6 +3,7 @@
 import { requireFeatureAccess, loadFeatureAccess, saveFeatureAccess } from "@/lib/authorization";
 import { MPHelper } from "@/lib/providers/ministry-platform";
 import { sanitizeIds } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
+import { z } from "zod";
 import {
   loadComplianceToolsConfig,
   saveComplianceToolsConfig,
@@ -46,7 +47,8 @@ export async function getComplianceToolsConfigAction(): Promise<ComplianceToolsC
 }
 
 export async function saveComplianceToolAction(
-  tool: ComplianceToolConfig
+  tool: ComplianceToolConfig,
+  isNew?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   try {
     await requireFeatureAccess("admin");
@@ -56,6 +58,10 @@ export async function saveComplianceToolAction(
 
     const config = loadComplianceToolsConfig();
     const existingIndex = config.tools.findIndex((t) => t.slug === tool.slug);
+
+    if (isNew && existingIndex >= 0) {
+      return { success: false, error: "slug: A tool with this slug already exists." };
+    }
 
     if (existingIndex >= 0) {
       config.tools[existingIndex] = tool;
@@ -85,6 +91,13 @@ export async function saveComplianceToolAction(
     return { success: true };
   } catch (error) {
     console.error("Error saving compliance tool:", error);
+    if (error instanceof z.ZodError) {
+      const messages = error.issues.map((i) => {
+        const field = i.path.length > 0 ? i.path.join(".") : "config";
+        return `${field}: ${i.message}`;
+      });
+      return { success: false, error: messages.join("; ") };
+    }
     return { success: false, error: error instanceof Error ? error.message : "Failed to save compliance tool" };
   }
 }

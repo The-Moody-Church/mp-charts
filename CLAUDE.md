@@ -312,6 +312,29 @@ Server actions in `actions.ts` should call **service classes** (not MPHelper dir
 Component → Server Action → Service (singleton) → MPHelper → Ministry Platform API
 ```
 
+## Admin Tool Editors (Journey & Compliance)
+
+The **Journey Tools** admin (`src/components/admin/journey-tools/`) and **Compliance Tools** admin (`src/components/admin/compliance-tools/`) share the same UX patterns and must stay in sync:
+
+| Pattern | Implementation |
+|---------|---------------|
+| **Field-level error highlighting** | `errorFields: Set<string>` + `fieldErrorClass()` / `clearFieldError()` |
+| **Error placement** | Error message displayed near save button, not at top of form |
+| **Slug auto-sanitization** | `onChange` lowercases, replaces invalid chars with hyphens |
+| **Duplicate slug protection** | Client-side check against `existingSlugs` + server-side `isNew` flag |
+| **Zod error parsing** | Server catches `z.ZodError`, formats as `"field: message; ..."` |
+| **Form sections** | `<fieldset>` with `<legend>` for visual grouping |
+| **Used journey filtering** | `usedJourneyIds` prop filters journey dropdown to prevent duplicates |
+| **Default group role** | Defaults to "Member" (ID: 2) for new tools |
+
+**IMPORTANT**: When making changes to validation, error handling, form layout, or UX patterns in **either** editor, check whether the same change should be applied to the other. Always ask the user if unsure. The two editors are intentionally parallel — shared actions like `getAvailableJourneys`, `getAvailableGroups`, etc. live in the journey tools actions and are imported by the compliance editor.
+
+Key files:
+- `src/components/admin/journey-tools/journey-tool-editor.tsx` — Journey tool form
+- `src/components/admin/journey-tools/actions.ts` — Journey admin server actions (shared MP queries)
+- `src/components/admin/compliance-tools/compliance-tool-editor.tsx` — Compliance tool form
+- `src/components/admin/compliance-tools/actions.ts` — Compliance admin server actions
+
 ## Dev-Only vs Production Navigation
 
 Some features are dev/demo tools and are **hidden in production builds**. They are gated behind `process.env.NODE_ENV === "development"` in:

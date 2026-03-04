@@ -26,6 +26,7 @@ import {
   updateJourneyMilestone,
   getJourneyMilestoneFiles,
   uploadJourneyParticipantPhoto,
+  completeJourneyParticipant,
   pauseJourneyParticipant,
   resumeJourneyParticipant,
 } from "./actions";
@@ -86,6 +87,7 @@ export function JourneyDetailModal({
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [pauseNotes, setPauseNotes] = useState("");
+  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const [showPauseConfirm, setShowPauseConfirm] = useState(false);
   const [showResumeConfirm, setShowResumeConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -102,6 +104,7 @@ export function JourneyDetailModal({
       setLinkCopied(false);
       setEditingKey(null);
       setEditError(null);
+      setShowCompleteConfirm(false);
       setShowPauseConfirm(false);
       setShowResumeConfirm(false);
       setPauseNotes("");
@@ -231,6 +234,28 @@ export function JourneyDetailModal({
     } finally {
       setPhotoUploading(false);
       if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  };
+
+  const handleComplete = async () => {
+    if (!participant) return;
+    setActionLoading("complete");
+    try {
+      const formData = new FormData();
+      formData.set("Group_Participant_ID", String(participant.info.Group_Participant_ID));
+      const result = await completeJourneyParticipant(slug, formData);
+      if (!result.success) {
+        setFileError(result.error || "Complete failed");
+        return;
+      }
+      onUpdate();
+      onOpenChange(false);
+    } catch (err) {
+      console.error("Complete failed:", err);
+      setFileError("Failed to complete participant");
+    } finally {
+      setActionLoading(null);
+      setShowCompleteConfirm(false);
     }
   };
 
@@ -379,6 +404,8 @@ export function JourneyDetailModal({
   const mpBaseOrigin = mpFileUrl ? new URL(mpFileUrl).origin : null;
   const mpParticipantUrl = mpBaseOrigin ? `${mpBaseOrigin}/mp/355/${info.Participant_ID}` : null;
 
+  // Complete button shows in group mode on the current tab
+  const showCompleteButton = !!participant.info.Group_Participant_ID && isCurrentTab;
   // Pause/resume only applies in group mode
   const showPauseControls = supportsPause && !!participant.info.Group_Participant_ID;
   const showResumeButton = showPauseControls && !isCurrentTab && participant.isPaused;
@@ -468,37 +495,63 @@ export function JourneyDetailModal({
           <div className="py-8 text-center text-sm text-muted-foreground">Loading details...</div>
         ) : (
           <div className="space-y-4">
-            {/* Pause Button — on current tab when pause is supported (group mode only) */}
-            {showPauseControls && isCurrentTab && (
-              <div className="space-y-2">
-                {!showPauseConfirm ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-yellow-500 text-yellow-700 hover:bg-yellow-50"
-                    disabled={!!actionLoading}
-                    onClick={() => setShowPauseConfirm(true)}
-                  >
-                    Pause Process
-                  </Button>
-                ) : (
-                  <div className="space-y-2 rounded-md border bg-yellow-50 p-2">
-                    <Label htmlFor="pauseNotes" className="text-xs font-medium text-yellow-800">Reason for pausing (optional)</Label>
-                    <Textarea
-                      id="pauseNotes"
-                      value={pauseNotes}
-                      onChange={(e) => setPauseNotes(e.target.value)}
-                      placeholder="Notes..."
-                      rows={2}
-                      className="text-sm"
-                    />
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => setShowPauseConfirm(false)} disabled={!!actionLoading}>Cancel</Button>
-                      <Button size="sm" className="bg-yellow-600 hover:bg-yellow-700 text-white" onClick={handlePause} disabled={!!actionLoading}>
-                        {actionLoading === "pause" ? "Pausing..." : "Confirm Pause"}
-                      </Button>
+            {/* Action buttons — inline when collapsed, stacked when confirm is open */}
+            {(showCompleteButton || (showPauseControls && isCurrentTab)) && (
+              <div className={showCompleteConfirm || showPauseConfirm ? "space-y-4" : "flex flex-wrap gap-2"}>
+                {showCompleteButton && (
+                  !showCompleteConfirm ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-blue-500 text-blue-700 hover:bg-blue-50"
+                      disabled={!!actionLoading}
+                      onClick={() => setShowCompleteConfirm(true)}
+                    >
+                      Remove from Tracking Group
+                    </Button>
+                  ) : (
+                    <div className="space-y-2 rounded-md border bg-blue-50 p-2">
+                      <p className="text-xs text-blue-800">This will end-date the participant&apos;s record in the tracking group.</p>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => setShowCompleteConfirm(false)} disabled={!!actionLoading}>Cancel</Button>
+                        <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleComplete} disabled={!!actionLoading}>
+                          {actionLoading === "complete" ? "Removing..." : "Confirm"}
+                        </Button>
+                      </div>
                     </div>
-                  </div>
+                  )
+                )}
+
+                {showPauseControls && isCurrentTab && (
+                  !showPauseConfirm ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-yellow-500 text-yellow-700 hover:bg-yellow-50"
+                      disabled={!!actionLoading}
+                      onClick={() => setShowPauseConfirm(true)}
+                    >
+                      Pause Process
+                    </Button>
+                  ) : (
+                    <div className="space-y-2 rounded-md border bg-yellow-50 p-2">
+                      <Label htmlFor="pauseNotes" className="text-xs font-medium text-yellow-800">Reason for pausing (optional)</Label>
+                      <Textarea
+                        id="pauseNotes"
+                        value={pauseNotes}
+                        onChange={(e) => setPauseNotes(e.target.value)}
+                        placeholder="Notes..."
+                        rows={2}
+                        className="text-sm"
+                      />
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => setShowPauseConfirm(false)} disabled={!!actionLoading}>Cancel</Button>
+                        <Button size="sm" className="bg-yellow-600 hover:bg-yellow-700 text-white" onClick={handlePause} disabled={!!actionLoading}>
+                          {actionLoading === "pause" ? "Pausing..." : "Confirm Pause"}
+                        </Button>
+                      </div>
+                    </div>
+                  )
                 )}
               </div>
             )}

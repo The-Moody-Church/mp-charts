@@ -35,6 +35,7 @@ import type { JourneyMilestoneConfig } from "@/lib/journey-tools-config-types";
 interface ComplianceToolEditorProps {
   existingTool?: ComplianceToolConfig | null;
   existingSlugs: string[];
+  usedJourneyIds: number[];
   onSaved: () => void;
   onCancel: () => void;
 }
@@ -49,7 +50,7 @@ function mapRequirementType(mpType: string): ComplianceRequirementConfig["type"]
   return typeMap[mpType] || "milestone";
 }
 
-export function ComplianceToolEditor({ existingTool, existingSlugs, onSaved, onCancel }: ComplianceToolEditorProps) {
+export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyIds, onSaved, onCancel }: ComplianceToolEditorProps) {
   const isEditing = !!existingTool;
 
   // MP reference data
@@ -59,6 +60,8 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, onSaved, onC
   const [groupRoles, setGroupRoles] = useState<MPGroupRole[]>([]);
   const [loadingRef, setLoadingRef] = useState(true);
   const [groupSearch, setGroupSearch] = useState("");
+  const [pausedGroupSearch, setPausedGroupSearch] = useState("");
+  const [pausedGroups, setPausedGroups] = useState<MPGroup[]>([]);
 
   // Form state
   const [toolName, setToolName] = useState(existingTool?.toolName ?? "");
@@ -71,15 +74,25 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, onSaved, onC
   const [journeyMilestones, setJourneyMilestones] = useState<ComplianceMilestoneConfig[]>(existingTool?.journeyMilestones ?? []);
   const [programId, setProgramId] = useState<number | null>(existingTool?.programId ?? null);
   const [trackingGroupId, setTrackingGroupId] = useState<number | null>(existingTool?.trackingGroupId ?? null);
-  const [defaultGroupRoleId, setDefaultGroupRoleId] = useState<number | null>(existingTool?.defaultGroupRoleId ?? null);
+  const [defaultGroupRoleId, setDefaultGroupRoleId] = useState<number | null>(existingTool?.defaultGroupRoleId ?? 2);
   const [supportsPause, setSupportsPause] = useState(existingTool?.supportsPause ?? false);
   const [pausedGroupId, setPausedGroupId] = useState<number | null>(existingTool?.pausedGroupId ?? null);
   const [pauseMilestoneId, setPauseMilestoneId] = useState<number | null>(existingTool?.pauseMilestoneId ?? null);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorFields, setErrorFields] = useState<Set<string>>(new Set());
   const [loadingRequirements, setLoadingRequirements] = useState(false);
   const [loadingMilestones, setLoadingMilestones] = useState(false);
+
+  const fieldErrorClass = (field: string) =>
+    errorFields.has(field) ? "border-red-500 ring-1 ring-red-500" : "";
+
+  const clearFieldError = (field: string) => {
+    if (!errorFields.has(field)) return;
+    setErrorFields((prev) => { const next = new Set(prev); next.delete(field); return next; });
+    if (errorFields.size <= 1) setError(null);
+  };
 
   // Load reference data
   useEffect(() => {
@@ -95,6 +108,15 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, onSaved, onC
         setPrograms(p);
         setGroups(g);
         setGroupRoles(gr);
+
+        // Pre-populate paused group dropdown with existing selection
+        if (existingTool?.pausedGroupId) {
+          const allGroups = g;
+          if (!allGroups.some((x) => x.Group_ID === existingTool.pausedGroupId)) {
+            // Paused group not in initial load — it will show in search results
+          }
+          setPausedGroups(allGroups);
+        }
       } catch (err) {
         console.error("Failed to load reference data:", err);
         setError("Failed to load configuration data from Ministry Platform.");
@@ -103,6 +125,7 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, onSaved, onC
       }
     }
     load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // When group role selection changes, fetch requirements
@@ -111,6 +134,7 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, onSaved, onC
       ? [...selectedGroupRoleIds, roleId]
       : selectedGroupRoleIds.filter(id => id !== roleId);
     setSelectedGroupRoleIds(newIds);
+    clearFieldError("groupRoleIds");
 
     if (newIds.length === 0) {
       setRequirements([]);
@@ -178,6 +202,7 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, onSaved, onC
   // Auto-generate slug from tool name
   const handleToolNameChange = (name: string) => {
     setToolName(name);
+    clearFieldError("toolName");
     if (!isEditing) {
       setSlug(generateUniqueSlug(name, existingSlugs));
     }
@@ -193,23 +218,35 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, onSaved, onC
     }
   };
 
+  // Search paused groups
+  const handlePausedGroupSearch = async () => {
+    try {
+      const results = await getAvailableGroups(pausedGroupSearch);
+      setPausedGroups(results);
+    } catch (err) {
+      console.error("Failed to search paused groups:", err);
+    }
+  };
+
   const handleSave = async () => {
     setError(null);
+    setErrorFields(new Set());
 
-    if (!toolName.trim()) {
-      setError("Tool name is required.");
-      return;
-    }
-    if (!slug.trim()) {
-      setError("Slug is required.");
-      return;
-    }
-    if (selectedGroupRoleIds.length === 0) {
-      setError("At least one group role must be selected.");
-      return;
-    }
+    // Client-side validation — collect all errors at once
+    const errors: string[] = [];
+    const fields = new Set<string>();
+
+    if (!toolName.trim()) { errors.push("Tool name is required."); fields.add("toolName"); }
+    if (!slug.trim()) { errors.push("Slug is required."); fields.add("slug"); }
+    else if (!isEditing && existingSlugs.includes(slug.trim())) { errors.push("A tool with this slug already exists."); fields.add("slug"); }
+    if (selectedGroupRoleIds.length === 0) { errors.push("At least one group role must be selected."); fields.add("groupRoleIds"); }
     if (requirements.filter(r => r.visible).length === 0 && journeyMilestones.filter(m => m.visible).length === 0) {
-      setError("At least one requirement or milestone must be visible.");
+      errors.push("At least one requirement or milestone must be visible."); fields.add("requirements");
+    }
+
+    if (errors.length > 0) {
+      setError(errors.join(" "));
+      setErrorFields(fields);
       return;
     }
 
@@ -235,9 +272,17 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, onSaved, onC
         updatedAt: now,
       };
 
-      const result = await saveComplianceToolAction(tool);
+      const result = await saveComplianceToolAction(tool, !isEditing);
       if (!result.success) {
-        setError(result.error || "Failed to save.");
+        const errMsg = result.error || "Failed to save.";
+        // Parse field names from server Zod errors (format: "fieldName: message; ...")
+        const serverFields = new Set<string>();
+        for (const segment of errMsg.split("; ")) {
+          const colonIdx = segment.indexOf(":");
+          if (colonIdx > 0) serverFields.add(segment.substring(0, colonIdx));
+        }
+        setError(errMsg);
+        setErrorFields(serverFields);
         return;
       }
       onSaved();
@@ -264,6 +309,7 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, onSaved, onC
       sortOrder: m.sortOrder,
       visible: m.visible,
     })));
+    clearFieldError("requirements");
   };
 
   // All milestones from journey (for pause milestone select)
@@ -278,247 +324,298 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, onSaved, onC
       <CardHeader>
         <CardTitle>{isEditing ? "Edit Compliance Tool" : "Add Compliance Tool"}</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
-        {error && (
-          <div className="text-sm text-red-600 bg-red-50 rounded-md p-2">{error}</div>
-        )}
+      <CardContent className="space-y-8">
+        {/* ── Section: Title & Description ── */}
+        <fieldset className="space-y-4 rounded-lg border p-4">
+          <legend className="px-2 text-sm font-semibold">Title &amp; Description</legend>
 
-        {/* Tool Name and Slug */}
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="flex-1 space-y-2">
-            <Label htmlFor="tool-name">Tool Name</Label>
-            <Input
-              id="tool-name"
-              value={toolName}
-              onChange={(e) => handleToolNameChange(e.target.value)}
-              placeholder="e.g., Volunteer Compliance"
-              className="text-base sm:text-sm"
-            />
+          {/* Tool Name and Slug */}
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1 space-y-2">
+              <Label htmlFor="tool-name">Tool Name</Label>
+              <Input
+                id="tool-name"
+                value={toolName}
+                onChange={(e) => handleToolNameChange(e.target.value)}
+                placeholder="e.g., Volunteer Compliance"
+                className={`text-base sm:text-sm ${fieldErrorClass("toolName")}`}
+              />
+            </div>
+            <div className="w-full sm:w-48 space-y-2">
+              <Label htmlFor="tool-slug">URL Slug</Label>
+              <Input
+                id="tool-slug"
+                value={slug}
+                onChange={(e) => {
+                  setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-{2,}/g, "-"));
+                  clearFieldError("slug");
+                }}
+                placeholder="e.g., volunteer-compliance"
+                disabled={isEditing}
+                className={`text-base sm:text-sm ${fieldErrorClass("slug")}`}
+              />
+            </div>
           </div>
-          <div className="w-full sm:w-48 space-y-2">
-            <Label htmlFor="tool-slug">URL Slug</Label>
-            <Input
-              id="tool-slug"
-              value={slug}
-              onChange={(e) => setSlug(e.target.value)}
-              placeholder="e.g., volunteer-compliance"
-              disabled={isEditing}
-              className="text-base sm:text-sm"
-            />
-          </div>
-        </div>
 
-        {/* Description */}
-        <div className="space-y-2">
-          <Label htmlFor="tool-desc">Description</Label>
-          <Textarea
-            id="tool-desc"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={2}
-            placeholder="Short description shown on the home page card"
-            className="text-sm"
-          />
-        </div>
-
-        {/* Group Roles Selection */}
-        <div className="space-y-2">
-          <Label>Group Roles (which roles have compliance requirements)</Label>
-          <div className="max-h-48 overflow-y-auto space-y-2 rounded-md border p-3">
-            {groupRoles.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No group roles found</p>
-            ) : (
-              groupRoles.map((role) => (
-                <label
-                  key={role.Group_Role_ID}
-                  className="flex items-center gap-2 text-sm cursor-pointer"
-                >
-                  <Checkbox
-                    checked={selectedGroupRoleIds.includes(role.Group_Role_ID)}
-                    onCheckedChange={(checked) =>
-                      handleGroupRoleToggle(role.Group_Role_ID, checked === true)
-                    }
-                  />
-                  <span>{role.Role_Title}</span>
-                  <span className="text-muted-foreground">
-                    (ID: {role.Group_Role_ID})
-                  </span>
-                </label>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Requirements */}
-        <div className="space-y-2">
-          <Label>Requirements (toggle visibility, edit labels, reorder)</Label>
-          {loadingRequirements ? (
-            <div className="text-sm text-muted-foreground">Loading requirements...</div>
-          ) : (
-            <RequirementPicker requirements={requirements} onChange={setRequirements} />
-          )}
-        </div>
-
-        {/* Optional Journey */}
-        <div className="space-y-2">
-          <Label htmlFor="journey-select">Journey (optional — merge journey milestones into checklist)</Label>
-          <select
-            id="journey-select"
-            value={journeyId ?? ""}
-            onChange={(e) => setJourneyId(e.target.value ? Number(e.target.value) : null)}
-            className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
-          >
-            <option value="">No journey attached</option>
-            {journeys.map((j) => (
-              <option key={j.Journey_ID} value={j.Journey_ID}>
-                {j.Journey_Name} (ID: {j.Journey_ID})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Journey Milestones */}
-        {journeyId && (
+          {/* Description */}
           <div className="space-y-2">
-            <Label>Journey Milestones (toggle visibility, edit labels, reorder)</Label>
-            {loadingMilestones ? (
-              <div className="text-sm text-muted-foreground">Loading milestones...</div>
-            ) : (
-              <MilestonePicker milestones={milestonePickerData} onChange={handleMilestonesChange} />
-            )}
-          </div>
-        )}
-
-        {/* Program */}
-        <div className="space-y-2">
-          <Label htmlFor="program-select">Program (for milestone writes)</Label>
-          <select
-            id="program-select"
-            value={programId ?? ""}
-            onChange={(e) => setProgramId(e.target.value ? Number(e.target.value) : null)}
-            className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
-          >
-            <option value="">None</option>
-            {programs.map((p) => (
-              <option key={p.Program_ID} value={p.Program_ID}>
-                {p.Program_Name} (ID: {p.Program_ID})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Tracking Group */}
-        <div className="space-y-2">
-          <Label>Tracking Group (filter participants by group membership)</Label>
-          <div className="flex gap-2">
-            <Input
-              value={groupSearch}
-              onChange={(e) => setGroupSearch(e.target.value)}
-              placeholder="Search groups..."
-              onKeyDown={(e) => e.key === "Enter" && handleGroupSearch()}
-              className="text-base sm:text-sm"
+            <Label htmlFor="tool-desc">Description</Label>
+            <Textarea
+              id="tool-desc"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={2}
+              placeholder="Short description shown on the home page card"
+              className="text-sm"
             />
-            <Button variant="outline" size="sm" onClick={handleGroupSearch}>
-              Search
-            </Button>
           </div>
-          <select
-            value={trackingGroupId ?? ""}
-            onChange={(e) => setTrackingGroupId(e.target.value ? Number(e.target.value) : null)}
-            className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
-          >
-            <option value="">No tracking group (required for processing)</option>
-            {groups.map((g) => (
-              <option key={g.Group_ID} value={g.Group_ID}>
-                {g.Group_Name} (ID: {g.Group_ID})
-              </option>
-            ))}
-          </select>
-        </div>
 
-        {/* Default Group Role */}
-        <div className="space-y-2">
-          <Label htmlFor="default-role-select">Default Group Role (for group moves)</Label>
-          <select
-            id="default-role-select"
-            value={defaultGroupRoleId ?? ""}
-            onChange={(e) => setDefaultGroupRoleId(e.target.value ? Number(e.target.value) : null)}
-            className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
-          >
-            <option value="">None</option>
-            {groupRoles.map((r) => (
-              <option key={r.Group_Role_ID} value={r.Group_Role_ID}>
-                {r.Role_Title} (ID: {r.Group_Role_ID})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Pause Support */}
-        <div className="space-y-3">
+          {/* Enabled toggle */}
           <label className="flex items-center gap-2 cursor-pointer">
             <Checkbox
-              checked={supportsPause}
-              onCheckedChange={(checked) => setSupportsPause(checked === true)}
+              checked={enabled}
+              onCheckedChange={(checked) => setEnabled(checked === true)}
             />
-            <span className="text-sm font-medium">Enable pause/resume</span>
+            <span className="text-sm font-medium">Tool Enabled</span>
           </label>
+        </fieldset>
 
-          {supportsPause && (
-            <div className="pl-6 space-y-3">
+        {/* ── Section: Group Roles & Requirements ── */}
+        <fieldset className="space-y-4 rounded-lg border p-4">
+          <legend className="px-2 text-sm font-semibold">Group Roles &amp; Requirements</legend>
+
+          {/* Group Roles Selection */}
+          <div className="space-y-2">
+            <Label>Group Roles (which roles have compliance requirements)</Label>
+            <div className={`max-h-48 overflow-y-auto space-y-2 rounded-md border p-3 ${fieldErrorClass("groupRoleIds")}`}>
+              {groupRoles.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No group roles found</p>
+              ) : (
+                groupRoles.map((role) => (
+                  <label
+                    key={role.Group_Role_ID}
+                    className="flex items-center gap-2 text-sm cursor-pointer"
+                  >
+                    <Checkbox
+                      checked={selectedGroupRoleIds.includes(role.Group_Role_ID)}
+                      onCheckedChange={(checked) =>
+                        handleGroupRoleToggle(role.Group_Role_ID, checked === true)
+                      }
+                    />
+                    <span>{role.Role_Title}</span>
+                    <span className="text-muted-foreground">
+                      (ID: {role.Group_Role_ID})
+                    </span>
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Requirements */}
+          <div className="space-y-2">
+            <Label>Requirements (toggle visibility, edit labels, reorder)</Label>
+            {loadingRequirements ? (
+              <div className="text-sm text-muted-foreground">Loading requirements...</div>
+            ) : (
+              <div className={fieldErrorClass("requirements") ? `rounded-md ${fieldErrorClass("requirements")}` : ""}>
+                <RequirementPicker requirements={requirements} onChange={(r) => { setRequirements(r); clearFieldError("requirements"); }} />
+              </div>
+            )}
+          </div>
+        </fieldset>
+
+        {/* ── Section: Journey (Optional) ── */}
+        <fieldset className="space-y-4 rounded-lg border p-4">
+          <legend className="px-2 text-sm font-semibold">Journey (Optional)</legend>
+
+          <div className="space-y-2">
+            <Label htmlFor="journey-select">Journey (merge journey milestones into checklist)</Label>
+            <select
+              id="journey-select"
+              value={journeyId ?? ""}
+              onChange={(e) => setJourneyId(e.target.value ? Number(e.target.value) : null)}
+              className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
+            >
+              <option value="">No journey attached</option>
+              {journeys.filter((j) => !usedJourneyIds.includes(j.Journey_ID)).map((j) => (
+                <option key={j.Journey_ID} value={j.Journey_ID}>
+                  {j.Journey_Name} (ID: {j.Journey_ID})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Journey Milestones */}
+          {journeyId && (
+            <div className="space-y-2">
+              <Label>Journey Milestones (toggle visibility, edit labels, reorder)</Label>
+              {loadingMilestones ? (
+                <div className="text-sm text-muted-foreground">Loading milestones...</div>
+              ) : (
+                <MilestonePicker milestones={milestonePickerData} onChange={handleMilestonesChange} />
+              )}
+            </div>
+          )}
+        </fieldset>
+
+        {/* ── Section: Groups ── */}
+        <fieldset className="space-y-4 rounded-lg border p-4">
+          <legend className="px-2 text-sm font-semibold">Groups</legend>
+
+          {/* Program */}
+          <div className="space-y-2">
+            <Label htmlFor="program-select">Program (for milestone writes)</Label>
+            <select
+              id="program-select"
+              value={programId ?? ""}
+              onChange={(e) => setProgramId(e.target.value ? Number(e.target.value) : null)}
+              className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
+            >
+              <option value="">None</option>
+              {programs.map((p) => (
+                <option key={p.Program_ID} value={p.Program_ID}>
+                  {p.Program_Name} (ID: {p.Program_ID})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Tracking Group */}
+          <div className="space-y-2">
+            <Label>Tracking Group (filter participants by group membership)</Label>
+            <div className="flex gap-2">
+              <Input
+                value={groupSearch}
+                onChange={(e) => setGroupSearch(e.target.value)}
+                placeholder="Search groups..."
+                onKeyDown={(e) => e.key === "Enter" && handleGroupSearch()}
+                className="text-base sm:text-sm"
+              />
+              <Button variant="outline" size="sm" onClick={handleGroupSearch}>
+                Search
+              </Button>
+            </div>
+            <select
+              value={trackingGroupId ?? ""}
+              onChange={(e) => {
+                const id = e.target.value ? Number(e.target.value) : null;
+                setTrackingGroupId(id);
+                if (!id) {
+                  setSupportsPause(false);
+                  setPausedGroupId(null);
+                  setPauseMilestoneId(null);
+                  setDefaultGroupRoleId(null);
+                }
+              }}
+              className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
+            >
+              <option value="">No tracking group (required for processing)</option>
+              {groups.map((g) => (
+                <option key={g.Group_ID} value={g.Group_ID}>
+                  {g.Group_Name} (ID: {g.Group_ID})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Group-mode options (only when tracking group is set) */}
+          {trackingGroupId && (
+            <div className="space-y-4 border-t pt-4">
+              {/* Default Group Role */}
               <div className="space-y-2">
-                <Label>Paused Group</Label>
+                <Label htmlFor="default-role-select">Default Group Role (for group moves)</Label>
                 <select
-                  value={pausedGroupId ?? ""}
-                  onChange={(e) => setPausedGroupId(e.target.value ? Number(e.target.value) : null)}
+                  id="default-role-select"
+                  value={defaultGroupRoleId ?? ""}
+                  onChange={(e) => setDefaultGroupRoleId(e.target.value ? Number(e.target.value) : null)}
                   className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
                 >
-                  <option value="">Select paused group...</option>
-                  {groups.map((g) => (
-                    <option key={g.Group_ID} value={g.Group_ID}>
-                      {g.Group_Name} (ID: {g.Group_ID})
+                  <option value="">None</option>
+                  {groupRoles.map((r) => (
+                    <option key={r.Group_Role_ID} value={r.Group_Role_ID}>
+                      {r.Role_Title} (ID: {r.Group_Role_ID})
                     </option>
                   ))}
                 </select>
               </div>
-              {journeyId && allMilestones.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Pause Milestone</Label>
-                  <select
-                    value={pauseMilestoneId ?? ""}
-                    onChange={(e) => setPauseMilestoneId(e.target.value ? Number(e.target.value) : null)}
-                    className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
-                  >
-                    <option value="">Select milestone that marks paused...</option>
-                    {allMilestones.map((m) => (
-                      <option key={m.milestoneId} value={m.milestoneId}>
-                        {m.label} (ID: {m.milestoneId})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+
+              {/* Pause Support */}
+              <div className="space-y-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox
+                    checked={supportsPause}
+                    onCheckedChange={(checked) => setSupportsPause(checked === true)}
+                  />
+                  <span className="text-sm font-medium">Enable pause/resume</span>
+                </label>
+
+                {supportsPause && (
+                  <div className="pl-6 space-y-3">
+                    <div className="space-y-2">
+                      <Label>Paused Group</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          value={pausedGroupSearch}
+                          onChange={(e) => setPausedGroupSearch(e.target.value)}
+                          placeholder="Search groups..."
+                          onKeyDown={(e) => e.key === "Enter" && handlePausedGroupSearch()}
+                          className="text-base sm:text-sm"
+                        />
+                        <Button variant="outline" size="sm" onClick={handlePausedGroupSearch}>
+                          Search
+                        </Button>
+                      </div>
+                      <select
+                        value={pausedGroupId ?? ""}
+                        onChange={(e) => setPausedGroupId(e.target.value ? Number(e.target.value) : null)}
+                        className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
+                      >
+                        <option value="">Select paused group...</option>
+                        {pausedGroups.map((g) => (
+                          <option key={g.Group_ID} value={g.Group_ID}>
+                            {g.Group_Name} (ID: {g.Group_ID})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {journeyId && allMilestones.length > 0 && (
+                      <div className="space-y-2">
+                        <Label>Pause Milestone</Label>
+                        <select
+                          value={pauseMilestoneId ?? ""}
+                          onChange={(e) => setPauseMilestoneId(e.target.value ? Number(e.target.value) : null)}
+                          className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
+                        >
+                          <option value="">Select milestone that marks paused...</option>
+                          {allMilestones.map((m) => (
+                            <option key={m.milestoneId} value={m.milestoneId}>
+                              {m.label} (ID: {m.milestoneId})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
-        </div>
-
-        {/* Enabled toggle */}
-        <label className="flex items-center gap-2 cursor-pointer">
-          <Checkbox
-            checked={enabled}
-            onCheckedChange={(checked) => setEnabled(checked === true)}
-          />
-          <span className="text-sm font-medium">Enabled</span>
-        </label>
+        </fieldset>
 
         {/* Actions */}
-        <div className="flex gap-2 pt-2">
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Saving..." : isEditing ? "Update" : "Create"}
-          </Button>
-          <Button variant="outline" onClick={onCancel} disabled={saving}>
-            Cancel
-          </Button>
+        <div className="space-y-2 pt-2">
+          {error && (
+            <div className="text-sm text-red-600 bg-red-50 rounded-md p-2">{error}</div>
+          )}
+          <div className="flex gap-2">
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? "Saving..." : isEditing ? "Update" : "Create"}
+            </Button>
+            <Button variant="outline" onClick={onCancel} disabled={saving}>
+              Cancel
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>

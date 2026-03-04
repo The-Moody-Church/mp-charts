@@ -410,6 +410,7 @@ FodyWeavers.xsd
 
 # Environment
 .env.local
+.env copy.local
 
 # Runtime RBAC config (managed via Setup page, not committed)
 data/feature-access.json

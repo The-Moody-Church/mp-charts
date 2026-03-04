@@ -29,6 +29,29 @@ export function MilestonePicker({ milestones, onChange }: MilestonePickerProps) 
     );
   };
 
+  const handleDiscontinueToggle = (milestoneId: number, discontinuesJourney: boolean) => {
+    onChange(
+      milestones.map((m) =>
+        m.milestoneId === milestoneId
+          ? {
+              ...m,
+              discontinuesJourney,
+              // Default to "discontinued" badge when first enabled
+              completionBadge: discontinuesJourney ? (m.completionBadge ?? "discontinued") : undefined,
+            }
+          : m
+      )
+    );
+  };
+
+  const handleBadgeChange = (milestoneId: number, completionBadge: "discontinued" | "completed") => {
+    onChange(
+      milestones.map((m) =>
+        m.milestoneId === milestoneId ? { ...m, completionBadge } : m
+      )
+    );
+  };
+
   const handleMoveUp = (milestoneId: number) => {
     const idx = sorted.findIndex((m) => m.milestoneId === milestoneId);
     if (idx <= 0) return;
@@ -63,45 +86,68 @@ export function MilestonePicker({ milestones, onChange }: MilestonePickerProps) 
       {sorted.map((m, idx) => (
         <div
           key={m.milestoneId}
-          className="flex items-center gap-2 rounded-md border p-2"
+          className="rounded-md border p-2 space-y-1"
         >
-          <Checkbox
-            checked={m.visible}
-            onCheckedChange={(checked) => handleToggle(m.milestoneId, checked === true)}
-          />
-          <Input
-            value={m.label}
-            onChange={(e) => handleLabelChange(m.milestoneId, e.target.value)}
-            className="flex-1 h-8 text-sm text-base sm:text-sm"
-          />
-          <span className="text-xs text-muted-foreground whitespace-nowrap">
-            ID: {m.milestoneId}
-          </span>
-          <div className="flex flex-col">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-5 w-5 p-0"
-              disabled={idx === 0}
-              onClick={() => handleMoveUp(m.milestoneId)}
-              aria-label="Move up"
-            >
-              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
-              </svg>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-5 w-5 p-0"
-              disabled={idx === sorted.length - 1}
-              onClick={() => handleMoveDown(m.milestoneId)}
-              aria-label="Move down"
-            >
-              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </Button>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              checked={m.visible}
+              onCheckedChange={(checked) => handleToggle(m.milestoneId, checked === true)}
+            />
+            <Input
+              value={m.label}
+              onChange={(e) => handleLabelChange(m.milestoneId, e.target.value)}
+              className="flex-1 h-8 text-sm text-base sm:text-sm"
+            />
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              ID: {m.milestoneId}
+            </span>
+            <div className="flex flex-col">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-5 w-5 p-0"
+                disabled={idx === 0}
+                onClick={() => handleMoveUp(m.milestoneId)}
+                aria-label="Move up"
+              >
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                </svg>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-5 w-5 p-0"
+                disabled={idx === sorted.length - 1}
+                onClick={() => handleMoveDown(m.milestoneId)}
+                aria-label="Move down"
+              >
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </Button>
+            </div>
+          </div>
+          {/* Discontinue Journey config */}
+          <div className="flex items-center gap-2 pl-6">
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <Checkbox
+                checked={m.discontinuesJourney === true}
+                onCheckedChange={(checked) => handleDiscontinueToggle(m.milestoneId, checked === true)}
+              />
+              <span className="text-xs text-muted-foreground">Discontinues journey</span>
+            </label>
+            {m.discontinuesJourney && (
+              <select
+                value={m.completionBadge ?? "discontinued"}
+                onChange={(e) => handleBadgeChange(m.milestoneId, e.target.value as "discontinued" | "completed")}
+                className="h-7 rounded border border-input bg-transparent px-1 text-[10px]"
+                title="Badge shown when this milestone discontinues the journey"
+              >
+                <option value="discontinued">Discontinued</option>
+                <option value="completed">Completed</option>
+              </select>
+            )}
           </div>
         </div>
       ))}
