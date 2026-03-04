@@ -611,9 +611,6 @@ export function ComplianceDetailModal({
               </DialogTitle>
               <DialogDescription>
                 Started {formatDate(info.Start_Date)}
-                {participant.groupRoleNames.length > 0 && (
-                  <> &middot; {participant.groupRoleNames.join(", ")}</>
-                )}
                 {mpParticipantUrl && (
                   <>
                     {" — "}
