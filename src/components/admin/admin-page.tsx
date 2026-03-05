@@ -45,6 +45,20 @@ export function AdminPage() {
 
         <Card className="flex flex-col">
           <CardHeader>
+            <CardTitle>Feedback</CardTitle>
+            <CardDescription>
+              Configure the user feedback feature and Ministry Platform integration
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="mt-auto">
+            <Link href="/admin/feedback">
+              <Button variant="outline">Feedback Settings</Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card className="flex flex-col">
+          <CardHeader>
             <CardTitle>Permissions</CardTitle>
             <CardDescription>
               Manage which User Groups can access each feature

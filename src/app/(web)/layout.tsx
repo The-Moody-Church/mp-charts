@@ -4,6 +4,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { Providers } from "@/app/providers";
 import { AuthWrapper, Header, DynamicBreadcrumb } from "@/components/layout";
+import { FeedbackWrapper } from "@/components/feedback";
 import type { RuntimeConfig } from "@/contexts";
 
 export const metadata: Metadata = {
@@ -49,6 +50,7 @@ export default function WebLayout({
               {children}
             </main>
           </div>
+          <FeedbackWrapper />
         </Providers>
       </AuthWrapper>
     </Suspense>

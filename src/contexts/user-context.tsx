@@ -12,6 +12,7 @@ interface UserContextValue {
   journeyTools: JourneyToolMeta[];
   complianceTools: ComplianceToolMeta[];
   isSuperAdmin: boolean;
+  feedbackEnabled: boolean;
   isLoading: boolean;
   error: Error | null;
   refreshUserProfile: () => Promise<void>;
@@ -30,6 +31,7 @@ export function UserProvider({ children }: UserProviderProps) {
   const [journeyTools, setJourneyTools] = useState<JourneyToolMeta[]>([]);
   const [complianceTools, setComplianceTools] = useState<ComplianceToolMeta[]>([]);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [feedbackEnabled, setFeedbackEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -42,6 +44,7 @@ export function UserProvider({ children }: UserProviderProps) {
       setJourneyTools([]);
       setComplianceTools([]);
       setIsSuperAdmin(false);
+      setFeedbackEnabled(false);
       setIsLoading(false);
       return;
     }
@@ -58,6 +61,7 @@ export function UserProvider({ children }: UserProviderProps) {
       setJourneyTools(auth.journeyTools);
       setComplianceTools(auth.complianceTools);
       setIsSuperAdmin(auth.isSuperAdmin);
+      setFeedbackEnabled(auth.feedbackEnabled);
     } catch (err) {
       setError(err instanceof Error ? err : new Error("Failed to load user profile"));
       setUserProfile(null);
@@ -65,6 +69,7 @@ export function UserProvider({ children }: UserProviderProps) {
       setJourneyTools([]);
       setComplianceTools([]);
       setIsSuperAdmin(false);
+      setFeedbackEnabled(false);
     } finally {
       setIsLoading(false);
     }
@@ -79,6 +84,7 @@ export function UserProvider({ children }: UserProviderProps) {
       setJourneyTools([]);
       setComplianceTools([]);
       setIsSuperAdmin(false);
+      setFeedbackEnabled(false);
       setIsLoading(false);
     }
   }, [userGuid, isPending, session?.user, loadUserProfile]);
@@ -88,7 +94,7 @@ export function UserProvider({ children }: UserProviderProps) {
   };
 
   return (
-    <UserContext.Provider value={{ userProfile, accessibleFeatures, journeyTools, complianceTools, isSuperAdmin, isLoading, error, refreshUserProfile }}>
+    <UserContext.Provider value={{ userProfile, accessibleFeatures, journeyTools, complianceTools, isSuperAdmin, feedbackEnabled, isLoading, error, refreshUserProfile }}>
       {children}
     </UserContext.Provider>
   );

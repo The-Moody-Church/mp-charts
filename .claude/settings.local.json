@@ -90,7 +90,10 @@
       "Bash(rm -rf src/app/\\\\\\(web\\\\\\)/tools)",
       "Bash(git rm --cached data/feature-access.json)",
       "Bash(npx tsx -e \":*)",
-      "Bash(git diff main...HEAD --oneline)"
+      "Bash(git diff main...HEAD --oneline)",
+      "Bash(ls /Users/jonathon.huff/Claude/Code/mp-charts/mp-charts/src/app/\\\\\\(web\\\\\\)/admin/)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(git add .gitignore .claude/settings.local.json src/lib/feedback-config-types.ts src/lib/feedback-config.ts src/lib/auth-helpers.ts src/services/feedbackService.ts src/components/feedback/actions.ts src/components/feedback/feedback-button.tsx src/components/feedback/feedback-wrapper.tsx src/components/feedback/index.ts src/components/admin/feedback/actions.ts src/components/admin/feedback/feedback-settings.tsx src/components/admin/feedback/index.ts src/app/\\\\\\(web\\\\\\)/admin/feedback/page.tsx src/app/\\\\\\(web\\\\\\)/layout.tsx src/components/admin/admin-page.tsx src/components/shared-actions/user.ts src/contexts/user-context.tsx)"
     ],
     "deny": [],
     "ask": [],

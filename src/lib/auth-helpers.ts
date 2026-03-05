@@ -45,3 +45,10 @@ export function getMpUserId(session: Session): number | undefined {
 export function getUserGuid(session: Session): string | undefined {
   return (session.user as Record<string, unknown>).userGuid as string | undefined;
 }
+
+/**
+ * Extracts the MP Contact_ID from a session.
+ */
+export function getMpContactId(session: Session): number | undefined {
+  return (session.user as Record<string, unknown>).mpContactId as number | undefined;
+}
