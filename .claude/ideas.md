@@ -9,6 +9,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 ## Table of Contents
 
 ### Features
+- [Add feedback feature (#69)](#add-feedback-feature-69)
 - [Pastoral Interface for Contact Logs (#19)](#pastoral-interface-for-contact-logs-19)
 - ~~[Processing Search Bar (#49)](#processing-search-bar-49)~~ ✅
 - ~~[Volunteer Processing: Show In-Process Volunteers on Active Tab (#50)](#volunteer-processing-show-in-process-volunteers-on-active-tab-50)~~ ✅
@@ -50,6 +51,17 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 ---
 
 ## Features
+
+### Add feedback feature ([#69](https://github.com/The-Moody-Church/mp-charts/issues/69))
+Add a button allowing users to submit feedback from MP Next utilizing MPs Feedback tables.
+
+Login user should be the contact 
+Clicking the feedback button should open a modal, with the title field and description. That should allow the user to give a summary and a more description of their suggestion. 
+
+There should be a setup admin page for this feature, that should them allow the feature to be toggled on and on, it should allow feedback to be set to a specific feedback type ID, and it should allow assignment to a specific contact.
+
+Visibility should automatically be set to ID 2.
+Dates submitted should be the current date and time in Central Time.
 
 ### Pastoral Interface for Contact Logs ([#19](https://github.com/The-Moody-Church/mp-charts/issues/19))
 A dedicated pastoral interface for viewing and managing contact logs.
