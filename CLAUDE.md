@@ -121,6 +121,15 @@ Reviewed all open/merged upstream PRs through PR #52 (release v2026.02.28.1353).
 
 When committing changes, if `.claude/settings.local.json` has pending modifications, include it in the commit. This file tracks Claude Code permission settings and should stay in sync.
 
+### Branch Before Committing Code Changes
+
+**Never commit code changes directly to `main`.** If the changes include any source code (`.ts`, `.tsx`, `.js`, `.css`, config files, etc.), stop and ask the user whether to create a feature branch before committing.
+
+- **Documentation-only changes** (`.md` files, `.claude/` context files, `ideas.md`) **may** be committed directly to `main`.
+- **Code changes** — even small ones — must go on a branch and be merged via PR. This ensures the pre-PR checklist (security review, ideas.md sync) is always triggered.
+
+If you're unsure whether a change counts as "code" or "documentation", ask.
+
 ### Always Push After Committing
 
 This is a single-developer fork. Every commit to `main` (or any branch) must be followed immediately by a `git push`. There is no reason to leave commits unpushed — unpushed commits miss CI (Docker build, image scan) and risk diverging from the remote.
