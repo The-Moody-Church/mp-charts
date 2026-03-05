@@ -73,39 +73,40 @@ export function isSuperAdmin(userGroupIds: number[]): boolean {
 export function loadFeatureAccess(): FeatureAccessConfig {
   const merged = { ...DEFAULT_CONFIG };
 
-  if (existsSync(CONFIG_PATH)) {
-    const raw = readFileSync(CONFIG_PATH, "utf-8");
-    const parsed = JSON.parse(raw) as FeatureAccessConfig;
-
-    // Merge with defaults to ensure new features are always present
-    for (const [key, value] of Object.entries(parsed)) {
-      merged[key] = value;
-    }
-  }
-
   // Inject enabled journey tools as dynamic features
   const journeyTools = getEnabledJourneyTools();
   for (const tool of journeyTools) {
     const featureKey = `journey:${tool.slug}`;
-    if (!merged[featureKey]) {
-      merged[featureKey] = {
-        label: tool.journeyName,
-        description: tool.description,
-        allowedGroupIds: [],
-      };
-    }
+    merged[featureKey] = {
+      label: tool.journeyName,
+      description: tool.description,
+      allowedGroupIds: [],
+    };
   }
 
   // Inject enabled compliance tools as dynamic features
   const complianceTools = getEnabledComplianceTools();
   for (const tool of complianceTools) {
     const featureKey = `compliance:${tool.slug}`;
-    if (!merged[featureKey]) {
-      merged[featureKey] = {
-        label: tool.toolName,
-        description: tool.description,
-        allowedGroupIds: [],
-      };
+    merged[featureKey] = {
+      label: tool.toolName,
+      description: tool.description,
+      allowedGroupIds: [],
+    };
+  }
+
+  // Build the set of valid feature keys (static + dynamic)
+  const validKeys = new Set(Object.keys(merged));
+
+  // Merge saved config, but only for keys that still exist
+  if (existsSync(CONFIG_PATH)) {
+    const raw = readFileSync(CONFIG_PATH, "utf-8");
+    const parsed = JSON.parse(raw) as FeatureAccessConfig;
+
+    for (const [key, value] of Object.entries(parsed)) {
+      if (validKeys.has(key)) {
+        merged[key] = value;
+      }
     }
   }
 
