@@ -25,6 +25,7 @@ import {
   MilestoneExpandedView,
   MilestoneEditForm,
   QuickActionsPanel,
+  QuickActionButton,
 } from "@/components/processing";
 import {
   getComplianceParticipantDetail,
@@ -200,6 +201,7 @@ export function ComplianceDetailModal({
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const [showPauseConfirm, setShowPauseConfirm] = useState(false);
   const [showResumeConfirm, setShowResumeConfirm] = useState(false);
+  const [quickActionExpanded, setQuickActionExpanded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -218,6 +220,7 @@ export function ComplianceDetailModal({
       setShowCompleteConfirm(false);
       setShowPauseConfirm(false);
       setShowResumeConfirm(false);
+      setQuickActionExpanded(false);
       setPauseNotes("");
       getComplianceParticipantDetail(
         slug,
@@ -683,7 +686,7 @@ export function ComplianceDetailModal({
         ) : (
           <div className="space-y-4">
             {/* Action buttons — inline when collapsed, stacked when confirm is open */}
-            {(showCompleteButton || (showPauseControls && isCurrentTab)) && (
+            {(showCompleteButton || (showPauseControls && isCurrentTab) || availableQuickActionItems.length > 0) && (
               <div className={showCompleteConfirm || showPauseConfirm ? "space-y-4" : "flex flex-wrap gap-2"}>
                 {showCompleteButton && (
                   !showCompleteConfirm ? (
@@ -740,6 +743,11 @@ export function ComplianceDetailModal({
                     </div>
                   )
                 )}
+
+                <QuickActionButton
+                  show={availableQuickActionItems.length > 0 && !quickActionExpanded}
+                  onClick={() => setQuickActionExpanded(true)}
+                />
               </div>
             )}
 
@@ -766,6 +774,41 @@ export function ComplianceDetailModal({
                 )}
               </div>
             )}
+
+            {/* Quick Actions expanded panel — milestones, certifications, forms */}
+            <QuickActionsPanel
+              availableItems={availableQuickActionItems}
+              selectedKey={selectedMilestoneKey}
+              onSelectedKeyChange={setSelectedMilestoneKey}
+              date={milestoneDate}
+              onDateChange={setMilestoneDate}
+              notes={milestoneNotes}
+              onNotesChange={setMilestoneNotes}
+              fileInputRef={fileInputRef}
+              fileError={fileError}
+              onFileError={setFileError}
+              canSubmit={!!selectedMilestoneKey && (() => {
+                if (!detail) return false;
+                if (!selectedQuickItem) return false;
+                switch (selectedQuickItem.type) {
+                  case 'journey_milestone':
+                    return !!detail.writeBackConfig.milestoneIds[selectedMilestoneKey] && !!detail.writeBackConfig.programId;
+                  case 'certification':
+                    return !!detail.writeBackConfig.certificationTypeIds[selectedMilestoneKey];
+                  case 'form':
+                    return !!detail.writeBackConfig.formIds[selectedMilestoneKey];
+                  default:
+                    return false;
+                }
+              })()}
+              submitting={!!actionLoading}
+              onSubmit={handleQuickActionSubmit}
+              showNotes={quickActionShowNotes}
+              itemLabel="Item"
+              notesMaxLength={500}
+              expanded={quickActionExpanded}
+              onExpandedChange={setQuickActionExpanded}
+            />
 
             {/* Requirements Checklist */}
             {requirementItems.length > 0 && (
@@ -958,41 +1001,6 @@ export function ComplianceDetailModal({
               </div>
             )}
 
-            {/* Quick Actions — milestones, certifications, forms */}
-            {availableQuickActionItems.length > 0 && (
-              <QuickActionsPanel
-                availableItems={availableQuickActionItems}
-                selectedKey={selectedMilestoneKey}
-                onSelectedKeyChange={setSelectedMilestoneKey}
-                date={milestoneDate}
-                onDateChange={setMilestoneDate}
-                notes={milestoneNotes}
-                onNotesChange={setMilestoneNotes}
-                fileInputRef={fileInputRef}
-                fileError={fileError}
-                onFileError={setFileError}
-                canSubmit={!!selectedMilestoneKey && (() => {
-                  if (!detail) return false;
-                  if (!selectedQuickItem) return false;
-                  switch (selectedQuickItem.type) {
-                    case 'journey_milestone':
-                      return !!detail.writeBackConfig.milestoneIds[selectedMilestoneKey] && !!detail.writeBackConfig.programId;
-                    case 'certification':
-                      return !!detail.writeBackConfig.certificationTypeIds[selectedMilestoneKey];
-                    case 'form':
-                      return !!detail.writeBackConfig.formIds[selectedMilestoneKey];
-                    default:
-                      return false;
-                  }
-                })()}
-                submitting={!!actionLoading}
-                onSubmit={handleQuickActionSubmit}
-                showNotes={quickActionShowNotes}
-                itemLabel="Item"
-                notesMaxLength={500}
-                allCompleteMessage="All items are complete."
-              />
-            )}
           </div>
         )}
       </DialogContent>

@@ -19,6 +19,7 @@ import {
   MilestoneExpandedView,
   MilestoneEditForm,
   QuickActionsPanel,
+  QuickActionButton,
 } from "@/components/processing";
 import {
   getJourneyParticipantDetail,
@@ -90,6 +91,7 @@ export function JourneyDetailModal({
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const [showPauseConfirm, setShowPauseConfirm] = useState(false);
   const [showResumeConfirm, setShowResumeConfirm] = useState(false);
+  const [quickActionExpanded, setQuickActionExpanded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -107,6 +109,7 @@ export function JourneyDetailModal({
       setShowCompleteConfirm(false);
       setShowPauseConfirm(false);
       setShowResumeConfirm(false);
+      setQuickActionExpanded(false);
       setPauseNotes("");
       getJourneyParticipantDetail(
         slug,
@@ -496,7 +499,7 @@ export function JourneyDetailModal({
         ) : (
           <div className="space-y-4">
             {/* Action buttons — inline when collapsed, stacked when confirm is open */}
-            {(showCompleteButton || (showPauseControls && isCurrentTab)) && (
+            {(showCompleteButton || (showPauseControls && isCurrentTab) || availableMilestones.length > 0) && (
               <div className={showCompleteConfirm || showPauseConfirm ? "space-y-4" : "flex flex-wrap gap-2"}>
                 {showCompleteButton && (
                   !showCompleteConfirm ? (
@@ -553,6 +556,11 @@ export function JourneyDetailModal({
                     </div>
                   )
                 )}
+
+                <QuickActionButton
+                  show={availableMilestones.length > 0 && !quickActionExpanded}
+                  onClick={() => setQuickActionExpanded(true)}
+                />
               </div>
             )}
 
@@ -579,6 +587,25 @@ export function JourneyDetailModal({
                 )}
               </div>
             )}
+
+            {/* Quick Actions expanded panel */}
+            <QuickActionsPanel
+              availableItems={availableMilestones}
+              selectedKey={selectedMilestoneKey}
+              onSelectedKeyChange={setSelectedMilestoneKey}
+              date={milestoneDate}
+              onDateChange={setMilestoneDate}
+              notes={milestoneNotes}
+              onNotesChange={setMilestoneNotes}
+              fileInputRef={fileInputRef}
+              fileError={fileError}
+              onFileError={setFileError}
+              canSubmit={!!selectedMilestoneKey && !!detail?.writeBackConfig.milestoneIds[selectedMilestoneKey] && !!detail?.writeBackConfig.programId}
+              submitting={!!actionLoading}
+              onSubmit={handleMarkMilestoneComplete}
+              expanded={quickActionExpanded}
+              onExpandedChange={setQuickActionExpanded}
+            />
 
             {/* Checklist */}
             <div className="space-y-2">
@@ -679,22 +706,6 @@ export function JourneyDetailModal({
               })}
             </div>
 
-            {/* Quick Actions */}
-            <QuickActionsPanel
-              availableItems={availableMilestones}
-              selectedKey={selectedMilestoneKey}
-              onSelectedKeyChange={setSelectedMilestoneKey}
-              date={milestoneDate}
-              onDateChange={setMilestoneDate}
-              notes={milestoneNotes}
-              onNotesChange={setMilestoneNotes}
-              fileInputRef={fileInputRef}
-              fileError={fileError}
-              onFileError={setFileError}
-              canSubmit={!!selectedMilestoneKey && !!detail?.writeBackConfig.milestoneIds[selectedMilestoneKey] && !!detail?.writeBackConfig.programId}
-              submitting={!!actionLoading}
-              onSubmit={handleMarkMilestoneComplete}
-            />
           </div>
         )}
       </DialogContent>
