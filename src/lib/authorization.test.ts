@@ -38,11 +38,6 @@ const mockConfig = {
     description: "View metrics",
     allowedGroupIds: [29, 45],
   },
-  "baptism-processing": {
-    label: "Baptism Processing",
-    description: "Manage baptism",
-    allowedGroupIds: [],
-  },
 };
 
 describe("authorization", () => {
@@ -189,7 +184,7 @@ describe("authorization", () => {
 
     it("should return false for features with empty allowedGroupIds", () => {
       process.env.ADMIN_USER_GROUP_IDS = "99";
-      expect(hasFeatureAccess([100], "baptism-processing")).toBe(false);
+      expect(hasFeatureAccess([100], "contact-lookup")).toBe(false);
     });
   });
 
@@ -204,7 +199,6 @@ describe("authorization", () => {
       const features = getAccessibleFeatures([99]);
       expect(features).toContain("dashboard");
       expect(features).toContain("admin");
-      expect(features).toContain("baptism-processing");
     });
 
     it("should return only allowed features for regular users", () => {
@@ -212,7 +206,6 @@ describe("authorization", () => {
       const features = getAccessibleFeatures([45]);
       expect(features).toContain("dashboard");
       expect(features).not.toContain("admin");
-      expect(features).not.toContain("baptism-processing");
     });
 
     it("should return empty for users with no matching groups", () => {
