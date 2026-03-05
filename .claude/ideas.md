@@ -21,6 +21,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Add current groups list to volunteers already in a group (#36)](#add-current-groups-list-to-volunteers-already-in-a-group-36)~~ ✅
 
 ### Improvements
+- [Chart YoY Conparisons (#68)](#chart-yoy-conparisons-68)
 - [In the Engagement Venn diagram, can we add a circle for overall attendance (in-person + online)? (#67)](#in-the-engagement-venn-diagram-can-we-add-a-circle-for-overall-attendance-in-person-online-67)
 - [Small Group Trends Chart (#15)](#small-group-trends-chart-15)
 - ~~[Executive Dashboard: Mobile Views (#13)](#executive-dashboard-mobile-views-13)~~ ✅
@@ -109,6 +110,14 @@ On the active volunteers tab of volunteer processing, on an individuals card, li
 ---
 
 ## Improvements
+
+### Chart YoY Conparisons ([#68](https://github.com/The-Moody-Church/mp-charts/issues/68))
+Request from Philip
+Compare year after year the trends of:
+Worship Attendance (in-person & online)
+Communities’ Attendance
+Serving Assignments
+Mission Engagement
 
 ### In the Engagement Venn diagram, can we add a circle for overall attendance (in-person + online)? ([#67](https://github.com/The-Moody-Church/mp-charts/issues/67))
 Requested by Philip.
