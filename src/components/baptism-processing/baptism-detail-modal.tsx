@@ -19,6 +19,7 @@ import {
   MilestoneExpandedView,
   MilestoneEditForm,
   QuickActionsPanel,
+  QuickActionButton,
 } from "@/components/processing";
 import {
   getApplicantDetail,
@@ -83,6 +84,7 @@ export function BaptismDetailModal({
   const [pauseNotes, setPauseNotes] = useState("");
   const [showPauseConfirm, setShowPauseConfirm] = useState(false);
   const [showResumeConfirm, setShowResumeConfirm] = useState(false);
+  const [quickActionExpanded, setQuickActionExpanded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -99,6 +101,7 @@ export function BaptismDetailModal({
       setEditError(null);
       setShowPauseConfirm(false);
       setShowResumeConfirm(false);
+      setQuickActionExpanded(false);
       setPauseNotes("");
       getApplicantDetail(
         applicant.info.Contact_ID,
@@ -547,6 +550,33 @@ export function BaptismDetailModal({
               </div>
             )}
 
+            {/* Quick Actions */}
+            {availableMilestones.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                <QuickActionButton
+                  show={!quickActionExpanded}
+                  onClick={() => setQuickActionExpanded(true)}
+                />
+              </div>
+            )}
+            <QuickActionsPanel
+              availableItems={availableMilestones}
+              selectedKey={selectedMilestoneKey}
+              onSelectedKeyChange={setSelectedMilestoneKey}
+              date={milestoneDate}
+              onDateChange={setMilestoneDate}
+              notes={milestoneNotes}
+              onNotesChange={setMilestoneNotes}
+              fileInputRef={fileInputRef}
+              fileError={fileError}
+              onFileError={setFileError}
+              canSubmit={!!selectedMilestoneKey && !!detail?.writeBackConfig.milestoneIds[selectedMilestoneKey] && !!detail?.writeBackConfig.programId}
+              submitting={!!actionLoading}
+              onSubmit={handleMarkMilestoneComplete}
+              expanded={quickActionExpanded}
+              onExpandedChange={setQuickActionExpanded}
+            />
+
             {/* Checklist */}
             <div className="space-y-2">
               <h3 className="text-sm font-semibold">Milestones</h3>
@@ -646,22 +676,6 @@ export function BaptismDetailModal({
               })}
             </div>
 
-            {/* Quick Actions */}
-            <QuickActionsPanel
-              availableItems={availableMilestones}
-              selectedKey={selectedMilestoneKey}
-              onSelectedKeyChange={setSelectedMilestoneKey}
-              date={milestoneDate}
-              onDateChange={setMilestoneDate}
-              notes={milestoneNotes}
-              onNotesChange={setMilestoneNotes}
-              fileInputRef={fileInputRef}
-              fileError={fileError}
-              onFileError={setFileError}
-              canSubmit={!!selectedMilestoneKey && !!detail?.writeBackConfig.milestoneIds[selectedMilestoneKey] && !!detail?.writeBackConfig.programId}
-              submitting={!!actionLoading}
-              onSubmit={handleMarkMilestoneComplete}
-            />
           </div>
         )}
       </DialogContent>

@@ -22,6 +22,7 @@ import {
   MilestoneExpandedView,
   MilestoneEditForm,
   QuickActionsPanel,
+  QuickActionButton,
 } from "@/components/processing";
 import {
   getApplicantDetail,
@@ -77,6 +78,7 @@ export function MembershipDetailModal({
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [confirmingCompletion, setConfirmingCompletion] = useState(false);
+  const [quickActionExpanded, setQuickActionExpanded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -92,6 +94,7 @@ export function MembershipDetailModal({
       setEditingKey(null);
       setEditError(null);
       setConfirmingCompletion(false);
+      setQuickActionExpanded(false);
       getApplicantDetail(
         applicant.info.Contact_ID,
         applicant.info.Participant_ID,
@@ -435,6 +438,50 @@ export function MembershipDetailModal({
             {/* Contact Info */}
             <ContactLinks email={info.Email_Address} phone={info.Mobile_Phone} />
 
+            {/* Quick Actions */}
+            {(() => {
+              const availableItems = detail?.writeBackConfig
+                ? checklist.filter((item) => item.status === "not_started")
+                : [];
+              const selectedMilestoneId = selectedMilestoneKey && detail?.writeBackConfig
+                ? detail.writeBackConfig.milestoneIds[selectedMilestoneKey] ?? null
+                : null;
+              const programId = detail?.writeBackConfig?.programId;
+              return (
+                <>
+                  {availableItems.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      <QuickActionButton
+                        show={!quickActionExpanded}
+                        onClick={() => setQuickActionExpanded(true)}
+                      />
+                    </div>
+                  )}
+                  <QuickActionsPanel
+                    availableItems={availableItems}
+                    selectedKey={selectedMilestoneKey}
+                    onSelectedKeyChange={setSelectedMilestoneKey}
+                    date={milestoneDate}
+                    onDateChange={setMilestoneDate}
+                    notes={milestoneNotes}
+                    onNotesChange={setMilestoneNotes}
+                    fileInputRef={fileInputRef}
+                    fileError={fileError}
+                    onFileError={setFileError}
+                    canSubmit={!!selectedMilestoneId && !!programId}
+                    submitting={actionLoading !== null}
+                    onSubmit={() => {
+                      if (selectedMilestoneId && programId) {
+                        handleMarkMilestoneComplete(selectedMilestoneId, programId);
+                      }
+                    }}
+                    expanded={quickActionExpanded}
+                    onExpandedChange={setQuickActionExpanded}
+                  />
+                </>
+              );
+            })()}
+
             {/* Checklist detail */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-gray-900">Milestones</h3>
@@ -539,37 +586,6 @@ export function MembershipDetailModal({
               })}
             </div>
 
-            {/* Quick Actions: Create Milestone */}
-            {(() => {
-              const availableItems = detail?.writeBackConfig
-                ? checklist.filter((item) => item.status === "not_started")
-                : [];
-              const selectedMilestoneId = selectedMilestoneKey && detail?.writeBackConfig
-                ? detail.writeBackConfig.milestoneIds[selectedMilestoneKey] ?? null
-                : null;
-              const programId = detail?.writeBackConfig?.programId;
-              return (
-                <QuickActionsPanel
-                  availableItems={availableItems}
-                  selectedKey={selectedMilestoneKey}
-                  onSelectedKeyChange={setSelectedMilestoneKey}
-                  date={milestoneDate}
-                  onDateChange={setMilestoneDate}
-                  notes={milestoneNotes}
-                  onNotesChange={setMilestoneNotes}
-                  fileInputRef={fileInputRef}
-                  fileError={fileError}
-                  onFileError={setFileError}
-                  canSubmit={!!selectedMilestoneId && !!programId}
-                  submitting={actionLoading !== null}
-                  onSubmit={() => {
-                    if (selectedMilestoneId && programId) {
-                      handleMarkMilestoneComplete(selectedMilestoneId, programId);
-                    }
-                  }}
-                />
-              );
-            })()}
           </div>
         )}
       </DialogContent>
