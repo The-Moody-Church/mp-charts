@@ -22,7 +22,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Add current groups list to volunteers already in a group (#36)](#add-current-groups-list-to-volunteers-already-in-a-group-36)~~ ✅
 
 ### Improvements
-- [Permissions Page: Sort Selected Groups to Top](#permissions-page-sort-selected-groups-to-top)
+- [Permissions Page: Sort Selected Groups to Top (#70)](#permissions-page-sort-selected-groups-to-top-70)
 - [Chart YoY Conparisons (#68)](#chart-yoy-conparisons-68)
 - [In the Engagement Venn diagram, can we add a circle for overall attendance (in-person + online)? (#67)](#in-the-engagement-venn-diagram-can-we-add-a-circle-for-overall-attendance-in-person-online-67)
 - [Small Group Trends Chart (#15)](#small-group-trends-chart-15)
@@ -124,7 +124,7 @@ On the active volunteers tab of volunteer processing, on an individuals card, li
 
 ## Improvements
 
-### Permissions Page: Sort Selected Groups to Top
+### Permissions Page: Sort Selected Groups to Top ([#70](https://github.com/The-Moody-Church/mp-charts/issues/70))
 On the permissions page, when a group is selected (assigned), display it at the top of the group list. This way, when opening the permissions page you can quickly see which groups are already assigned without scrolling through the full list.
 
 ### Chart YoY Conparisons ([#68](https://github.com/The-Moody-Church/mp-charts/issues/68))
