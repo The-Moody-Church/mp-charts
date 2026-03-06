@@ -864,7 +864,8 @@ Before every commit (on ANY branch):
 1. **CLAUDE.md check**: Do the changes introduce new patterns, conventions, or architectural decisions? If so, update CLAUDE.md in the same commit.
 2. **Session summary**: Update `.claude/sessions/session-summary-YYYY-MM-DD.md` with what's being committed.
 3. **ideas.md**: If any issues were completed, update `.claude/ideas.md` (see "Ideas & Issue Tracking" section).
-4. Include all updated context files in the commit.
+4. **status.md**: After merging a PR, update `.claude/status.md` to reflect the completed work and current project state.
+5. Include all updated context files in the commit.
 
 ## Ideas & Issue Tracking
 
