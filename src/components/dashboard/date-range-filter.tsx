@@ -204,17 +204,15 @@ export function DateRangeFilter({
     (year: number, ctrlKey: boolean) => {
       let newYears: number[];
       if (ctrlKey) {
-        if (selection.years.includes(year)) {
-          newYears = selection.years.filter(y => y !== year);
-        } else {
+        // Ctrl+click: add this year to selection (never remove)
+        if (!selection.years.includes(year)) {
           newYears = [...selection.years, year];
+        } else {
+          newYears = selection.years;
         }
       } else {
-        if (selection.years.length === 1 && selection.years[0] === year) {
-          newYears = [];
-        } else {
-          newYears = [year];
-        }
+        // Single click: always select this year
+        newYears = [year];
       }
       // Auto-select all 12 months when clicking a year
       const allMonths = getOrderedMonths();
