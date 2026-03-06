@@ -16,7 +16,6 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 ## Open Issues
 
-- [**#73** — Issue description syncing (ideas.md ↔ GitHub)](ideas.md#issue-description-syncing-73)
 - [**#72** — Dashboard subpages per journey step](ideas.md#and-more-specific-dashboard-subpages-72)
 - [**#52** — Active Communities and Small Groups chart needs work](ideas.md#bug-active-communities-and-small-groups-chart-needs-work-52)
 - [**#57** — IDOR mitigation (per-record authorization)](ideas.md#idor-mitigation--per-record-authorization-57)
