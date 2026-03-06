@@ -13,6 +13,7 @@ import { SectionWrapper } from './section-wrapper';
 import { VennDiagram } from './venn-diagram';
 import { RosterVsAttendanceChart } from './roster-vs-attendance';
 import { ServingTrendsChart, ServingByRoleTypeChart, ServingByMinistryChart } from './serving-charts';
+import { CommunityTotalAttendanceChart } from './community-total-attendance-chart';
 
 interface DashboardMetricsProps {
   data: DashboardData;
@@ -235,6 +236,64 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
           </Card>
         ) : (
           <>
+            {/* Communities' Total Attendance & Serving Trends — first row */}
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Communities' Total Attendance */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Communities&apos; Attendance</CardTitle>
+                  <CardDescription>
+                    {isSingleMonth ? 'Weekly total attendance across all communities' : `Monthly total attendance across all communities${showCompare ? ' comparison' : ''}`}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ExpandableChart
+                    title="Communities' Attendance"
+                    description={isSingleMonth ? 'Weekly total attendance' : `Monthly total attendance${showCompare ? ' comparison' : ''}`}
+                    expandedChildren={
+                      <CommunityTotalAttendanceChart
+                        currentYear={data.communityAttendanceTrends}
+                        previousYear={showCompare ? data.previousYearCommunityAttendanceTrends : []}
+                        height={600}
+                      />
+                    }
+                  >
+                    <CommunityTotalAttendanceChart
+                      currentYear={data.communityAttendanceTrends}
+                      previousYear={showCompare ? data.previousYearCommunityAttendanceTrends : []}
+                    />
+                  </ExpandableChart>
+                </CardContent>
+              </Card>
+
+              {/* Serving Trends */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Serving Trends</CardTitle>
+                  <CardDescription>Monthly active servers and leaders{showCompare ? ' comparison' : ''}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ExpandableChart
+                    title="Serving Trends"
+                    description={`Monthly active servers and leaders${showCompare ? ' comparison' : ''}`}
+                    expandedChildren={
+                      <ServingTrendsChart
+                        data={data.servingTrends}
+                        previousYear={showCompare ? data.previousYearServingTrends : []}
+                        height={600}
+                      />
+                    }
+                  >
+                    <ServingTrendsChart
+                      data={data.servingTrends}
+                      previousYear={showCompare ? data.previousYearServingTrends : []}
+                    />
+                  </ExpandableChart>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Serving metrics — second row */}
             <div className="grid gap-4 md:grid-cols-2">
               <MetricCard
                 title="Total Serving/Leading"
@@ -251,45 +310,24 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
               </Card>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2">
-              {/* Where People Serve */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Where People Serve</CardTitle>
-                  <CardDescription>Distribution of volunteers across ministries</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ExpandableChart
-                    title="Where People Serve"
-                    description="Distribution of volunteers across ministries"
-                    expandedChildren={
-                      <ServingByMinistryChart data={data.servingByMinistry} height={600} />
-                    }
-                  >
-                    <ServingByMinistryChart data={data.servingByMinistry} />
-                  </ExpandableChart>
-                </CardContent>
-              </Card>
-
-              {/* Serving Trends */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Serving Trends</CardTitle>
-                  <CardDescription>Monthly active servers and leaders over time</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ExpandableChart
-                    title="Serving Trends"
-                    description="Monthly active servers and leaders over time"
-                    expandedChildren={
-                      <ServingTrendsChart data={data.servingTrends} height={600} />
-                    }
-                  >
-                    <ServingTrendsChart data={data.servingTrends} />
-                  </ExpandableChart>
-                </CardContent>
-              </Card>
-            </div>
+            {/* Where People Serve — full width */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Where People Serve</CardTitle>
+                <CardDescription>Distribution of volunteers across ministries</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ExpandableChart
+                  title="Where People Serve"
+                  description="Distribution of volunteers across ministries"
+                  expandedChildren={
+                    <ServingByMinistryChart data={data.servingByMinistry} height={600} />
+                  }
+                >
+                  <ServingByMinistryChart data={data.servingByMinistry} />
+                </ExpandableChart>
+              </CardContent>
+            </Card>
           </>
         )}
       </SectionWrapper>

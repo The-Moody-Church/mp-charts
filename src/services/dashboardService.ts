@@ -167,6 +167,7 @@ export class DashboardService {
       smallGroupTrends,
       previousYearSmallGroupTrends: [], // Computed client-side by filterDashboardData
       communityAttendanceTrends: communityTrends.monthly,
+      previousYearCommunityAttendanceTrends: [], // Computed client-side by filterDashboardData
       monthlyAttendanceTrends,
       previousYearMonthlyAttendanceTrends,
       weeklyAttendanceTrends,
@@ -186,6 +187,7 @@ export class DashboardService {
       attendanceByMonth: [],
       servingLeadingRecords: [],
       servingTrends: [],
+      previousYearServingTrends: [],
       servingByRoleType: [],
       servingByMinistry: [],
       totalServingLeading: 0,
