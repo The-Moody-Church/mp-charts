@@ -24,9 +24,9 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 
 ### Improvements
 - [issue description syncing (#73)](#issue-description-syncing-73)
-- [Permissions Page: Sort Selected Groups to Top (#70)](#permissions-page-sort-selected-groups-to-top-70)
-- [In the Engagement Venn diagram, can we add a circle for overall attendance (in-person + online)? (#67)](#in-the-engagement-venn-diagram-can-we-add-a-circle-for-overall-attendance-in-person-online-67)
 - [Small Group Trends Chart (#15)](#small-group-trends-chart-15)
+- ~~[Permissions Page: Sort Selected Groups to Top (#70)](#permissions-page-sort-selected-groups-to-top-70)~~ ✅
+- ~~[In the Engagement Venn diagram, can we add a circle for overall attendance (in-person + online)? (#67)](#in-the-engagement-venn-diagram-can-we-add-a-circle-for-overall-attendance-in-person-online-67)~~ ✅
 - ~~[Chart YoY Conparisons (#68)](#chart-yoy-conparisons-68)~~ ✅
 - ~~[Executive Dashboard: Mobile Views (#13)](#executive-dashboard-mobile-views-13)~~ ✅
 - ~~[Volunteer Processing Mobile Views (#33)](#volunteer-processing-mobile-views-33)~~ ✅
@@ -127,12 +127,6 @@ Added a floating feedback button and modal allowing authenticated users to submi
 ### issue description syncing ([#73](https://github.com/The-Moody-Church/mp-charts/issues/73))
 When issue descriptions are updated directly on a GitHub issue, ideas.md is not being updated with the updated issue description. We want to keep everything in sync so that if a quick placeholder issue is added, more detail can be added by editing the description later and ideas.MD should update to stay in sync with that.
 
-### Permissions Page: Sort Selected Groups to Top ([#70](https://github.com/The-Moody-Church/mp-charts/issues/70))
-On the permissions page, when a group is selected (assigned), display it at the top of the group list. This way, when opening the permissions page you can quickly see which groups are already assigned without scrolling through the full list.
-
-### In the Engagement Venn diagram, can we add a circle for overall attendance (in-person + online)? ([#67](https://github.com/The-Moody-Church/mp-charts/issues/67))
-Requested by Philip.
-
 ### Small Group Trends Chart ([#15](https://github.com/The-Moody-Church/mp-charts/issues/15))
 The Small Group Trends line chart may not be the best visualization for this data. Consider switching to a bar chart or removing it entirely if it doesn’t add enough value to the dashboard.
 
@@ -153,6 +147,12 @@ Contact Lookup and Template Tool are gated behind `isDev` in sidebar and home pa
 
 ### ~~Update Webpage Title ([#4](https://github.com/The-Moody-Church/mp-charts/issues/4))~~ ✅ COMPLETED
 Renamed from "Pastor App" to "MP Tools" in page title, metadata, and all default fallbacks.
+
+### ~~Permissions Page: Sort Selected Groups to Top ([#70](https://github.com/The-Moody-Church/mp-charts/issues/70))~~ ✅ COMPLETED
+Selected groups are now sorted to the top of each group list in the permissions admin. Uses a `Set` for O(1) lookup and stable sort to preserve alphabetical order within selected/unselected groups. Also optimized the checkbox `checked` prop from `Array.includes()` to `Set.has()`.
+
+### ~~In the Engagement Venn diagram, can we add a circle for overall attendance (in-person + online)? ([#67](https://github.com/The-Moody-Church/mp-charts/issues/67))~~ ✅ COMPLETED
+Added a dashed emerald/green circle to the engagement Venn diagram showing average total attendance (in-person + online), sized proportionally and centered at the centroid of the three engagement circles. Added an "Avg Sunday Attendance" row to the breakdown table.
 
 ### ~~Dashboard Date Range Selector ([#20](https://github.com/The-Moody-Church/mp-charts/issues/20))~~ ✅ COMPLETED
 Replace the hardcoded ministry year date ranges with an interactive date selector that includes comparison capabilities.
