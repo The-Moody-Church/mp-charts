@@ -118,10 +118,10 @@ export function ServingTrendsChart({ data, previousYear = [], height = 300 }: Se
         {!isMobile && <Legend />}
         <Line type="monotone" dataKey="currentServing" stroke="#3b82f6" strokeWidth={2} dot={false} name={showComparison ? 'Serving (Current)' : 'Serving'} />
         {showComparison && <Line type="monotone" dataKey="previousServing" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Serving (Previous)" />}
-        <Line type="monotone" dataKey="currentLeading" stroke="#f59e0b" strokeWidth={2} dot={false} name={showComparison ? 'Leading (Current)' : 'Leading'} />
-        {showComparison && <Line type="monotone" dataKey="previousLeading" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Leading (Previous)" />}
-        <Line type="monotone" dataKey="currentTotal" stroke="#6b7280" strokeWidth={1} strokeDasharray="3 3" dot={false} name={showComparison ? 'Total (Current)' : 'Total'} />
-        {showComparison && <Line type="monotone" dataKey="previousTotal" stroke="#6b7280" strokeWidth={1} strokeDasharray="8 4" dot={false} name="Total (Previous)" />}
+        <Line type="monotone" dataKey="currentLeading" stroke="#10b981" strokeWidth={2} dot={false} name={showComparison ? 'Leading (Current)' : 'Leading'} />
+        {showComparison && <Line type="monotone" dataKey="previousLeading" stroke="#10b981" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Leading (Previous)" />}
+        <Line type="monotone" dataKey="currentTotal" stroke="#f59e0b" strokeWidth={2} dot={false} name={showComparison ? 'Total (Current)' : 'Total'} />
+        {showComparison && <Line type="monotone" dataKey="previousTotal" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Total (Previous)" />}
       </LineChart>
     </ResponsiveContainer>
   );

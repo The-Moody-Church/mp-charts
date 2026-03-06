@@ -132,8 +132,36 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
       {/* Section 2: Feed Your Soul */}
       {/* ============================================================ */}
       <SectionWrapper title="Feed Your Soul">
+        {/* Community Attendance — total across all communities */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Community Attendance</CardTitle>
+            <CardDescription>
+              {isSingleMonth ? 'Weekly total attendance across all communities' : `Monthly total attendance across all communities${showCompare ? ' comparison' : ''}`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ExpandableChart
+              title="Community Attendance"
+              description={isSingleMonth ? 'Weekly total attendance' : `Monthly total attendance${showCompare ? ' comparison' : ''}`}
+              expandedChildren={
+                <CommunityTotalAttendanceChart
+                  currentYear={data.communityAttendanceTrends}
+                  previousYear={showCompare ? data.previousYearCommunityAttendanceTrends : []}
+                  height={600}
+                />
+              }
+            >
+              <CommunityTotalAttendanceChart
+                currentYear={data.communityAttendanceTrends}
+                previousYear={showCompare ? data.previousYearCommunityAttendanceTrends : []}
+              />
+            </ExpandableChart>
+          </CardContent>
+        </Card>
+
         <div className="grid gap-6 md:grid-cols-2">
-          {/* Community Attendance */}
+          {/* Community Sunday Gathering — per-community breakdown */}
           <Card>
             <CardHeader>
               <CardTitle>Community Sunday Gathering</CardTitle>
@@ -236,62 +264,31 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
           </Card>
         ) : (
           <>
-            {/* Communities' Total Attendance & Serving Trends — first row */}
-            <div className="grid gap-6 md:grid-cols-2">
-              {/* Communities' Total Attendance */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Communities&apos; Attendance</CardTitle>
-                  <CardDescription>
-                    {isSingleMonth ? 'Weekly total attendance across all communities' : `Monthly total attendance across all communities${showCompare ? ' comparison' : ''}`}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ExpandableChart
-                    title="Communities' Attendance"
-                    description={isSingleMonth ? 'Weekly total attendance' : `Monthly total attendance${showCompare ? ' comparison' : ''}`}
-                    expandedChildren={
-                      <CommunityTotalAttendanceChart
-                        currentYear={data.communityAttendanceTrends}
-                        previousYear={showCompare ? data.previousYearCommunityAttendanceTrends : []}
-                        height={600}
-                      />
-                    }
-                  >
-                    <CommunityTotalAttendanceChart
-                      currentYear={data.communityAttendanceTrends}
-                      previousYear={showCompare ? data.previousYearCommunityAttendanceTrends : []}
-                    />
-                  </ExpandableChart>
-                </CardContent>
-              </Card>
-
-              {/* Serving Trends */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Serving Trends</CardTitle>
-                  <CardDescription>Monthly active servers and leaders{showCompare ? ' comparison' : ''}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ExpandableChart
-                    title="Serving Trends"
-                    description={`Monthly active servers and leaders${showCompare ? ' comparison' : ''}`}
-                    expandedChildren={
-                      <ServingTrendsChart
-                        data={data.servingTrends}
-                        previousYear={showCompare ? data.previousYearServingTrends : []}
-                        height={600}
-                      />
-                    }
-                  >
+            {/* Serving Trends */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Serving Trends</CardTitle>
+                <CardDescription>Monthly active servers and leaders{showCompare ? ' comparison' : ''}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ExpandableChart
+                  title="Serving Trends"
+                  description={`Monthly active servers and leaders${showCompare ? ' comparison' : ''}`}
+                  expandedChildren={
                     <ServingTrendsChart
                       data={data.servingTrends}
                       previousYear={showCompare ? data.previousYearServingTrends : []}
+                      height={600}
                     />
-                  </ExpandableChart>
-                </CardContent>
-              </Card>
-            </div>
+                  }
+                >
+                  <ServingTrendsChart
+                    data={data.servingTrends}
+                    previousYear={showCompare ? data.previousYearServingTrends : []}
+                  />
+                </ExpandableChart>
+              </CardContent>
+            </Card>
 
             {/* Serving metrics — second row */}
             <div className="grid gap-4 md:grid-cols-2">
