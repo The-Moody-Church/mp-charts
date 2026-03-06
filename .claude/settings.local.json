@@ -101,7 +101,9 @@
       "Bash(do)",
       "Bash(echo \"=== Checking $comp ===\")",
       "Bash(for f in src/components/ui/avatar.tsx src/components/ui/drawer.tsx src/components/ui/form.tsx src/components/ui/radio-group.tsx src/components/ui/tooltip.tsx)",
-      "Bash(do echo \"=== $f ===\")"
+      "Bash(do echo \"=== $f ===\")",
+      "Bash(curl -s -I http://localhost:3000/manifest.json)",
+      "Bash(git add public/sw.js public/offline.html src/components/pwa/install-prompt.tsx src/components/pwa/index.ts src/app/providers.tsx \"src/app/\\(web\\)/layout.tsx\" src/proxy.ts .claude/sessions/session-summary-2026-03-06.md .claude/settings.local.json)"
     ],
     "deny": [],
     "ask": [],

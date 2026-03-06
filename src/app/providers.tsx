@@ -2,7 +2,7 @@
 
 import { UserProvider } from "@/contexts/user-context";
 import { RuntimeConfigProvider, type RuntimeConfig } from "@/contexts/runtime-config-context";
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 
 interface ProvidersProps {
   runtimeConfig: RuntimeConfig;
@@ -10,6 +10,12 @@ interface ProvidersProps {
 }
 
 export function Providers({ runtimeConfig, children }: ProvidersProps) {
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js");
+    }
+  }, []);
+
   return (
     <RuntimeConfigProvider config={runtimeConfig}>
       <UserProvider>
