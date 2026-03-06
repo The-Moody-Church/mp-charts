@@ -195,15 +195,27 @@ function FilteredGroupList({
   selectedIds: number[];
   onToggle: (groupId: number, checked: boolean) => void;
 }) {
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+
   const filtered = useMemo(() => {
-    if (!search.trim()) return groups;
-    const term = search.toLowerCase();
-    return groups.filter(
-      (g) =>
-        g.User_Group_Name.toLowerCase().includes(term) ||
-        String(g.User_Group_ID).includes(term)
-    );
-  }, [groups, search]);
+    const base = search.trim()
+      ? groups.filter((g) => {
+          const term = search.toLowerCase();
+          return (
+            g.User_Group_Name.toLowerCase().includes(term) ||
+            String(g.User_Group_ID).includes(term)
+          );
+        })
+      : groups;
+
+    return [...base].sort((a, b) => {
+      const aSelected = selectedSet.has(a.User_Group_ID);
+      const bSelected = selectedSet.has(b.User_Group_ID);
+      if (aSelected && !bSelected) return -1;
+      if (!aSelected && bSelected) return 1;
+      return 0;
+    });
+  }, [groups, search, selectedSet]);
 
   if (groups.length === 0) {
     return (
@@ -224,7 +236,7 @@ function FilteredGroupList({
             className="flex items-center gap-2 text-sm cursor-pointer"
           >
             <Checkbox
-              checked={selectedIds.includes(group.User_Group_ID)}
+              checked={selectedSet.has(group.User_Group_ID)}
               onCheckedChange={(checked) =>
                 onToggle(group.User_Group_ID, checked === true)
               }
