@@ -5,6 +5,8 @@ import { EngagementOverlap } from '@/lib/dto';
 
 interface VennDiagramProps {
   data: EngagementOverlap;
+  /** Average total attendance (in-person + online) for the selected period */
+  averageTotalAttendance?: number;
 }
 
 // ─── Geometry helpers ──────────────────────────────────────────
@@ -48,7 +50,7 @@ function textWidthVB(text: string, fontSize: number): number {
   return text.length * fontSize * CHAR_W_RATIO;
 }
 
-function computeLayout(data: EngagementOverlap) {
+function computeLayout(data: EngagementOverlap, averageTotalAttendance?: number) {
   const tA = data.totalActivity, tB = data.totalGroup, tC = data.totalServing;
   const maxT = Math.max(tA, tB, tC, 1);
   const MAX_R = 120;
@@ -136,6 +138,14 @@ function computeLayout(data: EngagementOverlap) {
     visible: c.r > 0,
   }));
 
+  // Attendance circle: centered at the centroid of the three circles
+  let attendanceCircle: Circle | null = null;
+  if (averageTotalAttendance && averageTotalAttendance > 0 && activeCircles.length > 0) {
+    // Size proportionally using the same sqrt scaling as engagement circles
+    const rAttendance = MAX_R * Math.sqrt(averageTotalAttendance / maxT);
+    attendanceCircle = { x: gx, y: gy, r: rAttendance };
+  }
+
   // Build bounding box from circles + label text extents
   const PAD = 15;
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -145,6 +155,14 @@ function computeLayout(data: EngagementOverlap) {
     maxX = Math.max(maxX, c.x + c.r);
     minY = Math.min(minY, c.y - c.r);
     maxY = Math.max(maxY, c.y + c.r);
+  }
+
+  // Include attendance circle in bounding box
+  if (attendanceCircle) {
+    minX = Math.min(minX, attendanceCircle.x - attendanceCircle.r);
+    maxX = Math.max(maxX, attendanceCircle.x + attendanceCircle.r);
+    minY = Math.min(minY, attendanceCircle.y - attendanceCircle.r);
+    maxY = Math.max(maxY, attendanceCircle.y + attendanceCircle.r);
   }
 
   for (const lbl of labels) {
@@ -173,6 +191,7 @@ function computeLayout(data: EngagementOverlap) {
 
   return {
     circles: [cA, cB, cC] as [Circle, Circle, Circle],
+    attendanceCircle,
     labels,
     vb: `${minX - PAD} ${minY - PAD} ${maxX - minX + PAD * 2} ${maxY - minY + PAD * 2}`,
   };
@@ -227,6 +246,7 @@ const CLR = {
   A: { fill: 'rgba(220,38,38,0.35)', stroke: '#dc2626', text: '#dc2626' },   // red
   B: { fill: 'rgba(37,99,235,0.35)', stroke: '#2563eb', text: '#2563eb' },   // blue
   C: { fill: 'rgba(202,138,4,0.35)',  stroke: '#ca8a04', text: '#a16207' },   // yellow (darker text)
+  attendance: { fill: 'rgba(16,185,129,0.12)', stroke: '#059669', text: '#047857' }, // emerald/green
 };
 
 // Per-region colors: primaries + blended overlap colors
@@ -242,9 +262,9 @@ const REGION_CLR: Record<string, { text: string; bg: string }> = {
 
 // ─── Component ─────────────────────────────────────────────────
 
-export function VennDiagram({ data }: VennDiagramProps) {
+export function VennDiagram({ data, averageTotalAttendance }: VennDiagramProps) {
   const [hovered, setHovered] = useState<string | null>(null);
-  const { circles, labels, vb } = useMemo(() => computeLayout(data), [data]);
+  const { circles, attendanceCircle, labels, vb } = useMemo(() => computeLayout(data, averageTotalAttendance), [data, averageTotalAttendance]);
 
   const [cA, cB, cC] = circles;
   const all = [cA, cB, cC];
@@ -288,7 +308,20 @@ export function VennDiagram({ data }: VennDiagramProps) {
       {/* Proportional Venn Diagram */}
       <div className="flex-1 min-w-0 flex items-center justify-center">
         <svg viewBox={vb} className="w-full h-full max-w-lg">
-          {/* Circles */}
+          {/* Attendance circle (behind engagement circles) */}
+          {attendanceCircle && attendanceCircle.r > 0 && (
+            <circle
+              cx={attendanceCircle.x}
+              cy={attendanceCircle.y}
+              r={attendanceCircle.r}
+              fill={CLR.attendance.fill}
+              stroke={CLR.attendance.stroke}
+              strokeWidth={2}
+              strokeDasharray="6 3"
+            />
+          )}
+
+          {/* Engagement circles */}
           {all.map((c, i) => c.r > 0 && (
             <circle key={i} cx={c.x} cy={c.y} r={c.r} fill={clrArr[i].fill} stroke={clrArr[i].stroke} strokeWidth={2} />
           ))}
@@ -317,6 +350,48 @@ export function VennDiagram({ data }: VennDiagramProps) {
               </text>
             </g>
           ))}
+
+          {/* Attendance circle label — centered inside */}
+          {attendanceCircle && attendanceCircle.r > 0 && averageTotalAttendance != null && (
+            <g>
+              {/* Pill background */}
+              {(() => {
+                const text = `Avg Attendance: ${Math.round(averageTotalAttendance).toLocaleString()}`;
+                const tw = textWidthVB(text, FONT_SUB);
+                const padX = 6, padY = 3;
+                const rw = tw + padX * 2;
+                const rh = FONT_SUB + padY * 2;
+                // Position at top of the attendance circle
+                const labelY = attendanceCircle.y - attendanceCircle.r + rh / 2 + 4;
+                return (
+                  <>
+                    <rect
+                      x={attendanceCircle.x - rw / 2}
+                      y={labelY - rh / 2}
+                      width={rw}
+                      height={rh}
+                      rx={rh / 2}
+                      fill="white"
+                      stroke={CLR.attendance.stroke}
+                      strokeWidth={1}
+                      opacity={0.92}
+                    />
+                    <text
+                      x={attendanceCircle.x}
+                      y={labelY}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      fontSize={FONT_SUB}
+                      fontWeight={600}
+                      fill={CLR.attendance.text}
+                    >
+                      {text}
+                    </text>
+                  </>
+                );
+              })()}
+            </g>
+          )}
 
           {/* Region count labels — pill badges with white background, rendered last to stay on top */}
           {regions.map(({ id, count }) => {
@@ -377,6 +452,14 @@ export function VennDiagram({ data }: VennDiagramProps) {
             </tr>
           </thead>
           <tbody>
+            {/* Average Total Attendance */}
+            {averageTotalAttendance != null && averageTotalAttendance > 0 && (
+              <tr className="border-b bg-emerald-50/50">
+                <td className="py-2 px-3 font-medium" style={{ color: CLR.attendance.text }}>Avg Sunday Attendance</td>
+                <td className="text-right py-2 px-3 tabular-nums">{Math.round(averageTotalAttendance).toLocaleString()}</td>
+                <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">—</td>
+              </tr>
+            )}
             {/* Totals by dimension */}
             <tr className="border-b bg-red-50/50">
               <td className="py-2 px-3 font-medium" style={{ color: CLR.A.text }}>Any Activity</td>
