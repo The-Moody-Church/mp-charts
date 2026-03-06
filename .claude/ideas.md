@@ -127,12 +127,15 @@ Added a floating feedback button and modal allowing authenticated users to submi
 On the permissions page, when a group is selected (assigned), display it at the top of the group list. This way, when opening the permissions page you can quickly see which groups are already assigned without scrolling through the full list.
 
 ### Chart YoY Conparisons ([#68](https://github.com/The-Moody-Church/mp-charts/issues/68))
-Request from Philip
-Compare year after year the trends of:
-Worship Attendance (in-person & online)
-Communities’ Attendance
-Serving Assignments
-Mission Engagement
+When you click on a year filter (i.e. 25-26), that should include all the months in that period unless "Ministry Year" is explicitly clicked.
+
+Shift+click should be able to select multiple months at once.
+
+New chart:
+Communities’ Attendance - should be the same data as communities Sunday gathering but without separating the classes out. So just one total number for all the groups and the previous period comparison. Should be a line graph. This chart should be first in the grow in love section.
+
+Updated Chart:
+Serving Trends should add comparison to the previous period. The design should be solid colors for current year and dashed for previous year, just like worship service attendance. This chart should be moved to be the first chart on the grow in love section.
 
 ### In the Engagement Venn diagram, can we add a circle for overall attendance (in-person + online)? ([#67](https://github.com/The-Moody-Church/mp-charts/issues/67))
 Requested by Philip.
