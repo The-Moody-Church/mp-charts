@@ -72,13 +72,6 @@ export function filterDashboardData(
     return date >= startDate && date <= endDate;
   });
 
-  // Previous year community attendance for YoY comparison
-  let previousYearCommunityAttendanceTrends = filterCommunityByDateRange(
-    fullData.communityAttendanceTrends,
-    prevStart,
-    prevEnd
-  );
-
   const smallGroupTrends = filterMonthlyByDate(
     fullData.smallGroupTrends,
     startDate,
@@ -98,6 +91,13 @@ export function filterDashboardData(
   // Cap the previous metrics end date to the lesser of the full previous end
   // or today-minus-one-year (so partial current periods get fair comparisons)
   const prevMetricsEnd = todayPrevYear < prevEnd ? todayPrevYear : prevEnd;
+
+  // Previous year community attendance for YoY comparison
+  let previousYearCommunityAttendanceTrends = filterCommunityByDateRange(
+    fullData.communityAttendanceTrends,
+    prevStart,
+    prevEnd
+  );
 
   let previousYearMonthlyAttendanceTrends = filterMonthlyTrends(
     fullData.monthlyAttendanceTrends,
