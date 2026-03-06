@@ -16,11 +16,25 @@ const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'
 
 interface ServingTrendsChartProps {
   data: ServingTrend[];
+  previousYear?: ServingTrend[];
   height?: number;
 }
 
-export function ServingTrendsChart({ data, height = 300 }: ServingTrendsChartProps) {
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+const MONTH_ORDER = ['September', 'October', 'November', 'December', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August'];
+
+function ensureMonthName(item: ServingTrend): ServingTrend {
+  if (item.monthName) return item;
+  const [, m] = item.month.split('-').map(Number);
+  return { ...item, monthName: MONTH_NAMES[m - 1] };
+}
+
+export function ServingTrendsChart({ data, previousYear = [], height = 300 }: ServingTrendsChartProps) {
   const isMobile = useIsMobile();
+  const showComparison = previousYear.length > 0;
 
   if (data.length === 0) {
     return (
@@ -30,12 +44,60 @@ export function ServingTrendsChart({ data, height = 300 }: ServingTrendsChartPro
     );
   }
 
-  const chartData = data.map(d => ({
-    name: new Date(d.month + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
-    Serving: d.servingCount,
-    Leading: d.leadingCount,
-    Total: d.totalCount,
-  }));
+  const currentData = data.map(ensureMonthName);
+  const previousData = previousYear.map(ensureMonthName);
+
+  // Build merged chart data keyed by monthName for YoY comparison
+  const monthsMap = new Map<string, {
+    name: string;
+    monthName: string;
+    sortKey: string;
+    currentServing?: number;
+    currentLeading?: number;
+    currentTotal?: number;
+    previousServing?: number;
+    previousLeading?: number;
+    previousTotal?: number;
+  }>();
+
+  for (const d of currentData) {
+    const [y, m] = d.month.split('-').map(Number);
+    const label = new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+    monthsMap.set(d.monthName, {
+      name: label,
+      monthName: d.monthName,
+      sortKey: d.month,
+      currentServing: d.servingCount,
+      currentLeading: d.leadingCount,
+      currentTotal: d.totalCount,
+    });
+  }
+
+  if (showComparison) {
+    for (const d of previousData) {
+      const existing = monthsMap.get(d.monthName);
+      if (existing) {
+        existing.previousServing = d.servingCount;
+        existing.previousLeading = d.leadingCount;
+        existing.previousTotal = d.totalCount;
+      } else {
+        const [y, m] = d.month.split('-').map(Number);
+        const label = new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+        monthsMap.set(d.monthName, {
+          name: label,
+          monthName: d.monthName,
+          sortKey: d.month,
+          previousServing: d.servingCount,
+          previousLeading: d.leadingCount,
+          previousTotal: d.totalCount,
+        });
+      }
+    }
+  }
+
+  const chartData = Array.from(monthsMap.values()).sort(
+    (a, b) => MONTH_ORDER.indexOf(a.monthName) - MONTH_ORDER.indexOf(b.monthName)
+  );
 
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -54,9 +116,12 @@ export function ServingTrendsChart({ data, height = 300 }: ServingTrendsChartPro
           }}
         />
         {!isMobile && <Legend />}
-        <Line type="monotone" dataKey="Serving" stroke="#3b82f6" strokeWidth={2} dot={false} />
-        <Line type="monotone" dataKey="Leading" stroke="#f59e0b" strokeWidth={2} dot={false} />
-        <Line type="monotone" dataKey="Total" stroke="#6b7280" strokeWidth={1} strokeDasharray="5 5" dot={false} />
+        <Line type="monotone" dataKey="currentServing" stroke="#3b82f6" strokeWidth={2} dot={false} name={showComparison ? 'Serving (Current)' : 'Serving'} />
+        {showComparison && <Line type="monotone" dataKey="previousServing" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Serving (Previous)" />}
+        <Line type="monotone" dataKey="currentLeading" stroke="#10b981" strokeWidth={2} dot={false} name={showComparison ? 'Leading (Current)' : 'Leading'} />
+        {showComparison && <Line type="monotone" dataKey="previousLeading" stroke="#10b981" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Leading (Previous)" />}
+        <Line type="monotone" dataKey="currentTotal" stroke="#f59e0b" strokeWidth={2} dot={false} name={showComparison ? 'Total (Current)' : 'Total'} />
+        {showComparison && <Line type="monotone" dataKey="previousTotal" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Total (Previous)" />}
       </LineChart>
     </ResponsiveContainer>
   );

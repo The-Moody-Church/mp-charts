@@ -136,6 +136,18 @@ This is a single-developer fork. Every commit to `main` (or any branch) must be 
 
 **Rule**: After every successful `git commit`, run `git push` in the same operation. If on a new branch, use `git push -u origin <branch>`.
 
+### PR Merge Strategy
+
+Always use **merge commits** (`gh pr merge --merge`), not squash merges. This preserves the full commit history on `main`, making it easier to trace individual changes back to their original context.
+
+```bash
+# ✅ CORRECT — merge commit
+gh pr merge N --repo The-Moody-Church/mp-charts --merge --delete-branch
+
+# ❌ NEVER — squash loses individual commit history
+gh pr merge N --repo The-Moody-Church/mp-charts --squash --delete-branch
+```
+
 ### Handling `package-lock.json` and `next-env.d.ts`
 
 Both files are committed to the repo and must NOT be added to `.gitignore`.
@@ -829,21 +841,28 @@ AI assistants maintain context files in `.claude/` to track project state across
 
 Each session gets a dated file at `.claude/sessions/session-summary-YYYY-MM-DD.md`. This is the primary record of what happened during a session.
 
-**Writing approach — incremental, then polished:**
-1. **As you work**: Append notes to the session summary incrementally — files changed, decisions made, issues encountered. Don't wait until the end.
-2. **Before each commit**: Ensure the session summary reflects what's being committed. Include it in the commit.
-3. **At session end**: Review and clean up the session summary for clarity. Remove noise, consolidate duplicate entries, ensure file lists are complete and accurate. The goal is a useful historical record, not a raw log.
+**Session start — create immediately:**
+1. Create (or open) today's session summary file before any code work begins
+2. Write a brief plan at the top: what the user is asking for, what you expect to do
+
+**During the session — update continuously:**
+- **After each user message**: If the user gives a command, asks a question, or provides feedback that changes direction, append a note capturing it
+- **Before each non-documentation commit**: Update the summary with what's being committed (files changed, decisions made). Include it in the commit.
+- **On key decisions**: Record the decision and rationale as it happens, not later
+
+**At session end:**
+- Review and clean up for clarity. Remove noise, consolidate duplicate entries, ensure file lists are complete and accurate
+- Respond to user cues: "thanks", "that's all", "we're done", "end of session"
+- User can request: "Create a session summary" or "Update context files"
 
 **What to include:**
+- Session plan / objectives (at the top)
 - Issues addressed (with `#N` references)
 - Files created / modified / removed (with line numbers for significant changes)
 - Key decisions and their rationale
+- User feedback and direction changes
 - Known issues or follow-ups
 - Status markers: ✅ COMPLETED, ⚠️ IN PROGRESS, ❌ BLOCKED
-
-**Detecting session end:**
-- Respond to user cues: "thanks", "that's all", "we're done", "end of session"
-- User can request: "Create a session summary" or "Update context files"
 
 ### Pre-Commit Checklist
 
@@ -852,7 +871,8 @@ Before every commit (on ANY branch):
 1. **CLAUDE.md check**: Do the changes introduce new patterns, conventions, or architectural decisions? If so, update CLAUDE.md in the same commit.
 2. **Session summary**: Update `.claude/sessions/session-summary-YYYY-MM-DD.md` with what's being committed.
 3. **ideas.md**: If any issues were completed, update `.claude/ideas.md` (see "Ideas & Issue Tracking" section).
-4. Include all updated context files in the commit.
+4. **status.md**: After merging a PR, update `.claude/status.md` to reflect the completed work and current project state.
+5. Include all updated context files in the commit.
 
 ## Ideas & Issue Tracking
 

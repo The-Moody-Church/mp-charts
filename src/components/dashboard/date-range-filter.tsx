@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -144,15 +144,45 @@ export function DateRangeFilter({
   const isSpringSemester = isPresetMatch(selection, SPRING_SEMESTER_MONTHS);
   const isSummer = isPresetMatch(selection, SUMMER_MONTHS);
 
+  // Track the last clicked month index (in ministry year order) for shift+click range selection
+  const lastClickedMonthIdx = useRef<number | null>(null);
+
   const toggleMonth = useCallback(
-    (month: number, ctrlKey: boolean) => {
+    (month: number, ctrlKey: boolean, shiftKey: boolean) => {
+      const ordered = getOrderedMonths();
+      const clickedIdx = ordered.indexOf(month);
+
       let newMonths: number[];
-      if (ctrlKey) {
-        // Multi-select: toggle this month
-        if (selection.months.includes(month)) {
-          newMonths = selection.months.filter(m => m !== month);
+      if (shiftKey && lastClickedMonthIdx.current !== null) {
+        // Shift+click: select range from last clicked to current
+        const startIdx = Math.min(lastClickedMonthIdx.current, clickedIdx);
+        const endIdx = Math.max(lastClickedMonthIdx.current, clickedIdx);
+        const rangeMonths = ordered.slice(startIdx, endIdx + 1);
+        if (ctrlKey) {
+          // Shift+Ctrl: add range to existing selection
+          const combined = new Set([...selection.months, ...rangeMonths]);
+          newMonths = [...combined];
         } else {
-          newMonths = [...selection.months, month];
+          // Shift only: replace selection with range
+          newMonths = rangeMonths;
+        }
+      } else if (ctrlKey) {
+        // Multi-select: toggle this month, then fill gaps so the visual
+        // selection matches the actual date range (which spans min→max)
+        let toggled: number[];
+        if (selection.months.includes(month)) {
+          toggled = selection.months.filter(m => m !== month);
+        } else {
+          toggled = [...selection.months, month];
+        }
+        // Fill in all months between min and max in ministry-year order
+        if (toggled.length >= 2) {
+          const indices = toggled.map(m => ordered.indexOf(m));
+          const minIdx = Math.min(...indices);
+          const maxIdx = Math.max(...indices);
+          newMonths = ordered.slice(minIdx, maxIdx + 1);
+        } else {
+          newMonths = toggled;
         }
       } else {
         // Single-select: replace with just this month
@@ -163,6 +193,8 @@ export function DateRangeFilter({
           newMonths = [month];
         }
       }
+
+      lastClickedMonthIdx.current = clickedIdx;
       onSelectionChange({ ...selection, months: newMonths });
     },
     [selection, onSelectionChange]
@@ -172,19 +204,19 @@ export function DateRangeFilter({
     (year: number, ctrlKey: boolean) => {
       let newYears: number[];
       if (ctrlKey) {
-        if (selection.years.includes(year)) {
-          newYears = selection.years.filter(y => y !== year);
-        } else {
+        // Ctrl+click: add this year to selection (never remove)
+        if (!selection.years.includes(year)) {
           newYears = [...selection.years, year];
+        } else {
+          newYears = selection.years;
         }
       } else {
-        if (selection.years.length === 1 && selection.years[0] === year) {
-          newYears = [];
-        } else {
-          newYears = [year];
-        }
+        // Single click: always select this year
+        newYears = [year];
       }
-      onSelectionChange({ ...selection, years: newYears });
+      // Auto-select all 12 months when clicking a year
+      const allMonths = getOrderedMonths();
+      onSelectionChange({ ...selection, months: [...allMonths], years: newYears });
     },
     [selection, onSelectionChange]
   );
@@ -226,7 +258,7 @@ export function DateRangeFilter({
               size="sm"
               disabled={disabled}
               className="h-7 px-2 text-xs min-w-[3rem]"
-              onClick={(e) => toggleMonth(month, e.ctrlKey || e.metaKey)}
+              onClick={(e) => toggleMonth(month, e.ctrlKey || e.metaKey, e.shiftKey)}
             >
               {MONTH_LABELS[month]}
             </Button>
@@ -312,7 +344,7 @@ export function DateRangeFilter({
 
       {/* Hint text */}
       <p className="text-xs text-muted-foreground hidden sm:block">
-        Hold Ctrl/Cmd to select multiple months or years
+        Hold Ctrl/Cmd to select multiple months or years. Hold Shift to select a range of months.
       </p>
     </div>
   );
