@@ -9,6 +9,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 ## Table of Contents
 
 ### Features
+- [and more specific dashboard subpages (#72)](#and-more-specific-dashboard-subpages-72)
 - [Pastoral Interface for Contact Logs (#19)](#pastoral-interface-for-contact-logs-19)
 - ~~[Processing Search Bar (#49)](#processing-search-bar-49)~~ ✅
 - ~~[Volunteer Processing: Show In-Process Volunteers on Active Tab (#50)](#volunteer-processing-show-in-process-volunteers-on-active-tab-50)~~ ✅
@@ -52,6 +53,12 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 ---
 
 ## Features
+
+### and more specific dashboard subpages ([#72](https://github.com/The-Moody-Church/mp-charts/issues/72))
+For each step in the journey of a lifetime, add sub pages with more detailed charts. 
+- Know God 
+- feed your soul 
+- grow in love
 
 ### Pastoral Interface for Contact Logs ([#19](https://github.com/The-Moody-Church/mp-charts/issues/19))
 A dedicated pastoral interface for viewing and managing contact logs.
