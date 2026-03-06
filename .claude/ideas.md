@@ -32,8 +32,8 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Executive Dashboard One Month Charts Fix (#12)](#executive-dashboard-one-month-charts-fix-12)~~ ✅
 - ~~[Hide Unused Modules in Production (#6)](#hide-unused-modules-in-production-6)~~ ✅
 - ~~[Update Webpage Title (#4)](#update-webpage-title-4)~~ ✅
-- ~~[Dashboard Date Range Selector (#20)](#dashboard-date-range-selector-20)~~ ✅
 - ~~[Permissions Page: Sort Selected Groups to Top (#70)](#permissions-page-sort-selected-groups-to-top-70)~~ ✅
+- ~~[Dashboard Date Range Selector (#20)](#dashboard-date-range-selector-20)~~ ✅
 
 ### Technical Debt
 - [BUG: Active Communities and Small Groups Chart Needs Work (#52)](#bug-active-communities-and-small-groups-chart-needs-work-52)
