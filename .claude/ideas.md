@@ -24,8 +24,8 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 
 ### Improvements
 - [Chart YoY Conparisons (#68)](#chart-yoy-conparisons-68)
-- [In the Engagement Venn diagram, can we add a circle for overall attendance (in-person + online)? (#67)](#in-the-engagement-venn-diagram-can-we-add-a-circle-for-overall-attendance-in-person-online-67)
 - [Small Group Trends Chart (#15)](#small-group-trends-chart-15)
+- ~~[In the Engagement Venn diagram, can we add a circle for overall attendance (in-person + online)? (#67)](#in-the-engagement-venn-diagram-can-we-add-a-circle-for-overall-attendance-in-person-online-67)~~ ✅
 - ~~[issue description syncing (#73)](#issue-description-syncing-73)~~ ✅
 - ~~[Executive Dashboard: Mobile Views (#13)](#executive-dashboard-mobile-views-13)~~ ✅
 - ~~[Volunteer Processing Mobile Views (#33)](#volunteer-processing-mobile-views-33)~~ ✅
@@ -135,11 +135,11 @@ Communities’ Attendance - should be the same data as communities Sunday gather
 Updated Chart:
 Serving Trends should add comparison to the previous period. The design should be solid colors for current year and dashed for previous year, just like worship service attendance. This chart should be moved to be the first chart on the grow in love section.
 
-### In the Engagement Venn diagram, can we add a circle for overall attendance (in-person + online)? ([#67](https://github.com/The-Moody-Church/mp-charts/issues/67))
-Requested by Philip.
-
 ### Small Group Trends Chart ([#15](https://github.com/The-Moody-Church/mp-charts/issues/15))
 The Small Group Trends line chart may not be the best visualization for this data. Consider switching to a bar chart or removing it entirely if it doesn't add enough value to the dashboard.
+
+### ~~In the Engagement Venn diagram, can we add a circle for overall attendance (in-person + online)? ([#67](https://github.com/The-Moody-Church/mp-charts/issues/67))~~ ✅ COMPLETED
+Requested by Philip.
 
 ### ~~issue description syncing ([#73](https://github.com/The-Moody-Church/mp-charts/issues/73))~~ ✅ COMPLETED
 When issue descriptions are updated directly on a GitHub issue, ideas.md is not being updated with the updated issue description. We want to keep everything in sync so that if a quick placeholder issue is added, more detail can be added by editing the description later and ideas.MD should update to stay in sync with that.
