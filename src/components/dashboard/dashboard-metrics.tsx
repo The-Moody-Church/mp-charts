@@ -43,7 +43,12 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
           <CardDescription>People engaged across three dimensions: activity attendance, communities &amp; groups, and serving/leading</CardDescription>
         </CardHeader>
         <CardContent>
-          {engagementLoading ? <LoadingSkeleton /> : <VennDiagram data={data.engagementOverlap} />}
+          {engagementLoading ? <LoadingSkeleton /> : (
+            <VennDiagram
+              data={data.engagementOverlap}
+              averageTotalAttendance={data.currentPeriod.averageInPersonAttendance + data.currentPeriod.averageOnlineAttendance}
+            />
+          )}
         </CardContent>
       </Card>
 
