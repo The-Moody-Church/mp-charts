@@ -23,6 +23,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Add feedback feature (#69)](#add-feedback-feature-69)~~ ✅
 
 ### Improvements
+- [issue description syncing (#73)](#issue-description-syncing-73)
 - [Permissions Page: Sort Selected Groups to Top (#70)](#permissions-page-sort-selected-groups-to-top-70)
 - [Chart YoY Conparisons (#68)](#chart-yoy-conparisons-68)
 - [In the Engagement Venn diagram, can we add a circle for overall attendance (in-person + online)? (#67)](#in-the-engagement-venn-diagram-can-we-add-a-circle-for-overall-attendance-in-person-online-67)
@@ -122,6 +123,9 @@ Added a floating feedback button and modal allowing authenticated users to submi
 ---
 
 ## Improvements
+
+### issue description syncing ([#73](https://github.com/The-Moody-Church/mp-charts/issues/73))
+When issue descriptions are updated directly on a GitHub issue, ideas.md is not being updated with the updated issue description. We want to keep everything in sync so that if a quick placeholder issue is added, more detail can be added by editing the description later and ideas.MD should update to stay in sync with that.
 
 ### Permissions Page: Sort Selected Groups to Top ([#70](https://github.com/The-Moody-Church/mp-charts/issues/70))
 On the permissions page, when a group is selected (assigned), display it at the top of the group list. This way, when opening the permissions page you can quickly see which groups are already assigned without scrolling through the full list.
