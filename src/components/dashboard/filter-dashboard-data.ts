@@ -92,6 +92,13 @@ export function filterDashboardData(
   // or today-minus-one-year (so partial current periods get fair comparisons)
   const prevMetricsEnd = todayPrevYear < prevEnd ? todayPrevYear : prevEnd;
 
+  // Previous year community attendance for YoY comparison
+  let previousYearCommunityAttendanceTrends = filterCommunityByDateRange(
+    fullData.communityAttendanceTrends,
+    prevStart,
+    prevEnd
+  );
+
   let previousYearMonthlyAttendanceTrends = filterMonthlyTrends(
     fullData.monthlyAttendanceTrends,
     prevStart,
@@ -128,6 +135,13 @@ export function filterDashboardData(
       fullData.weeklyCommunityAttendanceTrends,
       startDate,
       endDate
+    );
+
+    // Previous year weekly community data for comparison
+    previousYearCommunityAttendanceTrends = filterCommunityByDateRange(
+      fullData.weeklyCommunityAttendanceTrends,
+      prevStart,
+      prevEnd
     );
 
     // Previous year weekly data for comparison
@@ -176,6 +190,11 @@ export function filterDashboardData(
     totalServingLeading,
   } = computeServingMetrics(fullData.servingLeadingRecords, startDate, endDate);
 
+  // Compute previous year serving trends for YoY comparison
+  const { servingTrends: previousYearServingTrends } = computeServingMetrics(
+    fullData.servingLeadingRecords, prevStart, prevEnd
+  );
+
   // Count milestone dates: current period vs capped previous period
   const baptismsCurrentPeriod = countDatesInRange(fullData.baptismDates, startDate, endDate);
   const baptismsPreviousPeriod = countDatesInRange(fullData.baptismDates, prevStart, prevMetricsEnd);
@@ -215,10 +234,12 @@ export function filterDashboardData(
     monthlyAttendanceTrends,
     previousYearMonthlyAttendanceTrends,
     communityAttendanceTrends,
+    previousYearCommunityAttendanceTrends,
     smallGroupTrends,
     previousYearSmallGroupTrends,
     yearOverYear,
     servingTrends,
+    previousYearServingTrends,
     servingByRoleType,
     servingByMinistry,
     totalServingLeading,

@@ -23,16 +23,16 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Add feedback feature (#69)](#add-feedback-feature-69)~~ ✅
 
 ### Improvements
-- [Chart YoY Conparisons (#68)](#chart-yoy-conparisons-68)
+- [issue description syncing (#73)](#issue-description-syncing-73)
+- [Permissions Page: Sort Selected Groups to Top (#70)](#permissions-page-sort-selected-groups-to-top-70)
+- [In the Engagement Venn diagram, can we add a circle for overall attendance (in-person + online)? (#67)](#in-the-engagement-venn-diagram-can-we-add-a-circle-for-overall-attendance-in-person-online-67)
 - [Small Group Trends Chart (#15)](#small-group-trends-chart-15)
-- ~~[In the Engagement Venn diagram, can we add a circle for overall attendance (in-person + online)? (#67)](#in-the-engagement-venn-diagram-can-we-add-a-circle-for-overall-attendance-in-person-online-67)~~ ✅
-- ~~[issue description syncing (#73)](#issue-description-syncing-73)~~ ✅
+- ~~[Chart YoY Conparisons (#68)](#chart-yoy-conparisons-68)~~ ✅
 - ~~[Executive Dashboard: Mobile Views (#13)](#executive-dashboard-mobile-views-13)~~ ✅
 - ~~[Volunteer Processing Mobile Views (#33)](#volunteer-processing-mobile-views-33)~~ ✅
 - ~~[Executive Dashboard One Month Charts Fix (#12)](#executive-dashboard-one-month-charts-fix-12)~~ ✅
 - ~~[Hide Unused Modules in Production (#6)](#hide-unused-modules-in-production-6)~~ ✅
 - ~~[Update Webpage Title (#4)](#update-webpage-title-4)~~ ✅
-- ~~[Permissions Page: Sort Selected Groups to Top (#70)](#permissions-page-sort-selected-groups-to-top-70)~~ ✅
 - ~~[Dashboard Date Range Selector (#20)](#dashboard-date-range-selector-20)~~ ✅
 
 ### Technical Debt
@@ -124,25 +124,20 @@ Added a floating feedback button and modal allowing authenticated users to submi
 
 ## Improvements
 
-### Chart YoY Conparisons ([#68](https://github.com/The-Moody-Church/mp-charts/issues/68))
-When you click on a year filter (i.e. 25-26), that should include all the months in that period unless "Ministry Year" is explicitly clicked.
+### issue description syncing ([#73](https://github.com/The-Moody-Church/mp-charts/issues/73))
+When issue descriptions are updated directly on a GitHub issue, ideas.md is not being updated with the updated issue description. We want to keep everything in sync so that if a quick placeholder issue is added, more detail can be added by editing the description later and ideas.MD should update to stay in sync with that.
 
-Shift+click should be able to select multiple months at once.
+### Permissions Page: Sort Selected Groups to Top ([#70](https://github.com/The-Moody-Church/mp-charts/issues/70))
+On the permissions page, when a group is selected (assigned), display it at the top of the group list. This way, when opening the permissions page you can quickly see which groups are already assigned without scrolling through the full list.
 
-New chart:
-Communities’ Attendance - should be the same data as communities Sunday gathering but without separating the classes out. So just one total number for all the groups and the previous period comparison. Should be a line graph. This chart should be first in the grow in love section.
-
-Updated Chart:
-Serving Trends should add comparison to the previous period. The design should be solid colors for current year and dashed for previous year, just like worship service attendance. This chart should be moved to be the first chart on the grow in love section.
-
-### Small Group Trends Chart ([#15](https://github.com/The-Moody-Church/mp-charts/issues/15))
-The Small Group Trends line chart may not be the best visualization for this data. Consider switching to a bar chart or removing it entirely if it doesn't add enough value to the dashboard.
-
-### ~~In the Engagement Venn diagram, can we add a circle for overall attendance (in-person + online)? ([#67](https://github.com/The-Moody-Church/mp-charts/issues/67))~~ ✅ COMPLETED
+### In the Engagement Venn diagram, can we add a circle for overall attendance (in-person + online)? ([#67](https://github.com/The-Moody-Church/mp-charts/issues/67))
 Requested by Philip.
 
-### ~~issue description syncing ([#73](https://github.com/The-Moody-Church/mp-charts/issues/73))~~ ✅ COMPLETED
-When issue descriptions are updated directly on a GitHub issue, ideas.md is not being updated with the updated issue description. We want to keep everything in sync so that if a quick placeholder issue is added, more detail can be added by editing the description later and ideas.MD should update to stay in sync with that.
+### Small Group Trends Chart ([#15](https://github.com/The-Moody-Church/mp-charts/issues/15))
+The Small Group Trends line chart may not be the best visualization for this data. Consider switching to a bar chart or removing it entirely if it doesn’t add enough value to the dashboard.
+
+### ~~Chart YoY Conparisons ([#68](https://github.com/The-Moody-Church/mp-charts/issues/68))~~ ✅ COMPLETED
+Implemented all four enhancements: year filter auto-selects all months, Shift+click month range selection, new Communities’ Attendance total line chart with YoY comparison, and Serving Trends chart with YoY comparison (solid/dashed lines). Reordered Grow in Love section with Communities’ Attendance and Serving Trends first.
 
 ### ~~Executive Dashboard: Mobile Views ([#13](https://github.com/The-Moody-Church/mp-charts/issues/13))~~ ✅ COMPLETED
 Comprehensive mobile support added: responsive chart margins, click-triggered tooltips on touch devices, expandable chart wrapper, hidden legends on mobile, viewport-aware tooltip widths, and touch-friendly dismiss behavior.
@@ -158,9 +153,6 @@ Contact Lookup and Template Tool are gated behind `isDev` in sidebar and home pa
 
 ### ~~Update Webpage Title ([#4](https://github.com/The-Moody-Church/mp-charts/issues/4))~~ ✅ COMPLETED
 Renamed from "Pastor App" to "MP Tools" in page title, metadata, and all default fallbacks.
-
-### ~~Permissions Page: Sort Selected Groups to Top ([#70](https://github.com/The-Moody-Church/mp-charts/issues/70))~~ ✅ COMPLETED
-Selected groups are now sorted to the top of each group list in the permissions admin. Uses a `Set` for O(1) lookup and stable sort to preserve alphabetical order within selected/unselected groups. Also optimized the checkbox `checked` prop from `Array.includes()` to `Set.has()`.
 
 ### ~~Dashboard Date Range Selector ([#20](https://github.com/The-Moody-Church/mp-charts/issues/20))~~ ✅ COMPLETED
 Replace the hardcoded ministry year date ranges with an interactive date selector that includes comparison capabilities.

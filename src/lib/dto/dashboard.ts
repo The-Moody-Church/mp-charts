@@ -220,6 +220,7 @@ export interface DashboardData {
   smallGroupTrends: SmallGroupTrend[];
   previousYearSmallGroupTrends: SmallGroupTrend[];
   communityAttendanceTrends: CommunityAttendanceTrend[];
+  previousYearCommunityAttendanceTrends: CommunityAttendanceTrend[];
   monthlyAttendanceTrends: MonthlyAttendanceTrend[];
   previousYearMonthlyAttendanceTrends: MonthlyAttendanceTrend[];
   weeklyAttendanceTrends: WeeklyAttendanceTrend[];
@@ -247,6 +248,7 @@ export interface DashboardData {
   attendanceByMonth: AttendanceMonthRecord[];
   // Grow in Love — serving/leading
   servingTrends: ServingTrend[];
+  previousYearServingTrends: ServingTrend[];
   servingByRoleType: ServingByRoleType[];
   servingByMinistry: ServingByMinistry[];
   totalServingLeading: number;
