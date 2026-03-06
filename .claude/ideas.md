@@ -24,13 +24,13 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 
 ### Improvements
 - [Small Group Trends Chart (#15)](#small-group-trends-chart-15)
-- ~~[issue description syncing (#73)](#issue-description-syncing-73)~~ ✅
 - ~~[Chart YoY Conparisons (#68)](#chart-yoy-conparisons-68)~~ ✅
 - ~~[Executive Dashboard: Mobile Views (#13)](#executive-dashboard-mobile-views-13)~~ ✅
 - ~~[Volunteer Processing Mobile Views (#33)](#volunteer-processing-mobile-views-33)~~ ✅
 - ~~[Executive Dashboard One Month Charts Fix (#12)](#executive-dashboard-one-month-charts-fix-12)~~ ✅
 - ~~[Hide Unused Modules in Production (#6)](#hide-unused-modules-in-production-6)~~ ✅
 - ~~[Update Webpage Title (#4)](#update-webpage-title-4)~~ ✅
+- ~~[issue description syncing (#73)](#issue-description-syncing-73)~~ ✅
 - ~~[Permissions Page: Sort Selected Groups to Top (#70)](#permissions-page-sort-selected-groups-to-top-70)~~ ✅
 - ~~[In the Engagement Venn diagram, can we add a circle for overall attendance (in-person + online)? (#67)](#in-the-engagement-venn-diagram-can-we-add-a-circle-for-overall-attendance-in-person-online-67)~~ ✅
 - ~~[Dashboard Date Range Selector (#20)](#dashboard-date-range-selector-20)~~ ✅
