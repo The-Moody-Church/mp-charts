@@ -841,21 +841,28 @@ AI assistants maintain context files in `.claude/` to track project state across
 
 Each session gets a dated file at `.claude/sessions/session-summary-YYYY-MM-DD.md`. This is the primary record of what happened during a session.
 
-**Writing approach — incremental, then polished:**
-1. **As you work**: Append notes to the session summary incrementally — files changed, decisions made, issues encountered. Don't wait until the end.
-2. **Before each commit**: Ensure the session summary reflects what's being committed. Include it in the commit.
-3. **At session end**: Review and clean up the session summary for clarity. Remove noise, consolidate duplicate entries, ensure file lists are complete and accurate. The goal is a useful historical record, not a raw log.
+**Session start — create immediately:**
+1. Create (or open) today's session summary file before any code work begins
+2. Write a brief plan at the top: what the user is asking for, what you expect to do
+
+**During the session — update continuously:**
+- **After each user message**: If the user gives a command, asks a question, or provides feedback that changes direction, append a note capturing it
+- **Before each non-documentation commit**: Update the summary with what's being committed (files changed, decisions made). Include it in the commit.
+- **On key decisions**: Record the decision and rationale as it happens, not later
+
+**At session end:**
+- Review and clean up for clarity. Remove noise, consolidate duplicate entries, ensure file lists are complete and accurate
+- Respond to user cues: "thanks", "that's all", "we're done", "end of session"
+- User can request: "Create a session summary" or "Update context files"
 
 **What to include:**
+- Session plan / objectives (at the top)
 - Issues addressed (with `#N` references)
 - Files created / modified / removed (with line numbers for significant changes)
 - Key decisions and their rationale
+- User feedback and direction changes
 - Known issues or follow-ups
 - Status markers: ✅ COMPLETED, ⚠️ IN PROGRESS, ❌ BLOCKED
-
-**Detecting session end:**
-- Respond to user cues: "thanks", "that's all", "we're done", "end of session"
-- User can request: "Create a session summary" or "Update context files"
 
 ### Pre-Commit Checklist
 
