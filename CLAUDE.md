@@ -136,6 +136,18 @@ This is a single-developer fork. Every commit to `main` (or any branch) must be 
 
 **Rule**: After every successful `git commit`, run `git push` in the same operation. If on a new branch, use `git push -u origin <branch>`.
 
+### PR Merge Strategy
+
+Always use **merge commits** (`gh pr merge --merge`), not squash merges. This preserves the full commit history on `main`, making it easier to trace individual changes back to their original context.
+
+```bash
+# ✅ CORRECT — merge commit
+gh pr merge N --repo The-Moody-Church/mp-charts --merge --delete-branch
+
+# ❌ NEVER — squash loses individual commit history
+gh pr merge N --repo The-Moody-Church/mp-charts --squash --delete-branch
+```
+
 ### Handling `package-lock.json` and `next-env.d.ts`
 
 Both files are committed to the repo and must NOT be added to `.gitignore`.
