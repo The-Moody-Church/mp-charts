@@ -167,11 +167,22 @@ export function DateRangeFilter({
           newMonths = rangeMonths;
         }
       } else if (ctrlKey) {
-        // Multi-select: toggle this month
+        // Multi-select: toggle this month, then fill gaps so the visual
+        // selection matches the actual date range (which spans min→max)
+        let toggled: number[];
         if (selection.months.includes(month)) {
-          newMonths = selection.months.filter(m => m !== month);
+          toggled = selection.months.filter(m => m !== month);
         } else {
-          newMonths = [...selection.months, month];
+          toggled = [...selection.months, month];
+        }
+        // Fill in all months between min and max in ministry-year order
+        if (toggled.length >= 2) {
+          const indices = toggled.map(m => ordered.indexOf(m));
+          const minIdx = Math.min(...indices);
+          const maxIdx = Math.max(...indices);
+          newMonths = ordered.slice(minIdx, maxIdx + 1);
+        } else {
+          newMonths = toggled;
         }
       } else {
         // Single-select: replace with just this month
