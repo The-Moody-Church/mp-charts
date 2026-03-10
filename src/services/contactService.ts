@@ -55,6 +55,18 @@ export class ContactService {
   }
 
   /**
+   * Fetches all contacts with name fields for cached search.
+   * Returns the full dataset — caller is responsible for filtering/scoring.
+   * Auto-paginates in 1,000-record batches via MPHelper.
+   */
+  public async getAllContactsForSearch(): Promise<ContactSearch[]> {
+    return this.mp!.getTableRecords<ContactSearch>({
+      table: "Contacts",
+      select: "Contact_ID, Contact_GUID, First_Name, Nickname, Last_Name, Email_Address, Mobile_Phone, dp_fileUniqueId AS Image_GUID",
+    });
+  }
+
+  /**
    * Retrieves a specific contact by their GUID
    * 
    * @param contactGuid - The unique GUID identifier for the contact

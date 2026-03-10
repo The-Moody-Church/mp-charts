@@ -2,17 +2,18 @@
 
 Quick-reference snapshot of current project state. Read this first at session start. For full details on any item, see the relevant session summary in `.claude/sessions/`.
 
-**Last updated**: 2026-03-06
+**Last updated**: 2026-03-10
 
 ## Recently Completed
 
 | Date | Work | Issues | PR |
 |------|------|--------|----|
+| 2026-03-10 | **PWA**: service worker, offline fallback, iOS install prompt | — | #77 |
+| 2026-03-10 | **Search ranking**: scored search with exact/starts-with/contains/Soundex/Levenshtein, both name orderings, search-as-you-type, cached contact lookup | #78 | #79 |
 | 2026-03-06 | **Chart YoY comparisons**: Community Attendance chart, Serving Trends YoY, date filter improvements (shift+click range, year auto-select, gap fill) | #68 | #76 |
 | 2026-03-06 | **Venn diagram attendance circle**: average total attendance (in-person + online) | #67 | #75 |
 | 2026-03-06 | **Permissions sort**: selected groups sorted to top in admin | #70 | #74 |
 | 2026-03-05 | **Stale feature keys**: filter stale keys from permissions config | — | — |
-| 2026-02-26 | **RBAC implementation** + upstream PR #50/#51 incorporation | #58, #49, #50 | [session](sessions/session-summary-2026-02-26.md) |
 
 ## Open Issues
 

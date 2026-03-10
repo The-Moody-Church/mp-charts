@@ -23,9 +23,9 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Add feedback feature (#69)](#add-feedback-feature-69)~~ ✅
 
 ### Improvements
-- [Search should show closer matches first, weighted by field. (#78)](#search-should-show-closer-matches-first-weighted-by-field-78)
 - [Small Group Trends Chart (#15)](#small-group-trends-chart-15)
 - ~~[Chart YoY Conparisons (#68)](#chart-yoy-conparisons-68)~~ ✅
+- ~~[Search should show closer matches first, weighted by field. (#78)](#search-should-show-closer-matches-first-weighted-by-field-78)~~ ✅
 - ~~[Executive Dashboard: Mobile Views (#13)](#executive-dashboard-mobile-views-13)~~ ✅
 - ~~[Volunteer Processing Mobile Views (#33)](#volunteer-processing-mobile-views-33)~~ ✅
 - ~~[Executive Dashboard One Month Charts Fix (#12)](#executive-dashboard-one-month-charts-fix-12)~~ ✅
@@ -125,11 +125,6 @@ Added a floating feedback button and modal allowing authenticated users to submi
 
 ## Improvements
 
-### Search should show closer matches first, weighted by field. ([#78](https://github.com/The-Moody-Church/mp-charts/issues/78))
-First Name, Last Name, and display name matches that are more exact matches should be shown first.
-
-So searching for Jon Huff would return Jonny Huff with a higher priority than John Huff because it is an exact match. John Huff matches using the sounds like algorithm, but Jonny Huff should be prioritized since it's an exact match.
-
 ### Small Group Trends Chart ([#15](https://github.com/The-Moody-Church/mp-charts/issues/15))
 The Small Group Trends line chart may not be the best visualization for this data. Consider switching to a bar chart or removing it entirely if it doesn’t add enough value to the dashboard.
 
@@ -171,6 +166,9 @@ Replace the hardcoded ministry year date ranges with an interactive date selecto
 - **Compare toggle**: Checkbox to compare against the previous period
   - Previous period = same selected date range but shifted back one year
   - Must handle ranges that span multiple years (e.g., Sep 2024–May 2025 compares to Sep 2023–May 2024)
+
+### ~~Search should show closer matches first, weighted by field. ([#78](https://github.com/The-Moody-Church/mp-charts/issues/78))~~ ✅ COMPLETED
+Replaced `filterByName` with `searchByName` that scores and ranks results by match quality: exact (40pts) > starts-with (25pts) > contains (10pts) > Soundex phonetic (1pt) > Levenshtein fuzzy (1pt). Multi-word queries try both "First Last" and "Last First" interpretations; comma-separated queries force "Last, First". Soundex uses first-letter equivalence groups to prevent false positives. Contact lookup uses cached dataset (6h TTL) + client-side scoring with search-as-you-type (300ms debounce). 36 tests.
 
 ---
 

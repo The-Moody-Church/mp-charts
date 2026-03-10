@@ -2,8 +2,9 @@
 
 import { requireFeatureAccess } from '@/lib/authorization';
 import { enforceRateLimit } from '@/lib/rate-limit';
-import { ContactService } from '@/services/contactService';
 import { ContactSearch } from '@/lib/dto';
+import { searchByNameFlat } from '@/lib/processing-utils';
+import { getCachedAllContacts } from './cached-contacts';
 
 export async function searchContacts(searchTerm: string): Promise<ContactSearch[]> {
   try {
@@ -14,10 +15,10 @@ export async function searchContacts(searchTerm: string): Promise<ContactSearch[
       return [];
     }
 
-    const contactService = await ContactService.getInstance();
-    const results = await contactService.contactSearch(searchTerm.trim());
+    const allContacts = await getCachedAllContacts();
+    const results = searchByNameFlat(allContacts, searchTerm.trim());
 
-    return results;
+    return results.slice(0, 20);
   } catch (error) {
     console.error('Error searching contacts:', error);
     throw new Error('Failed to search contacts');
