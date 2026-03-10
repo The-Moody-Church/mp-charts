@@ -94,8 +94,6 @@ export const ContactLookupSearch: React.FC<ContactLookupSearchProps> = ({
     setSearchTerm(e.target.value);
   };
 
-  const isDisabled = disabled || isPending;
-
   return (
     <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
       <Input
@@ -104,12 +102,12 @@ export const ContactLookupSearch: React.FC<ContactLookupSearchProps> = ({
         onChange={handleInputChange}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        disabled={isDisabled}
+        disabled={disabled}
         className="flex-1"
       />
       <Button
         onClick={performSearch}
-        disabled={isDisabled || !searchTerm.trim()}
+        disabled={disabled || isPending || !searchTerm.trim()}
       >
         {isPending ? "Searching..." : "Search"}
       </Button>
