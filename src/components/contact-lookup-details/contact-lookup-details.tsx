@@ -2,23 +2,71 @@
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
-import { getContactDetails, getContactLogsByContactId } from "./actions";
-import { ContactLookupDetails as ContactLookupDetailsType, ContactLogDisplay } from "@/lib/dto";
+import Link from "next/link";
+import { getContactDetails, getContactLogsByContactId, getHouseholdMembers, getContactBadges } from "./actions";
+import { ContactLookupDetails as ContactLookupDetailsType, ContactLogDisplay, HouseholdMember, ContactBadges } from "@/lib/dto";
 import { ContactLogs } from "@/components/contact-logs";
+import { ContactLinks } from "@/components/processing";
+import { useBreadcrumbOverride } from "@/components/layout/dynamic-breadcrumb";
 import { useRuntimeConfig } from "@/contexts";
 
 interface ContactLookupDetailsProps {
   guid: string;
 }
 
+function getDisplayName(firstName?: string, nickname?: string) {
+  return nickname && nickname.trim() ? nickname : firstName;
+}
+
+function getInitials(firstName?: string, nickname?: string, lastName?: string) {
+  const displayFirstName = getDisplayName(firstName, nickname);
+  const first = displayFirstName?.charAt(0)?.toUpperCase() || "";
+  const last = lastName?.charAt(0)?.toUpperCase() || "";
+  return first + last;
+}
+
+function calculateAge(dateOfBirth: string): number {
+  const dob = new Date(dateOfBirth);
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const monthDiff = today.getMonth() - dob.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+    age--;
+  }
+  return age;
+}
+
+function formatBirthday(dateOfBirth: string): string {
+  const dob = new Date(dateOfBirth);
+  return dob.toLocaleDateString("en-US", { month: "long", day: "numeric" });
+}
+
+const BADGE_STYLES: Record<string, string> = {
+  Member: "bg-green-100 text-green-800",
+  Associate: "bg-blue-100 text-blue-800",
+  Youth: "bg-purple-100 text-purple-800",
+  Dropped: "bg-red-100 text-red-800",
+  "In a Group": "bg-emerald-100 text-emerald-800",
+  Serving: "bg-amber-100 text-amber-800",
+};
+
 export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
   guid,
 }) => {
   const { mpFileUrl } = useRuntimeConfig();
+  const setBreadcrumb = useBreadcrumbOverride();
   const [contact, setContact] = useState<ContactLookupDetailsType | null>(null);
   const [contactLogs, setContactLogs] = useState<ContactLogDisplay[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [badges, setBadges] = useState<ContactBadges | null>(null);
+  const [familyMembers, setFamilyMembers] = useState<HouseholdMember[]>([]);
+  const [familyOpen, setFamilyOpen] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Clear breadcrumb override on unmount
+  useEffect(() => {
+    return () => setBreadcrumb(null);
+  }, [setBreadcrumb]);
 
   const fetchContactDetails = async () => {
     try {
@@ -27,11 +75,39 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
 
       const contactDetails = await getContactDetails(guid);
       setContact(contactDetails);
-      
-      // Fetch contact logs
+
+      // Update layout breadcrumb with contact name
+      const name = getDisplayName(contactDetails.First_Name, contactDetails.Nickname);
+      setBreadcrumb([
+        { label: "Contact Lookup", href: "/contactlookup" },
+        { label: `${name} ${contactDetails.Last_Name}` },
+      ]);
+
       if (contactDetails.Contact_ID) {
-        const logs = await getContactLogsByContactId(contactDetails.Contact_ID);
+        const [logs, badgeData, household] = await Promise.all([
+          getContactLogsByContactId(contactDetails.Contact_ID),
+          getContactBadges(contactDetails.Contact_ID),
+          contactDetails.Household_ID
+            ? getHouseholdMembers(contactDetails.Household_ID)
+            : Promise.resolve([]),
+        ]);
         setContactLogs(logs);
+        setBadges(badgeData);
+        // Filter out current contact and sort by position then DOB
+        setFamilyMembers(
+          household
+            .filter((m) => m.Contact_ID !== contactDetails.Contact_ID)
+            .sort((a, b) => {
+              const posA = a.Household_Position_ID ?? 999;
+              const posB = b.Household_Position_ID ?? 999;
+              if (posA !== posB) return posA - posB;
+              // Oldest first: earliest DOB first
+              if (!a.Date_of_Birth && !b.Date_of_Birth) return 0;
+              if (!a.Date_of_Birth) return 1;
+              if (!b.Date_of_Birth) return -1;
+              return a.Date_of_Birth.localeCompare(b.Date_of_Birth);
+            })
+        );
       }
     } catch (err) {
       console.error("Error loading contact details:", err);
@@ -51,21 +127,6 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guid]);
-
-  const getDisplayName = (firstName?: string, nickname?: string) => {
-    return nickname && nickname.trim() ? nickname : firstName;
-  };
-
-  const getInitials = (
-    firstName?: string,
-    nickname?: string,
-    lastName?: string
-  ) => {
-    const displayFirstName = getDisplayName(firstName, nickname);
-    const first = displayFirstName?.charAt(0)?.toUpperCase() || "";
-    const last = lastName?.charAt(0)?.toUpperCase() || "";
-    return first + last;
-  };
 
   const getImageUrl = (imageGuid: string) => {
     return `${mpFileUrl}/${imageGuid}?$thumbnail=true`;
@@ -106,7 +167,7 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
               No Contact Found
             </h3>
             <div className="mt-2 text-sm text-yellow-700">
-              <p>No contact details found for the provided GUID.</p>
+              <p>No contact details found for the provided identifier.</p>
             </div>
           </div>
         </div>
@@ -120,6 +181,7 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
     <>
       <div className="bg-white shadow rounded-lg">
         <div className="px-4 py-5 sm:p-6">
+          {/* Header: Avatar + Name + Badges */}
           <div className="flex items-center space-x-5">
             <div className="flex-shrink-0">
               <div className="h-20 w-20 rounded-full overflow-hidden relative">
@@ -146,12 +208,31 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
               <h1 className="text-2xl font-bold text-gray-900 truncate">
                 {displayName} {contact.Last_Name}
               </h1>
-              <p className="text-sm text-gray-500">
-                GUID: {contact.Contact_GUID}
-              </p>
+
+              {/* Badges */}
+              {badges && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {badges.membershipStatus && (
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${BADGE_STYLES[badges.membershipStatus]}`}>
+                      {badges.membershipStatus}
+                    </span>
+                  )}
+                  {badges.inGroup && (
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${BADGE_STYLES["In a Group"]}`}>
+                      In a Group
+                    </span>
+                  )}
+                  {badges.serving && (
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${BADGE_STYLES["Serving"]}`}>
+                      Serving
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
+          {/* Contact Info Grid */}
           <div className="mt-6 border-t border-gray-200 pt-6">
             <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
               <div>
@@ -177,46 +258,87 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
                 </dd>
               </div>
 
-              <div>
-                <dt className="text-sm font-medium text-gray-500">
-                  Email Address
-                </dt>
-                <dd className="mt-1 text-sm text-gray-900">
-                  {contact.Email_Address ? (
-                    <a
-                      href={`mailto:${contact.Email_Address}`}
-                      className="text-blue-600 hover:text-blue-500"
-                    >
-                      {contact.Email_Address}
-                    </a>
-                  ) : (
-                    "N/A"
-                  )}
-                </dd>
-              </div>
-
-              <div>
-                <dt className="text-sm font-medium text-gray-500">
-                  Mobile Phone
-                </dt>
-                <dd className="mt-1 text-sm text-gray-900">
-                  {contact.Mobile_Phone ? (
-                    <a
-                      href={`tel:${contact.Mobile_Phone}`}
-                      className="text-blue-600 hover:text-blue-500"
-                    >
-                      {contact.Mobile_Phone}
-                    </a>
-                  ) : (
-                    "N/A"
-                  )}
-                </dd>
-              </div>
+              {contact.Date_of_Birth && (
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Birthday</dt>
+                  <dd className="mt-1 text-sm text-gray-900">
+                    {formatBirthday(contact.Date_of_Birth)} (Age {calculateAge(contact.Date_of_Birth)})
+                  </dd>
+                </div>
+              )}
             </dl>
+
+            {/* Action Buttons */}
+            <div className="mt-4">
+              <ContactLinks
+                email={contact.Email_Address}
+                phone={contact.Mobile_Phone}
+                showSms
+              />
+            </div>
           </div>
         </div>
       </div>
-      
+
+      {/* Family Section */}
+      {familyMembers.length > 0 && (
+        <div className="bg-white shadow rounded-lg">
+          <div className="px-4 py-5 sm:p-6">
+            <button
+              onClick={() => setFamilyOpen(!familyOpen)}
+              className="flex items-center gap-2 w-full text-left"
+            >
+              <svg
+                className={`h-4 w-4 text-gray-500 transition-transform ${familyOpen ? "rotate-90" : ""}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+              </svg>
+              <h2 className="text-lg font-semibold text-gray-900">
+                Family ({familyMembers.length})
+              </h2>
+            </button>
+
+            {familyOpen && (
+              <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                {familyMembers.map((member) => {
+                  const memberDisplayName = getDisplayName(member.First_Name, member.Nickname);
+                  return (
+                    <Link
+                      key={member.Contact_ID}
+                      href={`/contactlookup/${member.Contact_GUID}`}
+                      className="flex flex-col items-center gap-2 rounded-lg border p-3 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="h-12 w-12 rounded-full overflow-hidden relative flex-shrink-0">
+                        {member.Image_GUID && mpFileUrl ? (
+                          <Image
+                            src={getImageUrl(member.Image_GUID)}
+                            alt={`${memberDisplayName} ${member.Last_Name}`}
+                            fill
+                            className="object-cover"
+                            unoptimized
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gray-300 rounded-full flex items-center justify-center text-gray-600 text-sm font-medium">
+                            {getInitials(member.First_Name, member.Nickname, member.Last_Name)}
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-sm font-medium text-gray-900 text-center truncate w-full">
+                        {memberDisplayName} {member.Last_Name}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <ContactLogs
         contactLogs={contactLogs}
         contactId={contact.Contact_ID}

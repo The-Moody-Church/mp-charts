@@ -3,7 +3,7 @@ import type { Metadata, Viewport } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { Providers } from "@/app/providers";
-import { AuthWrapper, Header, DynamicBreadcrumb } from "@/components/layout";
+import { AuthWrapper, Header, DynamicBreadcrumb, BreadcrumbOverrideProvider } from "@/components/layout";
 import { FeedbackWrapper } from "@/components/feedback";
 import { InstallPrompt } from "@/components/pwa";
 import type { RuntimeConfig } from "@/contexts";
@@ -55,15 +55,17 @@ export default function WebLayout({
     }>
       <AuthWrapper>
         <Providers runtimeConfig={runtimeConfig}>
-          <div className={`flex flex-col ${GeistSans.variable} ${GeistMono.variable}`}>
-            <Header />
-            <main className="flex-1 mt-16">
-              <div className="px-4 py-3 border-b bg-muted/30">
-                <DynamicBreadcrumb />
-              </div>
-              {children}
-            </main>
-          </div>
+          <BreadcrumbOverrideProvider>
+            <div className={`flex flex-col ${GeistSans.variable} ${GeistMono.variable}`}>
+              <Header />
+              <main className="flex-1 mt-16">
+                <div className="px-4 py-3 border-b bg-muted/30">
+                  <DynamicBreadcrumb />
+                </div>
+                {children}
+              </main>
+            </div>
+          </BreadcrumbOverrideProvider>
           <FeedbackWrapper />
           <InstallPrompt />
         </Providers>

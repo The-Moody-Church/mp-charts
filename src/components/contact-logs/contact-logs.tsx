@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { ContactLogDisplay } from "@/lib/dto";
 import { ContactLogTypes } from "@/lib/providers/ministry-platform/models/ContactLogTypes";
-import { getContactLogTypes, createContactLog, updateContactLog, deleteContactLog } from "./actions";
+import { getContactLogTypes, createContactLog, updateContactLog } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -23,17 +23,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { Plus, Save } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -91,9 +81,6 @@ export function ContactLogs({
   const [editingLog, setEditingLog] = useState<ContactLogDisplay | null>(null);
   const [logTypes, setLogTypes] = useState<ContactLogTypes[]>([]);
   const [isLoadingLogTypes, setIsLoadingLogTypes] = useState(false);
-  const [deleteLogId, setDeleteLogId] = useState<number | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-
   const getContactDisplayName = () => {
     return `${contactNickname || "Contact"} ${contactLastName || ""}`.trim();
   };
@@ -193,31 +180,6 @@ export function ContactLogs({
       log.Contact_Date ? log.Contact_Date.split("T")[0] : ""
     );
     setIsEditModalOpen(true);
-  };
-
-  const handleDeleteClick = (logId: number) => {
-    setDeleteLogId(logId);
-  };
-
-  const confirmDelete = async () => {
-    if (!deleteLogId) return;
-
-    try {
-      setIsDeleting(true);
-      await deleteContactLog(deleteLogId);
-      
-      setDeleteLogId(null);
-      
-      if (onRefresh) {
-        onRefresh();
-      }
-    } catch (err) {
-      console.error("Error deleting contact log:", err);
-      const errorMessage = err instanceof Error ? err.message : "Failed to delete contact log";
-      alert(`Error: ${errorMessage}`);
-    } finally {
-      setIsDeleting(false);
-    }
   };
 
   useEffect(() => {
@@ -488,23 +450,13 @@ export function ContactLogs({
                   {formatDateTime(log.Contact_Date)}
                 </span>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => handleEditClick(log)}
-                >
-                  Edit
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-red-500 hover:text-red-700"
-                  onClick={() => handleDeleteClick(log.Contact_Log_ID)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => handleEditClick(log)}
+              >
+                Edit
+              </Button>
             </div>
 
             {log.Notes && (
@@ -529,26 +481,6 @@ export function ContactLogs({
         ))}
       </div>
 
-      <AlertDialog open={deleteLogId !== null} onOpenChange={(open) => !open && setDeleteLogId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete this contact log entry. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmDelete}
-              disabled={isDeleting}
-              className="bg-red-500 hover:bg-red-700"
-            >
-              {isDeleting ? "Deleting..." : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
