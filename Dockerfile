@@ -30,6 +30,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Patch Alpine OS packages to pick up security fixes (e.g. zlib CVE-2026-22184)
+RUN apk update && apk upgrade --no-cache && rm -rf /var/cache/apk/*
+
 # Remove npm (and its vulnerable transitive deps like glob, tar) since
 # the runner only needs the node binary to execute server.js
 RUN npm uninstall -g npm

@@ -61,6 +61,29 @@ Replaced the simple `filterByName` with a comprehensive scored `searchByName` al
 | `.claude/ideas.md` | Updated #78 completion description |
 | `.claude/status.md` | Added PR #77 and #79 entries |
 
+### PWA icons and theme color update ✅ COMPLETED
+
+- Updated PWA icons and theme color to new branded design
+- Committed directly to main (`9480f27`)
+
+### Docker security: patch zlib CVE-2026-22184 ✅ COMPLETED
+
+GitHub Actions Trivy scan reported a CRITICAL vulnerability in the Docker image:
+- **zlib CVE-2026-22184**: Arbitrary code execution via buffer overflow in untgz utility (zlib 1.3.1-r2 → fixed in 1.3.2-r0)
+
+The build passed because Trivy was configured with `exit-code: '0'` (informational only). Two fixes applied:
+1. **Dockerfile**: Added `apk update && apk upgrade --no-cache` in the runner stage to patch Alpine OS packages
+2. **CI workflow**: Changed Trivy `exit-code` from `'0'` to `'1'` so builds now **fail** on CRITICAL/HIGH vulnerabilities
+
+Committed directly to main (`ccb472f`).
+
+## Files Modified (session 2)
+
+| File | Change |
+|------|--------|
+| `Dockerfile` | Added `apk update && apk upgrade` in runner stage to patch Alpine CVEs |
+| `.github/workflows/docker-build-push.yml` | Changed Trivy `exit-code` to `'1'` to fail builds on CRITICAL/HIGH vulnerabilities |
+
 ## Issues Addressed
 
 - **#78** — Search should show closer matches first, weighted by field ✅ COMPLETED
