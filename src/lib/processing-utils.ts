@@ -72,6 +72,32 @@ export function soundex(s: string): string {
   return result.padEnd(4, "0");
 }
 
+/**
+ * Compare two Soundex codes with first-letter equivalence.
+ * Matches when: (a) first letters are the same, OR (b) first letters map to the
+ * same Soundex digit group (e.g. C/K→2, F/P→1, D/T→3) — AND the digit portions match.
+ * This prevents false positives like Huff (H100) matching Sophia (S100) while still
+ * catching Catherine/Katherine (C365/K365) and Filip/Philip (F410/P410).
+ */
+export function soundexMatch(a: string, b: string): boolean {
+  const sa = soundex(a);
+  const sb = soundex(b);
+  if (!sa || !sb || sa.slice(1) !== sb.slice(1)) return false;
+  if (sa[0] === sb[0]) return true;
+  // Check if first letters belong to the same Soundex digit group
+  const groups: Record<string, string> = {
+    B: "1", F: "1", P: "1", V: "1",
+    C: "2", G: "2", J: "2", K: "2", Q: "2", S: "2", X: "2", Z: "2",
+    D: "3", T: "3",
+    L: "4",
+    M: "5", N: "5",
+    R: "6",
+  };
+  const ga = groups[sa[0]];
+  const gb = groups[sb[0]];
+  return !!ga && ga === gb;
+}
+
 /** Name fields used for scoring. */
 interface NameFields {
   First_Name: string;
@@ -112,11 +138,9 @@ function scoreNameMatch(fields: NameFields, query: string): number {
       score = Math.max(score, 10);
     }
 
-    // Soundex fallback
+    // Soundex fallback (with first-letter equivalence to avoid false positives)
     if (score === 0) {
-      const termDigits = soundex(term).slice(1);
-      const nameDigits = [first, nick, last].filter(Boolean).map(n => soundex(n).slice(1));
-      if (termDigits && nameDigits.some(nd => nd === termDigits)) {
+      if ([first, nick, last].filter(Boolean).some(n => soundexMatch(term, n))) {
         score = 1;
       }
     }
@@ -159,11 +183,11 @@ function scoreNameMatch(fields: NameFields, query: string): number {
     score += 15;
   }
 
-  // Soundex fallback for unmatched parts
+  // Soundex fallback for unmatched parts (with first-letter equivalence)
   if (!firstMatched || !lastMatched) {
-    const nameDigits = [first, nick, last].filter(Boolean).map(n => soundex(n).slice(1));
+    const nameFields = [first, nick, last].filter(Boolean);
     const allSoundexMatch = queryWords.every(
-      word => nameDigits.some(nd => nd === soundex(word).slice(1))
+      word => nameFields.some(n => soundexMatch(word, n))
     );
     if (allSoundexMatch) {
       if (!firstMatched) score += 1;

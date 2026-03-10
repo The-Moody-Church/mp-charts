@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { searchByName, searchByNameFlat, soundex, normalizeApostrophes } from "./processing-utils";
+import { searchByName, searchByNameFlat, soundex, soundexMatch, normalizeApostrophes } from "./processing-utils";
 
 /** Helper to create a wrapped name record for searchByName. */
 function person(first: string, last: string, nickname: string | null = null) {
@@ -41,6 +41,33 @@ describe("normalizeApostrophes", () => {
   });
 });
 
+describe("soundexMatch", () => {
+  it("matches same first letter with same digits (Jon/John)", () => {
+    expect(soundexMatch("Jon", "John")).toBe(true);
+  });
+
+  it("matches equivalent first-letter groups (Catherine/Katherine)", () => {
+    expect(soundexMatch("Catherine", "Katherine")).toBe(true);
+  });
+
+  it("matches equivalent first-letter groups (Filip/Philip)", () => {
+    expect(soundexMatch("Filip", "Philip")).toBe(true);
+  });
+
+  it("rejects different first-letter groups even with same digits (Huff/Sophia)", () => {
+    expect(soundexMatch("Huff", "Sophia")).toBe(false);
+  });
+
+  it("rejects completely different names", () => {
+    expect(soundexMatch("Jon", "Huff")).toBe(false);
+  });
+
+  it("handles empty strings", () => {
+    expect(soundexMatch("", "Jon")).toBe(false);
+    expect(soundexMatch("Jon", "")).toBe(false);
+  });
+});
+
 describe("searchByName", () => {
   const items = [
     person("Jonny", "Huff"),
@@ -76,6 +103,30 @@ describe("searchByName", () => {
     const results = searchByName(items, "Jon Huff");
     const names = results.map(r => `${r.info.First_Name} ${r.info.Last_Name}`);
     expect(names).not.toContain("Alice Johnson");
+  });
+
+  it("does not false-positive Soundex on unrelated names (Huff vs Sophia)", () => {
+    const items2 = [
+      person("Sophia", "Guerra"),
+      person("Jude", "Huff"),
+    ];
+    const results = searchByName(items2, "huff");
+    const names = results.map(r => `${r.info.First_Name} ${r.info.Last_Name}`);
+    expect(names).toContain("Jude Huff");
+    expect(names).not.toContain("Sophia Guerra");
+  });
+
+  it("still matches Catherine/Katherine via Soundex first-letter equivalence", () => {
+    const items2 = [
+      person("Catherine", "Smith"),
+      person("Katherine", "Jones"),
+      person("Alice", "Brown"),
+    ];
+    const results = searchByName(items2, "Katherine");
+    const names = results.map(r => r.info.First_Name);
+    expect(names).toContain("Catherine");
+    expect(names).toContain("Katherine");
+    expect(names).not.toContain("Alice");
   });
 
   it("handles single-word search", () => {
