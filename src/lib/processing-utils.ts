@@ -118,7 +118,7 @@ function scoreNameMatch(fields: NameFields, query: string): number {
   const display = normalizeApostrophes(getDisplayName(fields.First_Name ?? "", fields.Nickname).toLowerCase());
   const last = normalizeApostrophes((fields.Last_Name ?? "").toLowerCase());
 
-  const queryWords = q.split(/\s+/).filter(Boolean);
+  const queryWords = q.split(/[\s,]+/).filter(Boolean);
 
   // Single-word scoring: score against all name fields equally
   if (queryWords.length === 1) {
@@ -148,9 +148,18 @@ function scoreNameMatch(fields: NameFields, query: string): number {
     return score;
   }
 
-  // Multi-word scoring: firstGuess + lastGuess
-  const firstGuess = queryWords[0];
-  const lastGuess = queryWords[queryWords.length - 1];
+  // Multi-word scoring: detect "Last, First" convention (comma-separated) vs "First Last"
+  let firstGuess: string;
+  let lastGuess: string;
+  if (q.includes(",")) {
+    // "Huff, Jon" → last=Huff, first=Jon
+    const parts = q.split(",").map(p => p.trim()).filter(Boolean);
+    lastGuess = normalizeApostrophes(parts[0]);
+    firstGuess = normalizeApostrophes(parts[parts.length > 1 ? 1 : 0]);
+  } else {
+    firstGuess = queryWords[0];
+    lastGuess = queryWords[queryWords.length - 1];
+  }
   let score = 0;
   let firstMatched = false;
   let lastMatched = false;

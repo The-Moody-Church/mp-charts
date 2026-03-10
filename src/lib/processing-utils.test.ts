@@ -148,6 +148,22 @@ describe("searchByName", () => {
     expect(results[0].info.First_Name).toBe("Jon");
   });
 
+  it("handles 'Last, First' comma convention", () => {
+    const items2 = [
+      person("Jon", "Huff"),
+      person("Jonny", "Huff"),
+      person("Jon", "Smith"),
+    ];
+    const results = searchByName(items2, "Huff, Jon");
+    const names = results.map(r => `${r.info.First_Name} ${r.info.Last_Name}`);
+    // "Jon Huff" should be first (exact last + exact first)
+    expect(names[0]).toBe("Jon Huff");
+    // "Jonny Huff" should rank above "Jon Smith" (last name match)
+    const jonnyIdx = names.indexOf("Jonny Huff");
+    const jonSmithIdx = names.indexOf("Jon Smith");
+    expect(jonnyIdx).toBeLessThan(jonSmithIdx);
+  });
+
   it("includes soundex matches for phonetically similar names", () => {
     const results = searchByName(items, "John Huff");
     const names = results.map(r => `${r.info.First_Name} ${r.info.Last_Name}`);
