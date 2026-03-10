@@ -23,6 +23,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Add feedback feature (#69)](#add-feedback-feature-69)~~ ✅
 
 ### Improvements
+- [Search should show closer matches first, weighted by field. (#78)](#search-should-show-closer-matches-first-weighted-by-field-78)
 - [Small Group Trends Chart (#15)](#small-group-trends-chart-15)
 - ~~[Chart YoY Conparisons (#68)](#chart-yoy-conparisons-68)~~ ✅
 - ~~[Executive Dashboard: Mobile Views (#13)](#executive-dashboard-mobile-views-13)~~ ✅
@@ -123,6 +124,11 @@ Added a floating feedback button and modal allowing authenticated users to submi
 ---
 
 ## Improvements
+
+### Search should show closer matches first, weighted by field. ([#78](https://github.com/The-Moody-Church/mp-charts/issues/78))
+First Name, Last Name, and display name matches that are more exact matches should be shown first.
+
+So searching for Jon Huff would return Jonny Huff with a higher priority than John Huff because it is an exact match. John Huff matches using the sounds like algorithm, but Jonny Huff should be prioritized since it's an exact match.
 
 ### Small Group Trends Chart ([#15](https://github.com/The-Moody-Church/mp-charts/issues/15))
 The Small Group Trends line chart may not be the best visualization for this data. Consider switching to a bar chart or removing it entirely if it doesn’t add enough value to the dashboard.
