@@ -23,7 +23,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Add feedback feature (#69)](#add-feedback-feature-69)~~ ✅
 
 ### Improvements
-- [Pre-warm Cache on Container Start](#pre-warm-cache-on-container-start)
+- [Pre-warm Cache on Container Start (#80)](#pre-warm-cache-on-container-start-80)
 - [Small Group Trends Chart (#15)](#small-group-trends-chart-15)
 - ~~[Chart YoY Conparisons (#68)](#chart-yoy-conparisons-68)~~ ✅
 - ~~[Executive Dashboard: Mobile Views (#13)](#executive-dashboard-mobile-views-13)~~ ✅
@@ -126,7 +126,7 @@ Added a floating feedback button and modal allowing authenticated users to submi
 
 ## Improvements
 
-### Pre-warm Cache on Container Start
+### Pre-warm Cache on Container Start ([#80](https://github.com/The-Moody-Church/mp-charts/issues/80))
 When the Docker container is initially created or recreated, the dashboard and contact lookup caches are cold — the first user to hit those pages has to wait for the full data fetch and cache build. Add a startup script or health-check hook that triggers cache population (dashboard data + contact search dataset) immediately after the container starts, so the cache is warm before any user arrives.
 
 ### Small Group Trends Chart ([#15](https://github.com/The-Moody-Church/mp-charts/issues/15))
