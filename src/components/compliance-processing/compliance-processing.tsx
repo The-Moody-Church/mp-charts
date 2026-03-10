@@ -7,7 +7,7 @@ import { ProcessingGrid, ProcessingSearchBar } from "@/components/processing";
 import { ComplianceCard } from "./compliance-card";
 import { ComplianceDetailModal } from "./compliance-detail-modal";
 import { getComplianceParticipants, getPausedComplianceParticipants } from "./actions";
-import { filterByName } from "@/lib/processing-utils";
+import { searchByName } from "@/lib/processing-utils";
 import type { ComplianceToolConfig } from "@/lib/compliance-tools-config-types";
 
 interface ComplianceProcessingProps {
@@ -93,12 +93,12 @@ export function ComplianceProcessing({ slug, config, initialApplicantId }: Compl
   };
 
   const filteredCurrent = useMemo(
-    () => filterByName(currentParticipants, searchQuery),
+    () => searchByName(currentParticipants, searchQuery),
     [currentParticipants, searchQuery]
   );
 
   const filteredPaused = useMemo(
-    () => filterByName(pausedParticipants, searchQuery),
+    () => searchByName(pausedParticipants, searchQuery),
     [pausedParticipants, searchQuery]
   );
 

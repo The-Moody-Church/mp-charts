@@ -7,7 +7,7 @@ import { ProcessingGrid, ProcessingSearchBar } from "@/components/processing";
 import { JourneyCard } from "./journey-card";
 import { JourneyDetailModal } from "./journey-detail-modal";
 import { getJourneyParticipants, getCompletedJourneyParticipants, getPausedJourneyParticipants } from "./actions";
-import { filterByName } from "@/lib/processing-utils";
+import { searchByName } from "@/lib/processing-utils";
 import type { JourneyToolConfig } from "@/lib/journey-tools-config-types";
 
 interface JourneyProcessingProps {
@@ -116,17 +116,17 @@ export function JourneyProcessing({ slug, config, initialApplicantId }: JourneyP
   };
 
   const filteredCurrent = useMemo(
-    () => filterByName(currentParticipants, searchQuery),
+    () => searchByName(currentParticipants, searchQuery),
     [currentParticipants, searchQuery]
   );
 
   const filteredCompleted = useMemo(
-    () => filterByName(completedParticipants, searchQuery),
+    () => searchByName(completedParticipants, searchQuery),
     [completedParticipants, searchQuery]
   );
 
   const filteredPaused = useMemo(
-    () => filterByName(pausedParticipants, searchQuery),
+    () => searchByName(pausedParticipants, searchQuery),
     [pausedParticipants, searchQuery]
   );
 
