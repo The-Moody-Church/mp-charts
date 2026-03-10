@@ -15,11 +15,11 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: "/assets/icons/favicon.ico", sizes: "32x32" },
-      { url: "/assets/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/assets/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/assets/icons/mp-tools-icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/assets/icons/mp-tools-icon-512.png", sizes: "512x512", type: "image/png" },
     ],
     apple: [
-      { url: "/assets/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+      { url: "/assets/icons/mp-tools-ios-180.png", sizes: "180x180", type: "image/png" },
     ],
   },
   appleWebApp: {
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#000000",
+  themeColor: "#73253E",
 }
 
 export default function WebLayout({
