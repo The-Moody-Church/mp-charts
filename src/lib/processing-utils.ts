@@ -98,6 +98,42 @@ export function soundexMatch(a: string, b: string): boolean {
   return !!ga && ga === gb;
 }
 
+/**
+ * Levenshtein edit distance between two strings.
+ * Returns the minimum number of single-character edits (insert, delete, replace).
+ */
+export function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+
+  // Use single-row DP for memory efficiency
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  let curr = new Array<number>(b.length + 1);
+
+  for (let i = 1; i <= a.length; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(
+        prev[j] + 1,      // deletion
+        curr[j - 1] + 1,  // insertion
+        prev[j - 1] + cost // substitution
+      );
+    }
+    [prev, curr] = [curr, prev];
+  }
+
+  return prev[b.length];
+}
+
+/** Check if a query term is a close misspelling of a name (max edit distance based on length). */
+function fuzzyMatch(term: string, name: string): boolean {
+  if (!term || !name) return false;
+  const maxDist = term.length < 5 ? 1 : 2;
+  return levenshtein(term, name) <= maxDist;
+}
+
 /** Name fields used for scoring. */
 interface NameFields {
   First_Name: string;
@@ -145,6 +181,13 @@ function scoreNameMatch(fields: NameFields, query: string): number {
       }
     }
 
+    // Levenshtein fuzzy fallback for misspellings (e.g. "huerra" → "guerra")
+    if (score === 0) {
+      if ([first, nick, last].filter(Boolean).some(n => fuzzyMatch(term, n))) {
+        score = 1;
+      }
+    }
+
     return score;
   }
 
@@ -182,13 +225,13 @@ function scoreNameMatch(fields: NameFields, query: string): number {
       score += 15;
     }
 
-    // Soundex fallback for unmatched parts (with first-letter equivalence)
+    // Soundex + fuzzy fallback for unmatched parts
     if (!firstMatched || !lastMatched) {
       const nameFields = [first, nick, last].filter(Boolean);
-      const allSoundexMatch = queryWords.every(
-        word => nameFields.some(n => soundexMatch(word, n))
+      const allPhoneticMatch = queryWords.every(
+        word => nameFields.some(n => soundexMatch(word, n) || fuzzyMatch(word, n))
       );
-      if (allSoundexMatch) {
+      if (allPhoneticMatch) {
         if (!firstMatched) score += 1;
         if (!lastMatched) score += 1;
       } else if (score === 0) {

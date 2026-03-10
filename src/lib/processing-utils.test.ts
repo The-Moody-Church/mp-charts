@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { searchByName, searchByNameFlat, soundex, soundexMatch, normalizeApostrophes } from "./processing-utils";
+import { searchByName, searchByNameFlat, soundex, soundexMatch, levenshtein, normalizeApostrophes } from "./processing-utils";
 
 /** Helper to create a wrapped name record for searchByName. */
 function person(first: string, last: string, nickname: string | null = null) {
@@ -65,6 +65,59 @@ describe("soundexMatch", () => {
   it("handles empty strings", () => {
     expect(soundexMatch("", "Jon")).toBe(false);
     expect(soundexMatch("Jon", "")).toBe(false);
+  });
+});
+
+describe("levenshtein", () => {
+  it("returns 0 for identical strings", () => {
+    expect(levenshtein("guerra", "guerra")).toBe(0);
+  });
+
+  it("returns 1 for single substitution (huerra → guerra)", () => {
+    expect(levenshtein("huerra", "guerra")).toBe(1);
+  });
+
+  it("returns 1 for single insertion", () => {
+    expect(levenshtein("huf", "huff")).toBe(1);
+  });
+
+  it("returns 1 for single deletion", () => {
+    expect(levenshtein("hufff", "huff")).toBe(1);
+  });
+
+  it("returns full length for empty vs non-empty", () => {
+    expect(levenshtein("", "abc")).toBe(3);
+    expect(levenshtein("abc", "")).toBe(3);
+  });
+});
+
+describe("searchByName — fuzzy matching", () => {
+  it("matches misspelling 'huerra' to 'Guerra' (edit distance 1)", () => {
+    const items = [
+      person("Sophia", "Guerra"),
+      person("Alice", "Brown"),
+    ];
+    const results = searchByName(items, "huerra");
+    expect(results.length).toBe(1);
+    expect(results[0].info.Last_Name).toBe("Guerra");
+  });
+
+  it("matches multi-word misspelling 'Sofía Huerra' to 'Sophia Guerra'", () => {
+    const items = [
+      person("Sophia", "Guerra"),
+      person("Alice", "Brown"),
+    ];
+    const results = searchByName(items, "Sofía Huerra");
+    expect(results.length).toBeGreaterThanOrEqual(1);
+    expect(results[0].info.First_Name).toBe("Sophia");
+  });
+
+  it("does not match when edit distance is too large", () => {
+    const items = [
+      person("Sophia", "Guerra"),
+    ];
+    const results = searchByName(items, "xxxxxx");
+    expect(results.length).toBe(0);
   });
 });
 
