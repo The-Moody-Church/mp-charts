@@ -168,7 +168,7 @@ Replace the hardcoded ministry year date ranges with an interactive date selecto
   - Must handle ranges that span multiple years (e.g., Sep 2024–May 2025 compares to Sep 2023–May 2024)
 
 ### ~~Search should show closer matches first, weighted by field. ([#78](https://github.com/The-Moody-Church/mp-charts/issues/78))~~ ✅ COMPLETED
-Replaced `filterByName` with `searchByName` that scores and ranks results by match quality: exact matches (100), starts-with (75), contains (50), Soundex phonetic (25). Multi-word queries split into first/last name guesses with bonus for both matching. Unified contact lookup to use cached dataset + same algorithm. Added 178 lines of tests.
+Replaced `filterByName` with `searchByName` that scores and ranks results by match quality: exact (40pts) > starts-with (25pts) > contains (10pts) > Soundex phonetic (1pt) > Levenshtein fuzzy (1pt). Multi-word queries try both "First Last" and "Last First" interpretations; comma-separated queries force "Last, First". Soundex uses first-letter equivalence groups to prevent false positives. Contact lookup uses cached dataset (6h TTL) + client-side scoring with search-as-you-type (300ms debounce). 36 tests.
 
 ---
 
