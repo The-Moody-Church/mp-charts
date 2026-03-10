@@ -5,13 +5,27 @@ import { GeistMono } from "geist/font/mono";
 import { Providers } from "@/app/providers";
 import { AuthWrapper, Header, DynamicBreadcrumb } from "@/components/layout";
 import { FeedbackWrapper } from "@/components/feedback";
+import { InstallPrompt } from "@/components/pwa";
 import type { RuntimeConfig } from "@/contexts";
 
 export const metadata: Metadata = {
   title: "MP Tools",
   description: "Ministry Platform Tools",
+  manifest: "/manifest.json",
   icons: {
-    icon: "/assets/icons/favicon.ico",
+    icon: [
+      { url: "/assets/icons/favicon.ico", sizes: "32x32" },
+      { url: "/assets/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/assets/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/assets/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "MP Tools",
   },
 };
 
@@ -51,6 +65,7 @@ export default function WebLayout({
             </main>
           </div>
           <FeedbackWrapper />
+          <InstallPrompt />
         </Providers>
       </AuthWrapper>
     </Suspense>

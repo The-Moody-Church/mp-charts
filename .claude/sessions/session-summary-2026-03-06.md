@@ -53,8 +53,44 @@
 - **Modified**: `src/services/dashboardService.ts`
 - **Modified**: `.claude/ideas.md` — marked #68 as completed
 
+---
+
+## PWA Service Worker (Session 2)
+
+### Objective
+Complete the PWA install requirements. Manifest and icons were already in place; the missing piece was a service worker, which browsers require before showing the install prompt.
+
+### Design Decisions
+
+**Why runtime caching instead of precaching:**
+Next.js generates hashed filenames for bundles on every build, so a static precache list in a hand-written SW would go stale immediately. Runtime caching (cache-first for `/_next/static/` and `/assets/`) achieves the same result — assets are cached on first visit and served from cache thereafter.
+
+**Why network-first for navigation:**
+The app is fully server-driven (Ministry Platform API). Serving stale HTML would show outdated data or broken auth states. Network-first ensures users always get fresh pages, with the offline fallback as a graceful degradation.
+
+**Why a minimal offline page instead of offline app shell:**
+The app can't do anything useful without the API. A full offline shell would just show empty states everywhere. A simple "you're offline, try again" page is honest and more helpful.
+
+**Why register in `providers.tsx`:**
+It's already a `"use client"` component that wraps the entire app. Adding a `useEffect` there avoids creating a new component and ensures registration happens once on mount.
+
+### Bug Fix: Manifest blocked by auth proxy
+The proxy matcher in `src/proxy.ts` didn't exclude `manifest.json`, `sw.js`, or `offline.html`, so unauthenticated requests for these files were redirected to `/signin`. The browser received HTML instead of JSON for the manifest, causing "Syntax error" in the console and preventing install eligibility. Added these files to the matcher exclusion pattern.
+
+### iOS Install Banner
+iOS Safari doesn't support `beforeinstallprompt`, so users must manually use Share > "Add to Home Screen." Added an `InstallPrompt` component that detects iOS Safari (and Android) and shows an instructional banner. Dismissable, persisted in localStorage, delayed 2s, hidden when already installed as PWA.
+
+### Files Changed
+- **Created**: `public/sw.js` — service worker (runtime cache for static assets, network-first for navigation, offline fallback)
+- **Created**: `public/offline.html` — minimal offline page
+- **Created**: `src/components/pwa/install-prompt.tsx` — iOS/Android install instruction banner
+- **Created**: `src/components/pwa/index.ts` — barrel export
+- **Modified**: `src/app/providers.tsx` — service worker registration via `useEffect`
+- **Modified**: `src/app/(web)/layout.tsx` — added `InstallPrompt` component
+- **Modified**: `src/proxy.ts` — excluded `manifest.json`, `sw.js`, `offline.html` from auth proxy
+
 ## Security Review
-- **Files reviewed**: 7 files
+- **Files reviewed**: 7 + 6 files (13 total across both sessions)
 - **Issues found**: None
 - **Checklist**: All critical/high items pass — no filter injection, no auth changes, no PII logging, no server actions modified
-- **Notes**: All changes are client-side chart rendering and UI state management
+- **Notes**: Service worker only caches static assets and serves an offline fallback. No API data is cached. No new server-side code. Proxy exclusions are for static public files only (no auth bypass for API routes). Install prompt uses only client-side detection (user agent, display-mode media query, localStorage).
