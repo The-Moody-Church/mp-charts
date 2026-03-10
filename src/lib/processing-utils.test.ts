@@ -164,6 +164,17 @@ describe("searchByName", () => {
     expect(jonnyIdx).toBeLessThan(jonSmithIdx);
   });
 
+  it("tries both 'First Last' and 'Last First' without comma", () => {
+    const items2 = [
+      person("Jonny", "Huff"),
+      person("Dixie", "Jonas"),
+    ];
+    const results = searchByName(items2, "Huff Jon");
+    const names = results.map(r => `${r.info.First_Name} ${r.info.Last_Name}`);
+    // "Jonny Huff" should rank first — last=Huff exact, first starts with Jon
+    expect(names[0]).toBe("Jonny Huff");
+  });
+
   it("includes soundex matches for phonetically similar names", () => {
     const results = searchByName(items, "John Huff");
     const names = results.map(r => `${r.info.First_Name} ${r.info.Last_Name}`);

@@ -148,63 +148,74 @@ function scoreNameMatch(fields: NameFields, query: string): number {
     return score;
   }
 
-  // Multi-word scoring: detect "Last, First" convention (comma-separated) vs "First Last"
-  let firstGuess: string;
-  let lastGuess: string;
-  if (q.includes(",")) {
-    // "Huff, Jon" → last=Huff, first=Jon
-    const parts = q.split(",").map(p => p.trim()).filter(Boolean);
-    lastGuess = normalizeApostrophes(parts[0]);
-    firstGuess = normalizeApostrophes(parts[parts.length > 1 ? 1 : 0]);
-  } else {
-    firstGuess = queryWords[0];
-    lastGuess = queryWords[queryWords.length - 1];
-  }
-  let score = 0;
-  let firstMatched = false;
-  let lastMatched = false;
+  // Multi-word scoring helper: scores a (firstGuess, lastGuess) interpretation
+  function scoreInterpretation(firstGuess: string, lastGuess: string): number {
+    let score = 0;
+    let firstMatched = false;
+    let lastMatched = false;
 
-  // Score last name match
-  if (last === lastGuess) { score += 40; lastMatched = true; }
-  else if (last.startsWith(lastGuess)) { score += 25; lastMatched = true; }
-  else if (last.includes(lastGuess)) { score += 10; lastMatched = true; }
+    // Score last name match
+    if (last === lastGuess) { score += 40; lastMatched = true; }
+    else if (last.startsWith(lastGuess)) { score += 25; lastMatched = true; }
+    else if (last.includes(lastGuess)) { score += 10; lastMatched = true; }
 
-  // Score first name / nickname match — take the best match across fields
-  let firstScore = 0;
-  for (const name of [first, nick, display].filter(Boolean)) {
-    if (name === firstGuess) { firstScore = Math.max(firstScore, 30); }
-    else if (name.startsWith(firstGuess)) { firstScore = Math.max(firstScore, 20); }
-    else if (name.includes(firstGuess)) { firstScore = Math.max(firstScore, 5); }
-  }
-  if (firstScore > 0) {
-    score += firstScore;
-    firstMatched = true;
-  }
-
-  // Both matched bonus
-  if (firstMatched && lastMatched) {
-    score += 20;
-  }
-
-  // Full query in "first last" combination
-  if (`${first} ${last}`.includes(q) || `${display} ${last}`.includes(q) ||
-      (nick && `${nick} ${last}`.includes(q))) {
-    score += 15;
-  }
-
-  // Soundex fallback for unmatched parts (with first-letter equivalence)
-  if (!firstMatched || !lastMatched) {
-    const nameFields = [first, nick, last].filter(Boolean);
-    const allSoundexMatch = queryWords.every(
-      word => nameFields.some(n => soundexMatch(word, n))
-    );
-    if (allSoundexMatch) {
-      if (!firstMatched) score += 1;
-      if (!lastMatched) score += 1;
-    } else if (score === 0) {
-      // No match at all
-      return 0;
+    // Score first name / nickname match — take the best match across fields
+    let firstScore = 0;
+    for (const name of [first, nick, display].filter(Boolean)) {
+      if (name === firstGuess) { firstScore = Math.max(firstScore, 30); }
+      else if (name.startsWith(firstGuess)) { firstScore = Math.max(firstScore, 20); }
+      else if (name.includes(firstGuess)) { firstScore = Math.max(firstScore, 5); }
     }
+    if (firstScore > 0) {
+      score += firstScore;
+      firstMatched = true;
+    }
+
+    // Both matched bonus
+    if (firstMatched && lastMatched) {
+      score += 20;
+    }
+
+    // Full query in "first last" combination
+    if (`${first} ${last}`.includes(q) || `${display} ${last}`.includes(q) ||
+        (nick && `${nick} ${last}`.includes(q))) {
+      score += 15;
+    }
+
+    // Soundex fallback for unmatched parts (with first-letter equivalence)
+    if (!firstMatched || !lastMatched) {
+      const nameFields = [first, nick, last].filter(Boolean);
+      const allSoundexMatch = queryWords.every(
+        word => nameFields.some(n => soundexMatch(word, n))
+      );
+      if (allSoundexMatch) {
+        if (!firstMatched) score += 1;
+        if (!lastMatched) score += 1;
+      } else if (score === 0) {
+        return 0;
+      }
+    }
+
+    return score;
+  }
+
+  // Try both "First Last" and "Last First" interpretations, take the best score.
+  // Comma forces "Last, First" only.
+  let score: number;
+  if (q.includes(",")) {
+    const parts = q.split(",").map(p => p.trim()).filter(Boolean);
+    score = scoreInterpretation(
+      normalizeApostrophes(parts[parts.length > 1 ? 1 : 0]),
+      normalizeApostrophes(parts[0])
+    );
+  } else {
+    const firstLast = scoreInterpretation(queryWords[0], queryWords[queryWords.length - 1]);
+    const lastFirst = scoreInterpretation(queryWords[queryWords.length - 1], queryWords[0]);
+    score = Math.max(firstLast, lastFirst);
+  }
+
+  if (score === 0) {
+    return 0;
   }
 
   return score;
