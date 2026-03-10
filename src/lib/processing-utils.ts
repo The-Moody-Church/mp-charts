@@ -113,10 +113,10 @@ function scoreNameMatch(fields: NameFields, query: string): number {
   const q = normalizeApostrophes(query.trim().toLowerCase());
   if (!q) return 0;
 
-  const first = normalizeApostrophes(fields.First_Name.toLowerCase());
-  const nick = normalizeApostrophes(fields.Nickname?.toLowerCase() ?? "");
-  const display = normalizeApostrophes(getDisplayName(fields.First_Name, fields.Nickname).toLowerCase());
-  const last = normalizeApostrophes(fields.Last_Name.toLowerCase());
+  const first = normalizeApostrophes((fields.First_Name ?? "").toLowerCase());
+  const nick = normalizeApostrophes((fields.Nickname ?? "").toLowerCase());
+  const display = normalizeApostrophes(getDisplayName(fields.First_Name ?? "", fields.Nickname).toLowerCase());
+  const last = normalizeApostrophes((fields.Last_Name ?? "").toLowerCase());
 
   const queryWords = q.split(/\s+/).filter(Boolean);
 
