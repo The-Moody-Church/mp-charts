@@ -117,8 +117,6 @@ export function ContactLogs({
         Feedback_Entry_ID: null,
       };
 
-      console.log("Creating contact log with data:", contactLogData);
-      
       await createContactLog(contactLogData);
       
       setIsCreateModalOpen(false);
@@ -151,8 +149,6 @@ export function ContactLogs({
         Contact_Log_Type_ID: selectedLogType?.Contact_Log_Type_ID || null,
       };
 
-      console.log("Updating contact log with data:", contactLogData);
-      
       await updateContactLog(editingLog.Contact_Log_ID, contactLogData);
       
       setIsEditModalOpen(false);
