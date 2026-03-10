@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useTransition } from "react";
+import React, { useState, useTransition, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { searchContacts } from "./actions";
@@ -23,6 +23,7 @@ export const ContactLookupSearch: React.FC<ContactLookupSearchProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [isPending, startTransition] = useTransition();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSearch = async (query: string) => {
     if (!query.trim()) {
@@ -47,13 +48,43 @@ export const ContactLookupSearch: React.FC<ContactLookupSearchProps> = ({
     });
   };
 
+  // Debounced search-as-you-type (300ms, minimum 2 characters)
+  useEffect(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+
+    const trimmed = searchTerm.trim();
+    if (trimmed.length < 2) {
+      if (trimmed.length === 0) {
+        onSearchResults?.([]);
+      }
+      return;
+    }
+
+    debounceRef.current = setTimeout(() => {
+      handleSearch(trimmed);
+    }, 300);
+
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm]);
+
+  // Instant search on Enter or button click
   const performSearch = () => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
     if (searchTerm.trim()) {
       handleSearch(searchTerm.trim());
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       performSearch();
     }
@@ -71,7 +102,7 @@ export const ContactLookupSearch: React.FC<ContactLookupSearchProps> = ({
         type="text"
         value={searchTerm}
         onChange={handleInputChange}
-        onKeyPress={handleKeyPress}
+        onKeyDown={handleKeyDown}
         placeholder={placeholder}
         disabled={isDisabled}
         className="flex-1"
