@@ -363,7 +363,7 @@ Some features are dev/demo tools and are **hidden in production builds**. They a
 - `src/components/layout/sidebar.tsx` — sidebar nav items
 
 **Currently dev-only:**
-- Contact Lookup (`/contactlookup`)
+- Contact Lookup (`/contact-lookup`)
 - Template Tool (`/tools/template`)
 
 **Visible in all environments:**

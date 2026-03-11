@@ -88,7 +88,7 @@ const NON_LINKABLE_PREFIXES = new Set(["journey", "compliance"]);
 
 // Custom labels for URL segments that don't split nicely on hyphens
 const SEGMENT_LABELS: Record<string, string> = {
-  contactlookup: "Contact Lookup",
+  "contact-lookup": "Contact Lookup",
 };
 
 // GUID pattern: 8-4-4-4-12 hex chars (with or without hyphens, MP sometimes uses spaces)

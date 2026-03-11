@@ -28,7 +28,7 @@ const featureCards: FeatureCard[] = [
   {
     title: "Contact Lookup",
     description: "Search and view contact records from Ministry Platform",
-    href: "/contactlookup",
+    href: "/contact-lookup",
     buttonText: "View Contacts",
     feature: "contact-lookup",
   },

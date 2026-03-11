@@ -84,7 +84,7 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
       // Update layout breadcrumb with contact name
       const name = getDisplayName(contactDetails.First_Name, contactDetails.Nickname);
       setBreadcrumb([
-        { label: "Contact Lookup", href: "/contactlookup" },
+        { label: "Contact Lookup", href: "/contact-lookup" },
         { label: `${name} ${contactDetails.Last_Name}` },
       ]);
 
@@ -157,7 +157,7 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
   };
 
   const handleCopyLink = () => {
-    const url = `${window.location.origin}/contactlookup/${guid}`;
+    const url = `${window.location.origin}/contact-lookup/${guid}`;
     navigator.clipboard.writeText(url).then(() => {
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2000);
@@ -368,7 +368,7 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
                   return (
                     <Link
                       key={member.Contact_ID}
-                      href={`/contactlookup/${member.Contact_GUID}`}
+                      href={`/contact-lookup/${member.Contact_GUID}`}
                       className="flex flex-col items-center gap-2 rounded-lg border p-3 hover:bg-gray-50 transition-colors"
                     >
                       <div className="h-12 w-12 rounded-full overflow-hidden relative flex-shrink-0">
