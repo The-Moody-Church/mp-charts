@@ -57,3 +57,44 @@ Audited all `'use cache'` functions across the codebase to verify completeness:
 - `src/components/contact-lookup/cached-contacts.ts` — Added NOTE comment to `getCachedAllContacts` pointing to `cache-warming.ts`
 
 **Security review**: Comment-only changes. No code logic, no filter interpolation, no PII, no auth changes. All checklist items pass.
+
+### Manage Members Feature — Session 2
+
+Implemented the full "Manage Members" page per `.claude/plans/plan-membership-management.md`.
+
+**Files created**:
+- `src/lib/dto/members.ts` — DTOs: `MemberCard`, `MemberStatusGroup`, `TransitionPayload`, constants (`STATUS_TO_MILESTONE`, `MEMBER_STATUS_GROUPS`, `MEMBERS_PAGE_SIZE`)
+- `src/services/memberService.ts` — Singleton service: `getMembers` (paginated), `getStatusCounts`, `getMemberStatuses`, `addMilestone`, `attachFileToMilestone`, `updateMemberStatus`
+- `src/components/manage-members/actions.ts` — Server actions: `fetchMembers`, `fetchStatusCounts`, `fetchMemberStatuses`, `transitionMember`
+- `src/components/manage-members/manage-members-shell.tsx` — Client shell: tabs, debounced search (300ms), pagination (50/page), transition dialog orchestration
+- `src/components/manage-members/member-card.tsx` — Card with photo, name, status badge, contact info, "Change Status" button
+- `src/components/manage-members/member-tabs.tsx` — Tab bar: Registered, Associate, Youth, No Status, Dropped (with counts)
+- `src/components/manage-members/transition-dialog.tsx` — Status transition: select target status, auto-mapped milestone, date, notes (auto-prefix for Dropped), file attachment
+- `src/components/manage-members/index.ts` — Barrel exports
+- `src/app/(web)/manage-members/page.tsx` — Server page with Suspense/PPR pattern
+
+**Files modified**:
+- `src/lib/dto/index.ts` — Added `members` barrel export
+- `src/lib/authorization.ts` — Added `"manage-members"` to `StaticFeature`, `DEFAULT_CONFIG`, `getAccessibleFeatures`
+- `src/components/layout/sidebar.tsx` — Added "Manage Members" nav item with `UserGroupIcon`
+- `src/components/home/home-cards.tsx` — Added "Manage Members" feature card
+- `README.md` — Added manage-members to project structure, features, components, and services
+
+**Key decisions**:
+- Used `Participant_Milestones` table (not `Contact_Milestones` — corrected during session)
+- Server-side pagination at 50/page; lightweight status count query for tab totals
+- All filter strings use `sanitizeFilterValue()` / `sanitizeIds()` for injection safety
+- Feature access via `requireFeatureAccess("manage-members")` with tiered rate limiting
+- Dropped notes auto-prefixed with specific member status name from lookup table
+
+**Security review**:
+- **Files reviewed**: 14 files
+- **Filter injection**: All user inputs sanitized — `sanitizeFilterValue()` for search, `sanitizeIds()` for status IDs. ✅
+- **Authentication**: All server actions call `requireFeatureAccess("manage-members")` before data access. ✅
+- **Rate limiting**: `"search"` tier for reads, `"write"` tier for transitions, file validation with `ALLOWED_DOCUMENT_TYPES` + `MAX_FILE_SIZE`. ✅
+- **Input validation**: contactId, participantId, newStatusId validated as non-NaN numbers; milestoneDate required. ✅
+- **PII logging**: Only `console.error` for errors, no PII logged. ✅
+- **File uploads**: MIME type + size validated server-side. ✅
+- **No hardcoded secrets, no open redirects**. ✅
+- **Issues found**: None
+- **Checklist**: All critical/high items pass

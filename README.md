@@ -37,6 +37,7 @@ A modern Next.js application integrated with Ministry Platform authentication an
 - **Testing**: Vitest test framework with coverage for auth, proxy, rate limiting, authorization, and API services
 - **Executive Dashboard**: Attendance metrics, community trends, small group analytics with YoY comparisons
 - **Contact Lookup**: Scored search with exact/starts-with/contains/Soundex/Levenshtein matching
+- **Manage Members**: Card-based membership management with status tabs, server-side search/pagination, status transitions via milestones
 - **Journey & Compliance Processing**: Configurable multi-step processing workflows (volunteer, baptism, membership)
 - **Cache Warming**: Automatic pre-warming of all cached data on server start
 
@@ -300,6 +301,7 @@ mp-charts/
 │   │   │   ├── contact-lookup/          # Contact search & detail pages
 │   │   │   │   └── [guid]/             # Dynamic contact detail page
 │   │   │   ├── dashboard/              # Executive dashboard
+│   │   │   ├── manage-members/        # Membership management
 │   │   │   ├── home/                   # Home redirect
 │   │   │   ├── journey/               # Journey processing tools
 │   │   │   ├── layout.tsx              # Web layout with auth
@@ -318,6 +320,7 @@ mp-charts/
 │   │   ├── contact-lookup/              # Contact search with scored matching
 │   │   ├── contact-lookup-details/      # Detailed contact view
 │   │   ├── dashboard/                   # Executive dashboard charts & metrics
+│   │   ├── manage-members/             # Membership status management
 │   │   ├── feedback/                    # User feedback feature
 │   │   ├── home/                        # Home page cards
 │   │   ├── journey-processing/          # Journey processing feature
@@ -478,6 +481,7 @@ Built with Radix UI primitives and styled with Tailwind CSS. Located in `src/com
 - **contact-logs**: Full CRUD for contact interaction history
 - **dashboard**: Executive dashboard with attendance, community, and small group charts (YoY comparisons)
 - **journey-processing**: Configurable multi-step journey workflows (e.g., volunteer, baptism)
+- **manage-members**: Membership status management with card grid, tab filtering, status transitions, and milestone creation
 - **compliance-processing**: Configurable compliance tracking workflows (e.g., membership)
 - **admin**: Admin tool editors for journey and compliance tool configuration
 - **feedback**: User feedback submission
@@ -498,6 +502,7 @@ Application services provide business logic abstraction over the Ministry Platfo
 | **DashboardService** | `dashboardService.ts` | Executive dashboard metrics and trends |
 | **JourneyProcessingService** | `journeyProcessingService.ts` | Journey workflow step processing |
 | **ComplianceProcessingService** | `complianceProcessingService.ts` | Compliance workflow processing |
+| **MemberService** | `memberService.ts` | Membership status management, milestones, transitions |
 | **FeedbackService** | `feedbackService.ts` | User feedback submission |
 | **UserService** | `userService.ts` | User profile and roles retrieval |
 
