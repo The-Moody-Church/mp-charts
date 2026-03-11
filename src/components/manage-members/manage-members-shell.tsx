@@ -24,8 +24,7 @@ function buildGroups(
   return MEMBER_STATUS_GROUPS.map((g) => {
     let count = 0;
     for (const id of g.statusIds) {
-      const key = id === null ? "null" : String(id);
-      count += counts[key] || 0;
+      count += counts[String(id)] || 0;
     }
     return { ...g, count };
   });
@@ -56,7 +55,7 @@ export function ManageMembersShell({
   const activeStatusIds = activeGroup?.statusIds ?? [1];
 
   const loadMembers = useCallback(
-    (statusIds: (number | null)[], pageNum: number, searchTerm: string) => {
+    (statusIds: number[], pageNum: number, searchTerm: string) => {
       startTransition(async () => {
         const [membersResult, countsResult] = await Promise.all([
           fetchMembers(statusIds, pageNum, searchTerm || undefined),

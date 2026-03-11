@@ -12,7 +12,7 @@ interface MemberCardProps {
   onTransition: (member: MemberCardType) => void;
 }
 
-function statusBadgeColor(statusId: number | null): string {
+function statusBadgeColor(statusId: number): string {
   switch (statusId) {
     case 1: return "bg-green-100 text-green-800";
     case 4: return "bg-blue-100 text-blue-800";
@@ -62,7 +62,7 @@ export function MemberCardComponent({ member, mpFileUrl, onTransition }: MemberC
         <span
           className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeColor(member.memberStatusId)}`}
         >
-          {member.memberStatus || "No Status"}
+          {member.memberStatus}
         </span>
 
         {/* Contact info */}

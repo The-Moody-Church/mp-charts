@@ -1,5 +1,6 @@
 /**
  * DTOs for the Manage Members feature.
+ * Only participants with a non-null Member_Status_ID are included.
  */
 
 export interface MemberCard {
@@ -11,8 +12,8 @@ export interface MemberCard {
   lastName: string;
   email: string | null;
   mobilePhone: string | null;
-  memberStatusId: number | null;
-  memberStatus: string | null;
+  memberStatusId: number;
+  memberStatus: string;
   contactStatusId: number | null;
   fileUniqueId: string | null;
 }
@@ -20,7 +21,7 @@ export interface MemberCard {
 export interface MemberStatusGroup {
   key: string;
   label: string;
-  statusIds: (number | null)[];
+  statusIds: number[];
   count: number;
 }
 
@@ -37,7 +38,6 @@ export const MEMBER_STATUS_GROUPS: Omit<MemberStatusGroup, 'count'>[] = [
   { key: 'registered', label: 'Registered', statusIds: [1] },
   { key: 'associate', label: 'Associate', statusIds: [4] },
   { key: 'youth', label: 'Youth', statusIds: [10] },
-  { key: 'no-status', label: 'No Status', statusIds: [null] },
   { key: 'dropped', label: 'Dropped', statusIds: [5, 6, 7, 8, 9] },
 ];
 

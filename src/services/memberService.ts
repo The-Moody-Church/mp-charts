@@ -14,14 +14,14 @@ interface MemberRow {
   Contact_Status_ID: number | null;
   dp_fileUniqueId: string | null;
   Participant_ID: number;
-  Member_Status_ID: number | null;
-  Member_Status: string | null;
+  Member_Status_ID: number;
+  Member_Status: string;
 }
 
 /** Raw row shape for the lightweight status-count query. */
 interface StatusCountRow {
   Contact_ID: number;
-  Member_Status_ID: number | null;
+  Member_Status_ID: number;
 }
 
 /** Member status lookup row. */
@@ -49,29 +49,22 @@ function toMemberCard(row: MemberRow): MemberCard {
 
 /**
  * Build the filter clause for member queries.
- * Always includes Participant_Record IS NOT NULL.
+ * Always requires a Participant record with a non-null Member_Status_ID.
  * Optionally adds status and search filters.
  */
 function buildMemberFilter(options: {
-  statusIds?: (number | null)[];
+  statusIds?: number[];
   search?: string;
 }): string {
-  const parts: string[] = ["Participant_Record IS NOT NULL"];
+  const parts: string[] = [
+    "Participant_Record IS NOT NULL",
+    "Participant_Record_Table.[Member_Status_ID] IS NOT NULL",
+  ];
 
   if (options.statusIds && options.statusIds.length > 0) {
-    const hasNull = options.statusIds.includes(null);
-    const numericIds = options.statusIds.filter((id): id is number => id !== null);
-
-    const statusParts: string[] = [];
-    if (numericIds.length > 0) {
-      statusParts.push(
-        `Participant_Record_Table.[Member_Status_ID] IN (${sanitizeIds(numericIds)})`
-      );
-    }
-    if (hasNull) {
-      statusParts.push("Participant_Record_Table.[Member_Status_ID] IS NULL");
-    }
-    parts.push(`(${statusParts.join(" OR ")})`);
+    parts.push(
+      `Participant_Record_Table.[Member_Status_ID] IN (${sanitizeIds(options.statusIds)})`
+    );
   }
 
   if (options.search && options.search.trim()) {
@@ -108,7 +101,7 @@ export class MemberService {
   // ---------------------------------------------------------------
 
   public async getMembers(options: {
-    statusIds?: (number | null)[];
+    statusIds?: number[];
     top?: number;
     skip?: number;
     search?: string;
@@ -167,7 +160,7 @@ export class MemberService {
     // Count client-side
     const counts: Record<string, number> = {};
     for (const row of rows) {
-      const key = row.Member_Status_ID === null ? "null" : String(row.Member_Status_ID);
+      const key = String(row.Member_Status_ID);
       counts[key] = (counts[key] || 0) + 1;
     }
     return counts;

@@ -8,7 +8,7 @@ import { ALLOWED_DOCUMENT_TYPES, MAX_FILE_SIZE } from "@/lib/processing-utils";
 import type { MemberCard, TransitionPayload } from "@/lib/dto";
 
 export async function fetchMembers(
-  statusIds: (number | null)[],
+  statusIds: number[],
   page: number,
   search?: string,
 ): Promise<{ members: MemberCard[] }> {
