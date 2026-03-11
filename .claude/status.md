@@ -2,12 +2,13 @@
 
 Quick-reference snapshot of current project state. Read this first at session start. For full details on any item, see the relevant session summary in `.claude/sessions/`.
 
-**Last updated**: 2026-03-10
+**Last updated**: 2026-03-11
 
 ## Recently Completed
 
 | Date | Work | Issues | PR |
 |------|------|--------|----|
+| 2026-03-11 | **Cache warming everywhere**: Audited all `'use cache'` functions, confirmed all 6 are registered in `cache-warming.ts`, added missing cross-reference comments to `dashboardService.ts` and `cached-contacts.ts` | #80 | — |
 | 2026-03-10 | **Contact lookup enhancements**: route rename, breadcrumbs, badges, family section, birthday, photo upload, View in MP, Copy Link, email/phone search, remove delete from logs, consolidate permissions | #19 | #81 |
 | 2026-03-10 | **PWA**: service worker, offline fallback, iOS install prompt | — | #77 |
 | 2026-03-10 | **Search ranking**: scored search with exact/starts-with/contains/Soundex/Levenshtein, both name orderings, search-as-you-type, cached contact lookup | #78 | #79 |

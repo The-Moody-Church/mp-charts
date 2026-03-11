@@ -7,7 +7,7 @@
 
 ## Work Done
 
-### Cache Warming Implementation (#80)
+### Cache Warming Implementation (#80) — Prior Session
 
 **Problem**: When the Docker container starts, all caches are cold. The first user to hit the dashboard or contact lookup waits for the full data fetch (multiple MP API calls, some taking 10+ seconds for engagement data).
 
@@ -45,3 +45,15 @@
 - Used `instrumentation.ts` polling instead of a Docker entrypoint script — cleaner, no Dockerfile changes needed
 - All caches warm in parallel for fastest startup
 - Secret-based auth on the API endpoint (proxy already allows `/api/*` through)
+
+### Cache Warming Audit & Documentation Gaps — This Session
+
+Audited all `'use cache'` functions across the codebase to verify completeness:
+- **All 6 cached functions confirmed registered** in `cache-warming.ts`
+- Found 2 files missing the mandatory cross-reference comment pointing to `cache-warming.ts`
+
+**Files modified**:
+- `src/services/dashboardService.ts` — Added NOTE comment to `getCachedGroupTypes` pointing to `cache-warming.ts` and explaining it's warmed indirectly
+- `src/components/contact-lookup/cached-contacts.ts` — Added NOTE comment to `getCachedAllContacts` pointing to `cache-warming.ts`
+
+**Security review**: Comment-only changes. No code logic, no filter interpolation, no PII, no auth changes. All checklist items pass.

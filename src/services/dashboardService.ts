@@ -24,6 +24,11 @@ const MONTH_NAMES = [
 /**
  * Cached Group_Types lookup (24-hour cache via 'use cache')
  * The `ids` parameter is automatically part of the cache key.
+ *
+ * NOTE: This function is warmed indirectly by getCachedDashboardData/getCachedFullRangeData.
+ * If you add a new 'use cache' function here, you MUST register it in
+ * src/lib/cache-warming.ts so it is pre-warmed on container start.
+ * See the "Cache Warming" section in CLAUDE.md.
  */
 async function getCachedGroupTypes(ids: string) {
   'use cache';
