@@ -21,7 +21,6 @@ Quick-reference snapshot of current project state. Read this first at session st
 - [**#52** — Active Communities and Small Groups chart needs work](ideas.md#bug-active-communities-and-small-groups-chart-needs-work-52)
 - [**#57** — IDOR mitigation (per-record authorization)](ideas.md#idor-mitigation--per-record-authorization-57)
 - [**#15** — Small Group Trends chart visualization improvements](ideas.md#small-group-trends-chart-15)
-- [**#19** — Pastoral interface for contact logs](ideas.md#pastoral-interface-for-contact-logs-19)
 
 ## Key Architecture Notes
 
