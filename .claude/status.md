@@ -4,16 +4,12 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 **Last updated**: 2026-03-11
 
-## In Progress
-
-| Work | Issues | PR | Notes |
-|------|--------|----|-------|
-| **Auth callback redirect**: Preserve original URL through login redirect | — | #86 | On `feature/auth-callback-redirect` branch |
-
 ## Recently Completed
 
 | Date | Work | Issues | PR |
 |------|------|--------|----|
+| 2026-03-11 | **Auth callback redirect**: Preserve original URL through login redirect | — | #86 |
+| 2026-03-11 | **Member photo upload fix**: Correct form field name mismatch in member detail modal | — | #87 |
 | 2026-03-11 | **Manage Members**: Card-based membership management with status tabs, detail modal, expandable milestones, deep links, client-side transition overrides, cache refresh button, rate limit resilience | — | #84 |
 | 2026-03-11 | **Cache warming everywhere**: Audited all `'use cache'` functions, confirmed all 6 are registered in `cache-warming.ts`, added missing cross-reference comments to `dashboardService.ts` and `cached-contacts.ts` | #80 | — |
 | 2026-03-10 | **Contact lookup enhancements**: route rename, breadcrumbs, badges, family section, birthday, photo upload, View in MP, Copy Link, email/phone search, remove delete from logs, consolidate permissions | #19 | #81 |
