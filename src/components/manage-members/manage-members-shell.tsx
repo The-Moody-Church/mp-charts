@@ -9,7 +9,7 @@ import { MemberTabs } from "./member-tabs";
 import { MemberCardComponent } from "./member-card";
 import { MemberDetailModal } from "./member-detail-modal";
 import { TransitionDialog } from "./transition-dialog";
-import { fetchMembers, fetchStatusCounts } from "./actions";
+import { fetchMembers, fetchStatusCounts, fetchMemberDetail } from "./actions";
 import { MEMBER_STATUS_GROUPS, MEMBERS_PAGE_SIZE } from "@/lib/dto";
 import type { MemberCard, MemberStatusGroup } from "@/lib/dto";
 
@@ -17,6 +17,7 @@ interface ManageMembersShellProps {
   initialMembers: MemberCard[];
   initialCounts: Record<string, number>;
   initialStatuses: { Member_Status_ID: number; Member_Status: string }[];
+  initialMemberId?: number | null;
 }
 
 function buildGroups(
@@ -35,6 +36,7 @@ export function ManageMembersShell({
   initialMembers,
   initialCounts,
   initialStatuses,
+  initialMemberId,
 }: ManageMembersShellProps) {
   const mpFileUrl = process.env.NEXT_PUBLIC_MINISTRY_PLATFORM_FILE_URL || null;
 
@@ -54,6 +56,22 @@ export function ManageMembersShell({
   // Transition dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<MemberCard | null>(null);
+
+  // Deep link: auto-open modal for ?member=contactId
+  const [hasAutoOpened, setHasAutoOpened] = useState(false);
+  useEffect(() => {
+    if (!initialMemberId || hasAutoOpened) return;
+    setHasAutoOpened(true);
+
+    // Fetch detail directly — works regardless of which tab the member is on
+    fetchMemberDetail(initialMemberId).then((result) => {
+      if (result) {
+        setDetailMember(result.member);
+        setDetailOpen(true);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialMemberId]);
 
   const groups = buildGroups(counts);
   const activeGroup = groups.find((g) => g.key === activeTab);

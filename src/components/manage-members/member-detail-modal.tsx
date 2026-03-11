@@ -45,6 +45,7 @@ export function MemberDetailModal({
   const [detail, setDetail] = useState<MemberDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -54,7 +55,7 @@ export function MemberDetailModal({
     }
 
     setLoading(true);
-    fetchMemberDetail(member.contactId, member.participantId)
+    fetchMemberDetail(member.contactId)
       .then(setDetail)
       .finally(() => setLoading(false));
   }, [open, member]);
@@ -79,6 +80,15 @@ export function MemberDetailModal({
       setPhotoUploading(false);
       if (photoInputRef.current) photoInputRef.current.value = "";
     }
+  }
+
+  function handleCopyLink() {
+    if (!member) return;
+    const url = `${window.location.origin}/manage-members?member=${member.contactId}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    });
   }
 
   const displayName = member
@@ -142,19 +152,26 @@ export function MemberDetailModal({
             {/* Contact links */}
             <ContactLinks email={m.email} phone={m.mobilePhone} showSms />
 
-            {/* View in MP link */}
-            {mpFileUrl && (
-              <div>
+            {/* Links: View in MP + Copy Link */}
+            <div className="flex flex-wrap items-center gap-1 text-sm">
+              {mpFileUrl && (
                 <a
                   href={`${new URL(mpFileUrl).origin}/mp/355/${m.participantId}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline text-sm"
+                  className="text-blue-600 hover:underline"
                 >
                   View in MP
                 </a>
-              </div>
-            )}
+              )}
+              {mpFileUrl && <span className="text-muted-foreground">&mdash;</span>}
+              <button
+                onClick={handleCopyLink}
+                className="text-blue-600 hover:underline"
+              >
+                {linkCopied ? "Copied!" : "Copy Link"}
+              </button>
+            </div>
 
             {/* Membership Milestones */}
             <div>

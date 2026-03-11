@@ -103,12 +103,11 @@ export async function fetchMemberStatuses(): Promise<
 
 export async function fetchMemberDetail(
   contactId: number,
-  participantId: number,
 ): Promise<MemberDetail | null> {
   const session = await requireFeatureAccess("manage-members");
   enforceRateLimit(session.user.id, "search");
 
-  if (!contactId || isNaN(contactId) || !participantId || isNaN(participantId)) {
+  if (!contactId || isNaN(contactId)) {
     return null;
   }
 
@@ -119,7 +118,7 @@ export async function fetchMemberDetail(
 
   // Fetch milestones from DB
   const service = await MemberService.getInstance();
-  const milestones = await service.getMemberMilestones(participantId);
+  const milestones = await service.getMemberMilestones(contact.Participant_ID!);
 
   return {
     member: toMemberCard(contact),
