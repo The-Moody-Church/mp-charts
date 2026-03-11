@@ -33,6 +33,13 @@ const featureCards: FeatureCard[] = [
     feature: "contact-lookup",
   },
   {
+    title: "Manage Members",
+    description: "View and manage church membership statuses, transitions, and milestones",
+    href: "/manage-members",
+    buttonText: "Manage Members",
+    feature: "manage-members",
+  },
+  {
     title: "Setup",
     description: "Manage which User Groups can access each feature",
     href: "/admin",
