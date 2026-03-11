@@ -57,7 +57,7 @@ export class MemberService {
 
     const rows = await this.mp!.getTableRecords<MilestoneRow>({
       table: "Participant_Milestones",
-      select: "Participant_Milestone_ID, Milestone_ID, Milestone_ID_Table.[Milestone_Title], Date_Accomplished, Notes",
+      select: "Participant_Milestone_ID, Participant_Milestones.[Milestone_ID], Milestone_ID_Table.[Milestone_Title], Date_Accomplished, Notes",
       filter: `Participant_ID IN (${safeId}) AND Milestone_ID_Table.[Journey_ID] = ${MEMBERSHIP_JOURNEY_ID}`,
       orderBy: "Date_Accomplished DESC",
     });

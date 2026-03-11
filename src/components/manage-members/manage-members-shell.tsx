@@ -64,12 +64,18 @@ export function ManageMembersShell({
     setHasAutoOpened(true);
 
     // Fetch detail directly — works regardless of which tab the member is on
-    fetchMemberDetail(initialMemberId).then((result) => {
-      if (result) {
-        setDetailMember(result.member);
-        setDetailOpen(true);
-      }
-    });
+    fetchMemberDetail(initialMemberId)
+      .then((result) => {
+        if (result) {
+          setDetailMember(result.member);
+          setDetailOpen(true);
+        } else {
+          console.warn("Deep link: member not found for contactId", initialMemberId);
+        }
+      })
+      .catch((err) => {
+        console.error("Deep link: failed to fetch member detail", err);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialMemberId]);
 
