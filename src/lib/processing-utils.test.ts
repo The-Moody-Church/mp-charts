@@ -9,8 +9,8 @@ function person(first: string, last: string, nickname: string | null = null) {
 }
 
 /** Helper to create a flat name record for searchByNameFlat. */
-function flatPerson(first: string, last: string, nickname: string | null = null) {
-  return { First_Name: first, Nickname: nickname, Last_Name: last };
+function flatPerson(first: string, last: string, nickname: string | null = null, email: string | null = null, phone: string | null = null) {
+  return { First_Name: first, Nickname: nickname, Last_Name: last, Email_Address: email, Mobile_Phone: phone };
 }
 
 describe("soundex", () => {
@@ -305,5 +305,96 @@ describe("searchByNameFlat", () => {
     expect(results.length).toBeGreaterThanOrEqual(1);
     // Jonny starts with "Jon" → should rank above John (soundex only)
     expect(results[0].First_Name).toBe("Jonny");
+  });
+});
+
+describe("searchByNameFlat — email matching", () => {
+  it("matches exact email address", () => {
+    const items = [
+      flatPerson("Jon", "Huff", null, "jon@example.com"),
+      flatPerson("Jane", "Doe", null, "jane@example.com"),
+    ];
+    const results = searchByNameFlat(items, "jon@example.com");
+    expect(results).toHaveLength(1);
+    expect(results[0].First_Name).toBe("Jon");
+  });
+
+  it("matches email local part", () => {
+    const items = [
+      flatPerson("Jon", "Huff", null, "jhuff@example.com"),
+      flatPerson("Jane", "Doe", null, "jdoe@example.com"),
+    ];
+    const results = searchByNameFlat(items, "jhuff");
+    expect(results).toHaveLength(1);
+    expect(results[0].First_Name).toBe("Jon");
+  });
+
+  it("matches partial email (contains)", () => {
+    const items = [
+      flatPerson("Jon", "Huff", null, "jonathan.huff@church.org"),
+      flatPerson("Jane", "Doe", null, "jane.doe@church.org"),
+    ];
+    const results = searchByNameFlat(items, "huff@church");
+    expect(results).toHaveLength(1);
+    expect(results[0].First_Name).toBe("Jon");
+  });
+
+  it("name matches rank higher than email matches", () => {
+    const items = [
+      flatPerson("Alice", "Smith", null, "jon@example.com"),
+      flatPerson("Jon", "Huff", null, "alice@example.com"),
+    ];
+    const results = searchByNameFlat(items, "jon");
+    expect(results[0].First_Name).toBe("Jon"); // name match outranks email match
+  });
+});
+
+describe("searchByNameFlat — phone matching", () => {
+  it("matches full phone number", () => {
+    const items = [
+      flatPerson("Jon", "Huff", null, null, "312-555-1234"),
+      flatPerson("Jane", "Doe", null, null, "312-555-5678"),
+    ];
+    const results = searchByNameFlat(items, "3125551234");
+    expect(results).toHaveLength(1);
+    expect(results[0].First_Name).toBe("Jon");
+  });
+
+  it("matches last 7 digits of phone", () => {
+    const items = [
+      flatPerson("Jon", "Huff", null, null, "1-312-555-1234"),
+      flatPerson("Jane", "Doe", null, null, "1-312-555-5678"),
+    ];
+    const results = searchByNameFlat(items, "555-1234");
+    expect(results).toHaveLength(1);
+    expect(results[0].First_Name).toBe("Jon");
+  });
+
+  it("matches partial phone digits", () => {
+    const items = [
+      flatPerson("Jon", "Huff", null, null, "312-555-1234"),
+      flatPerson("Jane", "Doe", null, null, "312-555-5678"),
+    ];
+    const results = searchByNameFlat(items, "1234");
+    expect(results).toHaveLength(1);
+    expect(results[0].First_Name).toBe("Jon");
+  });
+
+  it("ignores phone matching for queries with fewer than 3 digits", () => {
+    const items = [
+      flatPerson("Jon", "Huff", null, null, "312-555-1234"),
+    ];
+    const results = searchByNameFlat(items, "12");
+    // Should not match on phone (too few digits), but may match name
+    expect(results).toHaveLength(0);
+  });
+
+  it("handles formatted phone queries", () => {
+    const items = [
+      flatPerson("Jon", "Huff", null, null, "3125551234"),
+    ];
+    const results = searchByNameFlat(items, "(312) 555-1234");
+    expect(results).toHaveLength(1);
+    expect(results[0].First_Name).toBe("Jon");
   });
 });

@@ -18,4 +18,24 @@ export interface ContactLookupDetails {
   Email_Address: string;
   Mobile_Phone: string;
   Image_GUID: string;
+  Date_of_Birth: string | null;
+  Household_ID: number | null;
+  Household_Position_ID: number | null;
+}
+
+export interface HouseholdMember {
+  Contact_ID: number;
+  Contact_GUID: string;
+  First_Name: string;
+  Nickname: string;
+  Last_Name: string;
+  Image_GUID: string;
+  Household_Position_ID: number | null;
+  Date_of_Birth: string | null;
+}
+
+export interface ContactBadges {
+  membershipStatus: 'Member' | 'Associate' | 'Youth' | 'Dropped' | null;
+  inGroup: boolean;
+  serving: boolean;
 }

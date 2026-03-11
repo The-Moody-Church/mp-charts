@@ -139,6 +139,40 @@ interface NameFields {
   First_Name: string;
   Nickname: string | null;
   Last_Name: string;
+  Email_Address?: string | null;
+  Mobile_Phone?: string | null;
+}
+
+/** Strip non-digit characters from a string for phone comparison. */
+function digitsOnly(s: string): string {
+  return s.replace(/\D/g, "");
+}
+
+/** Score an email address against a query. Returns 0 if no match. */
+function scoreEmailMatch(email: string | null | undefined, query: string): number {
+  if (!email) return 0;
+  const e = email.toLowerCase();
+  if (e === query) return 8;
+  // Match against the local part (before @)
+  const local = e.split("@")[0];
+  if (local === query) return 7;
+  if (local.startsWith(query)) return 5;
+  if (e.includes(query)) return 3;
+  return 0;
+}
+
+/** Score a phone number against a query. Only matches when query contains digits. */
+function scorePhoneMatch(phone: string | null | undefined, query: string): number {
+  if (!phone) return 0;
+  const queryDigits = digitsOnly(query);
+  if (queryDigits.length < 3) return 0; // Need at least 3 digits to match
+  const phoneDigits = digitsOnly(phone);
+  if (!phoneDigits) return 0;
+  if (phoneDigits === queryDigits) return 8;
+  // Match last N digits (people often search by the 7 or 10 digit number without country code)
+  if (phoneDigits.endsWith(queryDigits)) return 7;
+  if (phoneDigits.includes(queryDigits)) return 5;
+  return 0;
 }
 
 /**
@@ -186,6 +220,14 @@ function scoreNameMatch(fields: NameFields, query: string): number {
       if ([first, nick, last].filter(Boolean).some(n => fuzzyMatch(term, n))) {
         score = 1;
       }
+    }
+
+    // Email and phone fallback for single-word queries
+    if (score === 0) {
+      score = Math.max(
+        scoreEmailMatch(fields.Email_Address, q),
+        scorePhoneMatch(fields.Mobile_Phone, q)
+      );
     }
 
     return score;
@@ -258,7 +300,11 @@ function scoreNameMatch(fields: NameFields, query: string): number {
   }
 
   if (score === 0) {
-    return 0;
+    // Email matching (lower priority than name matches)
+    score = Math.max(score, scoreEmailMatch(fields.Email_Address, q));
+
+    // Phone matching (only when query contains digits)
+    score = Math.max(score, scorePhoneMatch(fields.Mobile_Phone, q));
   }
 
   return score;

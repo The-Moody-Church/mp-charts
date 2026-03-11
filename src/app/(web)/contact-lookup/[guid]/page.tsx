@@ -12,7 +12,7 @@ export default function ContactLookupDetailPage({
 }: ContactLookupDetailPageProps) {
   return (
     <Suspense fallback={
-      <div className="container mx-auto p-4 space-y-6">
+      <div className="container mx-auto max-w-4xl p-4 sm:p-6 lg:p-8 space-y-6">
         <div className="text-muted-foreground">Loading contact...</div>
       </div>
     }>
@@ -27,7 +27,7 @@ async function ContactLookupDetailContent({
   const { guid } = await params;
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
+    <div className="container mx-auto max-w-4xl p-4 sm:p-6 lg:p-8 space-y-6">
       <ContactLookupDetails guid={guid} />
     </div>
   );

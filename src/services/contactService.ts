@@ -1,6 +1,6 @@
-import { ContactSearch } from "@/lib/dto";
+import { ContactSearch, ContactLookupDetails, HouseholdMember, ContactBadges } from "@/lib/dto";
 import { MPHelper } from "@/lib/providers/ministry-platform";
-import { sanitizeFilterValue, sanitizeGuid } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
+import { sanitizeFilterValue, sanitizeGuid, sanitizeIds } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
 
 /**
  * ContactService - Singleton service for managing contact-related operations
@@ -72,16 +72,15 @@ export class ContactService {
    * @param contactGuid - The unique GUID identifier for the contact
    * @returns Promise<ContactSearch | null> - The matching contact record or null if not found
    */
-  public async getContactByGuid(contactGuid: string): Promise<ContactSearch | null> {
+  public async getContactByGuid(contactGuid: string): Promise<ContactLookupDetails | null> {
     const validGuid = sanitizeGuid(contactGuid);
-    const records = await this.mp!.getTableRecords<ContactSearch>({
+    const records = await this.mp!.getTableRecords<ContactLookupDetails>({
       table: "Contacts",
       filter: `Contact_GUID = '${validGuid}'`,
-      select: "Contact_ID, Contact_GUID,First_Name,Nickname,Last_Name,Email_Address,Mobile_Phone,dp_fileUniqueId AS Image_GUID",
+      select: "Contact_ID, Contact_GUID, First_Name, Nickname, Last_Name, Email_Address, Mobile_Phone, dp_fileUniqueId AS Image_GUID, Date_of_Birth, Household_ID, Household_Position_ID",
       top: 1
     });
-    
-    // Return the first (and should be only) matching record, or null if not found
+
     return records.length > 0 ? records[0] : null;
   }
 
@@ -102,5 +101,129 @@ export class ContactService {
       "Contacts",
       [record]
     );
+  }
+
+  public async getHouseholdMembers(householdId: number): Promise<HouseholdMember[]> {
+    const safeId = sanitizeIds([householdId]);
+    return this.mp!.getTableRecords<HouseholdMember>({
+      table: "Contacts",
+      filter: `Household_ID IN (${safeId})`,
+      select: "Contact_ID, Contact_GUID, First_Name, Nickname, Last_Name, dp_fileUniqueId AS Image_GUID, Household_Position_ID, Date_of_Birth",
+      orderBy: "Household_Position_ID, Date_of_Birth",
+    });
+  }
+
+  public async getContactBadges(contactId: number): Promise<ContactBadges> {
+    const safeContactId = sanitizeIds([contactId]);
+
+    // Step 1: Get the participant record for this contact
+    const participants = await this.mp!.getTableRecords<{
+      Participant_ID: number;
+      Contact_ID: number;
+      Member_Status_ID: number | null;
+    }>({
+      table: "Participants",
+      filter: `Contact_ID IN (${safeContactId})`,
+      select: "Participant_ID, Contact_ID, Member_Status_ID",
+    });
+
+    // Map membership status
+    let membershipStatus: ContactBadges['membershipStatus'] = null;
+    if (participants.length > 0 && participants[0].Member_Status_ID != null) {
+      const statusId = participants[0].Member_Status_ID;
+      if (statusId === 1) membershipStatus = 'Member';
+      else if (statusId === 4) membershipStatus = 'Associate';
+      else if (statusId === 10) membershipStatus = 'Youth';
+      else if (statusId >= 5 && statusId <= 9) membershipStatus = 'Dropped';
+    }
+
+    // If no participant record, no group/serving data possible
+    if (participants.length === 0) {
+      return { membershipStatus, inGroup: false, serving: false };
+    }
+
+    const participantIds = participants.map(p => p.Participant_ID);
+    const safeParticipantIds = sanitizeIds(participantIds);
+    const today = new Date().toISOString().split('T')[0];
+
+    // Step 2: Check group membership and serving roles in parallel
+    const [groupParticipants, servingParticipants] = await Promise.all([
+      // In a Group: active Group_Participant in Small Group (1) or Community (11)
+      this.getActiveGroupParticipants(safeParticipantIds, today, [1, 11]),
+      // Serving: active Group_Participant with a role that has Group_Role_Type_ID 1 (Leader) or 3 (Servant)
+      this.getServingParticipants(safeParticipantIds, today),
+    ]);
+
+    return {
+      membershipStatus,
+      inGroup: groupParticipants.length > 0,
+      serving: servingParticipants.length > 0,
+    };
+  }
+
+  private async getActiveGroupParticipants(
+    safeParticipantIds: string,
+    today: string,
+    groupTypeIds: number[],
+  ): Promise<{ Group_Participant_ID: number }[]> {
+    // Step 1: Get active groups of the specified types
+    const groups = await this.mp!.getTableRecords<{ Group_ID: number }>({
+      table: "Groups",
+      filter: `Group_Type_ID IN (${groupTypeIds.join(',')}) AND Start_Date <= '${today}' AND (End_Date IS NULL OR End_Date >= '${today}')`,
+      select: "Group_ID",
+    });
+
+    if (groups.length === 0) return [];
+
+    const groupIds = sanitizeIds(groups.map(g => g.Group_ID));
+
+    // Step 2: Check if any of the participant's group_participant records are in those groups and active
+    return this.mp!.getTableRecords<{ Group_Participant_ID: number }>({
+      table: "Group_Participants",
+      filter: `Participant_ID IN (${safeParticipantIds}) AND Group_ID IN (${groupIds}) AND Start_Date <= '${today}' AND (End_Date IS NULL OR End_Date >= '${today}')`,
+      select: "Group_Participant_ID",
+      top: 1,
+    });
+  }
+
+  private async getServingParticipants(
+    safeParticipantIds: string,
+    today: string,
+  ): Promise<{ Group_Participant_ID: number }[]> {
+    // Step 1: Get roles that are Leader (1) or Servant (3)
+    const roles = await this.mp!.getTableRecords<{ Group_Role_ID: number }>({
+      table: "Group_Roles",
+      filter: "Group_Role_Type_ID IN (1, 3)",
+      select: "Group_Role_ID",
+    });
+
+    if (roles.length === 0) return [];
+
+    const roleIds = sanitizeIds(roles.map(r => r.Group_Role_ID));
+
+    // Step 2: Check if any of the participant's group_participant records have serving/leading roles and are active
+    return this.mp!.getTableRecords<{ Group_Participant_ID: number }>({
+      table: "Group_Participants",
+      filter: `Participant_ID IN (${safeParticipantIds}) AND Group_Role_ID IN (${roleIds}) AND Start_Date <= '${today}' AND (End_Date IS NULL OR End_Date >= '${today}')`,
+      select: "Group_Participant_ID",
+      top: 1,
+    });
+  }
+
+  public async uploadContactPhoto(
+    contactId: number,
+    file: File,
+    userId?: number
+  ): Promise<void> {
+    await this.mp!.uploadFiles({
+      table: "Contacts",
+      recordId: contactId,
+      files: [file],
+      uploadParams: {
+        description: "Contact photo uploaded via Contact Lookup",
+        isDefaultImage: true,
+        userId,
+      },
+    });
   }
 }

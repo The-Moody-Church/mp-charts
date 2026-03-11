@@ -28,7 +28,7 @@ export const ContactLookupResults: React.FC<ContactLookupResultsProps> = ({
 
     // Navigate to the contact detail page
     if (contact.Contact_GUID) {
-      router.push(`/contactlookup/${contact.Contact_GUID}`);
+      router.push(`/contact-lookup/${contact.Contact_GUID}`);
     }
   };
 

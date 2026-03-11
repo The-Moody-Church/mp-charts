@@ -1,9 +1,10 @@
 'use server';
 
 import { requireFeatureAccess } from '@/lib/authorization';
-import { ContactLookupDetails, ContactLogDisplay } from '@/lib/dto';
+import { ContactLookupDetails, ContactLogDisplay, HouseholdMember, ContactBadges } from '@/lib/dto';
 import { ContactService } from '@/services/contactService';
 import { ContactLogService } from '@/services/contactLogService';
+import { uploadContactPhoto } from '@/components/shared-actions/processing';
 
 export async function getContactDetails(guid: string): Promise<ContactLookupDetails> {
   try {
@@ -61,4 +62,43 @@ export async function getContactLogsByContactId(contactId: number): Promise<Cont
     console.error('Error fetching contact logs:', error);
     throw new Error('Failed to fetch contact logs');
   }
+}
+
+export async function getHouseholdMembers(householdId: number): Promise<HouseholdMember[]> {
+  try {
+    await requireFeatureAccess("contact-lookup");
+
+    if (!householdId || householdId <= 0) {
+      throw new Error('Valid household ID is required');
+    }
+
+    const contactService = await ContactService.getInstance();
+    return contactService.getHouseholdMembers(householdId);
+  } catch (error) {
+    console.error('Error fetching household members:', error);
+    throw new Error('Failed to fetch household members');
+  }
+}
+
+export async function getContactBadges(contactId: number): Promise<ContactBadges> {
+  try {
+    await requireFeatureAccess("contact-lookup");
+
+    if (!contactId || contactId <= 0) {
+      throw new Error('Valid contact ID is required');
+    }
+
+    const contactService = await ContactService.getInstance();
+    return contactService.getContactBadges(contactId);
+  } catch (error) {
+    console.error('Error fetching contact badges:', error);
+    return { membershipStatus: null, inGroup: false, serving: false };
+  }
+}
+
+export async function uploadContactLookupPhoto(
+  formData: FormData
+): Promise<{ success: boolean; error?: string }> {
+  await requireFeatureAccess("contact-lookup");
+  return uploadContactPhoto(formData, () => ContactService.getInstance());
 }

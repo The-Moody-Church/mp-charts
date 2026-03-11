@@ -10,7 +10,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 
 ### Features
 - [and more specific dashboard subpages (#72)](#and-more-specific-dashboard-subpages-72)
-- [Pastoral Interface for Contact Logs (#19)](#pastoral-interface-for-contact-logs-19)
+- ~~[Pastoral Interface for Contact Logs (#19)](#pastoral-interface-for-contact-logs-19)~~ ✅
 - ~~[Processing Search Bar (#49)](#processing-search-bar-49)~~ ✅
 - ~~[Volunteer Processing: Show In-Process Volunteers on Active Tab (#50)](#volunteer-processing-show-in-process-volunteers-on-active-tab-50)~~ ✅
 - ~~[Redesign Dashboard Layout: Discipleship Pathway Sections (#42)](#redesign-dashboard-layout-discipleship-pathway-sections-42)~~ ✅
@@ -63,8 +63,8 @@ For each step in the journey of a lifetime, add sub pages with more detailed cha
 - feed your soul 
 - grow in love
 
-### Pastoral Interface for Contact Logs ([#19](https://github.com/The-Moody-Church/mp-charts/issues/19))
-A dedicated pastoral interface for viewing and managing contact logs.
+### ~~Pastoral Interface for Contact Logs ([#19](https://github.com/The-Moody-Church/mp-charts/issues/19))~~ ✅ COMPLETED
+Contact lookup detail page now serves as the pastoral interface for contact logs. Features: contact info with action buttons (email, phone, SMS), membership/group/serving badges, birthday indicator, collapsible family/household section with avatars, and contact log create/edit functionality. Breadcrumbs show display name instead of GUID.
 
 ### ~~Processing Search Bar ([#49](https://github.com/The-Moody-Church/mp-charts/issues/49))~~ ✅ COMPLETED
 Added a shared `ProcessingSearchBar` component to all processing pages (volunteer, baptism, membership). Filters cards by name (first name, nickname, last name) across all tabs. Implemented as a reusable component in `src/components/processing/` with a `filterByName` utility in `src/lib/processing-utils.ts`.
