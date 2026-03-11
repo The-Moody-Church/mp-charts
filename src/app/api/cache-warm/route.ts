@@ -10,6 +10,14 @@ import { warmAllCaches } from '@/lib/cache-warming';
  * The token is generated in register() and shared via process.env.__CACHE_WARM_TOKEN
  * (same Node.js process). External callers cannot guess it.
  */
+/** Format milliseconds as m:ss.xx (e.g., 1:36.63) */
+function formatDuration(ms: number): string {
+  const totalSeconds = ms / 1000;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toFixed(2).padStart(5, '0')}`;
+}
+
 export async function GET(request: NextRequest) {
   const token = process.env.__CACHE_WARM_TOKEN;
   if (!token) {
@@ -38,12 +46,12 @@ export async function GET(request: NextRequest) {
 
   for (const r of results) {
     if (r.status === 'success') {
-      console.log(`[cache-warm] ✓ ${r.name} (${r.durationMs}ms)`);
+      console.log(`[cache-warm] ✓ ${r.name} (${formatDuration(r.durationMs)})`);
     } else {
-      console.error(`[cache-warm] ✗ ${r.name} (${r.durationMs}ms): ${r.error}`);
+      console.error(`[cache-warm] ✗ ${r.name} (${formatDuration(r.durationMs)}): ${r.error}`);
     }
   }
-  console.log(`[cache-warm] Complete: ${succeeded} succeeded, ${failed} failed (${totalMs}ms total)`);
+  console.log(`[cache-warm] Complete: ${succeeded} succeeded, ${failed} failed (${formatDuration(totalMs)} total)`);
 
   return NextResponse.json({
     success: failed === 0,

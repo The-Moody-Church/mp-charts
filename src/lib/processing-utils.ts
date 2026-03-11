@@ -41,6 +41,25 @@ export const ALLOWED_DOCUMENT_TYPES = [...ALLOWED_IMAGE_TYPES, 'application/pdf'
 /** Maximum file size for uploads (1 MB). */
 export const MAX_FILE_SIZE = 1 * 1024 * 1024;
 
+/**
+ * Current date/time formatted as an ISO-like string in Central time.
+ * Ministry Platform expects Central time for date fields.
+ */
+export function nowCentral(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Chicago',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date());
+  const get = (type: string) => parts.find(p => p.type === type)?.value || '00';
+  return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:${get('second')}`;
+}
+
 /** Normalize apostrophe variants (curly quotes, modifier letter) to ASCII and strip them for comparison. */
 export function normalizeApostrophes(s: string): string {
   return s.replace(/[\u2018\u2019\u02BC']/g, "");

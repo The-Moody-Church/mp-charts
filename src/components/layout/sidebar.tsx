@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
-import { HomeIcon, UsersIcon, ChartBarIcon, ShieldCheckIcon, MapIcon, CheckBadgeIcon } from "@heroicons/react/24/outline";
+import { HomeIcon, UsersIcon, UserGroupIcon, ChartBarIcon, ShieldCheckIcon, MapIcon, CheckBadgeIcon } from "@heroicons/react/24/outline";
 import { useAuthorization } from "@/hooks/use-authorization";
 import { useUser } from "@/contexts/user-context";
 import type { Feature } from "@/lib/authorization";
@@ -24,6 +24,7 @@ const navigation: NavItem[] = [
   { name: "Home", href: "/", icon: HomeIcon },
   { name: "Executive Dashboard", href: "/dashboard", icon: ChartBarIcon, feature: "dashboard" },
   { name: "Contact Lookup", href: "/contact-lookup", icon: UsersIcon, feature: "contact-lookup" },
+  { name: "Manage Members", href: "/manage-members", icon: UserGroupIcon, feature: "manage-members" },
   { name: "Setup", href: "/admin", icon: ShieldCheckIcon, adminOnly: true },
 ];
 

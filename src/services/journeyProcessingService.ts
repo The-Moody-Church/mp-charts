@@ -10,25 +10,7 @@ import {
   JourneyWriteBackConfig,
 } from '@/lib/dto';
 import { getJourneyToolBySlug, type JourneyToolConfig } from '@/lib/journey-tools-config';
-
-/**
- * Returns the current date/time formatted as an ISO-like string in Central time.
- * Ministry Platform expects Central time for date fields.
- */
-function nowCentral(): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Chicago',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  }).formatToParts(new Date());
-  const get = (type: string) => parts.find(p => p.type === type)?.value || '00';
-  return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:${get('second')}`;
-}
+import { nowCentral } from '@/lib/processing-utils';
 
 const BATCH_SIZE = 100;
 
