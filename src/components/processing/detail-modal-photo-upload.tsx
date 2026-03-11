@@ -13,6 +13,7 @@ interface DetailModalPhotoUploadProps {
   uploading: boolean;
   onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   photoInputRef: React.RefObject<HTMLInputElement | null>;
+  className?: string;
 }
 
 export function DetailModalPhotoUpload({
@@ -24,12 +25,13 @@ export function DetailModalPhotoUpload({
   uploading,
   onUpload,
   photoInputRef,
+  className,
 }: DetailModalPhotoUploadProps) {
   const displayName = getDisplayName(firstName, nickname);
 
   return (
     <div
-      className="w-14 h-14 rounded-full overflow-hidden relative flex-shrink-0 cursor-pointer group"
+      className={className || "w-14 h-14 rounded-full overflow-hidden relative flex-shrink-0 cursor-pointer group"}
       onClick={() => photoInputRef.current?.click()}
       title={uploading ? "Uploading..." : "Upload photo"}
     >

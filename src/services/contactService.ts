@@ -209,4 +209,21 @@ export class ContactService {
       top: 1,
     });
   }
+
+  public async uploadContactPhoto(
+    contactId: number,
+    file: File,
+    userId?: number
+  ): Promise<void> {
+    await this.mp!.uploadFiles({
+      table: "Contacts",
+      recordId: contactId,
+      files: [file],
+      uploadParams: {
+        description: "Contact photo uploaded via Contact Lookup",
+        isDefaultImage: true,
+        userId,
+      },
+    });
+  }
 }

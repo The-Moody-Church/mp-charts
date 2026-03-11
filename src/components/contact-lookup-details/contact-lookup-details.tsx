@@ -1,14 +1,15 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { getContactDetails, getContactLogsByContactId, getHouseholdMembers, getContactBadges } from "./actions";
+import { getContactDetails, getContactLogsByContactId, getHouseholdMembers, getContactBadges, uploadContactLookupPhoto } from "./actions";
 import { ContactLookupDetails as ContactLookupDetailsType, ContactLogDisplay, HouseholdMember, ContactBadges } from "@/lib/dto";
 import { ContactLogs } from "@/components/contact-logs";
-import { ContactLinks } from "@/components/processing";
+import { ContactLinks, DetailModalPhotoUpload } from "@/components/processing";
 import { useBreadcrumbOverride } from "@/components/layout/dynamic-breadcrumb";
 import { useRuntimeConfig } from "@/contexts";
+import { MAX_FILE_SIZE } from "@/lib/processing-utils";
 
 interface ContactLookupDetailsProps {
   guid: string;
@@ -62,6 +63,10 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
   const [familyOpen, setFamilyOpen] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
 
   // Clear breadcrumb override on unmount
   useEffect(() => {
@@ -119,6 +124,44 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !contact) return;
+
+    if (file.size > MAX_FILE_SIZE) {
+      setPhotoError(`Photo is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum 1 MB.`);
+      return;
+    }
+
+    setPhotoUploading(true);
+    setPhotoError(null);
+    try {
+      const formData = new FormData();
+      formData.set("Contact_ID", String(contact.Contact_ID));
+      formData.set("photo", file);
+      const result = await uploadContactLookupPhoto(formData);
+      if (!result.success) {
+        setPhotoError(result.error || "Upload failed");
+        return;
+      }
+      await fetchContactDetails();
+    } catch (err) {
+      console.error("Photo upload failed:", err);
+      setPhotoError("Failed to upload photo");
+    } finally {
+      setPhotoUploading(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  };
+
+  const handleCopyLink = () => {
+    const url = `${window.location.origin}/contactlookup/${guid}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    });
   };
 
   useEffect(() => {
@@ -183,31 +226,42 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
         <div className="px-4 py-5 sm:p-6">
           {/* Header: Avatar + Name + Badges */}
           <div className="flex items-center space-x-5">
-            <div className="flex-shrink-0">
-              <div className="h-20 w-20 rounded-full overflow-hidden relative">
-                {contact.Image_GUID && mpFileUrl ? (
-                  <Image
-                    src={getImageUrl(contact.Image_GUID)}
-                    alt={`${displayName} ${contact.Last_Name}`}
-                    fill
-                    className="object-cover"
-                    unoptimized
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gray-300 rounded-full flex items-center justify-center text-gray-600 text-xl font-medium">
-                    {getInitials(
-                      contact.First_Name,
-                      contact.Nickname,
-                      contact.Last_Name
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
+            <DetailModalPhotoUpload
+              imageGuid={contact.Image_GUID}
+              mpFileUrl={mpFileUrl}
+              firstName={contact.First_Name}
+              nickname={contact.Nickname}
+              lastName={contact.Last_Name}
+              uploading={photoUploading}
+              onUpload={handlePhotoUpload}
+              photoInputRef={photoInputRef}
+              className="w-20 h-20 rounded-full overflow-hidden relative flex-shrink-0 cursor-pointer group"
+            />
             <div className="flex-1 min-w-0">
               <h1 className="text-2xl font-bold text-gray-900 truncate">
                 {displayName} {contact.Last_Name}
               </h1>
+
+              {/* Links: View in MP + Copy Link */}
+              <div className="flex flex-wrap items-center gap-1 mt-1 text-sm">
+                {mpFileUrl && (
+                  <a
+                    href={`${new URL(mpFileUrl).origin}/mp/292/${contact.Contact_ID}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline"
+                  >
+                    View in MP
+                  </a>
+                )}
+                {mpFileUrl && <span className="text-gray-400">—</span>}
+                <button
+                  onClick={handleCopyLink}
+                  className="text-blue-600 hover:underline"
+                >
+                  {linkCopied ? "Copied!" : "Copy Link"}
+                </button>
+              </div>
 
               {/* Badges */}
               {badges && (
@@ -231,6 +285,11 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
               )}
             </div>
           </div>
+
+          {/* Photo upload error */}
+          {photoError && (
+            <p className="mt-2 text-sm text-red-600">{photoError}</p>
+          )}
 
           {/* Contact Info Grid */}
           <div className="mt-6 border-t border-gray-200 pt-6">

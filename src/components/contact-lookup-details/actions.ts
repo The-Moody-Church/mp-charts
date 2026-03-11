@@ -4,6 +4,7 @@ import { requireFeatureAccess } from '@/lib/authorization';
 import { ContactLookupDetails, ContactLogDisplay, HouseholdMember, ContactBadges } from '@/lib/dto';
 import { ContactService } from '@/services/contactService';
 import { ContactLogService } from '@/services/contactLogService';
+import { uploadContactPhoto } from '@/components/shared-actions/processing';
 
 export async function getContactDetails(guid: string): Promise<ContactLookupDetails> {
   try {
@@ -93,4 +94,11 @@ export async function getContactBadges(contactId: number): Promise<ContactBadges
     console.error('Error fetching contact badges:', error);
     return { membershipStatus: null, inGroup: false, serving: false };
   }
+}
+
+export async function uploadContactLookupPhoto(
+  formData: FormData
+): Promise<{ success: boolean; error?: string }> {
+  await requireFeatureAccess("contact-lookup");
+  return uploadContactPhoto(formData, () => ContactService.getInstance());
 }
