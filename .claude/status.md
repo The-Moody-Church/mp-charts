@@ -4,6 +4,12 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 **Last updated**: 2026-03-11
 
+## In Progress
+
+| Work | Issues | PR | Notes |
+|------|--------|----|-------|
+| **Manage Members**: Card-based membership management with status tabs, detail modal, expandable milestones, deep links, optimistic updates, cache invalidation | — | #84 | User testing |
+
 ## Recently Completed
 
 | Date | Work | Issues | PR |

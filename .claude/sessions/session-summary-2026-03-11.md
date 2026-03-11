@@ -168,8 +168,52 @@ User reported `Element type is invalid. Received a promise that resolves to: und
 
 **Investigation**: Build passes cleanly (`npm run build` succeeds, route shows as `◐ Partial Prerender`). The `BreadcrumbOverrideProvider` is a standard `"use client"` context provider. The error was **not reproducible** after a clean build — it was a dev server hot reload artifact from modifying the page component to accept `searchParams`.
 
+### Cache Invalidation & Optimistic Updates
+
+**Problem**: After a membership status transition, the cached contacts data still showed the old status. Users had to wait for the 6h cache TTL or a full cache rebuild.
+
+**Solution**: Two-pronged approach:
+1. **Cache invalidation**: `revalidateTag('contacts-search', { expire: 0 })` after successful transitions in `actions.ts`
+2. **Optimistic UI update**: `handleTransitionSuccess` in `manage-members-shell.tsx` immediately removes the member from the current list and adjusts tab counts locally, so users see the change instantly without waiting for cache rebuild
+
+**Files modified**:
+- `src/components/manage-members/actions.ts` — Added `revalidateTag` import and call after `updateMemberStatus`
+- `src/components/manage-members/manage-members-shell.tsx` — `handleTransitionSuccess` now accepts `newStatusId`, optimistically updates local state (removes member from list, adjusts counts)
+- `src/components/manage-members/transition-dialog.tsx` — `onSuccess` signature changed to `(newStatusId: number) => void`
+
+### Bugfixes
+
+**Ambiguous column name `Milestone_ID`**: MP REST API returned 500 when querying `Participant_Milestones` with a join to `Milestone_ID_Table`. Fixed by qualifying as `Participant_Milestones.[Milestone_ID]` in the select clause of `memberService.ts`.
+
+**Deep link silent failure**: `fetchMemberDetail` threw due to the ambiguous column error, but the useEffect in `manage-members-shell.tsx` had no `.catch()` handler. Fixed both: qualified the column name AND added error handling with `console.warn` to the deep link useEffect.
+
+**Files modified**:
+- `src/services/memberService.ts` — Qualified `Milestone_ID` → `Participant_Milestones.[Milestone_ID]`
+- `src/components/manage-members/manage-members-shell.tsx` — Added `.catch()` to deep link useEffect
+
+### Cache Warming Format
+
+Updated cache warming log output to use `m:ss.xx` format (e.g., `1:36.63`) instead of raw milliseconds.
+
+**Files modified**:
+- `src/app/api/cache-warm/route.ts` — Added `formatDuration(ms)` helper, updated all log output
+
+### Journey-Style Expandable Milestones
+
+Upgraded the milestone display in the member detail modal to match the journey processing expandable card layout.
+
+**Features**:
+- Each milestone card shows: name, date, small "MP" link to `/mp/344/{participantMilestoneId}`, paperclip icon (when files exist), expand/collapse chevron
+- Expanded view shows notes and file attachments (reuses shared `MilestoneExpandedView` component)
+- Files are lazily loaded on first expand via `fetchMilestoneFiles` server action
+
+**Files created/modified**:
+- `src/components/manage-members/member-detail-modal.tsx` — Full rewrite of milestone section with expandable `MilestoneItem` subcomponent
+- `src/components/manage-members/actions.ts` — Added `fetchMilestoneFiles` server action
+- `src/services/memberService.ts` — Added `getMilestoneFiles(milestoneRecordId)` method using `getFilesByRecord`
+
 ## Status
 
 - Build: Passes
 - Tests: Not affected (no test files changed)
-- PR #84: Open, ready for review
+- PR #84: Open, ready for user testing

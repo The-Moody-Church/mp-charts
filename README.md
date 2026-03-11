@@ -37,7 +37,7 @@ A modern Next.js application integrated with Ministry Platform authentication an
 - **Testing**: Vitest test framework with coverage for auth, proxy, rate limiting, authorization, and API services
 - **Executive Dashboard**: Attendance metrics, community trends, small group analytics with YoY comparisons
 - **Contact Lookup**: Scored search with exact/starts-with/contains/Soundex/Levenshtein matching
-- **Manage Members**: Card-based membership management with status tabs, server-side search/pagination, status transitions via milestones
+- **Manage Members**: Card-based membership management with status tabs, scored search, detail modal with expandable milestones, deep links, optimistic status transitions
 - **Journey & Compliance Processing**: Configurable multi-step processing workflows (volunteer, baptism, membership)
 - **Cache Warming**: Automatic pre-warming of all cached data on server start
 
@@ -481,7 +481,7 @@ Built with Radix UI primitives and styled with Tailwind CSS. Located in `src/com
 - **contact-logs**: Full CRUD for contact interaction history
 - **dashboard**: Executive dashboard with attendance, community, and small group charts (YoY comparisons)
 - **journey-processing**: Configurable multi-step journey workflows (e.g., volunteer, baptism)
-- **manage-members**: Membership status management with card grid, tab filtering, status transitions, and milestone creation
+- **manage-members**: Membership status management with card grid, tab filtering, detail modal (expandable milestones with notes/files, deep links, contact actions), optimistic status transitions with cache invalidation
 - **compliance-processing**: Configurable compliance tracking workflows (e.g., membership)
 - **admin**: Admin tool editors for journey and compliance tool configuration
 - **feedback**: User feedback submission
