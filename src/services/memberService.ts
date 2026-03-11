@@ -1,4 +1,4 @@
-import { TransitionPayload, STATUS_TO_MILESTONE, MEMBERSHIP_JOURNEY_ID } from "@/lib/dto";
+import { TransitionPayload, STATUS_TO_MILESTONE, MEMBERSHIP_JOURNEY_ID, MEMBERSHIP_PROGRAM_ID } from "@/lib/dto";
 import type { MemberMilestone, BaseFileInfo } from "@/lib/dto";
 import { MPHelper } from "@/lib/providers/ministry-platform";
 import { sanitizeIds } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
@@ -125,6 +125,7 @@ export class MemberService {
     const record: Record<string, unknown> = {
       Participant_ID: participantId,
       Milestone_ID: milestoneId,
+      Program_ID: MEMBERSHIP_PROGRAM_ID,
       Date_Accomplished: data.milestoneDate || new Date().toISOString().split("T")[0],
     };
     if (notes) {

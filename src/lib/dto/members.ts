@@ -58,6 +58,9 @@ export const MEMBER_STATUS_GROUPS: Omit<MemberStatusGroup, 'count'>[] = [
 /** Membership Journey ID in Ministry Platform */
 export const MEMBERSHIP_JOURNEY_ID = 7;
 
+/** Membership Program ID in Ministry Platform */
+export const MEMBERSHIP_PROGRAM_ID = 307;
+
 /** Maps Member_Status_ID → Milestone_ID for the membership journey */
 export const STATUS_TO_MILESTONE: Record<number, number> = {
   1: 48,   // Registered Member
