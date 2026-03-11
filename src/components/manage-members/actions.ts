@@ -1,6 +1,5 @@
 'use server';
 
-import { revalidateTag } from "next/cache";
 import { requireFeatureAccess } from "@/lib/authorization";
 import { getMpUserId } from "@/lib/auth-helpers";
 import { enforceRateLimit } from "@/lib/rate-limit";
@@ -199,9 +198,9 @@ export async function transitionMember(
     // Step 3: Update participant status
     await service.updateMemberStatus(participantId, newStatusId, userId);
 
-    // Invalidate contacts cache — stale data served until rebuild completes.
-    // The client does an optimistic local update so the UI reflects the change instantly.
-    revalidateTag('contacts-search', { expire: 0 });
+    // No immediate cache invalidation — the client tracks transitions locally
+    // and patches stale server data on search/tab-switch (see manage-members-shell.tsx).
+    // The cache refreshes naturally on its 6h TTL or on server restart.
 
     return { success: true };
   } catch (error) {
