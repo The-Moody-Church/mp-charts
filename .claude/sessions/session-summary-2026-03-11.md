@@ -98,3 +98,25 @@ Implemented the full "Manage Members" page per `.claude/plans/plan-membership-ma
 - **No hardcoded secrets, no open redirects**. ✅
 - **Issues found**: None
 - **Checklist**: All critical/high items pass
+
+### Manage Members — Bugfixes & Search Overhaul
+
+**Bug: Ambiguous column name 'Contact_ID'**:
+- Contacts → Participant_Record join produced duplicate Contact_ID columns
+- Fixed by qualifying as `Contacts.[Contact_ID]` in queries
+
+**Removed "No Status" tab**:
+- Members without a `Member_Status_ID` are no longer shown — all nulls filtered out
+- Removed the "no-status" entry from `MEMBER_STATUS_GROUPS`
+
+**Search overhaul — switched from server-side LIKE to cached scored search**:
+- Added `Participant_ID`, `Member_Status_ID`, `Member_Status` fields to `ContactSearch` DTO
+- Updated `contactService.getAllContactsForSearch` to include participant join fields
+- Rewrote `actions.ts` to use `getCachedAllContacts()` + `searchByNameFlat()` (Soundex/Levenshtein scored search) instead of server-side LIKE queries
+- Cleaned up `memberService.ts` — removed unused read methods (`getMembers`, `getStatusCounts`, `buildMemberFilter`) and associated types/imports; service now only contains write methods + `getMemberStatuses` lookup
+
+**Files modified**:
+- `src/lib/dto/contacts.ts` — Added participant/membership fields to `ContactSearch`
+- `src/services/contactService.ts` — Added participant join to `getAllContactsForSearch` select
+- `src/components/manage-members/actions.ts` — Rewritten: cache-based search with `searchByNameFlat`
+- `src/services/memberService.ts` — Removed unused read methods and imports

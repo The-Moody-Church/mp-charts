@@ -7,6 +7,10 @@ export interface ContactSearch {
   Email_Address: string;
   Mobile_Phone: string;
   Image_GUID: string;
+  /** Participant fields — null for contacts without a participant record */
+  Participant_ID: number | null;
+  Member_Status_ID: number | null;
+  Member_Status: string | null;
 }
 
 export interface ContactLookupDetails {

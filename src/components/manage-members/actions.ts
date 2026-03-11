@@ -4,8 +4,36 @@ import { requireFeatureAccess } from "@/lib/authorization";
 import { getMpUserId } from "@/lib/auth-helpers";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { MemberService } from "@/services/memberService";
-import { ALLOWED_DOCUMENT_TYPES, MAX_FILE_SIZE } from "@/lib/processing-utils";
-import type { MemberCard, TransitionPayload } from "@/lib/dto";
+import { ALLOWED_DOCUMENT_TYPES, MAX_FILE_SIZE, searchByNameFlat } from "@/lib/processing-utils";
+import { getCachedAllContacts } from "@/components/contact-lookup/cached-contacts";
+import { MEMBERS_PAGE_SIZE } from "@/lib/dto";
+import type { MemberCard, ContactSearch, TransitionPayload } from "@/lib/dto";
+
+/** Convert a cached ContactSearch row to a MemberCard. */
+function toMemberCard(c: ContactSearch): MemberCard {
+  return {
+    contactId: c.Contact_ID,
+    participantId: c.Participant_ID!,
+    displayName: `${c.First_Name} ${c.Last_Name}`,
+    nickname: c.Nickname || null,
+    firstName: c.First_Name,
+    lastName: c.Last_Name,
+    email: c.Email_Address || null,
+    mobilePhone: c.Mobile_Phone || null,
+    memberStatusId: c.Member_Status_ID!,
+    memberStatus: c.Member_Status!,
+    contactStatusId: null,
+    fileUniqueId: c.Image_GUID || null,
+  };
+}
+
+/** Get all members from the cached contacts dataset (filtered to those with membership). */
+async function getAllMembers(): Promise<ContactSearch[]> {
+  const allContacts = await getCachedAllContacts();
+  return allContacts.filter(
+    (c) => c.Participant_ID != null && c.Member_Status_ID != null,
+  );
+}
 
 export async function fetchMembers(
   statusIds: number[],
@@ -15,16 +43,31 @@ export async function fetchMembers(
   const session = await requireFeatureAccess("manage-members");
   enforceRateLimit(session.user.id, "search");
 
-  const service = await MemberService.getInstance();
-  const skip = (page - 1) * 50;
-  const result = await service.getMembers({
-    statusIds,
-    top: 50,
-    skip,
-    search: search || undefined,
-  });
+  let members = await getAllMembers();
 
-  return { members: result.members };
+  // Apply search using the same scored search as contact lookup
+  if (search && search.trim()) {
+    members = searchByNameFlat(members, search.trim());
+  }
+
+  // Filter by status tab
+  const statusSet = new Set(statusIds);
+  members = members.filter((c) => statusSet.has(c.Member_Status_ID!));
+
+  // Sort by last name, first name (unless search already ranked them)
+  if (!search || !search.trim()) {
+    members.sort((a, b) => {
+      const lastCmp = a.Last_Name.localeCompare(b.Last_Name);
+      if (lastCmp !== 0) return lastCmp;
+      return a.First_Name.localeCompare(b.First_Name);
+    });
+  }
+
+  // Paginate
+  const skip = (page - 1) * MEMBERS_PAGE_SIZE;
+  const pageMembers = members.slice(skip, skip + MEMBERS_PAGE_SIZE);
+
+  return { members: pageMembers.map(toMemberCard) };
 }
 
 export async function fetchStatusCounts(
@@ -33,8 +76,18 @@ export async function fetchStatusCounts(
   const session = await requireFeatureAccess("manage-members");
   enforceRateLimit(session.user.id, "search");
 
-  const service = await MemberService.getInstance();
-  return service.getStatusCounts(search || undefined);
+  let members = await getAllMembers();
+
+  if (search && search.trim()) {
+    members = searchByNameFlat(members, search.trim());
+  }
+
+  const counts: Record<string, number> = {};
+  for (const c of members) {
+    const key = String(c.Member_Status_ID);
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  return counts;
 }
 
 export async function fetchMemberStatuses(): Promise<
