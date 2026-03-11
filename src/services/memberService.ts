@@ -120,7 +120,7 @@ export class MemberService {
     const top = options.top ?? MEMBERS_PAGE_SIZE;
 
     const select = [
-      "Contact_ID", "Display_Name", "Nickname", "First_Name", "Last_Name",
+      "Contacts.[Contact_ID]", "Display_Name", "Nickname", "First_Name", "Last_Name",
       "Email_Address", "Mobile_Phone", "Contact_Status_ID", "dp_fileUniqueId",
       "Participant_Record_Table.[Participant_ID]",
       "Participant_Record_Table.[Member_Status_ID]",
@@ -160,7 +160,7 @@ export class MemberService {
     // Fetch just Contact_ID + Member_Status_ID (two columns, lightweight)
     const rows = await this.mp!.getTableRecords<StatusCountRow>({
       table: "Contacts",
-      select: "Contact_ID, Participant_Record_Table.[Member_Status_ID]",
+      select: "Contacts.[Contact_ID], Participant_Record_Table.[Member_Status_ID]",
       filter,
     });
 
