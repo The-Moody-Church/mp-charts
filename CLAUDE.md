@@ -66,9 +66,9 @@ gh pr create --title "..." --body "..."
 
 Refer to `.claude/notes/security-audit-2026-02-24.md` for the full audit report and the "Security Best Practices" section below for detailed rules and code examples.
 
-### Pre-PR Issue & Ideas Sync
+### Pre-PR Documentation Update
 
-**MANDATORY**: Before creating a PR, check whether the branch's changes close or advance any GitHub issues, and update `.claude/ideas.md` accordingly.
+**MANDATORY**: Before creating or merging a PR, update all context files so they are included in the merged branch — not committed to `main` after the fact.
 
 **Steps:**
 1. Review the commits in the branch (`git log main..HEAD --oneline`) and identify which issues are addressed
@@ -78,9 +78,11 @@ Refer to `.claude/notes/security-audit-2026-02-24.md` for the full audit report 
    - Move it below all incomplete entries in its section
    - Add or update the description to summarize what was done
 4. For issues that are **partially addressed** or need more detail, update the ideas.md entry body text to reflect current status
-5. Include the updated `ideas.md` in the PR's final commit
+5. Update `.claude/status.md` — move work from "In Progress" to "Recently Completed" (or add a new entry)
+6. Update `.claude/sessions/session-summary-YYYY-MM-DD.md` with final session status
+7. Commit all updated context files (`ideas.md`, `status.md`, session summary) **on the feature branch** before merging
 
-This ensures ideas.md stays accurate and the GitHub Actions sync will close resolved issues on push to main.
+This ensures context files are part of the PR's commit history and ideas.md stays accurate for the GitHub Actions sync.
 
 ### Upstream Sync
 
@@ -907,7 +909,7 @@ Before every commit (on ANY branch):
 2. **README.md check**: Do the changes affect anything documented in README.md? This includes: new/removed features, changed auth or env vars, new routes or components, updated services, changed project structure, or modified setup steps. If so, update README.md in the same commit.
 3. **Session summary**: Update `.claude/sessions/session-summary-YYYY-MM-DD.md` with what's being committed.
 4. **ideas.md**: If any issues were completed, update `.claude/ideas.md` (see "Ideas & Issue Tracking" section).
-5. **status.md**: After merging a PR, update `.claude/status.md` to reflect the completed work and current project state.
+5. **status.md**: Update `.claude/status.md` to reflect completed work **before merging the PR** (not after on `main`). This ensures context files are part of the merged branch's history.
 6. Include all updated context files in the commit.
 
 ## Ideas & Issue Tracking
