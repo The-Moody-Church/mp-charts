@@ -11,21 +11,7 @@ import {
   BackgroundCheckDetail,
 } from '@/lib/dto';
 import { getComplianceToolBySlug, type ComplianceToolConfig } from '@/lib/compliance-tools-config';
-
-function nowCentral(): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Chicago',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  }).formatToParts(new Date());
-  const get = (type: string) => parts.find(p => p.type === type)?.value || '00';
-  return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:${get('second')}`;
-}
+import { nowCentral } from '@/lib/processing-utils';
 
 const BATCH_SIZE = 100;
 const EXPIRING_SOON_DAYS = 30;

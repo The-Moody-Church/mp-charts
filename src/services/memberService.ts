@@ -2,6 +2,7 @@ import { TransitionPayload, STATUS_TO_MILESTONE, MEMBERSHIP_JOURNEY_ID, MEMBERSH
 import type { MemberMilestone, BaseFileInfo } from "@/lib/dto";
 import { MPHelper } from "@/lib/providers/ministry-platform";
 import { sanitizeIds } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
+import { nowCentral } from "@/lib/processing-utils";
 
 /** Member status lookup row. */
 interface MemberStatusRow {
@@ -126,7 +127,9 @@ export class MemberService {
       Participant_ID: participantId,
       Milestone_ID: milestoneId,
       Program_ID: MEMBERSHIP_PROGRAM_ID,
-      Date_Accomplished: data.milestoneDate || new Date().toISOString().split("T")[0],
+      Date_Accomplished: data.milestoneDate
+        ? `${data.milestoneDate}T${nowCentral().split("T")[1]}`
+        : nowCentral(),
     };
     if (notes) {
       record.Notes = notes;
