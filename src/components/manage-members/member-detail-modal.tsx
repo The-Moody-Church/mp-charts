@@ -102,7 +102,7 @@ export function MemberDetailModal({
     try {
       const formData = new FormData();
       formData.set("Contact_ID", String(member.contactId));
-      formData.set("file", file);
+      formData.set("photo", file);
       await uploadMemberPhoto(formData);
       onUpdate();
     } catch {
