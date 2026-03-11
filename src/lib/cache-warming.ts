@@ -2,7 +2,7 @@
  * Cache Warming Module
  *
  * Centralizes all cache warming logic. Called automatically on server start
- * (via instrumentation.ts → /api/cache-warm) and can be triggered manually.
+ * via instrumentation.ts → /api/cache-warm (HTTP request needed for 'use cache' context).
  *
  * ╔══════════════════════════════════════════════════════════════════════╗
  * ║  IMPORTANT: When adding a new 'use cache' function anywhere in     ║

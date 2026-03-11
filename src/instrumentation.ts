@@ -2,25 +2,27 @@
  * Next.js Instrumentation Hook
  *
  * The register() function runs once when the Next.js server starts.
- * We use it to trigger cache warming after the HTTP server is ready.
+ * We use it to trigger cache warming via the /api/cache-warm endpoint
+ * after the HTTP server is ready.
+ *
+ * A random token is set on process.env at runtime so the API route can
+ * verify the request came from this process — no user configuration needed.
  */
 export async function register() {
-  // Only warm caches in the Node.js runtime (not Edge), and only in production
+  // Only warm caches in the Node.js runtime (not Edge)
   if (process.env.NEXT_RUNTIME !== 'nodejs') return;
 
-  const secret = process.env.CACHE_WARM_SECRET;
-  if (!secret) {
-    console.log('[instrumentation] CACHE_WARM_SECRET not set — skipping automatic cache warming');
-    return;
-  }
+  // Generate a one-time token and share it via process.env (same Node process)
+  const crypto = await import('node:crypto');
+  const token = crypto.randomBytes(32).toString('hex');
+  process.env.__CACHE_WARM_TOKEN = token;
 
   // Schedule cache warming after the server is ready.
-  // The register() function runs during server initialization, before the
-  // HTTP listener is bound. We poll until the server is accepting connections.
+  // register() runs during server initialization, before the HTTP listener
+  // is bound. We poll until the server is accepting connections.
   const port = process.env.PORT || 3000;
-  const url = `http://localhost:${port}/api/cache-warm?secret=${encodeURIComponent(secret)}`;
+  const url = `http://localhost:${port}/api/cache-warm?token=${encodeURIComponent(token)}`;
 
-  // Use a non-blocking approach: retry in the background
   warmWithRetry(url).catch((err) => {
     console.error('[instrumentation] Cache warming failed after all retries:', err);
   });

@@ -157,6 +157,10 @@ Both files are committed to the repo and must NOT be added to `.gitignore`.
 
 **Rule of thumb**: If the change is a side effect of running a local command (not an intentional dependency or framework change), discard it with `git checkout -- <file>`.
 
+### Keeping `.env.example` in Sync
+
+When adding, removing, or renaming environment variables, update `.env.example` to match. This file documents all required and optional env vars for new developers and deployments. Add a brief comment above each variable explaining its purpose and how to generate it (if applicable). Never put actual secret values in `.env.example`.
+
 ## Commands
 
 - **Dev**: `npm run dev` (Next.js dev server)
@@ -243,12 +247,11 @@ async function getCachedData(key: string) {
 Caches are **pre-warmed automatically on server start** so the first user to hit the app gets instant responses instead of waiting for cold cache population.
 
 **How it works:**
-1. `src/instrumentation.ts` — `register()` runs on server start, polls `GET /api/cache-warm?secret=...` until the server is ready
-2. `src/app/api/cache-warm/route.ts` — Protected by `CACHE_WARM_SECRET` env var, calls `warmAllCaches()`
+1. `src/instrumentation.ts` — `register()` runs on server start, generates a random token on `process.env`, polls `/api/cache-warm` until the server is ready
+2. `src/app/api/cache-warm/route.ts` — Verifies the runtime token, calls `warmAllCaches()` within the Next.js request context (required for `'use cache'` functions)
 3. `src/lib/cache-warming.ts` — Central registry that calls every `'use cache'` function with the correct parameters
 
-**Required environment variable:**
-- `CACHE_WARM_SECRET` — Any random string (e.g., `openssl rand -hex 32`). Without this, automatic warming is skipped.
+Cache warming runs automatically on every server start — no configuration required. The endpoint is protected by a per-process random token shared via `process.env.__CACHE_WARM_TOKEN`.
 
 **Adding a new cached function — MANDATORY steps:**
 1. Create the `'use cache'` function in a non-`'use server'` file (so it can be imported by the warming module)

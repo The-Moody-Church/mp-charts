@@ -4,27 +4,23 @@ import { warmAllCaches } from '@/lib/cache-warming';
 /**
  * Cache warming API endpoint.
  *
- * Called automatically by instrumentation.ts on server start, and can be
- * triggered manually for on-demand warming. Protected by CACHE_WARM_SECRET
- * to prevent unauthorized access.
+ * Called automatically by instrumentation.ts on server start. Protected by a
+ * runtime token set on process.env — no user configuration needed.
  *
- * Usage:
- *   GET /api/cache-warm?secret=<CACHE_WARM_SECRET>
- *
- * Environment:
- *   CACHE_WARM_SECRET — Required. Shared secret for authenticating warming requests.
+ * The token is generated in register() and shared via process.env.__CACHE_WARM_TOKEN
+ * (same Node.js process). External callers cannot guess it.
  */
 export async function GET(request: NextRequest) {
-  const secret = process.env.CACHE_WARM_SECRET;
-  if (!secret) {
+  const token = process.env.__CACHE_WARM_TOKEN;
+  if (!token) {
     return NextResponse.json(
-      { error: 'CACHE_WARM_SECRET not configured' },
+      { error: 'Cache warming not initialized' },
       { status: 503 }
     );
   }
 
-  const requestSecret = request.nextUrl.searchParams.get('secret');
-  if (requestSecret !== secret) {
+  const requestToken = request.nextUrl.searchParams.get('token');
+  if (!requestToken || requestToken !== token) {
     return NextResponse.json(
       { error: 'Unauthorized' },
       { status: 401 }
@@ -40,7 +36,6 @@ export async function GET(request: NextRequest) {
   const succeeded = results.filter(r => r.status === 'success').length;
   const failed = results.filter(r => r.status === 'error').length;
 
-  // Log results
   for (const r of results) {
     if (r.status === 'success') {
       console.log(`[cache-warm] ✓ ${r.name} (${r.durationMs}ms)`);

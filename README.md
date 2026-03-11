@@ -151,6 +151,7 @@ MINISTRY_PLATFORM_BASE_URL=https://your-instance.ministryplatform.com/ministrypl
 # Public Keys
 NEXT_PUBLIC_MINISTRY_PLATFORM_FILE_URL=https://your-instance.ministryplatform.com/ministryplatformapi/files
 NEXT_PUBLIC_APP_NAME=MP Tools
+
 ```
 
 
