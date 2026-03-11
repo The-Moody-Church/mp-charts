@@ -157,6 +157,10 @@ Both files are committed to the repo and must NOT be added to `.gitignore`.
 
 **Rule of thumb**: If the change is a side effect of running a local command (not an intentional dependency or framework change), discard it with `git checkout -- <file>`.
 
+### Keeping `.env.example` in Sync
+
+When adding, removing, or renaming environment variables, update `.env.example` to match. This file documents all required and optional env vars for new developers and deployments. Add a brief comment above each variable explaining its purpose and how to generate it (if applicable). Never put actual secret values in `.env.example`.
+
 ## Commands
 
 - **Dev**: `npm run dev` (Next.js dev server)
@@ -229,12 +233,44 @@ async function getCachedData(key: string) {
 **Current cached functions:**
 | Function | TTL | Tags | File |
 |---|---|---|---|
-| `getCachedDashboardData(year)` | 6h | `dashboard-data`, `year-N` | `src/components/dashboard/actions.ts` |
-| `getCachedFullRangeData(year, endDate)` | 6h | `dashboard-data`, `dashboard-full-range` | `src/components/dashboard/actions.ts` |
+| `getCachedDashboardData(year)` | 6h | `dashboard-data`, `year-N` | `src/components/dashboard/cached-data.ts` |
+| `getCachedFullRangeData(year, endDate)` | 6h | `dashboard-data`, `dashboard-full-range` | `src/components/dashboard/cached-data.ts` |
+| `getCachedExtendedData(dateIso, start, end)` | 6h | `dashboard-data`, `dashboard-extended` | `src/components/dashboard/cached-data.ts` |
+| `getCachedEngagementData(dateIso, start, end)` | 6h | `dashboard-data`, `dashboard-engagement` | `src/components/dashboard/cached-data.ts` |
 | `getCachedGroupTypes(ids)` | 24h | `group-types` | `src/services/dashboardService.ts` |
-| `getCachedEventTypes(ids)` | 24h | `event-types` | `src/services/dashboardService.ts` |
+| `getCachedAllContacts()` | 6h | `contacts-search` | `src/components/contact-lookup/cached-contacts.ts` |
 
 **Note:** Dashboard cache is shared across all authenticated users (not keyed per-user). This is intentional — the dashboard shows aggregate metrics, not per-user data. If user-specific dashboard access is ever needed, the cache would need to be keyed by user or permission level.
+
+### Cache Warming
+
+Caches are **pre-warmed automatically on server start** so the first user to hit the app gets instant responses instead of waiting for cold cache population.
+
+**How it works:**
+1. `src/instrumentation.ts` — `register()` runs on server start, generates a random token on `process.env`, polls `/api/cache-warm` until the server is ready
+2. `src/app/api/cache-warm/route.ts` — Verifies the runtime token, calls `warmAllCaches()` within the Next.js request context (required for `'use cache'` functions)
+3. `src/lib/cache-warming.ts` — Central registry that calls every `'use cache'` function with the correct parameters
+
+Cache warming runs automatically on every server start — no configuration required. The endpoint is protected by a per-process random token shared via `process.env.__CACHE_WARM_TOKEN`.
+
+**Adding a new cached function — MANDATORY steps:**
+1. Create the `'use cache'` function in a non-`'use server'` file (so it can be imported by the warming module)
+2. Register it in `src/lib/cache-warming.ts` → `warmAllCaches()` with the correct parameters
+3. Update the "Current cached functions" table above
+4. Add a comment at the top of the source file pointing to `cache-warming.ts`
+
+```typescript
+// Example: registering a new cached function in cache-warming.ts
+import { getCachedNewData } from '@/components/feature/cached-data';
+
+export async function warmAllCaches(): Promise<WarmingResult[]> {
+  const results = await Promise.all([
+    // ... existing entries ...
+    warmOne('getCachedNewData', () => getCachedNewData(params)),
+  ]);
+  return results;
+}
+```
 
 ### Suspense & PPR Pattern for Pages
 
