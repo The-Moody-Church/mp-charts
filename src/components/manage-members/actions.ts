@@ -1,5 +1,6 @@
 'use server';
 
+import { revalidateTag } from "next/cache";
 import { requireFeatureAccess } from "@/lib/authorization";
 import { getMpUserId } from "@/lib/auth-helpers";
 import { enforceRateLimit } from "@/lib/rate-limit";
@@ -197,6 +198,9 @@ export async function transitionMember(
 
     // Step 3: Update participant status
     await service.updateMemberStatus(participantId, newStatusId, userId);
+
+    // Force-expire contacts cache so the next fetch reflects the new status
+    revalidateTag('contacts-search', { expire: 0 });
 
     return { success: true };
   } catch (error) {
