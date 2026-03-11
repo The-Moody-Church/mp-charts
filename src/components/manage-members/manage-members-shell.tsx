@@ -141,8 +141,19 @@ export function ManageMembersShell({
     setDialogOpen(true);
   }
 
-  function handleTransitionSuccess() {
-    loadMembers(activeStatusIds, page, search);
+  function handleTransitionSuccess(newStatusId: number) {
+    if (!selectedMember) return;
+
+    // Optimistic update: remove from current list, adjust counts instantly
+    setMembers((prev) => prev.filter((m) => m.contactId !== selectedMember.contactId));
+    setCounts((prev) => {
+      const updated = { ...prev };
+      const oldKey = String(selectedMember.memberStatusId);
+      if (updated[oldKey]) updated[oldKey] = Math.max(0, updated[oldKey] - 1);
+      const newKey = String(newStatusId);
+      updated[newKey] = (updated[newKey] || 0) + 1;
+      return updated;
+    });
   }
 
   const totalForTab = activeGroup?.count ?? 0;

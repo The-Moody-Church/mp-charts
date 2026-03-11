@@ -199,7 +199,8 @@ export async function transitionMember(
     // Step 3: Update participant status
     await service.updateMemberStatus(participantId, newStatusId, userId);
 
-    // Force-expire contacts cache so the next fetch reflects the new status
+    // Invalidate contacts cache — stale data served until rebuild completes.
+    // The client does an optimistic local update so the UI reflects the change instantly.
     revalidateTag('contacts-search', { expire: 0 });
 
     return { success: true };

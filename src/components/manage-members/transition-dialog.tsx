@@ -29,7 +29,7 @@ interface TransitionDialogProps {
   memberStatuses: { Member_Status_ID: number; Member_Status: string }[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess: () => void;
+  onSuccess: (newStatusId: number) => void;
 }
 
 /** Map milestone IDs to display labels */
@@ -90,7 +90,7 @@ export function TransitionDialog({
         setMilestoneDate(new Date().toISOString().split("T")[0]);
         if (fileInputRef.current) fileInputRef.current.value = "";
         onOpenChange(false);
-        onSuccess();
+        onSuccess(selectedStatusId);
       } else {
         setError(result.error || "An error occurred");
       }
