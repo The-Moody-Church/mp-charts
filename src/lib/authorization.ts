@@ -11,7 +11,6 @@ const CONFIG_PATH = join(process.cwd(), "data", "feature-access.json");
 export type StaticFeature =
   | "dashboard"
   | "contact-lookup"
-  | "contact-logs"
   | "admin";
 
 /** Dynamic features follow the pattern "journey:{slug}" or "compliance:{slug}" */
@@ -36,11 +35,6 @@ const DEFAULT_CONFIG: FeatureAccessConfig = {
   "contact-lookup": {
     label: "Contact Lookup",
     description: "Search and view contact records",
-    allowedGroupIds: [],
-  },
-  "contact-logs": {
-    label: "Contact Logs",
-    description: "Create and manage pastoral contact logs",
     allowedGroupIds: [],
   },
 };
@@ -154,7 +148,6 @@ export function getAccessibleFeatures(userGroupIds: number[]): Feature[] {
   const staticFeatures: StaticFeature[] = [
     "dashboard",
     "contact-lookup",
-    "contact-logs",
     "admin",
   ];
 

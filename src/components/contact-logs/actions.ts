@@ -10,7 +10,7 @@ import { enforceRateLimit } from "@/lib/rate-limit";
 
 export async function getContactLogTypes(): Promise<ContactLogTypes[]> {
   try {
-    await requireFeatureAccess("contact-logs");
+    await requireFeatureAccess("contact-lookup");
 
     const contactLogService = await ContactLogService.getInstance();
     const types = await contactLogService.getContactLogTypes();
@@ -26,7 +26,7 @@ export async function createContactLog(
   contactLogData: Omit<ContactLogInput, "Contact_Log_ID" | "Made_By">
 ): Promise<ContactLog> {
   try {
-    const session = await requireFeatureAccess("contact-logs");
+    const session = await requireFeatureAccess("contact-lookup");
     enforceRateLimit(session.user.id, "write");
     const userId = getMpUserId(session);
 
@@ -59,7 +59,7 @@ export async function updateContactLog(
   contactLogData: Partial<Omit<ContactLogInput, "Contact_Log_ID" | "Made_By">>
 ): Promise<ContactLog> {
   try {
-    const session = await requireFeatureAccess("contact-logs");
+    const session = await requireFeatureAccess("contact-lookup");
     enforceRateLimit(session.user.id, "write");
     const userId = getMpUserId(session);
 
@@ -89,7 +89,7 @@ export async function updateContactLog(
 
 export async function deleteContactLog(contactLogId: number): Promise<void> {
   try {
-    const session = await requireFeatureAccess("contact-logs");
+    const session = await requireFeatureAccess("contact-lookup");
     enforceRateLimit(session.user.id, "write");
 
     if (!contactLogId || contactLogId <= 0) {
@@ -106,7 +106,7 @@ export async function deleteContactLog(contactLogId: number): Promise<void> {
 
 export async function getContactLogsByContactId(contactId: number): Promise<ContactLog[]> {
   try {
-    await requireFeatureAccess("contact-logs");
+    await requireFeatureAccess("contact-lookup");
 
     if (!contactId || contactId <= 0) {
       throw new Error("Valid contact ID is required");
@@ -124,7 +124,7 @@ export async function getContactLogsByContactId(contactId: number): Promise<Cont
 
 export async function getContactLogById(contactLogId: number): Promise<ContactLog | null> {
   try {
-    await requireFeatureAccess("contact-logs");
+    await requireFeatureAccess("contact-lookup");
 
     if (!contactLogId || contactLogId <= 0) {
       throw new Error("Valid contact log ID is required");
