@@ -8,12 +8,13 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 | Work | Issues | PR | Notes |
 |------|--------|----|-------|
-| **Manage Members**: Card-based membership management with status tabs, detail modal, expandable milestones, deep links, optimistic updates, cache invalidation | — | #84 | User testing |
+| **Auth callback redirect**: Preserve original URL through login redirect | — | #86 | On `feature/auth-callback-redirect` branch |
 
 ## Recently Completed
 
 | Date | Work | Issues | PR |
 |------|------|--------|----|
+| 2026-03-11 | **Manage Members**: Card-based membership management with status tabs, detail modal, expandable milestones, deep links, client-side transition overrides, cache refresh button, rate limit resilience | — | #84 |
 | 2026-03-11 | **Cache warming everywhere**: Audited all `'use cache'` functions, confirmed all 6 are registered in `cache-warming.ts`, added missing cross-reference comments to `dashboardService.ts` and `cached-contacts.ts` | #80 | — |
 | 2026-03-10 | **Contact lookup enhancements**: route rename, breadcrumbs, badges, family section, birthday, photo upload, View in MP, Copy Link, email/phone search, remove delete from logs, consolidate permissions | #19 | #81 |
 | 2026-03-10 | **PWA**: service worker, offline fallback, iOS install prompt | — | #77 |
@@ -26,8 +27,9 @@ Quick-reference snapshot of current project state. Read this first at session st
 ## Open Issues
 
 - [**#72** — Dashboard subpages per journey step](ideas.md#and-more-specific-dashboard-subpages-72)
+- [**#83** — No attendance circle on engagement Venn diagram for single month selections](ideas.md#no-attendance-circle-one-engagement-venn-diagram-for-single-month-selections-83)
 - [**#52** — Active Communities and Small Groups chart needs work](ideas.md#bug-active-communities-and-small-groups-chart-needs-work-52)
-- [**#57** — IDOR mitigation (per-record authorization)](ideas.md#idor-mitigation--per-record-authorization-57)
+- [**#57** — IDOR mitigation (per-record authorization)](ideas.md#idor-mitigation-per-record-authorization-57)
 - [**#15** — Small Group Trends chart visualization improvements](ideas.md#small-group-trends-chart-15)
 
 ## Key Architecture Notes

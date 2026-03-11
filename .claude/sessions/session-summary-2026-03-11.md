@@ -212,8 +212,43 @@ Upgraded the milestone display in the member detail modal to match the journey p
 - `src/components/manage-members/actions.ts` — Added `fetchMilestoneFiles` server action
 - `src/services/memberService.ts` — Added `getMilestoneFiles(milestoneRecordId)` method using `getFilesByRecord`
 
+### Program_ID Fix & Central Time on Milestones
+
+**Bug: 500 on Participant_Milestones POST**: `Program_ID` is a required non-nullable field. Fixed by adding `MEMBERSHIP_PROGRAM_ID = 307` constant and including it in the milestone record.
+
+**Bug: Date_Accomplished missing time component**: Milestones created with `YYYY-MM-DD` only. Fixed by appending Central time: `${data.milestoneDate}T${nowCentral().split("T")[1]}`. Also extracted `nowCentral()` to shared `processing-utils.ts` to eliminate duplication across 3 services.
+
+**Files modified**:
+- `src/lib/dto/members.ts` — Added `MEMBERSHIP_PROGRAM_ID = 307`
+- `src/services/memberService.ts` — Added Program_ID to milestone record, appended Central time to Date_Accomplished
+- `src/lib/processing-utils.ts` — Added shared `nowCentral()` function
+- `src/services/journeyProcessingService.ts` — Replaced local `nowCentral()` with shared import
+- `src/services/complianceProcessingService.ts` — Replaced local `nowCentral()` with shared import
+
+### Client-Side Transition Overrides & Cache Improvements
+
+**Problem**: After status transition, `revalidateTag('contacts-search', { expire: 0 })` forced cold cache miss on next search, making subsequent searches slow.
+
+**Solution**:
+1. Removed immediate cache invalidation after transitions
+2. Track transitions client-side in `overridesRef` (Map<contactId, { oldStatusId, newStatusId }>)
+3. Patch stale server data with overrides on each load
+4. Added manual cache refresh button (rate-limited to 5/hour)
+
+**Problem**: Two server actions per search consumed 2 rate limit hits, allowing only ~15 searches/min. Rate limit errors crashed the page.
+
+**Solution**:
+1. Merged `fetchMembers` + `fetchStatusCounts` into single `fetchMembersAndCounts`
+2. Added try/catch in client's `loadMembers` to degrade gracefully
+3. Added cache refresh button with spinning arrow icon
+
+**Files modified**:
+- `src/components/manage-members/actions.ts` — Merged into `fetchMembersAndCounts`, removed immediate invalidation, added `refreshMemberCache`
+- `src/components/manage-members/manage-members-shell.tsx` — Added overrides ref, patching logic, refresh button, error handling
+- `src/app/(web)/manage-members/page.tsx` — Updated to use `fetchMembersAndCounts`
+
 ## Status
 
 - Build: Passes
 - Tests: Not affected (no test files changed)
-- PR #84: Open, ready for user testing
+- PR #84: Merged to main ✅
