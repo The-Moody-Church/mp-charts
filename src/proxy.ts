@@ -17,7 +17,9 @@ export async function proxy(request: NextRequest) {
 
     if (!sessionCookie) {
       if (isDev) console.log("Proxy: Redirecting to signin - no session cookie");
-      return NextResponse.redirect(new URL('/signin', request.url));
+      const signinUrl = new URL('/signin', request.url);
+      signinUrl.searchParams.set('callbackUrl', pathname + request.nextUrl.search);
+      return NextResponse.redirect(signinUrl);
     }
 
     if (isDev) console.log(`Proxy: Allowing request to ${pathname}`);
@@ -25,7 +27,9 @@ export async function proxy(request: NextRequest) {
 
   } catch (error) {
     console.error('Proxy: Error checking session:', error);
-    return NextResponse.redirect(new URL('/signin', request.url));
+    const signinUrl = new URL('/signin', request.url);
+    signinUrl.searchParams.set('callbackUrl', pathname + request.nextUrl.search);
+    return NextResponse.redirect(signinUrl);
   }
 }
 
