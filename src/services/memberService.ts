@@ -1,5 +1,5 @@
 import { TransitionPayload, STATUS_TO_MILESTONE, MEMBERSHIP_JOURNEY_ID } from "@/lib/dto";
-import type { MemberMilestone } from "@/lib/dto";
+import type { MemberMilestone, BaseFileInfo } from "@/lib/dto";
 import { MPHelper } from "@/lib/providers/ministry-platform";
 import { sanitizeIds } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
 
@@ -69,6 +69,29 @@ export class MemberService {
       dateAccomplished: r.Date_Accomplished,
       notes: r.Notes,
     }));
+  }
+
+  // ---------------------------------------------------------------
+  // Read: Files attached to a milestone record
+  // ---------------------------------------------------------------
+
+  public async getMilestoneFiles(milestoneRecordId: number): Promise<BaseFileInfo[]> {
+    const fileBaseUrl = process.env.NEXT_PUBLIC_MINISTRY_PLATFORM_FILE_URL;
+    const files = await this.mp!.getFilesByRecord({
+      table: "Participant_Milestones",
+      recordId: milestoneRecordId,
+    });
+
+    return files.map((f) => {
+      const ext = (f.FileExtension || "").toLowerCase().replace(".", "");
+      return {
+        fileId: f.FileId,
+        fileName: f.FileName,
+        fileUrl: `${fileBaseUrl}/${f.UniqueFileId}`,
+        isPdf: ext === "pdf",
+        isImage: f.IsImage,
+      };
+    });
   }
 
   // ---------------------------------------------------------------

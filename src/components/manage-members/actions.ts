@@ -10,7 +10,7 @@ import { getCachedAllContacts } from "@/components/contact-lookup/cached-contact
 import { MEMBERS_PAGE_SIZE } from "@/lib/dto";
 import { ContactService } from "@/services/contactService";
 import { uploadContactPhoto } from "@/components/shared-actions/processing";
-import type { MemberCard, MemberDetail, ContactSearch, TransitionPayload } from "@/lib/dto";
+import type { MemberCard, MemberDetail, BaseFileInfo, ContactSearch, TransitionPayload } from "@/lib/dto";
 
 /** Convert a cached ContactSearch row to a MemberCard. */
 function toMemberCard(c: ContactSearch): MemberCard {
@@ -211,6 +211,16 @@ export async function transitionMember(
       error: error instanceof Error ? error.message : "Failed to transition member",
     };
   }
+}
+
+export async function fetchMilestoneFiles(
+  milestoneRecordId: number,
+): Promise<BaseFileInfo[]> {
+  const session = await requireFeatureAccess("manage-members");
+  enforceRateLimit(session.user.id, "search");
+
+  const service = await MemberService.getInstance();
+  return service.getMilestoneFiles(milestoneRecordId);
 }
 
 export async function uploadMemberPhoto(

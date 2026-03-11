@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,9 +10,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { DetailModalPhotoUpload } from "@/components/processing/detail-modal-photo-upload";
 import { ContactLinks } from "@/components/processing/contact-links";
+import { MilestoneExpandedView } from "@/components/processing/milestone-expanded-view";
 import { getDisplayName, formatDate, ALLOWED_IMAGE_TYPES, MAX_FILE_SIZE } from "@/lib/processing-utils";
-import { fetchMemberDetail, uploadMemberPhoto } from "./actions";
-import type { MemberCard, MemberDetail, MemberMilestone } from "@/lib/dto";
+import { fetchMemberDetail, fetchMilestoneFiles, uploadMemberPhoto } from "./actions";
+import type { MemberCard, MemberDetail, MemberMilestone, BaseFileInfo } from "@/lib/dto";
 
 interface MemberDetailModalProps {
   member: MemberCard | null;
@@ -48,9 +49,18 @@ export function MemberDetailModal({
   const [linkCopied, setLinkCopied] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
+  // Expandable milestone state
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [recordFiles, setRecordFiles] = useState<Record<number, BaseFileInfo[]>>({});
+  const [filesLoading, setFilesLoading] = useState<number | null>(null);
+
+  const mpBaseOrigin = mpFileUrl ? new URL(mpFileUrl).origin : null;
+
   useEffect(() => {
     if (!open || !member) {
       setDetail(null);
+      setExpandedId(null);
+      setRecordFiles({});
       return;
     }
 
@@ -59,6 +69,27 @@ export function MemberDetailModal({
       .then(setDetail)
       .finally(() => setLoading(false));
   }, [open, member]);
+
+  const handleToggleExpand = useCallback(async (milestoneRecordId: number) => {
+    if (expandedId === milestoneRecordId) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(milestoneRecordId);
+
+    // Lazily fetch files on first expand
+    if (!(milestoneRecordId in recordFiles)) {
+      setFilesLoading(milestoneRecordId);
+      try {
+        const files = await fetchMilestoneFiles(milestoneRecordId);
+        setRecordFiles((prev) => ({ ...prev, [milestoneRecordId]: files }));
+      } catch {
+        setRecordFiles((prev) => ({ ...prev, [milestoneRecordId]: [] }));
+      } finally {
+        setFilesLoading(null);
+      }
+    }
+  }, [expandedId, recordFiles]);
 
   async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -154,9 +185,9 @@ export function MemberDetailModal({
 
             {/* Links: View in MP + Copy Link */}
             <div className="flex flex-wrap items-center gap-1 text-sm">
-              {mpFileUrl && (
+              {mpBaseOrigin && (
                 <a
-                  href={`${new URL(mpFileUrl).origin}/mp/355/${m.participantId}`}
+                  href={`${mpBaseOrigin}/mp/355/${m.participantId}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-600 hover:underline"
@@ -164,7 +195,7 @@ export function MemberDetailModal({
                   View in MP
                 </a>
               )}
-              {mpFileUrl && <span className="text-muted-foreground">&mdash;</span>}
+              {mpBaseOrigin && <span className="text-muted-foreground">&mdash;</span>}
               <button
                 onClick={handleCopyLink}
                 className="text-blue-600 hover:underline"
@@ -179,7 +210,15 @@ export function MemberDetailModal({
               {detail?.milestones && detail.milestones.length > 0 ? (
                 <div className="space-y-2">
                   {detail.milestones.map((ms) => (
-                    <MilestoneItem key={ms.participantMilestoneId} milestone={ms} />
+                    <MilestoneItem
+                      key={ms.participantMilestoneId}
+                      milestone={ms}
+                      mpBaseOrigin={mpBaseOrigin}
+                      expanded={expandedId === ms.participantMilestoneId}
+                      files={recordFiles[ms.participantMilestoneId]}
+                      filesLoading={filesLoading === ms.participantMilestoneId}
+                      onToggle={() => handleToggleExpand(ms.participantMilestoneId)}
+                    />
                   ))}
                 </div>
               ) : (
@@ -210,19 +249,74 @@ export function MemberDetailModal({
   );
 }
 
-function MilestoneItem({ milestone }: { milestone: MemberMilestone }) {
+interface MilestoneItemProps {
+  milestone: MemberMilestone;
+  mpBaseOrigin: string | null;
+  expanded: boolean;
+  files: BaseFileInfo[] | undefined;
+  filesLoading: boolean;
+  onToggle: () => void;
+}
+
+function MilestoneItem({ milestone, mpBaseOrigin, expanded, files, filesLoading, onToggle }: MilestoneItemProps) {
+  const hasExpandableContent = milestone.notes || (files && files.length > 0);
+
   return (
-    <div className="rounded-md border px-3 py-2">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium">{milestone.milestoneName}</span>
-        <span className="text-xs text-muted-foreground flex-shrink-0">
-          {formatDate(milestone.dateAccomplished)}
-        </span>
+    <div className="rounded-lg border bg-gray-50/50">
+      {/* Header row */}
+      <div
+        className="flex items-start justify-between gap-3 p-3 cursor-pointer"
+        onClick={onToggle}
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">{milestone.milestoneName}</span>
+            {mpBaseOrigin && (
+              <a
+                href={`${mpBaseOrigin}/mp/344/${milestone.participantMilestoneId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="text-[10px] text-blue-600 hover:underline flex-shrink-0 inline-flex items-center gap-0.5"
+              >
+                <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 7h3a5 5 0 010 10h-3m-6 0H6A5 5 0 016 7h3M8 12h8" />
+                </svg>
+                MP
+              </a>
+            )}
+          </div>
+          {milestone.dateAccomplished && (
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {formatDate(milestone.dateAccomplished)}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {files && files.length > 0 && (
+            <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
+            </svg>
+          )}
+          <svg
+            className={`h-4 w-4 text-gray-400 transition-transform ${expanded ? "rotate-180" : ""}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
       </div>
-      {milestone.notes && (
-        <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap">
-          {milestone.notes}
-        </p>
+
+      {/* Expanded content */}
+      {expanded && (hasExpandableContent || filesLoading || files !== undefined) && (
+        <MilestoneExpandedView
+          notes={milestone.notes}
+          files={files}
+          filesLoading={filesLoading}
+        />
       )}
     </div>
   );
