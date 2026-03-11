@@ -8,6 +8,7 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 | Date | Work | Issues | PR |
 |------|------|--------|----|
+| 2026-03-10 | **Contact lookup enhancements**: route rename, breadcrumbs, badges, family section, birthday, photo upload, View in MP, Copy Link, email/phone search, remove delete from logs, consolidate permissions | #19 | #81 |
 | 2026-03-10 | **PWA**: service worker, offline fallback, iOS install prompt | — | #77 |
 | 2026-03-10 | **Search ranking**: scored search with exact/starts-with/contains/Soundex/Levenshtein, both name orderings, search-as-you-type, cached contact lookup | #78 | #79 |
 | 2026-03-06 | **Chart YoY comparisons**: Community Attendance chart, Serving Trends YoY, date filter improvements (shift+click range, year auto-select, gap fill) | #68 | #76 |
