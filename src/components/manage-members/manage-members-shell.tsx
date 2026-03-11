@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MemberTabs } from "./member-tabs";
 import { MemberCardComponent } from "./member-card";
+import { MemberDetailModal } from "./member-detail-modal";
 import { TransitionDialog } from "./transition-dialog";
 import { fetchMembers, fetchStatusCounts } from "./actions";
 import { MEMBER_STATUS_GROUPS, MEMBERS_PAGE_SIZE } from "@/lib/dto";
@@ -45,6 +46,10 @@ export function ManageMembersShell({
   const [memberStatuses] = useState(initialStatuses);
   const [isLoading, startTransition] = useTransition();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Detail modal state
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailMember, setDetailMember] = useState<MemberCard | null>(null);
 
   // Transition dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -106,14 +111,19 @@ export function ManageMembersShell({
     loadMembers(activeStatusIds, newPage, search);
   }
 
-  // Transition
+  // Card click → detail modal
+  function handleCardClick(member: MemberCard) {
+    setDetailMember(member);
+    setDetailOpen(true);
+  }
+
+  // Transition (from detail modal or directly)
   function handleTransition(member: MemberCard) {
     setSelectedMember(member);
     setDialogOpen(true);
   }
 
   function handleTransitionSuccess() {
-    // Refresh current view
     loadMembers(activeStatusIds, page, search);
   }
 
@@ -166,7 +176,7 @@ export function ManageMembersShell({
                     key={member.contactId}
                     member={member}
                     mpFileUrl={mpFileUrl}
-                    onTransition={handleTransition}
+                    onClick={handleCardClick}
                   />
                 ))}
               </div>
@@ -201,6 +211,16 @@ export function ManageMembersShell({
           </div>
         </div>
       )}
+
+      {/* Detail modal */}
+      <MemberDetailModal
+        member={detailMember}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        onTransition={handleTransition}
+        mpFileUrl={mpFileUrl}
+        onUpdate={() => loadMembers(activeStatusIds, page, search)}
+      />
 
       {/* Transition dialog */}
       <TransitionDialog

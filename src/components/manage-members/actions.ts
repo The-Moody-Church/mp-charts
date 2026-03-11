@@ -7,7 +7,9 @@ import { MemberService } from "@/services/memberService";
 import { ALLOWED_DOCUMENT_TYPES, MAX_FILE_SIZE, searchByNameFlat } from "@/lib/processing-utils";
 import { getCachedAllContacts } from "@/components/contact-lookup/cached-contacts";
 import { MEMBERS_PAGE_SIZE } from "@/lib/dto";
-import type { MemberCard, ContactSearch, TransitionPayload } from "@/lib/dto";
+import { ContactService } from "@/services/contactService";
+import { uploadContactPhoto } from "@/components/shared-actions/processing";
+import type { MemberCard, MemberDetail, ContactSearch, TransitionPayload } from "@/lib/dto";
 
 /** Convert a cached ContactSearch row to a MemberCard. */
 function toMemberCard(c: ContactSearch): MemberCard {
@@ -24,6 +26,7 @@ function toMemberCard(c: ContactSearch): MemberCard {
     memberStatus: c.Member_Status!,
     contactStatusId: null,
     fileUniqueId: c.Image_GUID || null,
+    dateJoined: c.Date_Joined || null,
   };
 }
 
@@ -96,6 +99,32 @@ export async function fetchMemberStatuses(): Promise<
   await requireFeatureAccess("manage-members");
   const service = await MemberService.getInstance();
   return service.getMemberStatuses();
+}
+
+export async function fetchMemberDetail(
+  contactId: number,
+  participantId: number,
+): Promise<MemberDetail | null> {
+  const session = await requireFeatureAccess("manage-members");
+  enforceRateLimit(session.user.id, "search");
+
+  if (!contactId || isNaN(contactId) || !participantId || isNaN(participantId)) {
+    return null;
+  }
+
+  // Get member from cached contacts
+  const allMembers = await getAllMembers();
+  const contact = allMembers.find((c) => c.Contact_ID === contactId);
+  if (!contact) return null;
+
+  // Fetch milestones from DB
+  const service = await MemberService.getInstance();
+  const milestones = await service.getMemberMilestones(participantId);
+
+  return {
+    member: toMemberCard(contact),
+    milestones,
+  };
 }
 
 export async function transitionMember(
@@ -178,4 +207,11 @@ export async function transitionMember(
       error: error instanceof Error ? error.message : "Failed to transition member",
     };
   }
+}
+
+export async function uploadMemberPhoto(
+  formData: FormData,
+): Promise<{ success: boolean; error?: string }> {
+  await requireFeatureAccess("manage-members");
+  return uploadContactPhoto(formData, () => ContactService.getInstance());
 }

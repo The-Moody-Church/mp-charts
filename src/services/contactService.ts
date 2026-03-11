@@ -62,7 +62,7 @@ export class ContactService {
   public async getAllContactsForSearch(): Promise<ContactSearch[]> {
     return this.mp!.getTableRecords<ContactSearch>({
       table: "Contacts",
-      select: "Contacts.[Contact_ID], Contact_GUID, First_Name, Nickname, Last_Name, Email_Address, Mobile_Phone, dp_fileUniqueId AS Image_GUID, Participant_Record_Table.[Participant_ID], Participant_Record_Table.[Member_Status_ID], Participant_Record_Table_Member_Status_ID_Table.[Member_Status]",
+      select: "Contacts.[Contact_ID], Contact_GUID, First_Name, Nickname, Last_Name, Email_Address, Mobile_Phone, dp_fileUniqueId AS Image_GUID, Participant_Record_Table.[Participant_ID], Participant_Record_Table.[Member_Status_ID], Participant_Record_Table_Member_Status_ID_Table.[Member_Status], Participant_Record_Table.[Date_Joined]",
     });
   }
 

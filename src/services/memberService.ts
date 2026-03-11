@@ -1,10 +1,21 @@
 import { TransitionPayload, STATUS_TO_MILESTONE } from "@/lib/dto";
+import type { MemberMilestone } from "@/lib/dto";
 import { MPHelper } from "@/lib/providers/ministry-platform";
+import { sanitizeIds } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
 
 /** Member status lookup row. */
 interface MemberStatusRow {
   Member_Status_ID: number;
   Member_Status: string;
+}
+
+/** Raw row from Participant_Milestones with joined Milestone_Title. */
+interface MilestoneRow {
+  Participant_Milestone_ID: number;
+  Milestone_ID: number;
+  Milestone_Title: string;
+  Date_Accomplished: string | null;
+  Notes: string | null;
 }
 
 export class MemberService {
@@ -35,6 +46,31 @@ export class MemberService {
       table: "Member_Statuses",
       select: "Member_Status_ID, Member_Status",
     });
+  }
+
+  // ---------------------------------------------------------------
+  // Read: Membership milestones for a participant (Journey 7)
+  // ---------------------------------------------------------------
+
+  public async getMemberMilestones(participantId: number): Promise<MemberMilestone[]> {
+    const safeId = sanitizeIds([participantId]);
+    const milestoneIds = [...new Set(Object.values(STATUS_TO_MILESTONE))];
+    const safeMilestoneIds = sanitizeIds(milestoneIds);
+
+    const rows = await this.mp!.getTableRecords<MilestoneRow>({
+      table: "Participant_Milestones",
+      select: "Participant_Milestone_ID, Milestone_ID, Milestone_ID_Table.[Milestone_Title], Date_Accomplished, Notes",
+      filter: `Participant_ID IN (${safeId}) AND Milestone_ID IN (${safeMilestoneIds})`,
+      orderBy: "Date_Accomplished DESC",
+    });
+
+    return rows.map((r) => ({
+      participantMilestoneId: r.Participant_Milestone_ID,
+      milestoneId: r.Milestone_ID,
+      milestoneName: r.Milestone_Title,
+      dateAccomplished: r.Date_Accomplished,
+      notes: r.Notes,
+    }));
   }
 
   // ---------------------------------------------------------------

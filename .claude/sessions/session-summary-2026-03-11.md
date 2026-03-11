@@ -120,3 +120,30 @@ Implemented the full "Manage Members" page per `.claude/plans/plan-membership-ma
 - `src/services/contactService.ts` — Added participant join to `getAllContactsForSearch` select
 - `src/components/manage-members/actions.ts` — Rewritten: cache-based search with `searchByNameFlat`
 - `src/services/memberService.ts` — Removed unused read methods and imports
+
+### Member Detail Modal & Date Joined
+
+Added a detail modal that opens when clicking a member card, similar to the journey tracker detail modals.
+
+**Features**:
+- Photo with upload-on-click (reuses `DetailModalPhotoUpload` shared component)
+- Name, status badge, "Member since" date from `Participant.Date_Joined`
+- Email/phone/SMS pill-style buttons (reuses `ContactLinks` shared component)
+- "View in Ministry Platform" link
+- Membership History: all milestones from Journey 7 (Registered, Associate, Youth, Dropped) with dates and notes
+- "Change Status" button that opens the existing transition dialog
+
+**Date Joined on cards**: Member cards now show "Since {date}" below the status badge when `Date_Joined` is set on the participant record.
+
+**Files created**:
+- `src/components/manage-members/member-detail-modal.tsx` — Detail modal with contact info, milestones, photo upload
+
+**Files modified**:
+- `src/lib/dto/contacts.ts` — Added `Date_Joined` to `ContactSearch`
+- `src/lib/dto/members.ts` — Added `dateJoined` to `MemberCard`, new `MemberMilestone` and `MemberDetail` interfaces
+- `src/services/contactService.ts` — Added `Date_Joined` to cached contacts select
+- `src/services/memberService.ts` — Added `getMemberMilestones()` method (fetches from Participant_Milestones for Journey 7 milestone IDs)
+- `src/components/manage-members/actions.ts` — Added `fetchMemberDetail`, `uploadMemberPhoto` actions; `toMemberCard` now includes `dateJoined`
+- `src/components/manage-members/member-card.tsx` — Card is now clickable (opens detail modal), shows date joined, removed "Change Status" button (moved to modal)
+- `src/components/manage-members/manage-members-shell.tsx` — Added detail modal state management, card click → modal flow
+- `src/components/manage-members/index.ts` — Added `MemberDetailModal` barrel export

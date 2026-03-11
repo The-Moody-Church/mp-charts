@@ -2,14 +2,13 @@
 
 import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { getDisplayName, getInitials, getImageUrl } from "@/lib/processing-utils";
+import { getDisplayName, getInitials, getImageUrl, formatDate } from "@/lib/processing-utils";
 import type { MemberCard as MemberCardType } from "@/lib/dto";
 
 interface MemberCardProps {
   member: MemberCardType;
   mpFileUrl: string | null;
-  onTransition: (member: MemberCardType) => void;
+  onClick: (member: MemberCardType) => void;
 }
 
 function statusBadgeColor(statusId: number): string {
@@ -23,13 +22,16 @@ function statusBadgeColor(statusId: number): string {
   }
 }
 
-export function MemberCardComponent({ member, mpFileUrl, onTransition }: MemberCardProps) {
+export function MemberCardComponent({ member, mpFileUrl, onClick }: MemberCardProps) {
   const displayName = getDisplayName(member.firstName, member.nickname);
   const fullName = `${displayName} ${member.lastName}`;
   const showNickname = member.nickname && member.nickname !== member.firstName;
 
   return (
-    <Card className="flex flex-col h-full">
+    <Card
+      className="flex flex-col h-full cursor-pointer hover:ring-2 hover:ring-primary/20 transition-shadow"
+      onClick={() => onClick(member)}
+    >
       <CardContent className="flex flex-col items-center gap-2 p-4 flex-1">
         {/* Avatar */}
         <div className="w-16 h-16 rounded-full overflow-hidden relative flex-shrink-0">
@@ -65,22 +67,17 @@ export function MemberCardComponent({ member, mpFileUrl, onTransition }: MemberC
           {member.memberStatus}
         </span>
 
+        {/* Date joined */}
+        {member.dateJoined && (
+          <p className="text-xs text-muted-foreground">
+            Since {formatDate(member.dateJoined)}
+          </p>
+        )}
+
         {/* Contact info */}
         <div className="text-center text-xs text-muted-foreground space-y-0.5 min-w-0 w-full">
           {member.email && <p className="truncate">{member.email}</p>}
           {member.mobilePhone && <p className="truncate">{member.mobilePhone}</p>}
-        </div>
-
-        {/* Transition button */}
-        <div className="mt-auto pt-2 w-full">
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full text-xs"
-            onClick={() => onTransition(member)}
-          >
-            Change Status
-          </Button>
         </div>
       </CardContent>
     </Card>

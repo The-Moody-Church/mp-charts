@@ -16,6 +16,20 @@ export interface MemberCard {
   memberStatus: string;
   contactStatusId: number | null;
   fileUniqueId: string | null;
+  dateJoined: string | null;
+}
+
+export interface MemberMilestone {
+  participantMilestoneId: number;
+  milestoneId: number;
+  milestoneName: string;
+  dateAccomplished: string | null;
+  notes: string | null;
+}
+
+export interface MemberDetail {
+  member: MemberCard;
+  milestones: MemberMilestone[];
 }
 
 export interface MemberStatusGroup {

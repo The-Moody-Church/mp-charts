@@ -11,6 +11,7 @@ export interface ContactSearch {
   Participant_ID: number | null;
   Member_Status_ID: number | null;
   Member_Status: string | null;
+  Date_Joined: string | null;
 }
 
 export interface ContactLookupDetails {
