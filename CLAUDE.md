@@ -191,7 +191,7 @@ When adding, removing, or renaming environment variables, update `.env.example` 
   - **OIDC Logout**: Implements RP-initiated logout flow to properly end Ministry Platform OAuth sessions
   - **Required Environment Variables**: `MINISTRY_PLATFORM_BASE_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`
   - **MP OAuth Setup**: Requires Post-Logout Redirect URIs configured in Ministry Platform OAuth client (see README.md)
-- **Services Layer**: Singleton service classes in `src/services/` wrap MPHelper for domain logic (ContactService, ContactLogService, DashboardService, ToolService, UserService, VolunteerService)
+- **Services Layer**: Singleton service classes in `src/services/` wrap MPHelper for domain logic (ContactService, ContactLogService, ComplianceProcessingService, DashboardService, FeedbackService, JourneyProcessingService, UserService)
 - **Contexts**: React context providers in `src/contexts/` (UserProvider, RuntimeConfigProvider) composed in `src/app/providers.tsx`; session access via `authClient.useSession()` from `src/lib/auth-client.ts`
 - **Validation**: Zod v4 (`zod@^4.3`) — note: different API from Zod v3 (e.g., `z.guid()` instead of `z.string().uuid()`, type imports via `z.ZodObject<z.ZodRawShape>`)
 - **UI**: Radix UI primitives + shadcn/ui components in `src/components/ui/`, Tailwind CSS v4
@@ -392,21 +392,20 @@ Key files:
 - `src/components/admin/compliance-tools/compliance-tool-editor.tsx` — Compliance tool form
 - `src/components/admin/compliance-tools/actions.ts` — Compliance admin server actions
 
-## Dev-Only vs Production Navigation
+## Feature Visibility & Access Control
 
-Some features are dev/demo tools and are **hidden in production builds**. They are gated behind `process.env.NODE_ENV === "development"` in:
-- `src/app/(web)/page.tsx` — home page cards
-- `src/components/layout/sidebar.tsx` — sidebar nav items
+Feature visibility in the home page and sidebar is controlled by RBAC (feature-to-User-Group mappings), not environment variables. Users only see features their User Groups grant access to. Admin users (in `ADMIN_USER_GROUP_IDS` groups) see all features plus the admin settings page.
 
-**Currently dev-only:**
-- Contact Lookup (`/contact-lookup`)
-- Template Tool (`/tools/template`)
+**Current features:**
+- Executive Dashboard (`/dashboard`) — feature: `dashboard`
+- Contact Lookup (`/contact-lookup`) — feature: `contact-lookup`
+- Journey tools (`/journey/*`) — dynamically added from tool configuration
+- Compliance tools (`/compliance/*`) — dynamically added from tool configuration
+- Admin/Setup (`/admin`) — admin-only
 
-**Visible in all environments:**
-- Executive Dashboard (`/dashboard`)
-- Volunteer Processing (`/volunteer-processing`) — both "New Volunteers In Process" and "Approved Active Volunteers" tabs
-
-The routes themselves still exist in production — they're just not linked from the UI. When a dev-only feature is promoted to production, move it out of the `isDev` gate in the relevant files.
+Feature visibility is configured in:
+- `src/components/home/home-cards.tsx` — home page feature cards
+- `src/components/layout/sidebar.tsx` — sidebar navigation items
 
 ## Import Patterns
 
@@ -905,10 +904,11 @@ Each session gets a dated file at `.claude/sessions/session-summary-YYYY-MM-DD.m
 Before every commit (on ANY branch):
 
 1. **CLAUDE.md check**: Do the changes introduce new patterns, conventions, or architectural decisions? If so, update CLAUDE.md in the same commit.
-2. **Session summary**: Update `.claude/sessions/session-summary-YYYY-MM-DD.md` with what's being committed.
-3. **ideas.md**: If any issues were completed, update `.claude/ideas.md` (see "Ideas & Issue Tracking" section).
-4. **status.md**: After merging a PR, update `.claude/status.md` to reflect the completed work and current project state.
-5. Include all updated context files in the commit.
+2. **README.md check**: Do the changes affect anything documented in README.md? This includes: new/removed features, changed auth or env vars, new routes or components, updated services, changed project structure, or modified setup steps. If so, update README.md in the same commit.
+3. **Session summary**: Update `.claude/sessions/session-summary-YYYY-MM-DD.md` with what's being committed.
+4. **ideas.md**: If any issues were completed, update `.claude/ideas.md` (see "Ideas & Issue Tracking" section).
+5. **status.md**: After merging a PR, update `.claude/status.md` to reflect the completed work and current project state.
+6. Include all updated context files in the commit.
 
 ## Ideas & Issue Tracking
 

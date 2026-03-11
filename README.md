@@ -1,6 +1,6 @@
 # MPNext
 
-A modern Next.js application integrated with Ministry Platform authentication and REST API, built with TypeScript, Next.js 16, React 19, and NextAuth v5.
+A modern Next.js application integrated with Ministry Platform authentication and REST API, built with TypeScript, Next.js 16, React 19, and Better Auth.
 
 > **Fork Notice**: This repository ([The-Moody-Church/mp-charts](https://github.com/The-Moody-Church/mp-charts)) is a fork of [MinistryPlatform-Community/MPNext](https://github.com/MinistryPlatform-Community/MPNext). We pull in changes from upstream but do not contribute back. All development happens on this fork.
 
@@ -10,7 +10,7 @@ A modern Next.js application integrated with Ministry Platform authentication an
 - [Architecture](#architecture)
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
-  - [Quick Setup with Claude Code](#quick-setup-with-claude-code)
+  - [Quick Setup](#quick-setup)
   - [Manual Setup](#manual-setup)
   - [API Client Setup](#api-client-setup)
 - [Project Structure](#project-structure)
@@ -25,51 +25,65 @@ A modern Next.js application integrated with Ministry Platform authentication an
 
 ## Features
 
-- **Authentication**: NextAuth v5 with Ministry Platform OAuth provider and OIDC RP-initiated logout
+- **Authentication**: Better Auth with Ministry Platform OAuth via `genericOAuth` plugin and OIDC RP-initiated logout
+- **RBAC**: Admin-managed feature-to-User-Group mapping with per-feature access control
 - **Modern UI**: Radix UI primitives + shadcn/ui components with Tailwind CSS v4
+- **PWA**: Service worker, offline fallback, and iOS install prompt
 - **Type-Safe API**: Full TypeScript support with auto-generated types from Ministry Platform schema
-- **Next.js 16**: App Router with React Server Components
+- **Next.js 16**: App Router with Cache Components (PPR), Turbopack, and React Server Components
 - **REST API Client**: Comprehensive Ministry Platform REST API integration
 - **Type Generation**: CLI tool to generate TypeScript interfaces and Zod schemas from MP database
-- **Schema Documentation**: Auto-generated markdown documentation with type file links
-- **Validation**: Optional Zod schema validation in MPHelper for runtime data validation before API calls
-- **Testing**: Vitest test framework with comprehensive coverage for auth, middleware, and API services
-- **Tools Framework**: Reusable tool components for building Ministry Platform page tools
+- **Validation**: Zod v4 schema validation in MPHelper for runtime data validation before API calls
+- **Testing**: Vitest test framework with coverage for auth, proxy, rate limiting, authorization, and API services
+- **Executive Dashboard**: Attendance metrics, community trends, small group analytics with YoY comparisons
+- **Contact Lookup**: Scored search with exact/starts-with/contains/Soundex/Levenshtein matching
+- **Journey & Compliance Processing**: Configurable multi-step processing workflows (volunteer, baptism, membership)
+- **Cache Warming**: Automatic pre-warming of all cached data on server start
 
 ## Architecture
 
 ### Framework
-- **Next.js 16.1.6** with App Router
+- **Next.js 16** with App Router, Cache Components (PPR), and Turbopack
 - **React 19** with Server Components by default
 - **TypeScript** in strict mode
 - **Tailwind CSS v4** for styling
-- **Vitest 4.0** for testing
+- **Vitest** for testing
 
 ### Ministry Platform Integration
 Custom provider located at `src/lib/providers/ministry-platform/` featuring:
 - REST API client with OAuth2 authentication
 - Service-oriented architecture for domain-specific logic
-- Type-safe models and Zod validation schemas (603 generated files)
+- Type-safe models and Zod validation schemas (auto-generated)
 - Automatic token management with refresh
 - Six specialized services: Table, Procedure, Communication, File, Metadata, Domain
 
 ### Authentication
-NextAuth v5 (beta) with custom Ministry Platform OAuth provider (`src/auth.ts`)
-- JWT session strategy with automatic token refresh
-- OIDC RP-initiated logout for proper session termination
-- Middleware-based route protection
+Better Auth (`better-auth@^1.4`) with Ministry Platform OAuth via `genericOAuth` plugin:
+- **Server config**: `src/lib/auth.ts` — `betterAuth()` with `genericOAuth`, `customSession`, `nextCookies()` plugins
+- **Client config**: `src/lib/auth-client.ts` — `createAuthClient()` with matching client plugins
+- **Auth helpers**: `src/lib/auth-helpers.ts` — `getSession()`, `requireSession()`, `getMpUserId()`, `getUserGuid()`
+- **Route handler**: `src/app/api/auth/[...all]/route.ts` — Better Auth API route
+- **Route protection**: `src/proxy.ts` — Next.js 16 proxy with session cookie validation
+- JWT cookie-based sessions; OIDC RP-initiated logout for proper session termination
+
+### Authorization (RBAC)
+Feature access is controlled via admin-managed User Group mappings:
+- Configuration stored in `data/feature-access.json`
+- Super-admin groups defined by `ADMIN_USER_GROUP_IDS` env var
+- Server actions enforce access via `requireFeatureAccess()`
+- Admin page at `/admin` for managing feature-to-group assignments
 
 ## Prerequisites
 
 - **Node.js**: v22 or higher (v20.9+ minimum, v22 LTS recommended)
 - **Package Manager**: npm (comes with Node.js)
-- **Ministry Platform**: Active instance with API credentials and OAuth client configured (see [OAuth Setup](#oauth-setup))
+- **Ministry Platform**: Active instance with API credentials and OAuth client configured (see [API Client Setup](#api-client-setup))
 
 ## Getting Started
 
-### Quick Setup with Claude Code
+### Quick Setup
 
-If you have [Claude Code](https://claude.ai/code) installed, the setup process is automated:
+The interactive setup command automates environment configuration:
 
 ```bash
 git clone https://github.com/The-Moody-Church/mp-charts.git
@@ -78,19 +92,19 @@ npm install
 npm run setup
 ```
 
-The interactive setup command will:
+The setup command will:
 1. Verify Node.js version (v20.9+ required, v22 LTS recommended)
 2. Check git status
 3. Create `.env.local` from `.env.example` (if needed)
 4. Prompt for missing environment variables
-5. Auto-generate `NEXTAUTH_SECRET` (optional)
+5. Auto-generate `BETTER_AUTH_SECRET` (optional)
 6. Install and update dependencies
 7. Generate Ministry Platform types
 8. Run a production build to verify configuration
 
 **Additional setup options:**
 ```bash
-npm run setup:check     # Validation only (no changes)
+npm run setup:check            # Validation only (no changes)
 npm run setup -- --clean       # Clean install (delete node_modules first)
 npm run setup -- --skip-install # Skip npm install/update
 npm run setup -- --verbose     # Extra output
@@ -102,8 +116,6 @@ Once setup completes, run `npm run dev` and visit http://localhost:3000.
 ---
 
 ### Manual Setup
-
-If you prefer manual setup or don't have Claude Code:
 
 #### 1. Clone the Repository
 
@@ -129,19 +141,15 @@ cp .env.example .env.local
 Update `.env.local` with your configuration:
 
 ```env
-# NextAuth Provider Configuration
-OIDC_PROVIDER_NAME="MinistryPlatform"
-OIDC_CLIENT_ID=MPNext
+# Better Auth / OAuth Configuration
+OIDC_CLIENT_ID=TM.Widgets
 OIDC_CLIENT_SECRET=your_client_secret
-OIDC_WELL_KNOWN_URL=https://your-instance.ministryplatform.com/ministryplatformapi/oauth/.well-known/openid-configuration
-OIDC_SCOPE=openid profile email offline_access http://www.thinkministry.com/dataplatform/scopes/all
 
-# Generate this secret via: npx auth secret
-NEXTAUTH_SECRET=your_generated_secret
+# Generate via: openssl rand -base64 32
+BETTER_AUTH_SECRET=your_generated_secret
 
-# Update for production
-NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_DEBUG=false
+# Application base URL — used for OAuth callbacks and redirects
+BETTER_AUTH_URL=http://localhost:3000
 
 # MinistryPlatform API Configuration
 MINISTRY_PLATFORM_CLIENT_ID=MPNext
@@ -152,8 +160,9 @@ MINISTRY_PLATFORM_BASE_URL=https://your-instance.ministryplatform.com/ministrypl
 NEXT_PUBLIC_MINISTRY_PLATFORM_FILE_URL=https://your-instance.ministryplatform.com/ministryplatformapi/files
 NEXT_PUBLIC_APP_NAME=MP Tools
 
+# RBAC Configuration — super-admin User Group IDs (comma-separated)
+ADMIN_USER_GROUP_IDS=29
 ```
-
 
 #### API Client Setup
 
@@ -228,20 +237,6 @@ This will:
 - Clean up any previously generated files
 - Output to `src/lib/providers/ministry-platform/models/`
 
-**Expected output:**
-```
-Generating TypeScript types from Ministry Platform schema...
-Fetching table metadata from Ministry Platform...
-Found 301 tables
-Cleaning output directory: src/lib/providers/ministry-platform/models
-   Removed 605 existing type files
-Generating type definitions...
-  Contacts.ts (Contacts) [51 columns]
-  Events.ts (Events) [57 columns]
-  ...
-Successfully generated 301 table types + 301 Zod schemas (602 total files)
-```
-
 **Advanced options:**
 ```bash
 # Generate types for specific tables only
@@ -284,7 +279,7 @@ npm run dev
 
 When deploying to production:
 
-1. Update `NEXTAUTH_URL` to your production domain
+1. Update `BETTER_AUTH_URL` to your production domain
 2. Add production redirect URIs to Ministry Platform OAuth client
 3. Add production post-logout redirect URIs
 4. Ensure environment variables are set in your hosting provider
@@ -300,77 +295,79 @@ mp-charts/
 ├── src/
 │   ├── app/                              # Next.js App Router pages
 │   │   ├── (web)/                        # Protected route group
-│   │   │   ├── contactlookup/            # Contact lookup
-│   │   │   │   └── [guid]/              # Dynamic contact detail page
-│   │   │   ├── dashboard/               # Executive dashboard
-│   │   │   ├── home/                    # Home redirect
-│   │   │   ├── tools/                   # Tools framework
-│   │   │   │   └── template/            # Template tool example
-│   │   │   ├── layout.tsx               # Web layout with auth
-│   │   │   └── page.tsx                 # Root page
-│   │   ├── api/auth/[...nextauth]/      # NextAuth API routes
-│   │   ├── signin/                      # Sign-in page
-│   │   ├── layout.tsx                   # Root layout
-│   │   └── providers.tsx                # App providers wrapper
+│   │   │   ├── admin/                   # Admin settings (RBAC, feature access)
+│   │   │   ├── compliance/              # Compliance processing tools
+│   │   │   ├── contact-lookup/          # Contact search & detail pages
+│   │   │   │   └── [guid]/             # Dynamic contact detail page
+│   │   │   ├── dashboard/              # Executive dashboard
+│   │   │   ├── home/                   # Home redirect
+│   │   │   ├── journey/               # Journey processing tools
+│   │   │   ├── layout.tsx              # Web layout with auth
+│   │   │   └── page.tsx               # Root page (feature cards)
+│   │   ├── api/
+│   │   │   ├── auth/[...all]/          # Better Auth API route
+│   │   │   └── cache-warm/            # Cache warming endpoint
+│   │   ├── signin/                     # Sign-in page
+│   │   ├── layout.tsx                  # Root layout
+│   │   └── providers.tsx               # App providers wrapper
 │   │
 │   ├── components/                      # React components
+│   │   ├── admin/                       # Admin UI (journey-tools, compliance-tools editors)
+│   │   ├── compliance-processing/       # Compliance processing feature
 │   │   ├── contact-logs/                # Contact logs feature (CRUD)
-│   │   ├── contact-lookup/              # Contact lookup feature
-│   │   ├── contact-lookup-details/      # Contact details feature
-│   │   ├── dashboard/                   # Executive dashboard components
-│   │   │   ├── dashboard-shell.tsx      # Client shell (filter state, data lifecycle)
-│   │   │   ├── dashboard-metrics.tsx    # Metric cards and charts
-│   │   │   ├── date-range-filter.tsx    # Date range selector
-│   │   │   ├── attendance-chart.tsx     # Worship attendance chart
-│   │   │   ├── community-attendance-chart.tsx
-│   │   │   ├── small-group-trends.tsx
-│   │   │   ├── filter-dashboard-data.ts # Client-side data filtering
-│   │   │   ├── actions.ts              # Server actions (data fetching, cache)
-│   │   │   └── index.ts
-│   │   ├── layout/                      # Layout components
-│   │   ├── tool/                        # Tool framework components
-│   │   ├── user-menu/                   # User menu feature
-│   │   ├── user-tools-debug/            # Development debug helper
+│   │   ├── contact-lookup/              # Contact search with scored matching
+│   │   ├── contact-lookup-details/      # Detailed contact view
+│   │   ├── dashboard/                   # Executive dashboard charts & metrics
+│   │   ├── feedback/                    # User feedback feature
+│   │   ├── home/                        # Home page cards
+│   │   ├── journey-processing/          # Journey processing feature
+│   │   ├── layout/                      # Layout components (header, sidebar, breadcrumb)
+│   │   ├── processing/                  # Shared processing components (avatar, grid, forms)
+│   │   ├── pwa/                         # PWA install prompt
 │   │   ├── shared-actions/              # Cross-feature server actions
-│   │   └── ui/                          # shadcn/ui components
+│   │   ├── ui/                          # shadcn/ui components
+│   │   └── user-menu/                   # User menu feature
 │   │
-│   ├── contexts/                        # React Context providers
+│   ├── contexts/                        # React Context providers (User, RuntimeConfig)
 │   │
 │   ├── lib/                             # Shared libraries
 │   │   ├── dto/                         # Application DTOs/ViewModels
-│   │   │   ├── contacts.ts
-│   │   │   ├── contact-logs.ts
-│   │   │   ├── dashboard.ts
-│   │   │   └── index.ts
-│   │   ├── tool-params.ts               # Tool parameter utilities
+│   │   ├── auth.ts                      # Better Auth server configuration
+│   │   ├── auth-client.ts               # Better Auth client configuration
+│   │   ├── auth-helpers.ts              # Session helpers (requireSession, getMpUserId)
+│   │   ├── authorization.ts             # RBAC feature access control
+│   │   ├── cache-warming.ts             # Cache warming registry
+│   │   ├── processing-utils.ts          # Shared processing utilities
+│   │   ├── rate-limit.ts                # Rate limiting (sliding window)
 │   │   ├── utils.ts                     # General utilities
 │   │   └── providers/
 │   │       └── ministry-platform/       # Ministry Platform provider
 │   │           ├── auth/                # OAuth authentication
 │   │           ├── services/            # API services (6 services)
-│   │           ├── models/              # Generated types (603 files)
+│   │           ├── models/              # Generated types + Zod schemas
 │   │           ├── types/               # Type definitions
-│   │           ├── utils/               # HTTP client utilities
+│   │           ├── utils/               # HTTP client, filter sanitization
 │   │           ├── scripts/             # Type generation CLI
 │   │           ├── docs/                # Provider documentation
 │   │           ├── helper.ts            # Public API (MPHelper)
 │   │           └── index.ts             # Barrel export
 │   │
 │   ├── services/                        # Application services
-│   │   ├── contactService.ts
-│   │   ├── contactLogService.ts
-│   │   ├── dashboardService.ts          # Executive dashboard data
-│   │   ├── userService.ts
-│   │   └── toolService.ts
+│   │   ├── contactService.ts            # Contact search and updates
+│   │   ├── contactLogService.ts         # Contact log CRUD
+│   │   ├── complianceProcessingService.ts # Compliance workflow processing
+│   │   ├── dashboardService.ts          # Executive dashboard metrics
+│   │   ├── feedbackService.ts           # User feedback
+│   │   ├── journeyProcessingService.ts  # Journey workflow processing
+│   │   └── userService.ts               # User profile retrieval
 │   │
-│   ├── auth.ts                          # NextAuth configuration
-│   └── middleware.ts                    # Next.js middleware
+│   ├── instrumentation.ts              # Cache warming on server start
+│   └── proxy.ts                        # Next.js 16 route protection
 │
+├── data/                                # Runtime data (feature-access.json)
 ├── .claude/                             # Claude AI configuration
 ├── docs/                                # Documentation
 ├── Dockerfile                           # Production Docker build
-├── Dockerfile.dev                       # Development Docker build
-├── docker-compose.yml                   # Docker Compose configuration
 ├── DOCKER.md                            # Docker deployment guide
 ├── CLAUDE.md                            # Development guide
 ├── vitest.config.ts                     # Vitest configuration
@@ -398,14 +395,6 @@ const contacts = await mp.getTableRecords({
   orderBy: 'Last_Name',
   top: 50
 });
-
-// Create records (without validation - backward compatible)
-await mp.createTableRecords('Contact_Log', [{
-  Contact_ID: 12345,
-  Contact_Date: new Date().toISOString(),
-  Made_By: 1,
-  Notes: 'Follow-up call completed'
-}]);
 
 // Create records with Zod validation (recommended)
 await mp.createTableRecords('Contact_Log', [{
@@ -436,7 +425,7 @@ const files = await mp.getFilesByRecord({
 });
 ```
 
-### Available Services
+### Available MP Services
 
 | Service | Purpose | Key Methods |
 |---------|---------|-------------|
@@ -458,9 +447,6 @@ npm run mp:generate:models
 # Generate types for specific tables
 npx tsx src/lib/providers/ministry-platform/scripts/generate-types.ts --search "Contact"
 
-# Generate without cleaning old files
-npx tsx src/lib/providers/ministry-platform/scripts/generate-types.ts -o ./types --zod
-
 # See all options
 npx tsx src/lib/providers/ministry-platform/scripts/generate-types.ts --help
 ```
@@ -473,38 +459,31 @@ npx tsx src/lib/providers/ministry-platform/scripts/generate-types.ts --help
 - `-d, --detailed` - Sample records for better type inference (slower)
 - `--sample-size <num>` - Number of records to sample in detailed mode
 
-**Generated Output:**
-- 301 TypeScript interfaces (one per table)
-- 301 Zod validation schemas
-- Schema documentation with type file links (`.claude/references/ministryplatform.schema.md`)
-
 See [Ministry Platform Type Generator documentation](src/lib/providers/ministry-platform/scripts/README.md) for details.
 
 ## Components
 
 ### UI Components
-Built with Radix UI primitives and styled with Tailwind CSS. Located in `src/components/ui/`:
-- Alert, Alert Dialog, Avatar, Breadcrumb, Button, Card
-- Checkbox, Dialog, Drawer, Dropdown Menu, Form, Input
-- Label, Radio Group, Select, Skeleton, Switch, Textarea, Tooltip
+Built with Radix UI primitives and styled with Tailwind CSS. Located in `src/components/ui/`.
 
 ### Layout Components (`src/components/layout/`)
 - **AuthWrapper**: Server component for route protection with session validation
 - **Header**: Application header with sidebar toggle and user menu
-- **Sidebar**: Navigation sidebar with route links
+- **Sidebar**: Navigation sidebar with feature-gated route links
 - **DynamicBreadcrumb**: Auto-generated breadcrumbs from URL path
 
 ### Feature Components
-- **contact-lookup**: Contact search with fuzzy matching
-- **contact-lookup-details**: Detailed contact view with logs
+- **contact-lookup**: Contact search with scored fuzzy matching (exact, starts-with, contains, Soundex, Levenshtein)
+- **contact-lookup-details**: Detailed contact view with logs, family, photos, badges
 - **contact-logs**: Full CRUD for contact interaction history
+- **dashboard**: Executive dashboard with attendance, community, and small group charts (YoY comparisons)
+- **journey-processing**: Configurable multi-step journey workflows (e.g., volunteer, baptism)
+- **compliance-processing**: Configurable compliance tracking workflows (e.g., membership)
+- **admin**: Admin tool editors for journey and compliance tool configuration
+- **feedback**: User feedback submission
+- **processing**: Shared processing components (PersonAvatar, ProcessingGrid, MilestoneEditForm)
+- **pwa**: Progressive Web App install prompt
 - **user-menu**: User profile dropdown with sign-out
-
-### Tool Components (`src/components/tool/`)
-- **ToolContainer**: Main wrapper for tool pages
-- **ToolHeader**: Tool title bar with optional info tooltip
-- **ToolFooter**: Save/Close action buttons
-- **ToolParamsDebug**: Development helper for debugging URL parameters
 
 All components follow kebab-case naming and use named exports for consistency.
 
@@ -517,51 +496,16 @@ Application services provide business logic abstraction over the Ministry Platfo
 | **ContactService** | `contactService.ts` | Contact search and updates |
 | **ContactLogService** | `contactLogService.ts` | Contact log CRUD with validation |
 | **DashboardService** | `dashboardService.ts` | Executive dashboard metrics and trends |
-| **UserService** | `userService.ts` | User profile retrieval |
-| **ToolService** | `toolService.ts` | Tool page data and user permissions |
+| **JourneyProcessingService** | `journeyProcessingService.ts` | Journey workflow step processing |
+| **ComplianceProcessingService** | `complianceProcessingService.ts` | Compliance workflow processing |
+| **FeedbackService** | `feedbackService.ts` | User feedback submission |
+| **UserService** | `userService.ts` | User profile and roles retrieval |
 
 All services follow the singleton pattern and use `MPHelper` for API communication.
 
-## Building Custom Tools
-
-### Template Tool
-
-The project includes a template tool (`src/app/(web)/tools/template/`) that demonstrates best practices for building Ministry Platform tools that can be launched from within MP pages.
-
-**Key features:**
-- URL parameter parsing for MP page context (`pageID`, record selection, etc.)
-- Dual-mode support (create new vs. edit existing records)
-- Standard tool UI with save/close actions
-- Development helpers for debugging tool params and user context
-- Integration with `ToolContainer` component for consistent UX
-
-**Structure:**
-```
-src/app/(web)/tools/template/
-├── page.tsx           # Server component that parses URL params
-└── template-tool.tsx  # Client component with tool UI
-```
-
-**Usage as a starting point:**
-1. Copy the `template` folder to create your new tool
-2. Rename files and components appropriately
-3. Implement your tool logic inside the `ToolContainer`
-4. Remove `ToolParamsDebug` and `UserToolsDebug` before production
-
-**URL Parameters:**
-Tools receive standard MP parameters like `pageID`, `s` (selection), and `recordDescription`. Use `parseToolParams()` to handle them consistently.
-
-See the [template tool](src/app/(web)/tools/template/) for implementation details.
-
 ## Testing
 
-The project uses **Vitest 4.0** with comprehensive test coverage for critical functionality.
-
-### Test Infrastructure
-
-- **Framework**: Vitest with jsdom environment
-- **Libraries**: @testing-library/react, @testing-library/jest-dom
-- **Coverage**: v8 provider with HTML reports
+The project uses **Vitest** with test coverage for critical functionality.
 
 ### Running Tests
 
@@ -578,16 +522,18 @@ npm run test:coverage
 
 ### Test Coverage
 
-| Area | Files | Coverage |
-|------|-------|----------|
-| Authentication | `auth.test.ts` | JWT callbacks, token refresh, session handling |
-| Middleware | `middleware.test.ts` | Route protection, token validation |
+| Area | File | Coverage |
+|------|------|----------|
+| Authentication | `auth.test.ts` | Better Auth callbacks, session handling |
+| Route Protection | `proxy.test.ts` | Proxy-based route protection, cookie validation |
+| Rate Limiting | `rate-limit.test.ts` | Sliding window rate limit tiers |
+| Authorization | `authorization.test.ts` | RBAC feature access control |
+| Processing Utils | `processing-utils.test.ts` | Shared processing utilities |
+| User Service | `userService.test.ts` | User profile retrieval |
 | MP Client | `client.test.ts` | OAuth token management |
 | MPHelper | `helper.test.ts` | All CRUD operations, validation |
 | Table Service | `table.service.test.ts` | Table operations |
 | HTTP Client | `http-client.test.ts` | HTTP methods, URL building |
-
-**Total**: ~190+ test cases across 6 test files
 
 ### Test Configuration
 
@@ -617,9 +563,6 @@ npm run lint
 npm test              # Watch mode
 npm run test:run      # Single run
 npm run test:coverage # With coverage report
-
-# Generate MP types (basic, to custom location)
-npm run mp:generate
 
 # Generate MP types to models directory with Zod schemas (recommended)
 npm run mp:generate:models
@@ -695,12 +638,6 @@ Creates a pull request after validating all prerequisites are met.
 /pr #123               # Link to specific GitHub issue
 ```
 
-**PR format includes:**
-- Summary section with bullet points
-- Test plan checklist
-- Issue links (auto-detected from commits)
-- Claude Code attribution
-
 ### Command Files
 
 Command definitions are stored in `.claude/commands/`:
@@ -728,7 +665,6 @@ import { MPHelper } from '@/lib/providers/ministry-platform';
 import { Button } from '@/components/ui/button';
 import { ContactSearch } from '@/lib/dto';
 import { Header, Sidebar } from '@/components/layout';
-import { ToolContainer } from '@/components/tool';
 ```
 
 ### Component Style
@@ -751,67 +687,18 @@ src/components/
 ├── shared-actions/       # Cross-feature server actions
 ├── ui/                   # shadcn/ui components
 ├── layout/               # Layout components (header, sidebar, etc.)
-├── tool/                 # Tool framework components
+├── processing/           # Shared processing components
 ├── feature-name/         # Feature folder (kebab-case)
 │   ├── feature-name.tsx  # Main component
 │   ├── actions.ts        # Feature-specific server actions
 │   └── index.ts          # Barrel exports
-└── shared-component.tsx  # Shared standalone components
-```
-
-### Import Examples
-```typescript
-// Import feature components via barrel exports
-import { ContactLookup } from '@/components/contact-lookup';
-import { UserMenu } from '@/components/user-menu';
-
-// Import layout components
-import { Header, Sidebar, AuthWrapper } from '@/components/layout';
-
-// Import tool components
-import { ToolContainer, ToolParamsDebug } from '@/components/tool';
-
-// Import application DTOs
-import { ContactSearch, ContactLookupDetails } from '@/lib/dto';
-
-// Import Ministry Platform models (generated)
-import { ContactLog, Congregation } from '@/lib/providers/ministry-platform/models';
-
-// Import Ministry Platform Zod schemas
-import { ContactLogSchema } from '@/lib/providers/ministry-platform/models';
-
-// Import Ministry Platform helper
-import { MPHelper } from '@/lib/providers/ministry-platform';
-
-// Import shared actions
-import { getCurrentUserProfile } from '@/components/shared-actions/user';
 ```
 
 ### TypeScript
 - Strict mode enabled
 - Export interfaces from models
-- Use Zod schemas for validation
+- Use Zod v4 schemas for validation
 - Leverage TypeScript generics for type safety
-
-### Best Practices
-1. **Regenerate types** after Ministry Platform schema changes: `npm run mp:generate:models`
-2. Always use TypeScript generics for type-safe API calls
-3. Handle errors with try-catch blocks
-4. **Use Zod schemas for runtime validation** - Pass the optional `schema` parameter to `createTableRecords()` and `updateTableRecords()` to validate data before API calls:
-   ```typescript
-   import { ContactLogSchema } from '@/lib/providers/ministry-platform/models';
-
-   await mp.createTableRecords('Contact_Log', records, {
-     schema: ContactLogSchema,  // Catch validation errors before API call
-     $userId: 1
-   });
-   ```
-5. Keep Ministry Platform structure organized:
-   - Generated database models: `src/lib/providers/ministry-platform/models/` (auto-generated, don't edit manually)
-   - Application-level DTOs/ViewModels: `src/lib/dto/` (hand-written)
-   - Export all from respective `index.ts` files
-6. Access fields with special characters using bracket notation: `event["Allow_Check-in"]`
-7. **Run tests** before committing: `npm run test:run`
 
 ## License
 
