@@ -1,4 +1,4 @@
-import { TransitionPayload, STATUS_TO_MILESTONE } from "@/lib/dto";
+import { TransitionPayload, STATUS_TO_MILESTONE, MEMBERSHIP_JOURNEY_ID } from "@/lib/dto";
 import type { MemberMilestone } from "@/lib/dto";
 import { MPHelper } from "@/lib/providers/ministry-platform";
 import { sanitizeIds } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
@@ -54,13 +54,11 @@ export class MemberService {
 
   public async getMemberMilestones(participantId: number): Promise<MemberMilestone[]> {
     const safeId = sanitizeIds([participantId]);
-    const milestoneIds = [...new Set(Object.values(STATUS_TO_MILESTONE))];
-    const safeMilestoneIds = sanitizeIds(milestoneIds);
 
     const rows = await this.mp!.getTableRecords<MilestoneRow>({
       table: "Participant_Milestones",
       select: "Participant_Milestone_ID, Milestone_ID, Milestone_ID_Table.[Milestone_Title], Date_Accomplished, Notes",
-      filter: `Participant_ID IN (${safeId}) AND Milestone_ID IN (${safeMilestoneIds})`,
+      filter: `Participant_ID IN (${safeId}) AND Milestone_ID_Table.[Journey_ID] = ${MEMBERSHIP_JOURNEY_ID}`,
       orderBy: "Date_Accomplished DESC",
     });
 
