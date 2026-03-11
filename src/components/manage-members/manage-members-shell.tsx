@@ -9,7 +9,7 @@ import { MemberTabs } from "./member-tabs";
 import { MemberCardComponent } from "./member-card";
 import { MemberDetailModal } from "./member-detail-modal";
 import { TransitionDialog } from "./transition-dialog";
-import { fetchMembers, fetchStatusCounts, fetchMemberDetail } from "./actions";
+import { fetchMembersAndCounts, fetchMemberDetail, refreshMemberCache } from "./actions";
 import { MEMBER_STATUS_GROUPS, MEMBERS_PAGE_SIZE } from "@/lib/dto";
 import type { MemberCard, MemberStatusGroup } from "@/lib/dto";
 
@@ -93,6 +93,9 @@ export function ManageMembersShell({
   // Server may return stale cache data; client patches it with these overrides.
   const overridesRef = useRef<Map<number, TransitionOverride>>(new Map());
 
+  // Cache refresh
+  const [refreshing, setRefreshing] = useState(false);
+
   // Deep link: auto-open modal for ?member=contactId
   const [hasAutoOpened, setHasAutoOpened] = useState(false);
   useEffect(() => {
@@ -122,30 +125,31 @@ export function ManageMembersShell({
   const loadMembers = useCallback(
     (statusIds: number[], pageNum: number, searchTerm: string) => {
       startTransition(async () => {
-        const [membersResult, countsResult] = await Promise.all([
-          fetchMembers(statusIds, pageNum, searchTerm || undefined),
-          fetchStatusCounts(searchTerm || undefined),
-        ]);
+        try {
+          const { members: serverMembers, counts: serverCounts } =
+            await fetchMembersAndCounts(statusIds, pageNum, searchTerm || undefined);
 
-        const overrides = overridesRef.current;
+          const overrides = overridesRef.current;
 
-        if (overrides.size === 0) {
-          setMembers(membersResult.members);
-          setCounts(countsResult);
-          return;
+          if (overrides.size === 0) {
+            setMembers(serverMembers);
+            setCounts(serverCounts);
+            return;
+          }
+
+          // Patch member list: filter out members transitioned away from this tab
+          const statusSet = new Set(statusIds);
+          const patched = serverMembers.filter((m) => {
+            const override = overrides.get(m.contactId);
+            if (override === undefined) return true;
+            return statusSet.has(override.newStatusId);
+          });
+
+          setMembers(patched);
+          setCounts(patchCounts(serverCounts, overrides));
+        } catch {
+          // Rate limit or network error — keep existing data, don't crash
         }
-
-        // Patch member list: filter out members transitioned away from this tab
-        const statusSet = new Set(statusIds);
-        const patched = membersResult.members.filter((m) => {
-          const override = overrides.get(m.contactId);
-          if (override === undefined) return true;
-          // Keep only if the member's new status belongs to this tab
-          return statusSet.has(override.newStatusId);
-        });
-
-        setMembers(patched);
-        setCounts(patchCounts(countsResult, overrides));
       });
     },
     [],
@@ -222,12 +226,26 @@ export function ManageMembersShell({
     });
   }
 
+  async function handleRefreshCache() {
+    setRefreshing(true);
+    try {
+      const result = await refreshMemberCache();
+      if (result.success) {
+        // Clear local overrides — cache now has fresh data
+        overridesRef.current.clear();
+        loadMembers(activeStatusIds, page, search);
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   const totalForTab = activeGroup?.count ?? 0;
   const hasNextPage = members.length >= MEMBERS_PAGE_SIZE;
 
   return (
     <div className="space-y-4">
-      {/* Search */}
+      {/* Search + Refresh */}
       <div className="flex flex-col sm:flex-row gap-2">
         <Input
           placeholder="Search by name, email, or phone..."
@@ -244,6 +262,17 @@ export function ManageMembersShell({
             Clear
           </Button>
         )}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRefreshCache}
+          disabled={refreshing}
+          title="Refresh member data from Ministry Platform"
+        >
+          <svg className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </Button>
       </div>
 
       {/* Tabs */}

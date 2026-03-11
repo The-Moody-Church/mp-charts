@@ -1,5 +1,6 @@
 'use server';
 
+import { revalidateTag } from "next/cache";
 import { requireFeatureAccess } from "@/lib/authorization";
 import { getMpUserId } from "@/lib/auth-helpers";
 import { enforceRateLimit } from "@/lib/rate-limit";
@@ -38,28 +39,39 @@ async function getAllMembers(): Promise<ContactSearch[]> {
   );
 }
 
-export async function fetchMembers(
+/**
+ * Combined fetch: returns both the paginated member list and all tab counts
+ * in a single server action call (one rate-limit hit instead of two).
+ */
+export async function fetchMembersAndCounts(
   statusIds: number[],
   page: number,
   search?: string,
-): Promise<{ members: MemberCard[] }> {
+): Promise<{ members: MemberCard[]; counts: Record<string, number> }> {
   const session = await requireFeatureAccess("manage-members");
   enforceRateLimit(session.user.id, "search");
 
-  let members = await getAllMembers();
+  let allMembers = await getAllMembers();
 
   // Apply search using the same scored search as contact lookup
   if (search && search.trim()) {
-    members = searchByNameFlat(members, search.trim());
+    allMembers = searchByNameFlat(allMembers, search.trim());
+  }
+
+  // Compute counts across all statuses (before filtering by tab)
+  const counts: Record<string, number> = {};
+  for (const c of allMembers) {
+    const key = String(c.Member_Status_ID);
+    counts[key] = (counts[key] || 0) + 1;
   }
 
   // Filter by status tab
   const statusSet = new Set(statusIds);
-  members = members.filter((c) => statusSet.has(c.Member_Status_ID!));
+  let tabMembers = allMembers.filter((c) => statusSet.has(c.Member_Status_ID!));
 
   // Sort by last name, first name (unless search already ranked them)
   if (!search || !search.trim()) {
-    members.sort((a, b) => {
+    tabMembers.sort((a, b) => {
       const lastCmp = a.Last_Name.localeCompare(b.Last_Name);
       if (lastCmp !== 0) return lastCmp;
       return a.First_Name.localeCompare(b.First_Name);
@@ -68,29 +80,9 @@ export async function fetchMembers(
 
   // Paginate
   const skip = (page - 1) * MEMBERS_PAGE_SIZE;
-  const pageMembers = members.slice(skip, skip + MEMBERS_PAGE_SIZE);
+  const pageMembers = tabMembers.slice(skip, skip + MEMBERS_PAGE_SIZE);
 
-  return { members: pageMembers.map(toMemberCard) };
-}
-
-export async function fetchStatusCounts(
-  search?: string,
-): Promise<Record<string, number>> {
-  const session = await requireFeatureAccess("manage-members");
-  enforceRateLimit(session.user.id, "search");
-
-  let members = await getAllMembers();
-
-  if (search && search.trim()) {
-    members = searchByNameFlat(members, search.trim());
-  }
-
-  const counts: Record<string, number> = {};
-  for (const c of members) {
-    const key = String(c.Member_Status_ID);
-    counts[key] = (counts[key] || 0) + 1;
-  }
-  return counts;
+  return { members: pageMembers.map(toMemberCard), counts };
 }
 
 export async function fetchMemberStatuses(): Promise<
@@ -227,4 +219,19 @@ export async function uploadMemberPhoto(
 ): Promise<{ success: boolean; error?: string }> {
   await requireFeatureAccess("manage-members");
   return uploadContactPhoto(formData, () => ContactService.getInstance());
+}
+
+/** Force-refresh the contacts cache. Rate-limited to 5/hour. */
+export async function refreshMemberCache(): Promise<{ success: boolean; error?: string }> {
+  try {
+    const session = await requireFeatureAccess("manage-members");
+    enforceRateLimit(session.user.id, "cacheRefresh");
+    revalidateTag('contacts-search', { expire: 0 });
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to refresh cache",
+    };
+  }
 }

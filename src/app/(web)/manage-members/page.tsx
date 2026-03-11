@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { connection } from 'next/server';
 import { ManageMembersShell } from '@/components/manage-members';
-import { fetchMembers, fetchStatusCounts, fetchMemberStatuses } from '@/components/manage-members/actions';
+import { fetchMembersAndCounts, fetchMemberStatuses } from '@/components/manage-members/actions';
 
 interface Props {
   searchParams: Promise<{ member?: string }>;
@@ -25,16 +25,15 @@ async function ManageMembersContent({ searchParams }: Props) {
   const params = await searchParams;
   const memberId = params.member ? Number(params.member) : null;
 
-  const [membersResult, countsResult, statusesResult] = await Promise.all([
-    fetchMembers([1], 1),          // Default: Registered tab, page 1
-    fetchStatusCounts(),            // All tab counts
-    fetchMemberStatuses(),          // Status lookup for dialog
+  const [{ members, counts }, statusesResult] = await Promise.all([
+    fetchMembersAndCounts([1], 1),  // Default: Registered tab, page 1
+    fetchMemberStatuses(),           // Status lookup for dialog
   ]);
 
   return (
     <ManageMembersShell
-      initialMembers={membersResult.members}
-      initialCounts={countsResult}
+      initialMembers={members}
+      initialCounts={counts}
       initialStatuses={statusesResult}
       initialMemberId={memberId}
     />
