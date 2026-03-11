@@ -147,3 +147,29 @@ Added a detail modal that opens when clicking a member card, similar to the jour
 - `src/components/manage-members/member-card.tsx` — Card is now clickable (opens detail modal), shows date joined, removed "Change Status" button (moved to modal)
 - `src/components/manage-members/manage-members-shell.tsx` — Added detail modal state management, card click → modal flow
 - `src/components/manage-members/index.ts` — Added `MemberDetailModal` barrel export
+
+### Detail Modal Refinements
+
+**MP link fixed**: Changed from contact page (`/mp/292/{contactId}`) to participant page (`/mp/355/{participantId}`). Styled as simple blue link text ("View in MP") matching the journey detail modal pattern.
+
+**All Journey 7 milestones**: Changed milestone query from hardcoded `Milestone_ID IN (48,49,51,52)` to `Milestone_ID_Table.[Journey_ID] = ${MEMBERSHIP_JOURNEY_ID}`, so all milestones belonging to Journey 7 appear in the member detail modal, not just the status-mapped ones.
+
+**Copy Link deep link**: Added "Copy Link" button to the detail modal that copies `/manage-members?member={contactId}` URL. The page accepts a `?member=contactId` query param — on load, the shell auto-opens the detail modal for that member via a useEffect.
+
+**Files modified**:
+- `src/app/(web)/manage-members/page.tsx` — Added `searchParams` prop, parses `?member=contactId`, passes `initialMemberId` to shell
+- `src/components/manage-members/manage-members-shell.tsx` — Added `initialMemberId` prop, deep link auto-open via useEffect + `fetchMemberDetail`
+- `src/components/manage-members/member-detail-modal.tsx` — Added "Copy Link" button, fixed MP link URL/styling
+- `src/services/memberService.ts` — Changed milestone filter to use `Journey_ID` instead of hardcoded milestone IDs
+
+### Runtime Error Investigation
+
+User reported `Element type is invalid. Received a promise that resolves to: undefined. Lazy element type must resolve to a class or function.` at `BreadcrumbOverrideProvider` in `layout.tsx:58` when navigating to `/manage-members?member=221795`.
+
+**Investigation**: Build passes cleanly (`npm run build` succeeds, route shows as `◐ Partial Prerender`). The `BreadcrumbOverrideProvider` is a standard `"use client"` context provider. The error was **not reproducible** after a clean build — it was a dev server hot reload artifact from modifying the page component to accept `searchParams`.
+
+## Status
+
+- Build: Passes
+- Tests: Not affected (no test files changed)
+- PR #84: Open, ready for review
