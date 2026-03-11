@@ -68,10 +68,15 @@ function buildMemberFilter(options: {
   }
 
   if (options.search && options.search.trim()) {
-    const safe = sanitizeFilterValue(options.search.trim());
-    parts.push(
-      `(Display_Name LIKE '%${safe}%' OR Email_Address LIKE '%${safe}%' OR Mobile_Phone LIKE '%${safe}%')`
-    );
+    // Split into words so "jon huff" matches "Jonathon Huff" via AND logic:
+    // each word must appear in at least one of the searchable fields
+    const words = options.search.trim().split(/\s+/).filter(Boolean);
+    for (const word of words) {
+      const safe = sanitizeFilterValue(word);
+      parts.push(
+        `(First_Name LIKE '%${safe}%' OR Last_Name LIKE '%${safe}%' OR Nickname LIKE '%${safe}%' OR Display_Name LIKE '%${safe}%' OR Email_Address LIKE '%${safe}%' OR Mobile_Phone LIKE '%${safe}%')`
+      );
+    }
   }
 
   return parts.join(" AND ");
