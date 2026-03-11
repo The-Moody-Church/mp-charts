@@ -20,6 +20,12 @@ interface ManageMembersShellProps {
   initialMemberId?: number | null;
 }
 
+/** Tracks a status transition made this session (for client-side patching of stale cache). */
+interface TransitionOverride {
+  oldStatusId: number;
+  newStatusId: number;
+}
+
 function buildGroups(
   counts: Record<string, number>,
 ): MemberStatusGroup[] {
@@ -30,6 +36,32 @@ function buildGroups(
     }
     return { ...g, count };
   });
+}
+
+/**
+ * Apply transition overrides to server-returned counts.
+ * For each override, decrement the old status count and increment the new.
+ * Then clamp to zero to avoid negative counts if the cache already partially reflected the change.
+ */
+function patchCounts(
+  serverCounts: Record<string, number>,
+  overrides: Map<number, TransitionOverride>,
+): Record<string, number> {
+  if (overrides.size === 0) return serverCounts;
+
+  const patched = { ...serverCounts };
+  for (const [, { oldStatusId, newStatusId }] of overrides) {
+    const oldKey = String(oldStatusId);
+    const newKey = String(newStatusId);
+    patched[oldKey] = (patched[oldKey] || 0) - 1;
+    patched[newKey] = (patched[newKey] || 0) + 1;
+  }
+
+  // Clamp negatives (cache may have already reflected some transitions)
+  for (const key of Object.keys(patched)) {
+    if (patched[key] < 0) patched[key] = 0;
+  }
+  return patched;
 }
 
 export function ManageMembersShell({
@@ -56,6 +88,10 @@ export function ManageMembersShell({
   // Transition dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<MemberCard | null>(null);
+
+  // Track transitions made this session so search/tab-switch stays fast.
+  // Server may return stale cache data; client patches it with these overrides.
+  const overridesRef = useRef<Map<number, TransitionOverride>>(new Map());
 
   // Deep link: auto-open modal for ?member=contactId
   const [hasAutoOpened, setHasAutoOpened] = useState(false);
@@ -90,8 +126,26 @@ export function ManageMembersShell({
           fetchMembers(statusIds, pageNum, searchTerm || undefined),
           fetchStatusCounts(searchTerm || undefined),
         ]);
-        setMembers(membersResult.members);
-        setCounts(countsResult);
+
+        const overrides = overridesRef.current;
+
+        if (overrides.size === 0) {
+          setMembers(membersResult.members);
+          setCounts(countsResult);
+          return;
+        }
+
+        // Patch member list: filter out members transitioned away from this tab
+        const statusSet = new Set(statusIds);
+        const patched = membersResult.members.filter((m) => {
+          const override = overrides.get(m.contactId);
+          if (override === undefined) return true;
+          // Keep only if the member's new status belongs to this tab
+          return statusSet.has(override.newStatusId);
+        });
+
+        setMembers(patched);
+        setCounts(patchCounts(countsResult, overrides));
       });
     },
     [],
@@ -149,6 +203,12 @@ export function ManageMembersShell({
 
   function handleTransitionSuccess(newStatusId: number) {
     if (!selectedMember) return;
+
+    // Record the override so future server loads get patched
+    overridesRef.current.set(selectedMember.contactId, {
+      oldStatusId: selectedMember.memberStatusId,
+      newStatusId,
+    });
 
     // Optimistic update: remove from current list, adjust counts instantly
     setMembers((prev) => prev.filter((m) => m.contactId !== selectedMember.contactId));
