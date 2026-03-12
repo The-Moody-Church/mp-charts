@@ -167,3 +167,18 @@ This eliminates the JS-side bucketing and Set-based deduplication — each API c
 - `src/services/dashboardService.ts` — replaced Activity_Log query + JS bucketing (lines 1333-1352) with per-month parallel queries using distinct+groupBy
 - `.claude/ideas.md` — marked #97 as completed
 - `.claude/status.md` — added to Recently Completed
+
+#### Additional: Parallelize `getMonthlyAttendanceTrends()`
+
+Reviewed all other dashboard cache queries for parallelization opportunities. Most are already optimized (dependency chains, batch queries). One high-impact candidate:
+
+**`getMonthlyAttendanceTrends()`** looped through months sequentially — 2 API calls per month (Events → EventMetrics), 12 months × 2 year invocations = **48 sequential calls**. Replaced with `Promise.all` over months. Each month's pair remains sequential internally, but all months execute in parallel.
+
+Other methods reviewed and determined to be already optimal:
+- `getGroupTypeMetrics()` — dependency chain, already batched
+- `getSmallGroupTrends()` — already reduced from 27→3 queries
+- `getWeeklyAttendanceTrends()` — 2 dependent queries, already batched
+- `getCommunityAttendanceTrends()` — dependency chain
+- `getEventParticipantsByMonth()` — 2 dependent queries, already batched
+- `getRosterAndAttendanceRaw()` — marginal gain, skipped
+- `getServingLeadingRaw()` — 5 sequential dependencies, already batched

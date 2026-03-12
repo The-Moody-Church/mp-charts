@@ -763,81 +763,69 @@ export class DashboardService {
     endDate: Date
   ): Promise<MonthlyAttendanceTrend[]> {
     try {
-      const trends: MonthlyAttendanceTrend[] = [];
-      const currentDate = new Date(startDate);
+      // Build month ranges, then query all months in parallel.
+      // Each month needs 2 sequential calls (Events → EventMetrics), but
+      // months are independent — parallelizing cuts ~24 sequential calls to ~12 parallel pairs.
+      const months: { start: Date; end: Date; key: string; monthIndex: number }[] = [];
+      const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+      while (cursor <= endDate) {
+        const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+        const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
+        const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
+        months.push({ start: monthStart, end: monthEnd, key, monthIndex: cursor.getMonth() });
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
 
-      // Loop through each month in the ministry year (Sept - Aug)
-      while (currentDate <= endDate) {
-        const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-        const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+      const trends = await Promise.all(
+        months.map(async ({ start, end, key, monthIndex }) => {
+          const monthStartIso = start.toISOString();
+          const monthEndIso = end.toISOString();
 
-        const monthStartIso = monthStart.toISOString();
-        const monthEndIso = monthEnd.toISOString();
-
-        // Get worship service events for this month (Event_Type_ID = 7)
-        const events = await this.mp!.getTableRecords<{
-          Event_ID: number;
-        }>({
-          table: 'Events',
-          select: 'Event_ID',
-          filter: `
-            Events.Event_Start_Date >= '${monthStartIso}' AND
-            Events.Event_End_Date <= '${monthEndIso}' AND
-            Events.Cancelled = 0 AND
-            Events.Event_Type_ID = 7
-          `
-        });
-
-        const eventIds = events.map(e => e.Event_ID);
-        let totalInPerson = 0;
-        let totalOnline = 0;
-        let eventCount = 0;
-
-        if (eventIds.length > 0) {
-          // Get attendance metrics from Event_Metrics (Metric_ID 2 = In-Person, 3 = Online)
-          const eventMetrics = await this.mp!.getTableRecords<{
-            Event_ID: number;
-            Metric_ID: number;
-            Numerical_Value: number;
-          }>({
-            table: 'Event_Metrics',
-            select: 'Event_ID,Metric_ID,Numerical_Value',
-            filter: `
-              Event_Metrics.Event_ID IN (${sanitizeIds(eventIds)}) AND
-              Event_Metrics.Metric_ID IN (2, 3)
-            `
+          // Get worship service events for this month (Event_Type_ID = 7)
+          const events = await this.mp!.getTableRecords<{ Event_ID: number }>({
+            table: 'Events',
+            select: 'Event_ID',
+            filter: `Events.Event_Start_Date >= '${monthStartIso}' AND Events.Event_End_Date <= '${monthEndIso}' AND Events.Cancelled = 0 AND Events.Event_Type_ID = 7`
           });
 
-          // Track which events have metrics
-          const eventsWithMetrics = new Set<number>();
+          let totalInPerson = 0;
+          let totalOnline = 0;
+          let eventCount = 0;
 
-          for (const metric of eventMetrics) {
-            eventsWithMetrics.add(metric.Event_ID);
+          if (events.length > 0) {
+            const eventIds = events.map(e => e.Event_ID);
+            const eventMetrics = await this.mp!.getTableRecords<{
+              Event_ID: number;
+              Metric_ID: number;
+              Numerical_Value: number;
+            }>({
+              table: 'Event_Metrics',
+              select: 'Event_ID,Metric_ID,Numerical_Value',
+              filter: `Event_Metrics.Event_ID IN (${sanitizeIds(eventIds)}) AND Event_Metrics.Metric_ID IN (2, 3)`
+            });
 
-            if (metric.Metric_ID === 2) {
-              // In-Person attendance
-              totalInPerson += metric.Numerical_Value;
-            } else if (metric.Metric_ID === 3) {
-              // Online attendance
-              totalOnline += metric.Numerical_Value;
+            const eventsWithMetrics = new Set<number>();
+            for (const metric of eventMetrics) {
+              eventsWithMetrics.add(metric.Event_ID);
+              if (metric.Metric_ID === 2) {
+                totalInPerson += metric.Numerical_Value;
+              } else if (metric.Metric_ID === 3) {
+                totalOnline += metric.Numerical_Value;
+              }
             }
+            eventCount = eventsWithMetrics.size;
           }
 
-          eventCount = eventsWithMetrics.size;
-        }
-
-        trends.push({
-          month: `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`,
-          monthName: MONTH_NAMES[currentDate.getMonth()],
-          averageInPersonAttendance: eventCount > 0 ? Math.round(totalInPerson / eventCount) : 0,
-          averageOnlineAttendance: eventCount > 0 ? Math.round(totalOnline / eventCount) : 0,
-          averageTotalAttendance: eventCount > 0 ? Math.round((totalInPerson + totalOnline) / eventCount) : 0,
-          eventCount
-        });
-
-        // Move to next month
-        currentDate.setMonth(currentDate.getMonth() + 1);
-      }
+          return {
+            month: key,
+            monthName: MONTH_NAMES[monthIndex],
+            averageInPersonAttendance: eventCount > 0 ? Math.round(totalInPerson / eventCount) : 0,
+            averageOnlineAttendance: eventCount > 0 ? Math.round(totalOnline / eventCount) : 0,
+            averageTotalAttendance: eventCount > 0 ? Math.round((totalInPerson + totalOnline) / eventCount) : 0,
+            eventCount
+          };
+        })
+      );
 
       return trends;
     } catch (error) {
