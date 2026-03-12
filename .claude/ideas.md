@@ -10,7 +10,6 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 
 ### Features
 - [and more specific dashboard subpages (#72)](#and-more-specific-dashboard-subpages-72)
-- ~~[Contact-Lookup badges for Member should specify thpe (#85)](#contact-lookup-badges-for-member-should-specify-thpe-85)~~ ✅
 - ~~[Pastoral Interface for Contact Logs (#19)](#pastoral-interface-for-contact-logs-19)~~ ✅
 - ~~[Processing Search Bar (#49)](#processing-search-bar-49)~~ ✅
 - ~~[Volunteer Processing: Show In-Process Volunteers on Active Tab (#50)](#volunteer-processing-show-in-process-volunteers-on-active-tab-50)~~ ✅
@@ -22,6 +21,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Volunteer Processing: Assign to Group on Approval (#25)](#volunteer-processing-assign-to-group-on-approval-25)~~ ✅
 - ~~[Add current groups list to volunteers already in a group (#36)](#add-current-groups-list-to-volunteers-already-in-a-group-36)~~ ✅
 - ~~[Add feedback feature (#69)](#add-feedback-feature-69)~~ ✅
+- ~~[Contact-Lookup badges for Member should specify thpe (#85)](#contact-lookup-badges-for-member-should-specify-thpe-85)~~ ✅
 
 ### Improvements
 - [Add address to contact lookup contact page. (#88)](#add-address-to-contact-lookup-contact-page-88)
