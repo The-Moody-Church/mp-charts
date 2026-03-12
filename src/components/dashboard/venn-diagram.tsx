@@ -50,7 +50,8 @@ function textWidthVB(text: string, fontSize: number): number {
   return text.length * fontSize * CHAR_W_RATIO;
 }
 
-function computeLayout(data: EngagementOverlap, averageTotalAttendance?: number) {
+/** Exported for testing — computes circle positions, radii, labels, and viewBox */
+export function computeLayout(data: EngagementOverlap, averageTotalAttendance?: number) {
   const tA = data.totalActivity, tB = data.totalGroup, tC = data.totalServing;
   const maxT = Math.max(tA, tB, tC, 1);
   const MAX_R = 120;
@@ -138,11 +139,13 @@ function computeLayout(data: EngagementOverlap, averageTotalAttendance?: number)
     visible: c.r > 0,
   }));
 
-  // Attendance circle: centered at the centroid of the three circles
+  // Attendance circle: centered at the centroid of the engagement circles (or origin if none)
   let attendanceCircle: Circle | null = null;
-  if (averageTotalAttendance && averageTotalAttendance > 0 && activeCircles.length > 0) {
-    // Size proportionally using the same sqrt scaling as engagement circles
-    const rAttendance = MAX_R * Math.sqrt(averageTotalAttendance / maxT);
+  if (averageTotalAttendance && averageTotalAttendance > 0) {
+    // When no engagement circles exist, use averageTotalAttendance as the scale reference
+    // so the circle renders at MAX_R instead of being infinitely large
+    const scaleRef = activeCircles.length > 0 ? maxT : averageTotalAttendance;
+    const rAttendance = MAX_R * Math.sqrt(averageTotalAttendance / scaleRef);
     attendanceCircle = { x: gx, y: gy, r: rAttendance };
   }
 

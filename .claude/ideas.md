@@ -39,8 +39,8 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Search should show closer matches first, weighted by field. (#78)](#search-should-show-closer-matches-first-weighted-by-field-78)~~ ✅
 
 ### Technical Debt
-- [No attendance circle one engagement Venn diagram for single month selections. (#83)](#no-attendance-circle-one-engagement-venn-diagram-for-single-month-selections-83)
 - [BUG: Active Communities and Small Groups Chart Needs Work (#52)](#bug-active-communities-and-small-groups-chart-needs-work-52)
+- ~~[No attendance circle one engagement Venn diagram for single month selections. (#83)](#no-attendance-circle-one-engagement-venn-diagram-for-single-month-selections-83)~~ ✅
 - [IDOR Mitigation — Per-Record Authorization (#57)](#idor-mitigation-per-record-authorization-57)
 - ~~[Role-Based Access Control (RBAC) (#58)](#role-based-access-control-rbac-58)~~ ✅
 - ~~[BUG: Baptism Counter Doesn't Respond to Date Range Changes (#51)](#bug-baptism-counter-doesnt-respond-to-date-range-changes-51)~~ ✅
@@ -183,9 +183,6 @@ Replaced `filterByName` with `searchByName` that scores and ranks results by mat
 
 ## Technical Debt
 
-### No attendance circle one engagement Venn diagram for single month selections. ([#83](https://github.com/The-Moody-Church/mp-charts/issues/83))
-Tested on mobile. When a single month is selected in the filter, the Venn diagram omits the average attendance. It does show when selecting a semester, ministry year, or year.
-
 ### BUG: Active Communities and Small Groups Chart Needs Work ([#52](https://github.com/The-Moody-Church/mp-charts/issues/52))
 The active communities and small groups chart on the executive dashboard needs improvement. The data or visualization is not accurately representing the information.
 
@@ -251,3 +248,6 @@ Same root cause as #30. Fixed in the same PR.
 
 ### ~~Review upstream pr 39 ([#34](https://github.com/The-Moody-Church/mp-charts/issues/34))~~ ✅ COMPLETED
 Compare to changes already made in our development and cherrypick individual changes or merge all of appropriate.
+
+### ~~No attendance circle one engagement Venn diagram for single month selections. ([#83](https://github.com/The-Moody-Church/mp-charts/issues/83))~~ ✅ COMPLETED
+Fixed: Removed `activeCircles.length > 0` guard so attendance circle shows whenever `averageTotalAttendance > 0`. Also fixed weekly→monthly data conversion to properly compute per-event averages.

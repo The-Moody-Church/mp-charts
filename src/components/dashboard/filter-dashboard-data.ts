@@ -124,9 +124,9 @@ export function filterDashboardData(
     monthlyAttendanceTrends = weeklyFiltered.map(w => ({
       month: w.eventDate,
       monthName: w.dateLabel,
-      averageInPersonAttendance: w.inPersonAttendance,
-      averageOnlineAttendance: w.onlineAttendance,
-      averageTotalAttendance: w.totalAttendance,
+      averageInPersonAttendance: w.eventCount > 0 ? Math.round(w.inPersonAttendance / w.eventCount) : 0,
+      averageOnlineAttendance: w.eventCount > 0 ? Math.round(w.onlineAttendance / w.eventCount) : 0,
+      averageTotalAttendance: w.eventCount > 0 ? Math.round(w.totalAttendance / w.eventCount) : 0,
       eventCount: w.eventCount
     }));
 
@@ -153,9 +153,9 @@ export function filterDashboardData(
     previousYearMonthlyAttendanceTrends = prevWeeklyFiltered.map(w => ({
       month: w.eventDate,
       monthName: w.dateLabel,
-      averageInPersonAttendance: w.inPersonAttendance,
-      averageOnlineAttendance: w.onlineAttendance,
-      averageTotalAttendance: w.totalAttendance,
+      averageInPersonAttendance: w.eventCount > 0 ? Math.round(w.inPersonAttendance / w.eventCount) : 0,
+      averageOnlineAttendance: w.eventCount > 0 ? Math.round(w.onlineAttendance / w.eventCount) : 0,
+      averageTotalAttendance: w.eventCount > 0 ? Math.round(w.totalAttendance / w.eventCount) : 0,
       eventCount: w.eventCount
     }));
   }
@@ -171,9 +171,9 @@ export function filterDashboardData(
     ? prevMetricsWeekly.map(w => ({
         month: w.eventDate,
         monthName: w.dateLabel,
-        averageInPersonAttendance: w.inPersonAttendance,
-        averageOnlineAttendance: w.onlineAttendance,
-        averageTotalAttendance: w.totalAttendance,
+        averageInPersonAttendance: w.eventCount > 0 ? Math.round(w.inPersonAttendance / w.eventCount) : 0,
+        averageOnlineAttendance: w.eventCount > 0 ? Math.round(w.onlineAttendance / w.eventCount) : 0,
+        averageTotalAttendance: w.eventCount > 0 ? Math.round(w.totalAttendance / w.eventCount) : 0,
         eventCount: w.eventCount,
       }))
     : filterMonthlyTrends(fullData.monthlyAttendanceTrends, prevStart, prevMetricsEnd);
@@ -319,7 +319,8 @@ function countDatesInRange(dates: string[], startDate: Date, endDate: Date): num
  * Compute PeriodMetrics from filtered monthly attendance data.
  * Uses weighted averages (by event count) for attendance figures.
  */
-function computePeriodMetrics(
+/** Exported for testing */
+export function computePeriodMetrics(
   monthly: MonthlyAttendanceTrend[],
   startDate: Date,
   endDate: Date

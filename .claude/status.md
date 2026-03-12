@@ -2,12 +2,13 @@
 
 Quick-reference snapshot of current project state. Read this first at session start. For full details on any item, see the relevant session summary in `.claude/sessions/`.
 
-**Last updated**: 2026-03-11
+**Last updated**: 2026-03-12
 
 ## Recently Completed
 
 | Date | Work | Issues | PR |
 |------|------|--------|----|
+| 2026-03-12 | **Venn diagram single-month fix**: Attendance circle now shows for single-month selections; fixed weekly→monthly conversion semantics | #83 | — |
 | 2026-03-11 | **Auth callback redirect**: Preserve original URL through login redirect | — | #86 |
 | 2026-03-11 | **Member photo upload fix**: Correct form field name mismatch in member detail modal | — | #87 |
 | 2026-03-11 | **Manage Members**: Card-based membership management with status tabs, detail modal, expandable milestones, deep links, client-side transition overrides, cache refresh button, rate limit resilience | — | #84 |
@@ -23,7 +24,6 @@ Quick-reference snapshot of current project state. Read this first at session st
 ## Open Issues
 
 - [**#72** — Dashboard subpages per journey step](ideas.md#and-more-specific-dashboard-subpages-72)
-- [**#83** — No attendance circle on engagement Venn diagram for single month selections](ideas.md#no-attendance-circle-one-engagement-venn-diagram-for-single-month-selections-83)
 - [**#52** — Active Communities and Small Groups chart needs work](ideas.md#bug-active-communities-and-small-groups-chart-needs-work-52)
 - [**#57** — IDOR mitigation (per-record authorization)](ideas.md#idor-mitigation-per-record-authorization-57)
 - [**#15** — Small Group Trends chart visualization improvements](ideas.md#small-group-trends-chart-15)
