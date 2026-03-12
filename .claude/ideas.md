@@ -24,6 +24,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Add feedback feature (#69)](#add-feedback-feature-69)~~ ✅
 
 ### Improvements
+- [Add address to contact lookup contact page. (#88)](#add-address-to-contact-lookup-contact-page-88)
 - [Small Group Trends Chart (#15)](#small-group-trends-chart-15)
 - ~~[Pre-warm Cache on Container Start (#80)](#pre-warm-cache-on-container-start-80)~~ ✅
 - ~~[Chart YoY Conparisons (#68)](#chart-yoy-conparisons-68)~~ ✅
@@ -130,6 +131,9 @@ Added a floating feedback button and modal allowing authenticated users to submi
 ---
 
 ## Improvements
+
+### Add address to contact lookup contact page. ([#88](https://github.com/The-Moody-Church/mp-charts/issues/88))
+The full address should be included in addition to a button called "Get Directions" that launches maps (especially from mobile phone).
 
 ### Small Group Trends Chart ([#15](https://github.com/The-Moody-Church/mp-charts/issues/15))
 The Small Group Trends line chart may not be the best visualization for this data. Consider switching to a bar chart or removing it entirely if it doesn’t add enough value to the dashboard.
