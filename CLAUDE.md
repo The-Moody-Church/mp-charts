@@ -683,6 +683,47 @@ Components using this pattern:
 9. **Use service classes in server actions** - call services from `src/services/`, not MPHelper directly from components or actions
 10. **Report file changes** - after completing work, always report in chat which files were **created**, **modified**, or **removed**
 
+## Timezone Handling — Ministry Platform Dates
+
+Ministry Platform returns dates **without timezone information** (e.g., `"2026-03-12"`, `"2026-03-12T14:30:00"`). These represent **US Central Time** (the server's local time), but JavaScript's `new Date()` parses them inconsistently:
+
+| Input format | `new Date()` interpretation | Problem |
+|---|---|---|
+| `"2026-03-12"` (date-only) | **UTC** midnight | Shows March 11 in Central Time (UTC-5/6) |
+| `"2026-03-12T14:30:00"` (no Z) | **Local** time | Usually correct, but inconsistent with date-only |
+| `"2026-03-12T00:00:00Z"` (with Z) | **UTC** | Shows previous day in Central Time |
+
+**Rule**: When displaying MP dates to users, always parse as **local time** by extracting the date components. Never rely on `new Date(dateStr)` alone for date-only or timezone-less strings from MP.
+
+### Pattern: `parseLocalDate()`
+
+A reusable helper exists in `src/components/contact-lookup-details/contact-lookup-details.tsx`. If needed in more places, extract to a shared utility:
+
+```typescript
+/** Parse a date string as local time (avoids UTC shift from MP dates) */
+function parseLocalDate(dateStr: string): Date {
+  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  }
+  return new Date(dateStr);
+}
+```
+
+### When Sending Dates to MP
+
+Ministry Platform expects SQL Server datetime format (`YYYY-MM-DD HH:MM:SS`), not ISO format. Convert **after** any Zod validation (which expects ISO datetime), not before:
+
+```typescript
+// ✅ Validate first (ISO format), then convert for MP
+const validated = schema.parse(data);        // Zod validates ISO datetime
+validated.Date_Field = toSqlDatetime(date);  // Convert to SQL format for MP API
+
+// ❌ NEVER convert to SQL format before Zod validation
+data.Date_Field = toSqlDatetime(date);       // Now "YYYY-MM-DD HH:MM:SS"
+schema.parse(data);                          // ZodError: invalid ISO datetime
+```
+
 ## Validation Best Practices
 
 When working with Ministry Platform data:
