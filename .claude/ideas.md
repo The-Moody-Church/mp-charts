@@ -45,23 +45,6 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 
 ### Technical Debt
 - [Contact Log Searching Error (#99)](#contact-log-searching-error-99)
-- [Review Contact Log Search Scoring (#98)](#review-contact-log-search-scoring-98)
-- [Contact Logs should not be editable unless Made_By = the Current Logged In User (#96)](#contact-logs-should-not-be-editable-unless-made_by-the-current-logged-in-user-96)
-- [BUG: Active Communities and Small Groups Chart Needs Work (#52)](#bug-active-communities-and-small-groups-chart-needs-work-52)
-- [IDOR Mitigation — Per-Record Authorization (#57)](#idor-mitigation-per-record-authorization-57)
-- ~~[Role-Based Access Control (RBAC) (#58)](#role-based-access-control-rbac-58)~~ ✅
-- ~~[BUG: Baptism Counter Doesn't Respond to Date Range Changes (#51)](#bug-baptism-counter-doesnt-respond-to-date-range-changes-51)~~ ✅
-- ~~[Extract Shared Processing Components (Person Card, Milestone Checklist, Detail Modal) (#60)](#extract-shared-processing-components-person-card-milestone-checklist-detail-modal-60)~~ ✅
-- ~~[Migrate `unstable_cache` to Cache Components (`use cache`) (#21)](#migrate-unstable_cache-to-cache-components-use-cache-21)~~ ✅
-- ~~[review upstream pr42 (#35)](#review-upstream-pr42-35)~~ ✅
-- ~~[Upgrade to Next.js 16](#upgrade-to-nextjs-16)~~ ✅
-- ~~[Refine MP Permissions (#7)](#refine-mp-permissions-7)~~ ✅
-- ~~[Migrate `middleware.ts` to `proxy.ts` (#22)](#migrate-middlewarets-to-proxyts-22)~~ ✅
-- ~~[BUG: No Volunteers in Production Builds (#27)](#bug-no-volunteers-in-production-builds-27)~~ ✅
-- ~~[Images are not showing on the volunteers. Perhaps a permssions issue? (#30)](#images-are-not-showing-on-the-volunteers-perhaps-a-permssions-issue-30)~~ ✅
-- ~~[Links to MP are not showing in production in the volunteer processing pages. (#31)](#links-to-mp-are-not-showing-in-production-in-the-volunteer-processing-pages-31)~~ ✅
-- ~~[Review upstream pr 39 (#34)](#review-upstream-pr-39-34)~~ ✅
-- ~~[No attendance circle one engagement Venn diagram for single month selections. (#83)](#no-attendance-circle-one-engagement-venn-diagram-for-single-month-selections-83)~~ ✅
 
 ---
 
@@ -257,7 +240,7 @@ Error searching contacts: TypeError: Cannot read properties of null (reading 'lo
 }
 ```
 
-### Review Contact Log Search Scoring ([#98](https://github.com/The-Moody-Church/mp-charts/issues/98))
+### Review Contact Lookup Search Scoring ([#98](https://github.com/The-Moody-Church/mp-charts/issues/98))
 Explore why Kent S does not rank Kent Schmidt higher than Kent Andrews.
 
 ### Contact Logs should not be editable unless Made_By = the Current Logged In User ([#96](https://github.com/The-Moody-Church/mp-charts/issues/96))
