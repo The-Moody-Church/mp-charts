@@ -24,6 +24,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Contact-Lookup badges for Member should specify thpe (#85)](#contact-lookup-badges-for-member-should-specify-thpe-85)~~ ✅
 
 ### Improvements
+- [Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)
 - ~~[Small Group Trends Chart (#15)](#small-group-trends-chart-15)~~ ✅
 - ~~[contact lookup search improvements (#94)](#contact-lookup-search-improvements-94)~~ ✅
 - ~~[membership badge on contact lookup should include date joined (#93)](#membership-badge-on-contact-lookup-should-include-date-joined-93)~~ ✅
@@ -135,6 +136,9 @@ Extracted `statusBadgeColor` to shared utility (`src/lib/contact-badge-utils.ts`
 ---
 
 ## Improvements
+
+### Reduce Activity Log Query/Cache ([#97](https://github.com/The-Moody-Church/mp-charts/issues/97))
+We need a way to reduce the Activity log query. I think we want to make sure it is page_id <> 316 so it doesn't include group participants. also, we want to make sure that we're only returning the first instance of each contact id in each month. So maybe using the $distinct filter: `https://moody.ministryplatform.com/ministryplatformapi/tables/Activity_Log?%24select=Contact_ID&%24filter=page_id%20%3C%3E%20316&%24groupby=Contact_ID&%24distinct=true`
 
 ### ~~Small Group Trends Chart ([#15](https://github.com/The-Moody-Church/mp-charts/issues/15))~~ ✅ COMPLETED
 
