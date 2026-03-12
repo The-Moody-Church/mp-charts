@@ -116,30 +116,29 @@ export class ContactService {
   public async getContactBadges(contactId: number): Promise<ContactBadges> {
     const safeContactId = sanitizeIds([contactId]);
 
-    // Step 1: Get the participant record for this contact
+    // Step 1: Get the participant record for this contact (including Member_Status string)
     const participants = await this.mp!.getTableRecords<{
       Participant_ID: number;
       Contact_ID: number;
       Member_Status_ID: number | null;
+      Member_Status: string | null;
     }>({
       table: "Participants",
       filter: `Contact_ID IN (${safeContactId})`,
-      select: "Participant_ID, Contact_ID, Member_Status_ID",
+      select: "Participant_ID, Contact_ID, Member_Status_ID, Member_Status_ID_Table.[Member_Status]",
     });
 
-    // Map membership status
-    let membershipStatus: ContactBadges['membershipStatus'] = null;
+    // Use the MP Member_Status string directly (e.g., "Registered Member", "Associate Member")
+    let membershipStatus: string | null = null;
+    let membershipStatusId: number | null = null;
     if (participants.length > 0 && participants[0].Member_Status_ID != null) {
-      const statusId = participants[0].Member_Status_ID;
-      if (statusId === 1) membershipStatus = 'Member';
-      else if (statusId === 4) membershipStatus = 'Associate';
-      else if (statusId === 10) membershipStatus = 'Youth';
-      else if (statusId >= 5 && statusId <= 9) membershipStatus = 'Dropped';
+      membershipStatusId = participants[0].Member_Status_ID;
+      membershipStatus = participants[0].Member_Status ?? null;
     }
 
     // If no participant record, no group/serving data possible
     if (participants.length === 0) {
-      return { membershipStatus, inGroup: false, serving: false };
+      return { membershipStatus, membershipStatusId, inGroup: false, serving: false };
     }
 
     const participantIds = participants.map(p => p.Participant_ID);
@@ -156,6 +155,7 @@ export class ContactService {
 
     return {
       membershipStatus,
+      membershipStatusId,
       inGroup: groupParticipants.length > 0,
       serving: servingParticipants.length > 0,
     };

@@ -42,14 +42,16 @@ function formatBirthday(dateOfBirth: string): string {
   return dob.toLocaleDateString("en-US", { month: "long", day: "numeric" });
 }
 
-const BADGE_STYLES: Record<string, string> = {
-  Member: "bg-green-100 text-green-800",
-  Associate: "bg-blue-100 text-blue-800",
-  Youth: "bg-purple-100 text-purple-800",
-  Dropped: "bg-red-100 text-red-800",
-  "In a Group": "bg-emerald-100 text-emerald-800",
-  Serving: "bg-amber-100 text-amber-800",
-};
+function statusBadgeColor(statusId: number | null): string {
+  switch (statusId) {
+    case 1: return "bg-green-100 text-green-800";
+    case 4: return "bg-blue-100 text-blue-800";
+    case 10: return "bg-purple-100 text-purple-800";
+    case 5: case 6: case 7: case 8: case 9:
+      return "bg-red-100 text-red-800";
+    default: return "bg-gray-100 text-gray-800";
+  }
+}
 
 export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
   guid,
@@ -267,17 +269,17 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
               {badges && (
                 <div className="flex flex-wrap gap-2 mt-2">
                   {badges.membershipStatus && (
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${BADGE_STYLES[badges.membershipStatus]}`}>
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusBadgeColor(badges.membershipStatusId)}`}>
                       {badges.membershipStatus}
                     </span>
                   )}
                   {badges.inGroup && (
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${BADGE_STYLES["In a Group"]}`}>
+                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800">
                       In a Group
                     </span>
                   )}
                   {badges.serving && (
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${BADGE_STYLES["Serving"]}`}>
+                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-800">
                       Serving
                     </span>
                   )}

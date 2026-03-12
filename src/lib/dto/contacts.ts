@@ -40,7 +40,8 @@ export interface HouseholdMember {
 }
 
 export interface ContactBadges {
-  membershipStatus: 'Member' | 'Associate' | 'Youth' | 'Dropped' | null;
+  membershipStatus: string | null;
+  membershipStatusId: number | null;
   inGroup: boolean;
   serving: boolean;
 }
