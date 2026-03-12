@@ -120,6 +120,31 @@ Added `AND Page_ID <> 316` to the `getLastActivityDate()` filter in `contactServ
 - `src/lib/processing-utils.ts` — `classifySearchWord()`, mixed-type search in `scoreNameMatch()`, extracted `scoreNameOnly()`
 - `src/lib/contact-badge-utils.ts` — Associate/Youth badge colors → amber
 
+#### CLAUDE.md — Timezone Handling Documentation
+Added "Timezone Handling — Ministry Platform Dates" section documenting the UTC parsing pitfall, the `parseLocalDate()` pattern, and the Zod-before-SQL-conversion rule.
+
+#### File Upload Limits — Match Ministry Platform (20 MB)
+**Problem**: Upload limits were 1 MB with a restricted set of MIME types. MP allows 20 MB and accepts PNG, JPG, BMP, GIF, PDF, TXT, CSV.
+
+**Changes** (11 files):
+- `src/lib/processing-utils.ts` — `ALLOWED_IMAGE_TYPES` added `image/bmp`; `ALLOWED_DOCUMENT_TYPES` added `text/plain`, `text/csv`; `MAX_FILE_SIZE` 1 MB → 20 MB
+- All error messages across 7 components updated from "Maximum 1 MB" → "Maximum 20 MB"
+- All file input `accept` attributes updated to include `.bmp`, `.txt`, `.csv`, `.gif`, `.webp`
+- `CLAUDE.md` security section updated with new types and 20 MB limit
+
+**Files modified**:
+- `src/lib/processing-utils.ts`
+- `src/components/contact-lookup-details/contact-lookup-details.tsx`
+- `src/components/compliance-processing/compliance-detail-modal.tsx`
+- `src/components/journey-processing/journey-detail-modal.tsx`
+- `src/components/shared-actions/processing.ts`
+- `src/components/manage-members/actions.ts`
+- `src/components/manage-members/transition-dialog.tsx`
+- `src/components/processing/quick-actions-panel.tsx`
+- `src/components/processing/milestone-edit-form.tsx`
+- `src/components/processing/detail-modal-photo-upload.tsx`
+- `CLAUDE.md`
+
 ## Verification
 - TypeScript compilation passes, no new type errors
 - All 45 processing-utils tests pass
