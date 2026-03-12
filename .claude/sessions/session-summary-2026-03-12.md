@@ -79,8 +79,48 @@ Address multiple issues: #85 (member badge specificity), #88 (contact address + 
 - `src/components/dashboard/venn-diagram.tsx` — removed strict guard, added fallback sizing, exported `computeLayout`
 - `src/components/dashboard/filter-dashboard-data.ts` — weekly→monthly fallback, exported `computePeriodMetrics`
 
+### Session 2 — Issues #92, #93, #94
+
+#### Bug Fix — Contact Log Creation (Zod validation)
+**Problem**: Creating a contact log failed with ZodError on `Contact_Date` — the date was converted to SQL format (`YYYY-MM-DD HH:MM:SS`) before Zod validation, which expects ISO datetime.
+**Fix**: Moved Zod validation before the date format conversion in `contactLogService.ts`.
+
+#### Bug Fix — Last Activity Badge Timezone
+**Problem**: Tooltip showed previous day's date due to UTC parsing of date strings (e.g., `2026-03-12T00:00:00Z` → March 11 in CDT).
+**Fix**: Added `parseLocalDate()` helper that extracts YYYY-MM-DD and constructs a local-midnight Date. Applied to both badge text and tooltip.
+
+#### Issue #92 — Activity Log Excludes Group Participants ✅ COMPLETED
+Added `AND Page_ID <> 316` to the `getLastActivityDate()` filter in `contactService.ts`.
+
+#### Issue #93 — Membership Badge with Date Joined ✅ COMPLETED
+- Added `membershipDate` field to `ContactBadges` DTO
+- Extended Participants query to fetch `Date_Joined`
+- For Registered (1), Associate (4), Youth (10) members: shows Date_Joined
+- For Dropped members (status 5-9): fetches milestone 49 `Date_Accomplished` from `Participant_Milestones`
+- New `getDroppedMilestoneDate()` private method in `ContactService`
+- Badge displays date in parentheses: "Registered Member (Jan 5, 2020)"
+
+#### Issue #94 — Contact Lookup Search Improvements ✅ COMPLETED
+1. Added "Search by name, email, or phone number" helper text above input
+2. Added clear X button inside search box
+3. Mixed-type search: digits-only → phone, @ → email, else → name. All parts must match.
+4. Refactored `scoreNameMatch()` → `classifySearchWord()` + `scoreNameOnly()` for clean separation
+
+#### Badge Color Updates
+- Associate Member and Youth Member: changed from blue/purple to amber
+- Serving badge: changed from amber to emerald (matches "In a Group")
+
+### Files Modified (Session 2)
+- `src/services/contactLogService.ts` — moved Zod validation before SQL date conversion
+- `src/services/contactService.ts` — added Date_Joined to participant query, Page_ID filter, `getDroppedMilestoneDate()` method, dropped milestone fetch
+- `src/lib/dto/contacts.ts` — added `membershipDate` to `ContactBadges`
+- `src/components/contact-lookup-details/actions.ts` — added `membershipDate: null` to fallback
+- `src/components/contact-lookup-details/contact-lookup-details.tsx` — `parseLocalDate()` helper, membership date display, serving badge color change
+- `src/components/contact-lookup/contact-lookup-search.tsx` — helper text, clear button, Tailwind layout
+- `src/lib/processing-utils.ts` — `classifySearchWord()`, mixed-type search in `scoreNameMatch()`, extracted `scoreNameOnly()`
+- `src/lib/contact-badge-utils.ts` — Associate/Youth badge colors → amber
+
 ## Verification
-- TypeScript compilation passes, no type errors
-- All 236 tests pass (13 new)
-- Manual testing: attendance circle shows for single-month selections
-- Security review: all changes use existing sanitization, no new filter params or PII logging
+- TypeScript compilation passes, no new type errors
+- All 45 processing-utils tests pass
+- Security review: all filter params use existing sanitization or literal values, no PII logging

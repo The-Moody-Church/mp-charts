@@ -121,22 +121,21 @@ export class ContactLogService {
   public async createContactLog(
     contactLogData: Omit<ContactLogInput, 'Contact_Log_ID'>,
   ): Promise<ContactLog> {
+    // Validate the input data before date format conversion
+    const validatedData = ContactLogSchema.omit({ Contact_Log_ID: true }).parse(contactLogData);
+
     // Convert ISO date to SQL Server format (YYYY-MM-DD HH:MM:SS)
     // Ministry Platform expects SQL datetime format, not ISO format
-    if (contactLogData.Contact_Date) {
-      const date = new Date(contactLogData.Contact_Date);
-      // Format as SQL Server datetime
+    if (validatedData.Contact_Date) {
+      const date = new Date(validatedData.Contact_Date);
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const day = String(date.getDate()).padStart(2, '0');
       const hours = String(date.getHours()).padStart(2, '0');
       const minutes = String(date.getMinutes()).padStart(2, '0');
       const seconds = String(date.getSeconds()).padStart(2, '0');
-      contactLogData.Contact_Date = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+      (validatedData as Record<string, unknown>).Contact_Date = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
     }
-
-    // Validate the input data (update schema to accept SQL datetime string)
-    const validatedData = ContactLogSchema.omit({ Contact_Log_ID: true }).parse(contactLogData);
     
     const result = await this.mp!.createTableRecords(
       "Contact_Log",

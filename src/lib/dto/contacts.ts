@@ -48,6 +48,7 @@ export interface HouseholdMember {
 export interface ContactBadges {
   membershipStatus: string | null;
   membershipStatusId: number | null;
+  membershipDate: string | null;
   inGroup: boolean;
   serving: boolean;
   lastActivity: string | null;

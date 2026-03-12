@@ -92,7 +92,7 @@ export async function getContactBadges(contactId: number): Promise<ContactBadges
     return contactService.getContactBadges(contactId);
   } catch (error) {
     console.error('Error fetching contact badges:', error);
-    return { membershipStatus: null, membershipStatusId: null, inGroup: false, serving: false, lastActivity: null };
+    return { membershipStatus: null, membershipStatusId: null, membershipDate: null, inGroup: false, serving: false, lastActivity: null };
   }
 }
 
