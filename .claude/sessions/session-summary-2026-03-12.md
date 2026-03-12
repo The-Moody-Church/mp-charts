@@ -18,11 +18,11 @@ Address issue #85: Contact-Lookup badges for Member should specify type. The mem
 
 ### Last Activity Badge
 
-**Enhancement**: Added a "Last Activity" badge to the contact detail page showing when the most recent Contact_Log entry was recorded.
+**Enhancement**: Added a "Last Activity" badge to the contact detail page showing when the most recent Activity_Log entry was recorded.
 
 **Implementation**:
 1. Added `lastActivity: string | null` to `ContactBadges` DTO
-2. Added `getLastActivityDate()` private method in `ContactService` — queries `Contact_Log` table with `top: 1, orderBy: "Contact_Date DESC"` for the contact
+2. Added `getLastActivityDate()` private method in `ContactService` — queries `Activity_Log` table with `top: 1, orderBy: "Activity_Date DESC"` for the contact
 3. Fetched in parallel with group/serving checks in `getContactBadges()`
 4. Rendered as a sky-blue badge with relative date (e.g., "Last Activity: 3d ago") and full date tooltip
 5. `formatLastActivity()` helper renders: Today, Yesterday, Nd ago, Nw ago, Nmo ago, Ny ago
