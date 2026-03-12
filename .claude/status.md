@@ -8,6 +8,7 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
+| 2026-03-12 | **Contact lookup & badge improvements**: Activity log excludes Group Participants (#92), membership badge shows Date_Joined/Dropped date (#93), mixed-type search with clear button (#94), badge color updates, contact log creation fix, last activity timezone fix | #92, #93, #94 | — |
 | 2026-03-12 | **Venn diagram single-month fix**: Attendance circle now shows for single-month selections; fixed weekly→monthly conversion semantics; batch Event_Metrics query to avoid IIS URL length 404 | #83 | #89 |
 | 2026-03-12 | **Contact address + directions**: Address display (with unlisted note) and platform-aware "Get Directions" button (Apple Maps on iOS, app picker on Android, Google Maps web on desktop) | #88 | #91 |
 | 2026-03-12 | **Member badge specificity + last activity**: Extract shared `statusBadgeColor` utility, add member status badges to search results, show specific MP membership types, add "Last Activity" badge from Activity_Log | #85 | #90 |

@@ -24,10 +24,10 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Contact-Lookup badges for Member should specify thpe (#85)](#contact-lookup-badges-for-member-should-specify-thpe-85)~~ ✅
 
 ### Improvements
-- [contact lookup search improvements (#94)](#contact-lookup-search-improvements-94)
-- [membership badge on contact lookup should include date joined (#93)](#membership-badge-on-contact-lookup-should-include-date-joined-93)
-- [activity log should exclude group participants (#92)](#activity-log-should-exclude-group-participants-92)
 - [Small Group Trends Chart (#15)](#small-group-trends-chart-15)
+- ~~[contact lookup search improvements (#94)](#contact-lookup-search-improvements-94)~~ ✅
+- ~~[membership badge on contact lookup should include date joined (#93)](#membership-badge-on-contact-lookup-should-include-date-joined-93)~~ ✅
+- ~~[activity log should exclude group participants (#92)](#activity-log-should-exclude-group-participants-92)~~ ✅
 - ~~[Add address to contact lookup contact page. (#88)](#add-address-to-contact-lookup-contact-page-88)~~ ✅
 - ~~[Pre-warm Cache on Container Start (#80)](#pre-warm-cache-on-container-start-80)~~ ✅
 - ~~[Chart YoY Conparisons (#68)](#chart-yoy-conparisons-68)~~ ✅
@@ -135,18 +135,16 @@ Extracted `statusBadgeColor` to shared utility (`src/lib/contact-badge-utils.ts`
 
 ## Improvements
 
-### contact lookup search improvements ([#94](https://github.com/The-Moody-Church/mp-charts/issues/94))
-Indicate that name, email, and phone are searchable
-If a string has an @, search email, numbers, search phone, alpha only search name fields. So "Huff 8128" would show contacts matching name Huff and phone 8128.
-Search box needs and "X" on the right side to clear the search.
-
-### membership badge on contact lookup should include date joined ([#93](https://github.com/The-Moody-Church/mp-charts/issues/93))
-
-
-### activity log should exclude group participants  ([#92](https://github.com/The-Moody-Church/mp-charts/issues/92))
-On the contact lookup page
-
 ### Small Group Trends Chart ([#15](https://github.com/The-Moody-Church/mp-charts/issues/15))
+
+### ~~contact lookup search improvements ([#94](https://github.com/The-Moody-Church/mp-charts/issues/94))~~ ✅ COMPLETED
+Added helper text ("Search by name, email, or phone number"), clear X button in search box, and mixed-type search: digits-only words search phone, @ words search email, others search name fields. All parts must match (e.g., "Huff 8128" matches name + phone).
+
+### ~~membership badge on contact lookup should include date joined ([#93](https://github.com/The-Moody-Church/mp-charts/issues/93))~~ ✅ COMPLETED
+Membership badge now shows Date_Joined for Registered/Associate/Youth Members and the Dropped milestone (ID 49) date for dropped members. Also updated badge colors: Associate/Youth = amber, Serving = emerald (same as "In a Group").
+
+### ~~activity log should exclude group participants ([#92](https://github.com/The-Moody-Church/mp-charts/issues/92))~~ ✅ COMPLETED
+Last Activity badge now excludes Group Participants (Page_ID 316) from Activity_Log query.
 The Small Group Trends line chart may not be the best visualization for this data. Consider switching to a bar chart or removing it entirely if it doesn’t add enough value to the dashboard.
 
 ### ~~Add address to contact lookup contact page. ([#88](https://github.com/The-Moody-Church/mp-charts/issues/88))~~ ✅ COMPLETED
