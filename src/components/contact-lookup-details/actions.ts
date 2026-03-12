@@ -24,7 +24,7 @@ export async function getContactDetails(guid: string): Promise<ContactLookupDeta
     return contact;
   } catch (error) {
     console.error('Error fetching contact details:', error);
-    throw new Error('Failed to fetch contact details');
+    throw new Error(`Failed to fetch contact details: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 

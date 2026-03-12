@@ -77,7 +77,7 @@ export class ContactService {
     const records = await this.mp!.getTableRecords<ContactLookupDetails>({
       table: "Contacts",
       filter: `Contact_GUID = '${validGuid}'`,
-      select: "Contact_ID, Contact_GUID, First_Name, Nickname, Last_Name, Email_Address, Mobile_Phone, dp_fileUniqueId AS Image_GUID, Date_of_Birth, Household_ID, Household_Position_ID, Household_ID_Table_Address_ID_Table.[Address_Line_1], Household_ID_Table_Address_ID_Table.[Address_Line_2], Household_ID_Table_Address_ID_Table.[City], Household_ID_Table_Address_ID_Table.[State/Region] AS State, Household_ID_Table_Address_ID_Table.[Postal_Code], Household_ID_Table.[Home_Address_Unlisted]",
+      select: "Contact_ID, Contact_GUID, First_Name, Nickname, Last_Name, Email_Address, Mobile_Phone, dp_fileUniqueId AS Image_GUID, Date_of_Birth, Contacts.[Household_ID], Household_Position_ID, Household_ID_Table_Address_ID_Table.[Address_Line_1], Household_ID_Table_Address_ID_Table.[Address_Line_2], Household_ID_Table_Address_ID_Table.[City], Household_ID_Table_Address_ID_Table.[State/Region], Household_ID_Table_Address_ID_Table.[Postal_Code], Household_ID_Table.[Home_Address_Unlisted]",
       top: 1
     });
 

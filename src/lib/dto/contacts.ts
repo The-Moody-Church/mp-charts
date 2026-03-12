@@ -29,7 +29,7 @@ export interface ContactLookupDetails {
   Address_Line_1: string | null;
   Address_Line_2: string | null;
   City: string | null;
-  State: string | null;
+  "State/Region": string | null;
   Postal_Code: string | null;
   Home_Address_Unlisted: boolean;
 }
