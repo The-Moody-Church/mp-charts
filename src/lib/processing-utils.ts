@@ -283,10 +283,10 @@ function scoreNameOnly(
     const term = queryWords[0];
     let score = 0;
 
-    // Check name fields: exact > starts-with > contains
+    // Check name fields: exact > starts-with (with proportional bonus) > contains
     for (const name of [first, nick, display, last].filter(Boolean)) {
       if (name === term) score = Math.max(score, 40);
-      else if (name.startsWith(term)) score = Math.max(score, 25);
+      else if (name.startsWith(term)) score = Math.max(score, 25 + Math.round(10 * term.length / name.length));
       else if (name.includes(term)) score = Math.max(score, 10);
     }
 
@@ -327,16 +327,22 @@ function scoreNameOnly(
     let firstMatched = false;
     let lastMatched = false;
 
-    // Score last name match
+    // Score last name match (prefix matches get a proportional bonus for coverage)
     if (last === lastGuess) { score += 40; lastMatched = true; }
-    else if (last.startsWith(lastGuess)) { score += 25; lastMatched = true; }
+    else if (last.startsWith(lastGuess)) {
+      score += 25 + Math.round(10 * lastGuess.length / last.length);
+      lastMatched = true;
+    }
     else if (last.includes(lastGuess)) { score += 10; lastMatched = true; }
 
     // Score first name / nickname match — take the best match across fields
+    // Prefix matches get a proportional bonus for coverage
     let firstScore = 0;
     for (const name of [first, nick, display].filter(Boolean)) {
       if (name === firstGuess) { firstScore = Math.max(firstScore, 30); }
-      else if (name.startsWith(firstGuess)) { firstScore = Math.max(firstScore, 20); }
+      else if (name.startsWith(firstGuess)) {
+        firstScore = Math.max(firstScore, 20 + Math.round(5 * firstGuess.length / name.length));
+      }
       else if (name.includes(firstGuess)) { firstScore = Math.max(firstScore, 5); }
     }
     if (firstScore > 0) {
@@ -416,9 +422,9 @@ export function searchByName<T extends { info: NameFields }>(
 
   scored.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
-    const lastCmp = a.item.info.Last_Name.localeCompare(b.item.info.Last_Name);
+    const lastCmp = (a.item.info.Last_Name ?? "").localeCompare(b.item.info.Last_Name ?? "");
     if (lastCmp !== 0) return lastCmp;
-    return a.item.info.First_Name.localeCompare(b.item.info.First_Name);
+    return (a.item.info.First_Name ?? "").localeCompare(b.item.info.First_Name ?? "");
   });
 
   return scored.map(({ item }) => item);
@@ -441,9 +447,9 @@ export function searchByNameFlat<T extends NameFields>(
 
   scored.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
-    const lastCmp = a.item.Last_Name.localeCompare(b.item.Last_Name);
+    const lastCmp = (a.item.Last_Name ?? "").localeCompare(b.item.Last_Name ?? "");
     if (lastCmp !== 0) return lastCmp;
-    return a.item.First_Name.localeCompare(b.item.First_Name);
+    return (a.item.First_Name ?? "").localeCompare(b.item.First_Name ?? "");
   });
 
   return scored.map(({ item }) => item);

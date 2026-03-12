@@ -191,3 +191,32 @@ Other methods reviewed and determined to be already optimal:
 
 **Files modified**:
 - `src/instrumentation.ts` — replaced `node:crypto` import with `globalThis.crypto.getRandomValues`
+
+---
+
+### Session 4 — Issues #98 & #99
+
+#### Issue #99 — Contact Lookup Searching Error ✅ COMPLETED
+**Problem**: Searching "Kent S" threw `TypeError: Cannot read properties of null (reading 'localeCompare')` because some contacts in MP have null `Last_Name` or `First_Name`, and the sort comparator called `.localeCompare()` directly without null checks.
+
+**Fix**: Added `?? ""` null coalescing to all four `.localeCompare()` calls in both `searchByNameFlat` (line 444-446) and `searchByName` (line 419-421).
+
+#### Issue #98 — Review Contact Lookup Search Scoring ✅ COMPLETED
+**Problem**: "Kent S" didn't rank "Kent Schmidt" higher than "Kent Andrews". Root cause was actually #99 — the null crash prevented any results from being returned.
+
+**Enhancement**: Added proportional prefix-match bonus to improve ranking differentiation. Prefix matches now score higher when they cover a larger fraction of the target name:
+- Last name: `25 + round(10 * guessLen / lastLen)` (up to +10 bonus)
+- First name: `20 + round(5 * guessLen / nameLen)` (up to +5 bonus)
+- Single-word: `25 + round(10 * termLen / nameLen)` (up to +10 bonus)
+
+This means "Sch" matching "Schmidt" scores higher than "S" matching "Schmidt".
+
+### Files Modified (Session 4)
+- `src/lib/processing-utils.ts` — null safety in sort comparators (4 calls), proportional prefix-match bonus (3 scoring paths)
+- `.claude/ideas.md` — marked #98 and #99 as completed
+- `.claude/status.md` — added session 4 work to recently completed
+- `.claude/sessions/session-summary-2026-03-12.md` — this update
+
+### Verification (Session 4)
+- All 236 tests pass
+- Security review: changes are in pure scoring/sorting logic only, no filter params, no PII, no auth changes

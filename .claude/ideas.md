@@ -44,7 +44,9 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
 
 ### Technical Debt
-- [Contact Lookup Searching Error (#99)](#contact-lookup-searching-error-99)
+- [Contact Logs should not be editable unless Made_By = the Current Logged In User (#96)](#contact-logs-should-not-be-editable-unless-made_by--the-current-logged-in-user-96)
+- ~~[Contact Lookup Searching Error (#99)](#contact-lookup-searching-error-99)~~ ✅
+- ~~[Review Contact Lookup Search Scoring (#98)](#review-contact-lookup-search-scoring-98)~~ ✅
 
 ---
 
@@ -189,106 +191,11 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 
 ## Technical Debt
 
-### Contact Lookup Searching Error ([#99](https://github.com/The-Moody-Church/mp-charts/issues/99))
-When searching for `Kent S` you get an error. It works if you add a second letter to the second word. `Jonny H` as a search team does work.
-Typescript Error:
-```
-## Error Type
-Console Error
+### ~~Contact Lookup Searching Error ([#99](https://github.com/The-Moody-Church/mp-charts/issues/99))~~ ✅ COMPLETED
+Fixed null safety in `searchByNameFlat` and `searchByName` sort comparators — `Last_Name` and `First_Name` can be null for some contacts in MP, causing `localeCompare` to throw. Added `?? ""` fallback on all four `.localeCompare()` calls.
 
-## Error Message
-Failed to search contacts
-
-
-    at searchContacts (src/components/contact-lookup/actions.ts:24:11)
-
-## Code Frame
-  22 |   } catch (error) {
-  23 |     console.error('Error searching contacts:', error);
-> 24 |     throw new Error('Failed to search contacts');
-     |           ^
-  25 |   }
-  26 | }
-  27 |
-
-Next.js version: 16.1.6 (Turbopack)
-```
-Console:
-```
-Error searching contacts: TypeError: Cannot read properties of null (reading 'localeCompare')
-    at <unknown> (src/lib/processing-utils.ts:444:38)
-    at Array.sort (<anonymous>)
-    at searchByNameFlat (src/lib/processing-utils.ts:442:10)
-    at searchContacts (src/components/contact-lookup/actions.ts:19:37)
-  442 |   scored.sort((a, b) => {
-  443 |     if (b.score !== a.score) return b.score - a.score;
-> 444 |     const lastCmp = a.item.Last_Name.localeCompare(b.item.Last_Name);
-      |                                      ^
-  445 |     if (lastCmp !== 0) return lastCmp;
-  446 |     return a.item.First_Name.localeCompare(b.item.First_Name);
-  447 |   });
-⨯ Error: Failed to search contacts
-    at searchContacts (src/components/contact-lookup/actions.ts:24:11)
-  22 |   } catch (error) {
-  23 |     console.error('Error searching contacts:', error);
-> 24 |     throw new Error('Failed to search contacts');
-     |           ^
-  25 |   }
-  26 | }
-  27 | {
-  digest: '822530735'
-}
-```
-
-## Error Type
-Console Error
-
-## Error Message
-Failed to search contacts
-
-
-    at searchContacts (src/components/contact-lookup/actions.ts:24:11)
-
-## Code Frame
-  22 |   } catch (error) {
-  23 |     console.error('Error searching contacts:', error);
-> 24 |     throw new Error('Failed to search contacts');
-     |           ^
-  25 |   }
-  26 | }
-  27 |
-
-Next.js version: 16.1.6 (Turbopack)
-```
-Console:
-```
-Error searching contacts: TypeError: Cannot read properties of null (reading 'localeCompare')
-    at <unknown> (src/lib/processing-utils.ts:444:38)
-    at Array.sort (<anonymous>)
-    at searchByNameFlat (src/lib/processing-utils.ts:442:10)
-    at searchContacts (src/components/contact-lookup/actions.ts:19:37)
-  442 |   scored.sort((a, b) => {
-  443 |     if (b.score !== a.score) return b.score - a.score;
-> 444 |     const lastCmp = a.item.Last_Name.localeCompare(b.item.Last_Name);
-      |                                      ^
-  445 |     if (lastCmp !== 0) return lastCmp;
-  446 |     return a.item.First_Name.localeCompare(b.item.First_Name);
-  447 |   });
-⨯ Error: Failed to search contacts
-    at searchContacts (src/components/contact-lookup/actions.ts:24:11)
-  22 |   } catch (error) {
-  23 |     console.error('Error searching contacts:', error);
-> 24 |     throw new Error('Failed to search contacts');
-     |           ^
-  25 |   }
-  26 | }
-  27 | {
-  digest: '822530735'
-}
-```
-
-### Review Contact Lookup Search Scoring ([#98](https://github.com/The-Moody-Church/mp-charts/issues/98))
-Explore why Kent S does not rank Kent Schmidt higher than Kent Andrews.
+### ~~Review Contact Lookup Search Scoring ([#98](https://github.com/The-Moody-Church/mp-charts/issues/98))~~ ✅ COMPLETED
+Added proportional prefix-match bonus to search scoring: longer prefix matches now score higher than shorter ones (e.g., "Sch" matching "Schmidt" scores more than "S" matching "Schmidt"). Applied to single-word, multi-word first name, and multi-word last name scoring paths. The root cause of "Kent S" not working was actually #99 — null Last_Name contacts crashed the sort before results could be returned.
 
 ### Contact Logs should not be editable unless Made_By = the Current Logged In User ([#96](https://github.com/The-Moody-Church/mp-charts/issues/96))
 You should only be able to edit Contact Logs that were made by you. So, if contact_log record's made_by = user_id does not match the logged in user_id, then that contact log should not be editable.
