@@ -2,12 +2,13 @@
 
 Quick-reference snapshot of current project state. Read this first at session start. For full details on any item, see the relevant session summary in `.claude/sessions/`.
 
-**Last updated**: 2026-03-11
+**Last updated**: 2026-03-12
 
 ## Recently Completed
 
 | Date | Work | Issues | PR |
 |------|------|--------|----|
+| 2026-03-12 | **Member badge specificity**: Extract shared `statusBadgeColor` utility, add member status badges to search results, show specific MP membership types | #85 | TBD |
 | 2026-03-11 | **Auth callback redirect**: Preserve original URL through login redirect | — | #86 |
 | 2026-03-11 | **Member photo upload fix**: Correct form field name mismatch in member detail modal | — | #87 |
 | 2026-03-11 | **Manage Members**: Card-based membership management with status tabs, detail modal, expandable milestones, deep links, client-side transition overrides, cache refresh button, rate limit resilience | — | #84 |

@@ -10,6 +10,7 @@ import { ContactLinks, DetailModalPhotoUpload } from "@/components/processing";
 import { useBreadcrumbOverride } from "@/components/layout/dynamic-breadcrumb";
 import { useRuntimeConfig } from "@/contexts";
 import { MAX_FILE_SIZE } from "@/lib/processing-utils";
+import { statusBadgeColor } from "@/lib/contact-badge-utils";
 
 interface ContactLookupDetailsProps {
   guid: string;
@@ -42,16 +43,6 @@ function formatBirthday(dateOfBirth: string): string {
   return dob.toLocaleDateString("en-US", { month: "long", day: "numeric" });
 }
 
-function statusBadgeColor(statusId: number | null): string {
-  switch (statusId) {
-    case 1: return "bg-green-100 text-green-800";
-    case 4: return "bg-blue-100 text-blue-800";
-    case 10: return "bg-purple-100 text-purple-800";
-    case 5: case 6: case 7: case 8: case 9:
-      return "bg-red-100 text-red-800";
-    default: return "bg-gray-100 text-gray-800";
-  }
-}
 
 export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
   guid,
