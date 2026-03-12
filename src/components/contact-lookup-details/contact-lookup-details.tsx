@@ -42,6 +42,27 @@ function formatBirthday(dateOfBirth: string): string {
   return dob.toLocaleDateString("en-US", { month: "long", day: "numeric" });
 }
 
+function formatAddress(
+  line1: string | null,
+  line2: string | null,
+  city: string | null,
+  state: string | null,
+  postalCode: string | null,
+): string | null {
+  if (!line1) return null;
+  const parts = [line1];
+  if (line2) parts.push(line2);
+  const cityStateZip = [city, state].filter(Boolean).join(", ");
+  if (cityStateZip && postalCode) {
+    parts.push(`${cityStateZip} ${postalCode}`);
+  } else if (cityStateZip) {
+    parts.push(cityStateZip);
+  } else if (postalCode) {
+    parts.push(postalCode);
+  }
+  return parts.join(", ");
+}
+
 const BADGE_STYLES: Record<string, string> = {
   Member: "bg-green-100 text-green-800",
   Associate: "bg-blue-100 text-blue-800",
@@ -327,13 +348,54 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
               )}
             </dl>
 
+            {/* Address */}
+            {contact.Address_Line_1 && (
+              <div className="mt-4">
+                <dt className="text-sm font-medium text-gray-500">Address</dt>
+                <dd className="mt-1 text-sm text-gray-900">
+                  <div>{contact.Address_Line_1}</div>
+                  {contact.Address_Line_2 && <div>{contact.Address_Line_2}</div>}
+                  <div>
+                    {[contact.City, contact.State].filter(Boolean).join(", ")}
+                    {contact.Postal_Code ? ` ${contact.Postal_Code}` : ""}
+                  </div>
+                </dd>
+                {contact.Home_Address_Unlisted && (
+                  <p className="mt-1 text-xs text-gray-400">(Address marked as unlisted)</p>
+                )}
+              </div>
+            )}
+
             {/* Action Buttons */}
-            <div className="mt-4">
+            <div className="mt-4 flex flex-wrap gap-2">
               <ContactLinks
                 email={contact.Email_Address}
                 phone={contact.Mobile_Phone}
                 showSms
               />
+              {contact.Address_Line_1 && (() => {
+                const addr = formatAddress(
+                  contact.Address_Line_1,
+                  contact.Address_Line_2,
+                  contact.City,
+                  contact.State,
+                  contact.Postal_Code,
+                );
+                return addr ? (
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                    </svg>
+                    Get Directions
+                  </a>
+                ) : null;
+              })()}
             </div>
           </div>
         </div>
