@@ -215,14 +215,14 @@ export class ContactService {
   }
 
   private async getLastActivityDate(safeContactId: string): Promise<string | null> {
-    const logs = await this.mp!.getTableRecords<{ Contact_Date: string }>({
-      table: "Contact_Log",
+    const logs = await this.mp!.getTableRecords<{ Activity_Date: string }>({
+      table: "Activity_Log",
       filter: `Contact_ID IN (${safeContactId})`,
-      select: "Contact_Date",
-      orderBy: "Contact_Date DESC",
+      select: "Activity_Date",
+      orderBy: "Activity_Date DESC",
       top: 1,
     });
-    return logs.length > 0 ? logs[0].Contact_Date : null;
+    return logs.length > 0 ? logs[0].Activity_Date : null;
   }
 
   public async uploadContactPhoto(
