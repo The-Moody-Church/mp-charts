@@ -149,3 +149,21 @@ Added "Timezone Handling — Ministry Platform Dates" section documenting the UT
 - TypeScript compilation passes, no new type errors
 - All 45 processing-utils tests pass
 - Security review: all filter params use existing sanitization or literal values, no PII logging
+
+### Session 3 — Issue #97: Optimize Activity Log Cache
+
+#### Issue #97 — Reduce Activity Log Query/Cache ✅ COMPLETED
+
+**Problem**: The engagement venn diagram's Activity_Log query fetched every record across a ~5-year range, making it the slowest dashboard query. It also included Group Participants activity logs (Page_ID 316) which are redundant since the venn has a dedicated Groups dimension.
+
+**Solution**: Replaced the single bulk query with per-month parallel queries using:
+- `$select=Contact_ID` (only field needed)
+- `$distinct=true` + `$groupBy=Contact_ID` (one row per unique contact per month)
+- `Page_ID <> 316` filter (excludes Group Participants activity logs)
+
+This eliminates the JS-side bucketing and Set-based deduplication — each API call directly returns unique Contact_IDs for that month.
+
+**Files modified**:
+- `src/services/dashboardService.ts` — replaced Activity_Log query + JS bucketing (lines 1333-1352) with per-month parallel queries using distinct+groupBy
+- `.claude/ideas.md` — marked #97 as completed
+- `.claude/status.md` — added to Recently Completed

@@ -1330,26 +1330,35 @@ export class DashboardService {
     const endIso = endDate.toISOString();
 
     try {
-      // Step 1: Activity — query Activity_Log, bucket by month
-      const activityRecords = await this.mp!.getTableRecords<{
-        Contact_ID: number;
-        Activity_Date: string;
-      }>({
-        table: 'Activity_Log',
-        select: 'Contact_ID,Activity_Date',
-        filter: `Activity_Date >= '${startIso}' AND Activity_Date <= '${endIso}'`,
-      });
-
-      const activityBuckets = new Map<string, Set<number>>();
-      for (const r of activityRecords) {
-        const d = new Date(r.Activity_Date);
-        const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        if (!activityBuckets.has(month)) activityBuckets.set(month, new Set());
-        activityBuckets.get(month)!.add(r.Contact_ID);
+      // Step 1: Activity — query each month in parallel for distinct Contact_IDs.
+      // Exclude Page_ID 316 (Group Participants) — engagement venn has a
+      // dedicated "Groups" dimension via Group_Participants table.
+      const months: { start: Date; end: Date; key: string }[] = [];
+      const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+      while (cursor <= endDate) {
+        const monthStart = new Date(cursor);
+        const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0, 23, 59, 59);
+        const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
+        months.push({ start: monthStart, end: monthEnd > endDate ? endDate : monthEnd, key });
+        cursor.setMonth(cursor.getMonth() + 1);
       }
-      const activityByMonth = Array.from(activityBuckets.entries())
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([month, contacts]) => ({ month, contactIds: [...contacts] }));
+
+      const monthResults = await Promise.all(
+        months.map(async ({ start, end, key }) => {
+          const records = await this.mp!.getTableRecords<{ Contact_ID: number }>({
+            table: 'Activity_Log',
+            select: 'Contact_ID',
+            filter: `Activity_Date >= '${start.toISOString()}' AND Activity_Date <= '${end.toISOString()}' AND Page_ID <> 316`,
+            distinct: true,
+            groupBy: 'Contact_ID',
+          });
+          return { month: key, contactIds: records.map(r => r.Contact_ID) };
+        })
+      );
+
+      const activityByMonth = monthResults
+        .filter(m => m.contactIds.length > 0)
+        .sort((a, b) => a.month.localeCompare(b.month));
 
       // Step 2: Groups — Ministry_ID=8, with date ranges for client-side filtering
       const groups = await this.mp!.getTableRecords<{ Group_ID: number }>({
