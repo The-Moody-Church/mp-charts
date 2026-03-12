@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { ContactSearch } from "@/lib/dto";
 import { useRuntimeConfig } from "@/contexts";
+import { statusBadgeColor } from "@/lib/contact-badge-utils";
 
 interface ContactLookupResultsProps {
   results: ContactSearch[];
@@ -107,9 +108,16 @@ export const ContactLookupResults: React.FC<ContactLookupResultsProps> = ({
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="font-medium text-gray-900">
-                  {getDisplayName(contact.First_Name, contact.Nickname)}{" "}
-                  {contact.Last_Name}
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-gray-900">
+                    {getDisplayName(contact.First_Name, contact.Nickname)}{" "}
+                    {contact.Last_Name}
+                  </span>
+                  {contact.Member_Status && (
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeColor(contact.Member_Status_ID)}`}>
+                      {contact.Member_Status}
+                    </span>
+                  )}
                 </div>
                 {contact.Email_Address && (
                   <div className="text-sm text-gray-600 truncate">

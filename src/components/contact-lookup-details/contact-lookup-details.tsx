@@ -10,6 +10,7 @@ import { ContactLinks, DetailModalPhotoUpload } from "@/components/processing";
 import { useBreadcrumbOverride } from "@/components/layout/dynamic-breadcrumb";
 import { useRuntimeConfig } from "@/contexts";
 import { MAX_FILE_SIZE } from "@/lib/processing-utils";
+import { statusBadgeColor } from "@/lib/contact-badge-utils";
 
 interface ContactLookupDetailsProps {
   guid: string;
@@ -81,14 +82,19 @@ function getDirectionsUrl(address: string): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${encoded}`;
 }
 
-const BADGE_STYLES: Record<string, string> = {
-  Member: "bg-green-100 text-green-800",
-  Associate: "bg-blue-100 text-blue-800",
-  Youth: "bg-purple-100 text-purple-800",
-  Dropped: "bg-red-100 text-red-800",
-  "In a Group": "bg-emerald-100 text-emerald-800",
-  Serving: "bg-amber-100 text-amber-800",
-};
+function formatLastActivity(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+  if (diffDays < 365) return `${Math.floor(diffDays / 30)}mo ago`;
+  return `${Math.floor(diffDays / 365)}y ago`;
+}
 
 export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
   guid,
@@ -306,18 +312,26 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
               {badges && (
                 <div className="flex flex-wrap gap-2 mt-2">
                   {badges.membershipStatus && (
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${BADGE_STYLES[badges.membershipStatus]}`}>
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusBadgeColor(badges.membershipStatusId)}`}>
                       {badges.membershipStatus}
                     </span>
                   )}
                   {badges.inGroup && (
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${BADGE_STYLES["In a Group"]}`}>
+                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800">
                       In a Group
                     </span>
                   )}
                   {badges.serving && (
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${BADGE_STYLES["Serving"]}`}>
+                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-800">
                       Serving
+                    </span>
+                  )}
+                  {badges.lastActivity && (
+                    <span
+                      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-sky-100 text-sky-800"
+                      title={new Date(badges.lastActivity).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                    >
+                      Last Activity: {formatLastActivity(badges.lastActivity)}
                     </span>
                   )}
                 </div>

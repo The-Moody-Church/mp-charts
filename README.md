@@ -476,8 +476,8 @@ Built with Radix UI primitives and styled with Tailwind CSS. Located in `src/com
 - **DynamicBreadcrumb**: Auto-generated breadcrumbs from URL path
 
 ### Feature Components
-- **contact-lookup**: Contact search with scored fuzzy matching (exact, starts-with, contains, Soundex, Levenshtein)
-- **contact-lookup-details**: Detailed contact view with logs, family, photos, badges
+- **contact-lookup**: Contact search with scored fuzzy matching (exact, starts-with, contains, Soundex, Levenshtein), member status badges in results
+- **contact-lookup-details**: Detailed contact view with logs, family, photos, membership/group/serving/last-activity badges
 - **contact-logs**: Full CRUD for contact interaction history
 - **dashboard**: Executive dashboard with attendance, community, and small group charts (YoY comparisons)
 - **journey-processing**: Configurable multi-step journey workflows (e.g., volunteer, baptism)
