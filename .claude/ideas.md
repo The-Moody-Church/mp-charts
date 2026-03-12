@@ -136,7 +136,7 @@ Added a floating feedback button and modal allowing authenticated users to submi
 The Small Group Trends line chart may not be the best visualization for this data. Consider switching to a bar chart or removing it entirely if it doesn’t add enough value to the dashboard.
 
 ### ~~Add address to contact lookup contact page. ([#88](https://github.com/The-Moody-Church/mp-charts/issues/88))~~ ✅ COMPLETED
-Added address display (line 1, line 2, city/state/zip) and "Get Directions" button to the contact lookup detail page. Address fetched via Household → Address chained JOIN. Unlisted addresses show a note. Directions button opens Google Maps — works on mobile and desktop.
+Added address display (line 1, line 2, city/state/zip) and platform-aware "Get Directions" button to the contact lookup detail page. Address fetched via Household → Address chained JOIN. Unlisted addresses show a privacy note. Directions open Apple Maps on iOS, system app picker on Android (geo: scheme), and Google Maps web on desktop.
 
 ### ~~Pre-warm Cache on Container Start ([#80](https://github.com/The-Moody-Church/mp-charts/issues/80))~~ ✅ COMPLETED
 Implemented automatic cache warming via Next.js `instrumentation.ts` hook + internal API endpoint (`/api/cache-warm`). On server start, the instrumentation hook polls the warming endpoint until ready, then warms all 6 cached functions in parallel (4 dashboard caches + group types + contact search). Protected by `CACHE_WARM_SECRET` env var. Central registry in `src/lib/cache-warming.ts` ensures new cached functions must be registered for warming. CLAUDE.md updated with mandatory steps for adding new cached functions.
