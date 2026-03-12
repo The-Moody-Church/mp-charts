@@ -24,6 +24,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Contact-Lookup badges for Member should specify thpe (#85)](#contact-lookup-badges-for-member-should-specify-thpe-85)~~ ✅
 
 ### Improvements
+- [contact lookup search improvements (#94)](#contact-lookup-search-improvements-94)
 - [membership badge on contact lookup should include date joined (#93)](#membership-badge-on-contact-lookup-should-include-date-joined-93)
 - [activity log should exclude group participants (#92)](#activity-log-should-exclude-group-participants-92)
 - [Small Group Trends Chart (#15)](#small-group-trends-chart-15)
@@ -133,6 +134,11 @@ Extracted `statusBadgeColor` to shared utility (`src/lib/contact-badge-utils.ts`
 ---
 
 ## Improvements
+
+### contact lookup search improvements ([#94](https://github.com/The-Moody-Church/mp-charts/issues/94))
+Indicate that name, email, and phone are searchable
+If a string has an @, search email, numbers, search phone, alpha only search name fields. So "Huff 8128" would show contacts matching name Huff and phone 8128.
+Search box needs and "X" on the right side to clear the search.
 
 ### membership badge on contact lookup should include date joined ([#93](https://github.com/The-Moody-Church/mp-charts/issues/93))
 
