@@ -194,9 +194,20 @@ function scorePhoneMatch(phone: string | null | undefined, query: string): numbe
   return 0;
 }
 
+/** Classify a search word: digits-only → phone, contains @ → email, else → name */
+function classifySearchWord(word: string): "phone" | "email" | "name" {
+  if (/^\d+$/.test(word)) return "phone";
+  if (word.includes("@")) return "email";
+  return "name";
+}
+
 /**
  * Score a single name record against a search query.
  * Higher scores = closer match. Returns 0 for no match.
+ *
+ * Multi-word queries are split by type: digits-only words search phone,
+ * words with @ search email, all other words search name fields.
+ * All parts must match for a result to be returned.
  */
 function scoreNameMatch(fields: NameFields, query: string): number {
   const q = normalizeApostrophes(query.trim().toLowerCase());
@@ -209,6 +220,64 @@ function scoreNameMatch(fields: NameFields, query: string): number {
 
   const queryWords = q.split(/[\s,]+/).filter(Boolean);
 
+  // Classify each word by type
+  const nameWords: string[] = [];
+  const phoneWords: string[] = [];
+  const emailWords: string[] = [];
+  for (const word of queryWords) {
+    const type = classifySearchWord(word);
+    if (type === "phone") phoneWords.push(word);
+    else if (type === "email") emailWords.push(word);
+    else nameWords.push(word);
+  }
+
+  // If the query is mixed (has phone/email + name parts), score each part independently.
+  // All parts must match for the record to be included.
+  const hasMixedTypes = (phoneWords.length > 0 || emailWords.length > 0) && nameWords.length > 0;
+
+  if (hasMixedTypes) {
+    let totalScore = 0;
+
+    // Score phone words
+    for (const pw of phoneWords) {
+      const ps = scorePhoneMatch(fields.Mobile_Phone, pw);
+      if (ps === 0) return 0; // all parts must match
+      totalScore += ps;
+    }
+
+    // Score email words
+    for (const ew of emailWords) {
+      const es = scoreEmailMatch(fields.Email_Address, ew);
+      if (es === 0) return 0; // all parts must match
+      totalScore += es;
+    }
+
+    // Score name words using the name query portion
+    const nameQuery = nameWords.join(" ");
+    const ns = scoreNameOnly(nameQuery, nameWords, first, nick, display, last);
+    if (ns === 0) return 0; // all parts must match
+    totalScore += ns;
+
+    return totalScore;
+  }
+
+  // Non-mixed query: use existing logic (single type)
+  return scoreNameOnly(q, queryWords, first, nick, display, last, fields);
+}
+
+/**
+ * Score name fields against a query. When `fields` is provided, falls back to email/phone
+ * for unmatched queries. Used both for pure name queries and the name portion of mixed queries.
+ */
+function scoreNameOnly(
+  q: string,
+  queryWords: string[],
+  first: string,
+  nick: string,
+  display: string,
+  last: string,
+  fields?: NameFields,
+): number {
   // Single-word scoring: score against all name fields equally
   if (queryWords.length === 1) {
     const term = queryWords[0];
@@ -241,8 +310,8 @@ function scoreNameMatch(fields: NameFields, query: string): number {
       }
     }
 
-    // Email and phone fallback for single-word queries
-    if (score === 0) {
+    // Email and phone fallback for single-word queries (only for non-mixed queries)
+    if (score === 0 && fields) {
       score = Math.max(
         scoreEmailMatch(fields.Email_Address, q),
         scorePhoneMatch(fields.Mobile_Phone, q)
@@ -318,7 +387,7 @@ function scoreNameMatch(fields: NameFields, query: string): number {
     score = Math.max(firstLast, lastFirst);
   }
 
-  if (score === 0) {
+  if (score === 0 && fields) {
     // Email matching (lower priority than name matches)
     score = Math.max(score, scoreEmailMatch(fields.Email_Address, q));
 

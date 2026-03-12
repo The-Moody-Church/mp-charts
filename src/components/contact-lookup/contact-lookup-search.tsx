@@ -94,23 +94,45 @@ export const ContactLookupSearch: React.FC<ContactLookupSearchProps> = ({
     setSearchTerm(e.target.value);
   };
 
+  const handleClear = () => {
+    setSearchTerm("");
+    onSearchResults?.([]);
+  };
+
   return (
-    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-      <Input
-        type="text"
-        value={searchTerm}
-        onChange={handleInputChange}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        disabled={disabled}
-        className="flex-1"
-      />
-      <Button
-        onClick={performSearch}
-        disabled={disabled || isPending || !searchTerm.trim()}
-      >
-        {isPending ? "Searching..." : "Search"}
-      </Button>
+    <div className="flex flex-col gap-1.5">
+      <p className="text-sm text-muted-foreground">Search by name, email, or phone number</p>
+      <div className="flex gap-2 items-center">
+        <div className="relative flex-1">
+          <Input
+            type="text"
+            value={searchTerm}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            disabled={disabled}
+            className="pr-8"
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Clear search"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+        <Button
+          onClick={performSearch}
+          disabled={disabled || isPending || !searchTerm.trim()}
+        >
+          {isPending ? "Searching..." : "Search"}
+        </Button>
+      </div>
     </div>
   );
 };
