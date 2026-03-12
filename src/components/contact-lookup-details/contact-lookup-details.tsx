@@ -43,6 +43,20 @@ function formatBirthday(dateOfBirth: string): string {
   return dob.toLocaleDateString("en-US", { month: "long", day: "numeric" });
 }
 
+function formatLastActivity(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+  if (diffDays < 365) return `${Math.floor(diffDays / 30)}mo ago`;
+  return `${Math.floor(diffDays / 365)}y ago`;
+}
+
 
 export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
   guid,
@@ -272,6 +286,14 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
                   {badges.serving && (
                     <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-800">
                       Serving
+                    </span>
+                  )}
+                  {badges.lastActivity && (
+                    <span
+                      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-sky-100 text-sky-800"
+                      title={new Date(badges.lastActivity).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                    >
+                      Last Activity: {formatLastActivity(badges.lastActivity)}
                     </span>
                   )}
                 </div>

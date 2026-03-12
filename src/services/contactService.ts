@@ -136,21 +136,24 @@ export class ContactService {
       membershipStatus = participants[0].Member_Status ?? null;
     }
 
-    // If no participant record, no group/serving data possible
+    // If no participant record, no group/serving data possible — but still fetch last activity
     if (participants.length === 0) {
-      return { membershipStatus, membershipStatusId, inGroup: false, serving: false };
+      const lastActivity = await this.getLastActivityDate(safeContactId);
+      return { membershipStatus, membershipStatusId, inGroup: false, serving: false, lastActivity };
     }
 
     const participantIds = participants.map(p => p.Participant_ID);
     const safeParticipantIds = sanitizeIds(participantIds);
     const today = new Date().toISOString().split('T')[0];
 
-    // Step 2: Check group membership and serving roles in parallel
-    const [groupParticipants, servingParticipants] = await Promise.all([
+    // Step 2: Check group membership, serving roles, and last activity in parallel
+    const [groupParticipants, servingParticipants, lastActivity] = await Promise.all([
       // In a Group: active Group_Participant in Small Group (1) or Community (11)
       this.getActiveGroupParticipants(safeParticipantIds, today, [1, 11]),
       // Serving: active Group_Participant with a role that has Group_Role_Type_ID 1 (Leader) or 3 (Servant)
       this.getServingParticipants(safeParticipantIds, today),
+      // Last activity: most recent Contact_Log entry
+      this.getLastActivityDate(safeContactId),
     ]);
 
     return {
@@ -158,6 +161,7 @@ export class ContactService {
       membershipStatusId,
       inGroup: groupParticipants.length > 0,
       serving: servingParticipants.length > 0,
+      lastActivity,
     };
   }
 
@@ -208,6 +212,17 @@ export class ContactService {
       select: "Group_Participant_ID",
       top: 1,
     });
+  }
+
+  private async getLastActivityDate(safeContactId: string): Promise<string | null> {
+    const logs = await this.mp!.getTableRecords<{ Contact_Date: string }>({
+      table: "Contact_Log",
+      filter: `Contact_ID IN (${safeContactId})`,
+      select: "Contact_Date",
+      orderBy: "Contact_Date DESC",
+      top: 1,
+    });
+    return logs.length > 0 ? logs[0].Contact_Date : null;
   }
 
   public async uploadContactPhoto(

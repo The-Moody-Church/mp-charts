@@ -44,4 +44,5 @@ export interface ContactBadges {
   membershipStatusId: number | null;
   inGroup: boolean;
   serving: boolean;
+  lastActivity: string | null;
 }
