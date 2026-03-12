@@ -44,7 +44,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Search should show closer matches first, weighted by field. (#78)](#search-should-show-closer-matches-first-weighted-by-field-78)~~ ✅
 
 ### Technical Debt
-- [Contact Log Searching Error (#99)](#contact-log-searching-error-99)
+- [Contact Lookup Searching Error (#99)](#contact-lookup-searching-error-99)
 
 ---
 
@@ -189,10 +189,57 @@ Replaced `filterByName` with `searchByName` that scores and ranks results by mat
 
 ## Technical Debt
 
-### Contact Log Searching Error ([#99](https://github.com/The-Moody-Church/mp-charts/issues/99))
+### Contact Lookup Searching Error ([#99](https://github.com/The-Moody-Church/mp-charts/issues/99))
 When searching for `Kent S` you get an error. It works if you add a second letter to the second word. `Jonny H` as a search team does work.
 Typescript Error:
 ```
+## Error Type
+Console Error
+
+## Error Message
+Failed to search contacts
+
+
+    at searchContacts (src/components/contact-lookup/actions.ts:24:11)
+
+## Code Frame
+  22 |   } catch (error) {
+  23 |     console.error('Error searching contacts:', error);
+> 24 |     throw new Error('Failed to search contacts');
+     |           ^
+  25 |   }
+  26 | }
+  27 |
+
+Next.js version: 16.1.6 (Turbopack)
+```
+Console:
+```
+Error searching contacts: TypeError: Cannot read properties of null (reading 'localeCompare')
+    at <unknown> (src/lib/processing-utils.ts:444:38)
+    at Array.sort (<anonymous>)
+    at searchByNameFlat (src/lib/processing-utils.ts:442:10)
+    at searchContacts (src/components/contact-lookup/actions.ts:19:37)
+  442 |   scored.sort((a, b) => {
+  443 |     if (b.score !== a.score) return b.score - a.score;
+> 444 |     const lastCmp = a.item.Last_Name.localeCompare(b.item.Last_Name);
+      |                                      ^
+  445 |     if (lastCmp !== 0) return lastCmp;
+  446 |     return a.item.First_Name.localeCompare(b.item.First_Name);
+  447 |   });
+⨯ Error: Failed to search contacts
+    at searchContacts (src/components/contact-lookup/actions.ts:24:11)
+  22 |   } catch (error) {
+  23 |     console.error('Error searching contacts:', error);
+> 24 |     throw new Error('Failed to search contacts');
+     |           ^
+  25 |   }
+  26 | }
+  27 | {
+  digest: '822530735'
+}
+```
+
 ## Error Type
 Console Error
 
