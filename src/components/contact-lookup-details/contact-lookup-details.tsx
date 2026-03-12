@@ -82,8 +82,18 @@ function getDirectionsUrl(address: string): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${encoded}`;
 }
 
+/** Parse a date string as local time (avoids UTC shift from ISO strings like "2026-03-12T00:00:00Z") */
+function parseLocalDate(dateStr: string): Date {
+  // Extract YYYY-MM-DD from any ISO-like format and parse as local midnight
+  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  }
+  return new Date(dateStr);
+}
+
 function formatLastActivity(dateStr: string): string {
-  const date = new Date(dateStr);
+  const date = parseLocalDate(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -322,6 +332,11 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
                   {badges.membershipStatus && (
                     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusBadgeColor(badges.membershipStatusId)}`}>
                       {badges.membershipStatus}
+                      {badges.membershipDate && (
+                        <span className="ml-1 opacity-75">
+                          ({parseLocalDate(badges.membershipDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })})
+                        </span>
+                      )}
                     </span>
                   )}
                   {badges.inGroup && (
@@ -330,14 +345,14 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
                     </span>
                   )}
                   {badges.serving && (
-                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-800">
+                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800">
                       Serving
                     </span>
                   )}
                   {badges.lastActivity && (
                     <span
                       className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-sky-100 text-sky-800"
-                      title={new Date(badges.lastActivity).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                      title={parseLocalDate(badges.lastActivity).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
                     >
                       Last Activity: {formatLastActivity(badges.lastActivity)}
                     </span>
