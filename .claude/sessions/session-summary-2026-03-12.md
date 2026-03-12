@@ -46,9 +46,23 @@ Address multiple issues: #85 (member badge specificity), #88 (contact address + 
 - Added phone number, email, and address as text fields with clipboard copy buttons
 - Improved error messages in `getContactDetails` to include actual error cause
 
-### Issue #83 — Venn Diagram Attendance Circle (PR #89)
+### Issue #83 — Venn Diagram Attendance Circle ✅ COMPLETED (PR #89)
 
-PR #89 created for issue #83 (single-month Venn diagram attendance circle fix).
+**Problem**: Attendance circle (green dashed) disappeared when selecting a single month. Root cause was two-fold:
+
+1. **Guard condition too strict** (original fix): `venn-diagram.tsx` required `activeCircles.length > 0` to show the attendance circle. Removed this guard.
+2. **Weekly→monthly conversion semantics** (original fix): Fixed 3 weekly→monthly data conversions to divide by `eventCount`.
+3. **Weekly data empty due to IIS URL length limit** (new fix): `getWeeklyAttendanceTrends()` queried `Event_Metrics` with all event IDs in a single request, causing an IIS 404 when the URL exceeded ~4096 chars. Changed to use `batchGetTableRecords` (same pattern as `getPeriodMetrics`).
+4. **Fallback when weekly data unavailable** (new fix): `filterDashboardData()` unconditionally replaced monthly data with weekly data for single-month selections. When weekly data was `[]`, this zeroed out attendance. Added guard: only replace if weekly data has entries, otherwise keep monthly aggregated data.
+
+**Files modified**:
+- `src/components/dashboard/venn-diagram.tsx` — Removed `activeCircles.length > 0` guard, added `scaleRef` fallback, exported `computeLayout`
+- `src/components/dashboard/filter-dashboard-data.ts` — Fixed weekly→monthly conversion, added fallback to monthly data when weekly is empty, exported `computePeriodMetrics`
+- `src/services/dashboardService.ts` — Changed `getWeeklyAttendanceTrends()` to use `batchGetTableRecords` for Event_Metrics query
+
+**Files created**:
+- `src/components/dashboard/__tests__/filter-dashboard-data.test.ts` — 4 tests
+- `src/components/dashboard/__tests__/venn-diagram.test.ts` — 9 tests
 
 ## Files Created
 - `src/lib/contact-badge-utils.ts` — shared `statusBadgeColor` utility with status ID → Tailwind color mapping
@@ -56,13 +70,17 @@ PR #89 created for issue #83 (single-month Venn diagram attendance circle fix).
 ## Files Modified
 - `src/lib/dto/contacts.ts` — added `lastActivity` field to `ContactBadges`, address fields (including `State/Region`) to `ContactLookupDetails`
 - `src/services/contactService.ts` — added `getLastActivityDate()`, integrated into `getContactBadges()` parallel fetch, extended `getContactByGuid()` with address JOINs, qualified ambiguous columns (`Member_Status_ID`, `Household_ID`)
+- `src/services/dashboardService.ts` — changed `getWeeklyAttendanceTrends()` to batch Event_Metrics query
 - `src/components/contact-lookup/contact-lookup-results.tsx` — added member status badge next to name in search results
 - `src/components/contact-lookup-details/contact-lookup-details.tsx` — import shared utility, added `formatLastActivity()`, `formatAddress()`, `getDirectionsUrl()` helpers, last activity badge, address display with copy button, phone/email text fields with copy buttons, moved action buttons above info grid
 - `src/components/contact-lookup-details/actions.ts` — updated fallback return to include `lastActivity: null`, improved error message to include cause
 - `src/components/manage-members/member-card.tsx` — import `statusBadgeColor` from shared utility, removed local copy
 - `src/components/manage-members/member-detail-modal.tsx` — import `statusBadgeColor` from shared utility, removed local copy
+- `src/components/dashboard/venn-diagram.tsx` — removed strict guard, added fallback sizing, exported `computeLayout`
+- `src/components/dashboard/filter-dashboard-data.ts` — weekly→monthly fallback, exported `computePeriodMetrics`
 
 ## Verification
 - TypeScript compilation passes, no type errors
-- Manual testing: contact details page loads with address, phone, email, copy buttons, action buttons
+- All 236 tests pass (13 new)
+- Manual testing: attendance circle shows for single-month selections
 - Security review: all changes use existing sanitization, no new filter params or PII logging

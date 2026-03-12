@@ -7,7 +7,8 @@ Quick-reference snapshot of current project state. Read this first at session st
 ## Recently Completed
 
 | Date | Work | Issues | PR |
-|------|------|--------|----|
+|------|------|--------|---|
+| 2026-03-12 | **Venn diagram single-month fix**: Attendance circle now shows for single-month selections; fixed weekly→monthly conversion semantics; batch Event_Metrics query to avoid IIS URL length 404 | #83 | #89 |
 | 2026-03-12 | **Contact address + directions**: Address display (with unlisted note) and platform-aware "Get Directions" button (Apple Maps on iOS, app picker on Android, Google Maps web on desktop) | #88 | #91 |
 | 2026-03-12 | **Member badge specificity + last activity**: Extract shared `statusBadgeColor` utility, add member status badges to search results, show specific MP membership types, add "Last Activity" badge from Activity_Log | #85 | #90 |
 | 2026-03-11 | **Auth callback redirect**: Preserve original URL through login redirect | — | #86 |
@@ -25,7 +26,6 @@ Quick-reference snapshot of current project state. Read this first at session st
 ## Open Issues
 
 - [**#72** — Dashboard subpages per journey step](ideas.md#and-more-specific-dashboard-subpages-72)
-- [**#83** — No attendance circle on engagement Venn diagram for single month selections](ideas.md#no-attendance-circle-one-engagement-venn-diagram-for-single-month-selections-83)
 - [**#52** — Active Communities and Small Groups chart needs work](ideas.md#bug-active-communities-and-small-groups-chart-needs-work-52)
 - [**#57** — IDOR mitigation (per-record authorization)](ideas.md#idor-mitigation-per-record-authorization-57)
 - [**#15** — Small Group Trends chart visualization improvements](ideas.md#small-group-trends-chart-15)
