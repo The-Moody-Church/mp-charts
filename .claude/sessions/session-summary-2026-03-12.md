@@ -1,12 +1,11 @@
 # Session Summary — 2026-03-12
 
 ## Objective
+Address multiple issues: #85 (member badge specificity), #88 (contact address + directions), #83 (Venn diagram attendance circle).
 
-Address issue #85: Contact-Lookup badges for Member should specify type. The member status badge should show the specific MP membership type (e.g., "Registered Member", "Associate Member", "Youth Member", "Dropped Member") rather than a generic label. Also add member status badges to the search results list.
+## Work Completed
 
-## Changes
-
-### Issue #85 — Member Status Badge Specificity
+### Issue #85 — Member Status Badge Specificity ✅ COMPLETED (PR #90)
 
 **Problem**: The contact lookup search results showed no membership badges. The `statusBadgeColor` function was duplicated across 3 files.
 
@@ -16,7 +15,7 @@ Address issue #85: Contact-Lookup badges for Member should specify type. The mem
 3. Updated all 3 consumers to import from the shared utility
 4. Fixed a pre-existing type error in the badge fallback return (missing `membershipStatusId`)
 
-### Last Activity Badge
+### Last Activity Badge (PR #90)
 
 **Enhancement**: Added a "Last Activity" badge to the contact detail page showing when the most recent Activity_Log entry was recorded.
 
@@ -27,34 +26,43 @@ Address issue #85: Contact-Lookup badges for Member should specify type. The mem
 4. Rendered as a sky-blue badge with relative date (e.g., "Last Activity: 3d ago") and full date tooltip
 5. `formatLastActivity()` helper renders: Today, Yesterday, Nd ago, Nw ago, Nmo ago, Ny ago
 
-### Files Created
-- `src/lib/contact-badge-utils.ts` — shared `statusBadgeColor` utility with status ID → Tailwind color mapping
-
-### Files Modified
-- `src/lib/dto/contacts.ts` — added `lastActivity` field to `ContactBadges`
-- `src/services/contactService.ts` — added `getLastActivityDate()`, integrated into `getContactBadges()` parallel fetch
-- `src/components/contact-lookup/contact-lookup-results.tsx` — added member status badge next to name in search results
-- `src/components/contact-lookup-details/contact-lookup-details.tsx` — import shared utility, added `formatLastActivity()` helper, added last activity badge
-- `src/components/contact-lookup-details/actions.ts` — updated fallback return to include `lastActivity: null`
-- `src/components/manage-members/member-card.tsx` — import `statusBadgeColor` from shared utility, removed local copy
-- `src/components/manage-members/member-detail-modal.tsx` — import `statusBadgeColor` from shared utility, removed local copy
-- `.claude/plans/plan-issue-85-member-badges.md` — implementation plan
-- `.claude/sessions/session-summary-2026-03-12.md` — this file
-- `.claude/ideas.md` — marked #85 as completed
-- `.claude/status.md` — updated with completed work
-
-### Bug Fix — Ambiguous Column Name
+### Bug Fix — Ambiguous Column Name (PR #90)
 
 **Problem**: The `Member_Status_ID` column was ambiguous when joining the `Member_Status` lookup table in the Participants query, causing a 500 error from the MP API.
 
 **Fix**: Qualified `Member_Status_ID` with the table name: `Participants.[Member_Status_ID]` in the select clause.
 
-### Issue #83 — Venn Diagram Attendance Circle (separate branch)
+### Issue #88 — Add address to contact lookup page ✅ COMPLETED (PR #91)
+
+**Changes:**
+- Extended `ContactLookupDetails` DTO with address fields (`Address_Line_1`, `Address_Line_2`, `City`, `State/Region`, `Postal_Code`) and `Home_Address_Unlisted` flag
+- Updated `ContactService.getContactByGuid()` to fetch address data via chained JOINs through the Household → Address relationship
+- Qualified `Household_ID` with `Contacts.` to avoid ambiguous column error from the join
+- Used raw `State/Region` field name (MP API doesn't support aliases on chained join columns)
+- Added address display section and "Get Directions" pill button to the contact detail page
+- Addresses marked as unlisted show a subtle "(Address marked as unlisted)" privacy note
+- Platform-aware "Get Directions" button: Apple Maps on iOS, `geo:` scheme (system app picker) on Android, Google Maps web on desktop
+- Moved action buttons (email, SMS, phone, directions) above the contact info grid
+- Added phone number, email, and address as text fields with clipboard copy buttons
+- Improved error messages in `getContactDetails` to include actual error cause
+
+### Issue #83 — Venn Diagram Attendance Circle (PR #89)
 
 PR #89 created for issue #83 (single-month Venn diagram attendance circle fix).
 
+## Files Created
+- `src/lib/contact-badge-utils.ts` — shared `statusBadgeColor` utility with status ID → Tailwind color mapping
+
+## Files Modified
+- `src/lib/dto/contacts.ts` — added `lastActivity` field to `ContactBadges`, address fields (including `State/Region`) to `ContactLookupDetails`
+- `src/services/contactService.ts` — added `getLastActivityDate()`, integrated into `getContactBadges()` parallel fetch, extended `getContactByGuid()` with address JOINs, qualified ambiguous columns (`Member_Status_ID`, `Household_ID`)
+- `src/components/contact-lookup/contact-lookup-results.tsx` — added member status badge next to name in search results
+- `src/components/contact-lookup-details/contact-lookup-details.tsx` — import shared utility, added `formatLastActivity()`, `formatAddress()`, `getDirectionsUrl()` helpers, last activity badge, address display with copy button, phone/email text fields with copy buttons, moved action buttons above info grid
+- `src/components/contact-lookup-details/actions.ts` — updated fallback return to include `lastActivity: null`, improved error message to include cause
+- `src/components/manage-members/member-card.tsx` — import `statusBadgeColor` from shared utility, removed local copy
+- `src/components/manage-members/member-detail-modal.tsx` — import `statusBadgeColor` from shared utility, removed local copy
+
 ## Verification
-- `npx next build` — compiles successfully, no type errors
-- `npx vitest run` — all 223 tests pass
-- Security review: `getLastActivityDate` uses `sanitizeIds()` for the contact ID filter; no user input interpolation; read-only display change
-- Manual testing: contact badges load correctly after ambiguous column fix
+- TypeScript compilation passes, no type errors
+- Manual testing: contact details page loads with address, phone, email, copy buttons, action buttons
+- Security review: all changes use existing sanitization, no new filter params or PII logging
