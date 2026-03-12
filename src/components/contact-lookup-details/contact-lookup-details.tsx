@@ -63,6 +63,24 @@ function formatAddress(
   return parts.join(", ");
 }
 
+function getDirectionsUrl(address: string): string {
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  const encoded = encodeURIComponent(address);
+
+  // iOS: open Apple Maps (native experience)
+  if (/iPad|iPhone|iPod/.test(ua)) {
+    return `https://maps.apple.com/?daddr=${encoded}`;
+  }
+
+  // Android: geo: scheme triggers the system app picker (Google Maps, Waze, etc.)
+  if (/Android/.test(ua)) {
+    return `geo:0,0?q=${encoded}`;
+  }
+
+  // Desktop / fallback: Google Maps web
+  return `https://www.google.com/maps/dir/?api=1&destination=${encoded}`;
+}
+
 const BADGE_STYLES: Record<string, string> = {
   Member: "bg-green-100 text-green-800",
   Associate: "bg-blue-100 text-blue-800",
@@ -383,7 +401,7 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
                 );
                 return addr ? (
                   <a
-                    href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}`}
+                    href={getDirectionsUrl(addr)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
