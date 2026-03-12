@@ -44,6 +44,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Search should show closer matches first, weighted by field. (#78)](#search-should-show-closer-matches-first-weighted-by-field-78)~~ ✅
 
 ### Technical Debt
+- [Review Contact Log Search Scoring (#98)](#review-contact-log-search-scoring-98)
 - [Contact Logs should not be editable unless Made_By = the Current Logged In User (#96)](#contact-logs-should-not-be-editable-unless-made_by-the-current-logged-in-user-96)
 - [BUG: Active Communities and Small Groups Chart Needs Work (#52)](#bug-active-communities-and-small-groups-chart-needs-work-52)
 - [IDOR Mitigation — Per-Record Authorization (#57)](#idor-mitigation-per-record-authorization-57)
@@ -203,6 +204,9 @@ Replaced `filterByName` with `searchByName` that scores and ranks results by mat
 ---
 
 ## Technical Debt
+
+### Review Contact Log Search Scoring ([#98](https://github.com/The-Moody-Church/mp-charts/issues/98))
+Explore why Kent S does not rank Kent Schmidt higher than Kent Andrews.
 
 ### Contact Logs should not be editable unless Made_By = the Current Logged In User ([#96](https://github.com/The-Moody-Church/mp-charts/issues/96))
 You should only be able to edit Contact Logs that were made by you. So, if contact_log record's made_by = user_id does not match the logged in user_id, then that contact log should not be editable.
