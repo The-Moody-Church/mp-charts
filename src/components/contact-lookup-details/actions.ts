@@ -1,9 +1,11 @@
 'use server';
 
 import { requireFeatureAccess } from '@/lib/authorization';
-import { ContactLookupDetails, ContactLogDisplay, HouseholdMember, ContactBadges } from '@/lib/dto';
+import { ContactLookupDetails, ContactLogDisplay, ContactLogMadeBy, HouseholdMember, ContactBadges } from '@/lib/dto';
 import { ContactService } from '@/services/contactService';
 import { ContactLogService } from '@/services/contactLogService';
+import { MPHelper } from '@/lib/providers/ministry-platform';
+import { sanitizeIds } from '@/lib/providers/ministry-platform/utils/filter-sanitize';
 import { uploadContactPhoto } from '@/components/shared-actions/processing';
 
 export async function getContactDetails(guid: string): Promise<ContactLookupDetails> {
@@ -39,25 +41,64 @@ export async function getContactLogsByContactId(contactId: number): Promise<Cont
     const contactLogService = await ContactLogService.getInstance();
     const logs = await contactLogService.getContactLogsByContactId(contactId);
 
-    // Transform to ContactLogDisplay with type information
-    const logsWithTypes = await Promise.all(
-      logs.map(async (log) => {
-        let contactLogType: string | null = null;
+    // Collect unique Made_By user IDs and look up their contact info
+    const uniqueUserIds = [...new Set(logs.map(l => l.Made_By).filter(id => id > 0))];
+    const madeByMap = new Map<number, ContactLogMadeBy>();
 
-        if (log.Contact_Log_Type_ID) {
-          const types = await contactLogService.getContactLogTypes();
-          const type = types.find(t => t.Contact_Log_Type_ID === log.Contact_Log_Type_ID);
-          contactLogType = type?.Contact_Log_Type || null;
+    if (uniqueUserIds.length > 0) {
+      try {
+        const mp = new MPHelper();
+        const userRecords = await mp.getTableRecords<{
+          User_ID: number;
+          Contact_ID: number;
+          First_Name: string;
+          Last_Name: string;
+          Nickname: string | null;
+          Email_Address: string | null;
+          Mobile_Phone: string | null;
+          Image_GUID: string | null;
+        }>({
+          table: "dp_Users",
+          filter: `User_ID IN (${sanitizeIds(uniqueUserIds)})`,
+          select: "User_ID,Contact_ID_TABLE.Contact_ID,Contact_ID_TABLE.First_Name,Contact_ID_TABLE.Nickname,Contact_ID_TABLE.Last_Name,Contact_ID_TABLE.Email_Address,Contact_ID_TABLE.Mobile_Phone,Contact_ID_TABLE.dp_fileUniqueId AS Image_GUID",
+        });
+
+        for (const rec of userRecords) {
+          madeByMap.set(rec.User_ID, {
+            Contact_ID: rec.Contact_ID,
+            First_Name: rec.First_Name,
+            Last_Name: rec.Last_Name,
+            Nickname: rec.Nickname,
+            Email_Address: rec.Email_Address,
+            Mobile_Phone: rec.Mobile_Phone,
+            Image_GUID: rec.Image_GUID,
+          });
         }
+      } catch (err) {
+        // Non-fatal: logs still display, just without "Made By" names
+        console.error("Error fetching Made_By contact info:", err);
+      }
+    }
 
-        return {
-          ...log,
-          Contact_Log_Type: contactLogType,
-        } as ContactLogDisplay;
-      })
-    );
+    // Get log types once (not per-log)
+    const types = await contactLogService.getContactLogTypes();
 
-    return logsWithTypes;
+    // Transform to ContactLogDisplay with type information and Made By contact
+    const logsWithDetails: ContactLogDisplay[] = logs.map((log) => {
+      const logType = log.Contact_Log_Type_ID
+        ? types.find(t => t.Contact_Log_Type_ID === log.Contact_Log_Type_ID)?.Contact_Log_Type ?? null
+        : null;
+
+      const madeByContact = madeByMap.get(log.Made_By);
+
+      return {
+        ...log,
+        Contact_Log_Type: logType,
+        MadeByContact: madeByContact ? [madeByContact] : undefined,
+      };
+    });
+
+    return logsWithDetails;
   } catch (error) {
     console.error('Error fetching contact logs:', error);
     throw new Error('Failed to fetch contact logs');

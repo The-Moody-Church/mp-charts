@@ -8,6 +8,7 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
+| 2026-03-12 | **Restrict contact log edit by owner**: Edit button and server action only allow editing logs created by the current user (Made_By check). Added "Logged by" display showing who created each log entry. | #96 | — |
 | 2026-03-12 | **Contact search null safety & scoring**: Fixed localeCompare crash on null Last_Name/First_Name (#99), added proportional prefix-match bonus to search scoring (#98) | #98, #99 | #101 |
 | 2026-03-12 | **Optimize dashboard cache queries**: Activity_Log uses per-month parallel queries with `$distinct`+`$groupby` and `Page_ID <> 316`; Monthly attendance trends parallelized (~48 sequential calls → 12 parallel pairs × 2 years) | #97 | #100 |
 | 2026-03-12 | **Contact lookup & badge improvements**: Activity log excludes Group Participants (#92), membership badge shows Date_Joined/Dropped date (#93), mixed-type search with clear button (#94), badge color updates, contact log creation fix, last activity timezone fix | #92, #93, #94 | — |
