@@ -125,7 +125,7 @@ export class ContactService {
     }>({
       table: "Participants",
       filter: `Contact_ID IN (${safeContactId})`,
-      select: "Participant_ID, Contact_ID, Member_Status_ID, Member_Status_ID_Table.[Member_Status]",
+      select: "Participant_ID, Contact_ID, Participants.[Member_Status_ID], Member_Status_ID_Table.[Member_Status]",
     });
 
     // Use the MP Member_Status string directly (e.g., "Registered Member", "Associate Member")

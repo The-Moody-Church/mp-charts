@@ -43,7 +43,18 @@ Address issue #85: Contact-Lookup badges for Member should specify type. The mem
 - `.claude/ideas.md` — marked #85 as completed
 - `.claude/status.md` — updated with completed work
 
+### Bug Fix — Ambiguous Column Name
+
+**Problem**: The `Member_Status_ID` column was ambiguous when joining the `Member_Status` lookup table in the Participants query, causing a 500 error from the MP API.
+
+**Fix**: Qualified `Member_Status_ID` with the table name: `Participants.[Member_Status_ID]` in the select clause.
+
+### Issue #83 — Venn Diagram Attendance Circle (separate branch)
+
+PR #89 created for issue #83 (single-month Venn diagram attendance circle fix).
+
 ## Verification
 - `npx next build` — compiles successfully, no type errors
 - `npx vitest run` — all 223 tests pass
 - Security review: `getLastActivityDate` uses `sanitizeIds()` for the contact ID filter; no user input interpolation; read-only display change
+- Manual testing: contact badges load correctly after ambiguous column fix
