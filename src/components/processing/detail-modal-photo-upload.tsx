@@ -77,7 +77,7 @@ export function DetailModalPhotoUpload({
       <input
         ref={photoInputRef}
         type="file"
-        accept="image/jpeg,image/png,image/gif"
+        accept="image/jpeg,image/png,image/gif,image/bmp,image/webp"
         className="hidden"
         onChange={onUpload}
       />

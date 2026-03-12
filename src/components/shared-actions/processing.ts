@@ -74,7 +74,7 @@ export async function uploadContactPhoto(
     }
 
     if (file.size > MAX_FILE_SIZE) {
-      return { success: false, error: `File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum 1 MB.` };
+      return { success: false, error: `File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum 20 MB.` };
     }
 
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {

@@ -63,7 +63,7 @@ export function MilestoneEditForm({
         <Input
           type="file"
           ref={editFileInputRef}
-          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+          accept=".pdf,.txt,.csv,.jpg,.jpeg,.png,.gif,.bmp,.webp"
           className="text-xs h-8"
         />
       </div>

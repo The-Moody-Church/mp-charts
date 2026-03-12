@@ -32,14 +32,14 @@ export function formatDate(dateStr: string | null): string {
   });
 }
 
-/** Allowed MIME types for photo uploads. */
-export const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+/** Allowed MIME types for photo uploads (matches MP: PNG, JPG, BMP, GIF). */
+export const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/bmp', 'image/webp'];
 
-/** Allowed MIME types for document uploads (images + PDF). */
-export const ALLOWED_DOCUMENT_TYPES = [...ALLOWED_IMAGE_TYPES, 'application/pdf'];
+/** Allowed MIME types for document uploads (matches MP: images + PDF, TXT, CSV). */
+export const ALLOWED_DOCUMENT_TYPES = [...ALLOWED_IMAGE_TYPES, 'application/pdf', 'text/plain', 'text/csv'];
 
-/** Maximum file size for uploads (1 MB). */
-export const MAX_FILE_SIZE = 1 * 1024 * 1024;
+/** Maximum file size for uploads (20 MB — matches Ministry Platform limit). */
+export const MAX_FILE_SIZE = 20 * 1024 * 1024;
 
 /**
  * Current date/time formatted as an ISO-like string in Central time.

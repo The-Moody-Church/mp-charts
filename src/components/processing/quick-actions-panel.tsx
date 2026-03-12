@@ -160,12 +160,12 @@ export function QuickActionsPanel({
               id="file-upload"
               type="file"
               ref={fileInputRef}
-              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+              accept=".pdf,.txt,.csv,.jpg,.jpeg,.png,.gif,.bmp,.webp"
               className="text-xs"
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file && file.size > MAX_FILE_SIZE) {
-                  onFileError(`File is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum size is 1 MB.`);
+                  onFileError(`File is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum size is 20 MB.`);
                 } else {
                   onFileError(null);
                 }

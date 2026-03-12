@@ -192,11 +192,11 @@ export function TransitionDialog({
               id="attachment"
               type="file"
               ref={fileInputRef}
-              accept=".pdf,.jpg,.jpeg,.png,.gif,.webp"
+              accept=".pdf,.txt,.csv,.jpg,.jpeg,.png,.gif,.bmp,.webp"
               className="text-base sm:text-sm"
             />
             <p className="text-xs text-muted-foreground">
-              Max 1 MB. Accepted: JPEG, PNG, GIF, WebP, PDF
+              Max 20 MB. Accepted: JPEG, PNG, GIF, BMP, WebP, PDF, TXT, CSV
             </p>
           </div>
 

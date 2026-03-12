@@ -156,7 +156,7 @@ export async function transitionMember(
         };
       }
       if (file.size > MAX_FILE_SIZE) {
-        return { success: false, error: "File too large. Maximum 1 MB." };
+        return { success: false, error: "File too large. Maximum 20 MB." };
       }
       validFile = file;
     }

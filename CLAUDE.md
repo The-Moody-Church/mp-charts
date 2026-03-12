@@ -795,11 +795,11 @@ filter: `User_GUID = '${profile.sub}'`           // no format validation
 
 ### File Upload Validation
 
-All file upload endpoints must validate MIME type **and** file size on the server side:
+All file upload endpoints must validate MIME type **and** file size on the server side. Limits match Ministry Platform: **20 MB max**, standard file formats (PNG, JPG, BMP, GIF, PDF, TXT, CSV):
 
 ```typescript
-const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-const ALLOWED_DOCUMENT_TYPES = [...ALLOWED_IMAGE_TYPES, 'application/pdf'];
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/bmp', 'image/webp'];
+const ALLOWED_DOCUMENT_TYPES = [...ALLOWED_IMAGE_TYPES, 'application/pdf', 'text/plain', 'text/csv'];
 
 // ✅ Validate before processing
 if (!ALLOWED_DOCUMENT_TYPES.includes(file.type)) {

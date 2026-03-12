@@ -208,7 +208,7 @@ export function JourneyDetailModal({
     if (!file || !participant) return;
 
     if (file.size > MAX_FILE_SIZE) {
-      setFileError(`Photo is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum 1 MB.`);
+      setFileError(`Photo is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum 20 MB.`);
       return;
     }
 
@@ -343,7 +343,7 @@ export function JourneyDetailModal({
       if (editFileInputRef.current?.files) {
         for (const file of Array.from(editFileInputRef.current.files)) {
           if (file.size > MAX_FILE_SIZE) {
-            setEditError(`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum 1 MB.`);
+            setEditError(`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum 20 MB.`);
             setEditSaving(false);
             return;
           }
