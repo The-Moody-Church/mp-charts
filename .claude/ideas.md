@@ -24,6 +24,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Contact-Lookup badges for Member should specify thpe (#85)](#contact-lookup-badges-for-member-should-specify-thpe-85)~~ ✅
 
 ### Improvements
+- [activity log should exclude group participants (#92)](#activity-log-should-exclude-group-participants-92)
 - [Small Group Trends Chart (#15)](#small-group-trends-chart-15)
 - ~~[Add address to contact lookup contact page. (#88)](#add-address-to-contact-lookup-contact-page-88)~~ ✅
 - ~~[Pre-warm Cache on Container Start (#80)](#pre-warm-cache-on-container-start-80)~~ ✅
@@ -131,6 +132,9 @@ Extracted `statusBadgeColor` to shared utility (`src/lib/contact-badge-utils.ts`
 ---
 
 ## Improvements
+
+### activity log should exclude group participants  ([#92](https://github.com/The-Moody-Church/mp-charts/issues/92))
+On the contact lookup page
 
 ### Small Group Trends Chart ([#15](https://github.com/The-Moody-Church/mp-charts/issues/15))
 The Small Group Trends line chart may not be the best visualization for this data. Consider switching to a bar chart or removing it entirely if it doesn’t add enough value to the dashboard.
