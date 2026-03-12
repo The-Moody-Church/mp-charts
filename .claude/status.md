@@ -7,8 +7,10 @@ Quick-reference snapshot of current project state. Read this first at session st
 ## Recently Completed
 
 | Date | Work | Issues | PR |
-|------|------|--------|----|
-| 2026-03-12 | **Venn diagram single-month fix**: Attendance circle now shows for single-month selections; fixed weekly→monthly conversion semantics | #83 | — |
+|------|------|--------|---|
+| 2026-03-12 | **Venn diagram single-month fix**: Attendance circle now shows for single-month selections; fixed weekly→monthly conversion semantics; batch Event_Metrics query to avoid IIS URL length 404 | #83 | #89 |
+| 2026-03-12 | **Contact address + directions**: Address display (with unlisted note) and platform-aware "Get Directions" button (Apple Maps on iOS, app picker on Android, Google Maps web on desktop) | #88 | #91 |
+| 2026-03-12 | **Member badge specificity + last activity**: Extract shared `statusBadgeColor` utility, add member status badges to search results, show specific MP membership types, add "Last Activity" badge from Activity_Log | #85 | #90 |
 | 2026-03-11 | **Auth callback redirect**: Preserve original URL through login redirect | — | #86 |
 | 2026-03-11 | **Member photo upload fix**: Correct form field name mismatch in member detail modal | — | #87 |
 | 2026-03-11 | **Manage Members**: Card-based membership management with status tabs, detail modal, expandable milestones, deep links, client-side transition overrides, cache refresh button, rate limit resilience | — | #84 |

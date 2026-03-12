@@ -882,17 +882,17 @@ export class DashboardService {
       const eventIds = events.map(e => e.Event_ID);
 
       // Fetch all metrics for these events
-      const eventMetrics = await this.mp!.getTableRecords<{
+      // Batched to avoid IIS URL length limits with large ID sets
+      const eventMetrics = await this.batchGetTableRecords<{
         Event_ID: number;
         Metric_ID: number;
         Numerical_Value: number;
       }>({
         table: 'Event_Metrics',
         select: 'Event_ID,Metric_ID,Numerical_Value',
-        filter: `
-          Event_Metrics.Event_ID IN (${sanitizeIds(eventIds)}) AND
-          Event_Metrics.Metric_ID IN (2, 3)
-        `
+        ids: eventIds,
+        idColumn: 'Event_Metrics.Event_ID',
+        extraFilter: 'Event_Metrics.Metric_ID IN (2, 3)'
       });
 
       // Build event-to-date map

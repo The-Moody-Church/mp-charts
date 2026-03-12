@@ -10,6 +10,7 @@ import { ContactLinks, DetailModalPhotoUpload } from "@/components/processing";
 import { useBreadcrumbOverride } from "@/components/layout/dynamic-breadcrumb";
 import { useRuntimeConfig } from "@/contexts";
 import { MAX_FILE_SIZE } from "@/lib/processing-utils";
+import { statusBadgeColor } from "@/lib/contact-badge-utils";
 
 interface ContactLookupDetailsProps {
   guid: string;
@@ -42,14 +43,58 @@ function formatBirthday(dateOfBirth: string): string {
   return dob.toLocaleDateString("en-US", { month: "long", day: "numeric" });
 }
 
-const BADGE_STYLES: Record<string, string> = {
-  Member: "bg-green-100 text-green-800",
-  Associate: "bg-blue-100 text-blue-800",
-  Youth: "bg-purple-100 text-purple-800",
-  Dropped: "bg-red-100 text-red-800",
-  "In a Group": "bg-emerald-100 text-emerald-800",
-  Serving: "bg-amber-100 text-amber-800",
-};
+function formatAddress(
+  line1: string | null,
+  line2: string | null,
+  city: string | null,
+  state: string | null,
+  postalCode: string | null,
+): string | null {
+  if (!line1) return null;
+  const parts = [line1];
+  if (line2) parts.push(line2);
+  const cityStateZip = [city, state].filter(Boolean).join(", ");
+  if (cityStateZip && postalCode) {
+    parts.push(`${cityStateZip} ${postalCode}`);
+  } else if (cityStateZip) {
+    parts.push(cityStateZip);
+  } else if (postalCode) {
+    parts.push(postalCode);
+  }
+  return parts.join(", ");
+}
+
+function getDirectionsUrl(address: string): string {
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  const encoded = encodeURIComponent(address);
+
+  // iOS: open Apple Maps (native experience)
+  if (/iPad|iPhone|iPod/.test(ua)) {
+    return `https://maps.apple.com/?daddr=${encoded}`;
+  }
+
+  // Android: geo: scheme triggers the system app picker (Google Maps, Waze, etc.)
+  if (/Android/.test(ua)) {
+    return `geo:0,0?q=${encoded}`;
+  }
+
+  // Desktop / fallback: Google Maps web
+  return `https://www.google.com/maps/dir/?api=1&destination=${encoded}`;
+}
+
+function formatLastActivity(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+  if (diffDays < 365) return `${Math.floor(diffDays / 30)}mo ago`;
+  return `${Math.floor(diffDays / 365)}y ago`;
+}
 
 export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
   guid,
@@ -66,6 +111,7 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
 
   // Clear breadcrumb override on unmount
@@ -161,6 +207,13 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
     navigator.clipboard.writeText(url).then(() => {
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2000);
+    });
+  };
+
+  const handleCopyField = (value: string, field: string) => {
+    navigator.clipboard.writeText(value).then(() => {
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 2000);
     });
   };
 
@@ -267,18 +320,26 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
               {badges && (
                 <div className="flex flex-wrap gap-2 mt-2">
                   {badges.membershipStatus && (
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${BADGE_STYLES[badges.membershipStatus]}`}>
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusBadgeColor(badges.membershipStatusId)}`}>
                       {badges.membershipStatus}
                     </span>
                   )}
                   {badges.inGroup && (
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${BADGE_STYLES["In a Group"]}`}>
+                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800">
                       In a Group
                     </span>
                   )}
                   {badges.serving && (
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${BADGE_STYLES["Serving"]}`}>
+                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-800">
                       Serving
+                    </span>
+                  )}
+                  {badges.lastActivity && (
+                    <span
+                      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-sky-100 text-sky-800"
+                      title={new Date(badges.lastActivity).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                    >
+                      Last Activity: {formatLastActivity(badges.lastActivity)}
                     </span>
                   )}
                 </div>
@@ -290,6 +351,38 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
           {photoError && (
             <p className="mt-2 text-sm text-red-600">{photoError}</p>
           )}
+
+          {/* Action Buttons */}
+          <div className="mt-4 flex flex-wrap gap-2">
+            <ContactLinks
+              email={contact.Email_Address}
+              phone={contact.Mobile_Phone}
+              showSms
+            />
+            {contact.Address_Line_1 && (() => {
+              const addr = formatAddress(
+                contact.Address_Line_1,
+                contact.Address_Line_2,
+                contact.City,
+                contact["State/Region"],
+                contact.Postal_Code,
+              );
+              return addr ? (
+                <a
+                  href={getDirectionsUrl(addr)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                  </svg>
+                  Get Directions
+                </a>
+              ) : null;
+            })()}
+          </div>
 
           {/* Contact Info Grid */}
           <div className="mt-6 border-t border-gray-200 pt-6">
@@ -325,16 +418,100 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
                   </dd>
                 </div>
               )}
+
+              {contact.Mobile_Phone && (
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Phone</dt>
+                  <dd className="mt-1 text-sm text-gray-900 flex items-center gap-1.5">
+                    {contact.Mobile_Phone}
+                    <button
+                      onClick={() => handleCopyField(contact.Mobile_Phone, "phone")}
+                      className="text-gray-400 hover:text-gray-600 transition-colors"
+                      title="Copy phone number"
+                    >
+                      {copiedField === "phone" ? (
+                        <svg className="h-3.5 w-3.5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                      ) : (
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+                        </svg>
+                      )}
+                    </button>
+                  </dd>
+                </div>
+              )}
+              {contact.Email_Address && (
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Email</dt>
+                  <dd className="mt-1 text-sm text-gray-900 flex items-center gap-1.5">
+                    {contact.Email_Address}
+                    <button
+                      onClick={() => handleCopyField(contact.Email_Address, "email")}
+                      className="text-gray-400 hover:text-gray-600 transition-colors"
+                      title="Copy email"
+                    >
+                      {copiedField === "email" ? (
+                        <svg className="h-3.5 w-3.5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                      ) : (
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+                        </svg>
+                      )}
+                    </button>
+                  </dd>
+                </div>
+              )}
             </dl>
 
-            {/* Action Buttons */}
-            <div className="mt-4">
-              <ContactLinks
-                email={contact.Email_Address}
-                phone={contact.Mobile_Phone}
-                showSms
-              />
-            </div>
+            {/* Address */}
+            {contact.Address_Line_1 && (() => {
+              const fullAddress = formatAddress(
+                contact.Address_Line_1,
+                contact.Address_Line_2,
+                contact.City,
+                contact["State/Region"],
+                contact.Postal_Code,
+              );
+              return (
+                <div className="mt-4">
+                  <dt className="text-sm font-medium text-gray-500">Address</dt>
+                  <dd className="mt-1 text-sm text-gray-900 flex items-start gap-1.5">
+                    <div>
+                      <div>{contact.Address_Line_1}</div>
+                      {contact.Address_Line_2 && <div>{contact.Address_Line_2}</div>}
+                      <div>
+                        {[contact.City, contact["State/Region"]].filter(Boolean).join(", ")}
+                        {contact.Postal_Code ? ` ${contact.Postal_Code}` : ""}
+                      </div>
+                    </div>
+                    {fullAddress && (
+                      <button
+                        onClick={() => handleCopyField(fullAddress, "address")}
+                        className="text-gray-400 hover:text-gray-600 transition-colors mt-0.5 flex-shrink-0"
+                        title="Copy address"
+                      >
+                        {copiedField === "address" ? (
+                          <svg className="h-3.5 w-3.5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                          </svg>
+                        ) : (
+                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+                          </svg>
+                        )}
+                      </button>
+                    )}
+                  </dd>
+                  {contact.Home_Address_Unlisted && (
+                    <p className="mt-1 text-xs text-gray-400">(Address marked as unlisted)</p>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>

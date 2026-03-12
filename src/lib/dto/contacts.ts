@@ -26,6 +26,12 @@ export interface ContactLookupDetails {
   Date_of_Birth: string | null;
   Household_ID: number | null;
   Household_Position_ID: number | null;
+  Address_Line_1: string | null;
+  Address_Line_2: string | null;
+  City: string | null;
+  "State/Region": string | null;
+  Postal_Code: string | null;
+  Home_Address_Unlisted: boolean;
 }
 
 export interface HouseholdMember {
@@ -40,7 +46,9 @@ export interface HouseholdMember {
 }
 
 export interface ContactBadges {
-  membershipStatus: 'Member' | 'Associate' | 'Youth' | 'Dropped' | null;
+  membershipStatus: string | null;
+  membershipStatusId: number | null;
   inGroup: boolean;
   serving: boolean;
+  lastActivity: string | null;
 }

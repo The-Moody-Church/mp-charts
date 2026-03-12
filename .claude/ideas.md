@@ -9,7 +9,6 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 ## Table of Contents
 
 ### Features
-- [Contact-Lookup badges for Member should specify thpe (#85)](#contact-lookup-badges-for-member-should-specify-thpe-85)
 - [and more specific dashboard subpages (#72)](#and-more-specific-dashboard-subpages-72)
 - ~~[Pastoral Interface for Contact Logs (#19)](#pastoral-interface-for-contact-logs-19)~~ ✅
 - ~~[Processing Search Bar (#49)](#processing-search-bar-49)~~ ✅
@@ -22,9 +21,11 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Volunteer Processing: Assign to Group on Approval (#25)](#volunteer-processing-assign-to-group-on-approval-25)~~ ✅
 - ~~[Add current groups list to volunteers already in a group (#36)](#add-current-groups-list-to-volunteers-already-in-a-group-36)~~ ✅
 - ~~[Add feedback feature (#69)](#add-feedback-feature-69)~~ ✅
+- ~~[Contact-Lookup badges for Member should specify thpe (#85)](#contact-lookup-badges-for-member-should-specify-thpe-85)~~ ✅
 
 ### Improvements
 - [Small Group Trends Chart (#15)](#small-group-trends-chart-15)
+- ~~[Add address to contact lookup contact page. (#88)](#add-address-to-contact-lookup-contact-page-88)~~ ✅
 - ~~[Pre-warm Cache on Container Start (#80)](#pre-warm-cache-on-container-start-80)~~ ✅
 - ~~[Chart YoY Conparisons (#68)](#chart-yoy-conparisons-68)~~ ✅
 - ~~[Executive Dashboard: Mobile Views (#13)](#executive-dashboard-mobile-views-13)~~ ✅
@@ -58,9 +59,6 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 ---
 
 ## Features
-
-### Contact-Lookup badges for Member should specify thpe ([#85](https://github.com/The-Moody-Church/mp-charts/issues/85))
-Registered Members should be Registered Member, and Associate Member, and Dropped Member, and Youth Member.
 
 ### and more specific dashboard subpages ([#72](https://github.com/The-Moody-Church/mp-charts/issues/72))
 For each step in the journey of a lifetime, add sub pages with more detailed charts. 
@@ -127,12 +125,18 @@ On the active volunteers tab of volunteer processing, on an individuals card, li
 ### ~~Add feedback feature ([#69](https://github.com/The-Moody-Church/mp-charts/issues/69))~~ ✅ COMPLETED
 Added a floating feedback button and modal allowing authenticated users to submit feedback to Ministry Platform's Feedback tables. Includes an admin settings page to toggle the feature, configure feedback type ID, and assign feedback to a specific contact.
 
+### ~~Contact-Lookup badges for Member should specify thpe ([#85](https://github.com/The-Moody-Church/mp-charts/issues/85))~~ ✅ COMPLETED
+Extracted `statusBadgeColor` to shared utility (`src/lib/contact-badge-utils.ts`), added member status badges to contact search results, and consolidated duplicate badge color functions from 3 files. Badges now show the specific MP membership type (e.g., "Registered Member", "Associate Member") in both search results and detail pages.
+
 ---
 
 ## Improvements
 
 ### Small Group Trends Chart ([#15](https://github.com/The-Moody-Church/mp-charts/issues/15))
 The Small Group Trends line chart may not be the best visualization for this data. Consider switching to a bar chart or removing it entirely if it doesn’t add enough value to the dashboard.
+
+### ~~Add address to contact lookup contact page. ([#88](https://github.com/The-Moody-Church/mp-charts/issues/88))~~ ✅ COMPLETED
+Added address display (line 1, line 2, city/state/zip) and platform-aware "Get Directions" button to the contact lookup detail page. Address fetched via Household → Address chained JOIN. Unlisted addresses show a privacy note. Directions open Apple Maps on iOS, system app picker on Android (geo: scheme), and Google Maps web on desktop.
 
 ### ~~Pre-warm Cache on Container Start ([#80](https://github.com/The-Moody-Church/mp-charts/issues/80))~~ ✅ COMPLETED
 Implemented automatic cache warming via Next.js `instrumentation.ts` hook + internal API endpoint (`/api/cache-warm`). On server start, the instrumentation hook polls the warming endpoint until ready, then warms all 6 cached functions in parallel (4 dashboard caches + group types + contact search). Protected by `CACHE_WARM_SECRET` env var. Central registry in `src/lib/cache-warming.ts` ensures new cached functions must be registered for warming. CLAUDE.md updated with mandatory steps for adding new cached functions.
