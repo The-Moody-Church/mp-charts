@@ -24,6 +24,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Contact-Lookup badges for Member should specify thpe (#85)](#contact-lookup-badges-for-member-should-specify-thpe-85)~~ ✅
 
 ### Improvements
+- [membership badge on contact lookup should include date joined (#93)](#membership-badge-on-contact-lookup-should-include-date-joined-93)
 - [activity log should exclude group participants (#92)](#activity-log-should-exclude-group-participants-92)
 - [Small Group Trends Chart (#15)](#small-group-trends-chart-15)
 - ~~[Add address to contact lookup contact page. (#88)](#add-address-to-contact-lookup-contact-page-88)~~ ✅
@@ -132,6 +133,9 @@ Extracted `statusBadgeColor` to shared utility (`src/lib/contact-badge-utils.ts`
 ---
 
 ## Improvements
+
+### membership badge on contact lookup should include date joined ([#93](https://github.com/The-Moody-Church/mp-charts/issues/93))
+
 
 ### activity log should exclude group participants  ([#92](https://github.com/The-Moody-Church/mp-charts/issues/92))
 On the contact lookup page
