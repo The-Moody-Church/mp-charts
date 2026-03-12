@@ -116,49 +116,65 @@ export class ContactService {
   public async getContactBadges(contactId: number): Promise<ContactBadges> {
     const safeContactId = sanitizeIds([contactId]);
 
-    // Step 1: Get the participant record for this contact (including Member_Status string)
+    // Step 1: Get the participant record for this contact (including Member_Status string and Date_Joined)
     const participants = await this.mp!.getTableRecords<{
       Participant_ID: number;
       Contact_ID: number;
       Member_Status_ID: number | null;
       Member_Status: string | null;
+      Date_Joined: string | null;
     }>({
       table: "Participants",
       filter: `Contact_ID IN (${safeContactId})`,
-      select: "Participant_ID, Contact_ID, Participants.[Member_Status_ID], Member_Status_ID_Table.[Member_Status]",
+      select: "Participant_ID, Contact_ID, Participants.[Member_Status_ID], Member_Status_ID_Table.[Member_Status], Date_Joined",
     });
 
     // Use the MP Member_Status string directly (e.g., "Registered Member", "Associate Member")
     let membershipStatus: string | null = null;
     let membershipStatusId: number | null = null;
+    let membershipDate: string | null = null;
     if (participants.length > 0 && participants[0].Member_Status_ID != null) {
       membershipStatusId = participants[0].Member_Status_ID;
       membershipStatus = participants[0].Member_Status ?? null;
+
+      // For active members (Registered=1, Associate=4, Youth=10), use Date_Joined
+      if ([1, 4, 10].includes(membershipStatusId)) {
+        membershipDate = participants[0].Date_Joined ?? null;
+      }
     }
 
     // If no participant record, no group/serving data possible — but still fetch last activity
     if (participants.length === 0) {
       const lastActivity = await this.getLastActivityDate(safeContactId);
-      return { membershipStatus, membershipStatusId, inGroup: false, serving: false, lastActivity };
+      return { membershipStatus, membershipStatusId, membershipDate, inGroup: false, serving: false, lastActivity };
     }
 
     const participantIds = participants.map(p => p.Participant_ID);
     const safeParticipantIds = sanitizeIds(participantIds);
     const today = new Date().toISOString().split('T')[0];
+    const isDropped = membershipStatusId != null && [5, 6, 7, 8, 9].includes(membershipStatusId);
 
-    // Step 2: Check group membership, serving roles, and last activity in parallel
-    const [groupParticipants, servingParticipants, lastActivity] = await Promise.all([
+    // Step 2: Check group membership, serving roles, last activity, and dropped date in parallel
+    const [groupParticipants, servingParticipants, lastActivity, droppedDate] = await Promise.all([
       // In a Group: active Group_Participant in Small Group (1) or Community (11)
       this.getActiveGroupParticipants(safeParticipantIds, today, [1, 11]),
       // Serving: active Group_Participant with a role that has Group_Role_Type_ID 1 (Leader) or 3 (Servant)
       this.getServingParticipants(safeParticipantIds, today),
       // Last activity: most recent Contact_Log entry
       this.getLastActivityDate(safeContactId),
+      // Dropped date: milestone 49 for dropped members (status 5-9)
+      isDropped ? this.getDroppedMilestoneDate(safeParticipantIds) : Promise.resolve(null),
     ]);
+
+    // For dropped members, use the milestone date if available
+    if (isDropped && droppedDate) {
+      membershipDate = droppedDate;
+    }
 
     return {
       membershipStatus,
       membershipStatusId,
+      membershipDate,
       inGroup: groupParticipants.length > 0,
       serving: servingParticipants.length > 0,
       lastActivity,
@@ -217,12 +233,23 @@ export class ContactService {
   private async getLastActivityDate(safeContactId: string): Promise<string | null> {
     const logs = await this.mp!.getTableRecords<{ Activity_Date: string }>({
       table: "Activity_Log",
-      filter: `Contact_ID IN (${safeContactId})`,
+      filter: `Contact_ID IN (${safeContactId}) AND Page_ID <> 316`,
       select: "Activity_Date",
       orderBy: "Activity_Date DESC",
       top: 1,
     });
     return logs.length > 0 ? logs[0].Activity_Date : null;
+  }
+
+  private async getDroppedMilestoneDate(safeParticipantIds: string): Promise<string | null> {
+    const milestones = await this.mp!.getTableRecords<{ Date_Accomplished: string | null }>({
+      table: "Participant_Milestones",
+      filter: `Participant_ID IN (${safeParticipantIds}) AND Milestone_ID = 49`,
+      select: "Date_Accomplished",
+      orderBy: "Date_Accomplished DESC",
+      top: 1,
+    });
+    return milestones.length > 0 ? milestones[0].Date_Accomplished ?? null : null;
   }
 
   public async uploadContactPhoto(
