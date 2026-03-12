@@ -14,6 +14,7 @@ import { MilestoneExpandedView } from "@/components/processing/milestone-expande
 import { getDisplayName, formatDate, ALLOWED_IMAGE_TYPES, MAX_FILE_SIZE } from "@/lib/processing-utils";
 import { fetchMemberDetail, fetchMilestoneFiles, uploadMemberPhoto } from "./actions";
 import type { MemberCard, MemberDetail, MemberMilestone, BaseFileInfo } from "@/lib/dto";
+import { statusBadgeColor } from "@/lib/contact-badge-utils";
 
 interface MemberDetailModalProps {
   member: MemberCard | null;
@@ -22,17 +23,6 @@ interface MemberDetailModalProps {
   onTransition: (member: MemberCard) => void;
   mpFileUrl: string | null;
   onUpdate: () => void;
-}
-
-function statusBadgeColor(statusId: number): string {
-  switch (statusId) {
-    case 1: return "bg-green-100 text-green-800";
-    case 4: return "bg-blue-100 text-blue-800";
-    case 10: return "bg-purple-100 text-purple-800";
-    case 5: case 6: case 7: case 8: case 9:
-      return "bg-red-100 text-red-800";
-    default: return "bg-gray-100 text-gray-800";
-  }
 }
 
 export function MemberDetailModal({

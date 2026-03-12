@@ -9,8 +9,8 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 ## Table of Contents
 
 ### Features
-- [Contact-Lookup badges for Member should specify thpe (#85)](#contact-lookup-badges-for-member-should-specify-thpe-85)
 - [and more specific dashboard subpages (#72)](#and-more-specific-dashboard-subpages-72)
+- ~~[Contact-Lookup badges for Member should specify thpe (#85)](#contact-lookup-badges-for-member-should-specify-thpe-85)~~ ✅
 - ~~[Pastoral Interface for Contact Logs (#19)](#pastoral-interface-for-contact-logs-19)~~ ✅
 - ~~[Processing Search Bar (#49)](#processing-search-bar-49)~~ ✅
 - ~~[Volunteer Processing: Show In-Process Volunteers on Active Tab (#50)](#volunteer-processing-show-in-process-volunteers-on-active-tab-50)~~ ✅
@@ -59,9 +59,6 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 ---
 
 ## Features
-
-### Contact-Lookup badges for Member should specify thpe ([#85](https://github.com/The-Moody-Church/mp-charts/issues/85))
-Registered Members should be Registered Member, and Associate Member, and Dropped Member, and Youth Member.
 
 ### and more specific dashboard subpages ([#72](https://github.com/The-Moody-Church/mp-charts/issues/72))
 For each step in the journey of a lifetime, add sub pages with more detailed charts. 
@@ -127,6 +124,9 @@ On the active volunteers tab of volunteer processing, on an individuals card, li
 
 ### ~~Add feedback feature ([#69](https://github.com/The-Moody-Church/mp-charts/issues/69))~~ ✅ COMPLETED
 Added a floating feedback button and modal allowing authenticated users to submit feedback to Ministry Platform's Feedback tables. Includes an admin settings page to toggle the feature, configure feedback type ID, and assign feedback to a specific contact.
+
+### ~~Contact-Lookup badges for Member should specify thpe ([#85](https://github.com/The-Moody-Church/mp-charts/issues/85))~~ ✅ COMPLETED
+Extracted `statusBadgeColor` to shared utility (`src/lib/contact-badge-utils.ts`), added member status badges to contact search results, and consolidated duplicate badge color functions from 3 files. Badges now show the specific MP membership type (e.g., "Registered Member", "Associate Member") in both search results and detail pages.
 
 ---
 
