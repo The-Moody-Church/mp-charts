@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { MessageSquarePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +18,7 @@ import {
 import { submitFeedback } from "./actions";
 
 export function FeedbackButton() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -34,7 +36,8 @@ export function FeedbackButton() {
 
     setSubmitting(true);
     try {
-      const result = await submitFeedback(title, description);
+      const pageUrl = `${window.location.origin}${pathname}`;
+      const result = await submitFeedback(title, description, pageUrl);
       if (!result.success) {
         setError(result.error || "Failed to submit feedback.");
         return;
@@ -84,7 +87,7 @@ export function FeedbackButton() {
           <DialogHeader>
             <DialogTitle>Give Feedback</DialogTitle>
             <DialogDescription>
-              Share a suggestion or idea. Your feedback is submitted to the team.
+              Share a suggestion or idea. Your feedback creates a GitHub issue for the team to review.
             </DialogDescription>
           </DialogHeader>
 

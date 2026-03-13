@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { ArrowLeft } from "lucide-react";
@@ -11,18 +10,14 @@ import type { FeedbackConfig } from "@/lib/feedback-config-types";
 import {
   getFeedbackConfig,
   saveFeedbackConfigAction,
-  getFeedbackTypes,
+  getGitHubTokenConfigured,
 } from "./actions";
 
 export function FeedbackSettings() {
   const [config, setConfig] = useState<FeedbackConfig>({
     enabled: false,
-    feedbackTypeId: null,
-    assignedToContactId: null,
   });
-  const [feedbackTypes, setFeedbackTypes] = useState<
-    { Feedback_Type_ID: number; Feedback_Type: string }[]
-  >([]);
+  const [tokenConfigured, setTokenConfigured] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,12 +26,12 @@ export function FeedbackSettings() {
   useEffect(() => {
     async function load() {
       try {
-        const [cfg, types] = await Promise.all([
+        const [cfg, hasToken] = await Promise.all([
           getFeedbackConfig(),
-          getFeedbackTypes(),
+          getGitHubTokenConfigured(),
         ]);
         setConfig(cfg);
-        setFeedbackTypes(types);
+        setTokenConfigured(hasToken);
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Failed to load feedback config."
@@ -117,56 +112,23 @@ export function FeedbackSettings() {
 
         <fieldset className="space-y-4 rounded-lg border p-4">
           <legend className="px-2 text-sm font-medium">
-            Ministry Platform Settings
+            GitHub Integration
           </legend>
 
           <div className="space-y-2">
-            <Label htmlFor="feedback-type">Feedback Type</Label>
-            <select
-              id="feedback-type"
-              className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              value={config.feedbackTypeId ?? ""}
-              onChange={(e) =>
-                setConfig({
-                  ...config,
-                  feedbackTypeId: e.target.value
-                    ? Number(e.target.value)
-                    : null,
-                })
-              }
-            >
-              <option value="">Select a feedback type...</option>
-              {feedbackTypes.map((ft) => (
-                <option key={ft.Feedback_Type_ID} value={ft.Feedback_Type_ID}>
-                  {ft.Feedback_Type}
-                </option>
-              ))}
-            </select>
+            <Label>GitHub Token Status</Label>
+            {tokenConfigured ? (
+              <p className="text-sm text-green-600">
+                GITHUB_FEEDBACK_TOKEN is configured. Feedback submissions will create GitHub issues.
+              </p>
+            ) : (
+              <p className="text-sm text-amber-600">
+                GITHUB_FEEDBACK_TOKEN is not set. Add it to your environment variables to enable feedback.
+              </p>
+            )}
             <p className="text-xs text-muted-foreground">
-              The feedback type assigned to all submissions
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="assigned-contact">
-              Assigned To (Contact ID)
-            </Label>
-            <Input
-              id="assigned-contact"
-              type="number"
-              placeholder="Optional — Contact ID to assign feedback to"
-              value={config.assignedToContactId ?? ""}
-              onChange={(e) =>
-                setConfig({
-                  ...config,
-                  assignedToContactId: e.target.value
-                    ? Number(e.target.value)
-                    : null,
-                })
-              }
-            />
-            <p className="text-xs text-muted-foreground">
-              All feedback entries will be assigned to this contact for review
+              Feedback submissions create issues on the configured GitHub repository
+              (GITHUB_FEEDBACK_REPO, defaults to The-Moody-Church/mp-charts).
             </p>
           </div>
         </fieldset>

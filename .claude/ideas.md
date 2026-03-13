@@ -147,7 +147,7 @@ On the "New Volunteers In Process" tab, when a volunteer receives the fully appr
 On the active volunteers tab of volunteer processing, on an individuals card, list the groups where they have a role that we are tracking.
 
 ### ~~Add feedback feature ([#69](https://github.com/The-Moody-Church/mp-charts/issues/69))~~ ✅ COMPLETED
-Added a floating feedback button and modal allowing authenticated users to submit feedback to Ministry Platform's Feedback tables. Includes an admin settings page to toggle the feature, configure feedback type ID, and assign feedback to a specific contact.
+Added a floating feedback button and modal allowing authenticated users to submit feedback. Originally created MP Feedback_Entries records; replaced with GitHub issue creation in #104.
 
 ### ~~Contact-Lookup badges for Member should specify thpe ([#85](https://github.com/The-Moody-Church/mp-charts/issues/85))~~ ✅ COMPLETED
 Extracted `statusBadgeColor` to shared utility (`src/lib/contact-badge-utils.ts`), added member status badges to contact search results, and consolidated duplicate badge color functions from 3 files. Badges now show the specific MP membership type (e.g., "Registered Member", "Associate Member") in both search results and detail pages.

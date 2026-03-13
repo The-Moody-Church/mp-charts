@@ -17,8 +17,6 @@ const CONFIG_PATH = join(process.cwd(), "data", "feedback-config.json");
 
 const DEFAULT_CONFIG: FeedbackConfig = {
   enabled: false,
-  feedbackTypeId: null,
-  assignedToContactId: null,
 };
 
 /**
@@ -46,8 +44,11 @@ export function saveFeedbackConfig(config: FeedbackConfig): void {
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + "\n", "utf-8");
 }
 
-/** Returns true if feedback is enabled and properly configured. */
+/**
+ * Returns true if feedback is enabled and the GitHub token is configured.
+ * Requires both the admin toggle AND the GITHUB_FEEDBACK_TOKEN env var.
+ */
 export function isFeedbackEnabled(): boolean {
   const config = loadFeedbackConfig();
-  return config.enabled && config.feedbackTypeId !== null;
+  return config.enabled && !!process.env.GITHUB_FEEDBACK_TOKEN;
 }
