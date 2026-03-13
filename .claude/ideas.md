@@ -69,18 +69,19 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 
 ## Features
 
+### and more specific dashboard subpages ([#72](https://github.com/The-Moody-Church/mp-charts/issues/72))
+For each step in the journey of a lifetime, add sub pages with more detailed charts.
+- Know God
+- feed your soul
+- grow in love
+
+
 ### ~~Change feedback to create GitHub issues ([#104](https://github.com/The-Moody-Church/mp-charts/issues/104))~~ ✅ COMPLETED
 Adjust feedback button to create GitHub issues.
 
 Title required with optional description. Page url where feedback was generated should be appended to the end of the description along with the Name of the logged in user.
 
 This should replace the feedback to MP.
-
-### and more specific dashboard subpages ([#72](https://github.com/The-Moody-Church/mp-charts/issues/72))
-For each step in the journey of a lifetime, add sub pages with more detailed charts. 
-- Know God 
-- feed your soul 
-- grow in love
 
 ### ~~Pastoral Interface for Contact Logs ([#19](https://github.com/The-Moody-Church/mp-charts/issues/19))~~ ✅ COMPLETED
 Contact lookup detail page now serves as the pastoral interface for contact logs. Features: contact info with action buttons (email, phone, SMS), membership/group/serving badges, birthday indicator, collapsible family/household section with avatars, and contact log create/edit functionality. Breadcrumbs show display name instead of GUID.
