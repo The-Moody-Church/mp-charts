@@ -9,6 +9,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 ## Table of Contents
 
 ### Features
+- [Change feedback to create GitHub issues (#104)](#change-feedback-to-create-github-issues-104)
 - [and more specific dashboard subpages (#72)](#and-more-specific-dashboard-subpages-72)
 - ~~[Pastoral Interface for Contact Logs (#19)](#pastoral-interface-for-contact-logs-19)~~ ✅
 - ~~[Processing Search Bar (#49)](#processing-search-bar-49)~~ ✅
@@ -67,6 +68,13 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 ---
 
 ## Features
+
+### Change feedback to create GitHub issues  ([#104](https://github.com/The-Moody-Church/mp-charts/issues/104))
+Adjust feedback button to create GitHub issues.
+
+Title required with optional description. Page url where feedback was generated should be appended to the end of the description along with the Name of the logged in user.
+
+This should replace the feedback to MP.
 
 ### and more specific dashboard subpages ([#72](https://github.com/The-Moody-Church/mp-charts/issues/72))
 For each step in the journey of a lifetime, add sub pages with more detailed charts. 
