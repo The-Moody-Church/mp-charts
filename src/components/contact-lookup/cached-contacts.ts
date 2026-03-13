@@ -3,7 +3,8 @@ import { ContactService } from '@/services/contactService';
 import { ContactSearch } from '@/lib/dto';
 
 /**
- * Cached dataset of all contacts for search (6-hour TTL, stale-while-revalidate).
+ * Cached dataset of all contacts for search.
+ * Revalidates every 6 hours; serves stale for up to 24 hours (stale-while-revalidate).
  *
  * NOTE: If you add a new 'use cache' function here, you MUST also register it
  * in src/lib/cache-warming.ts so it is pre-warmed on container start.
@@ -11,7 +12,7 @@ import { ContactSearch } from '@/lib/dto';
  */
 export async function getCachedAllContacts(): Promise<ContactSearch[]> {
   'use cache';
-  cacheLife({ revalidate: 21600 }); // 6 hours
+  cacheLife({ revalidate: 21600, stale: 86400 }); // 6h revalidate, 24h stale
   cacheTag('contacts-search');
 
   const contactService = await ContactService.getInstance();

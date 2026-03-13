@@ -233,14 +233,16 @@ async function getCachedData(key: string) {
 - Invalidate with `revalidateTag('my-tag', { expire: 0 })` from server actions
 
 **Current cached functions:**
-| Function | TTL | Tags | File |
-|---|---|---|---|
-| `getCachedDashboardData(year)` | 6h | `dashboard-data`, `year-N` | `src/components/dashboard/cached-data.ts` |
-| `getCachedFullRangeData(year, endDate)` | 6h | `dashboard-data`, `dashboard-full-range` | `src/components/dashboard/cached-data.ts` |
-| `getCachedExtendedData(dateIso, start, end)` | 6h | `dashboard-data`, `dashboard-extended` | `src/components/dashboard/cached-data.ts` |
-| `getCachedEngagementData(dateIso, start, end)` | 6h | `dashboard-data`, `dashboard-engagement` | `src/components/dashboard/cached-data.ts` |
-| `getCachedGroupTypes(ids)` | 24h | `group-types` | `src/services/dashboardService.ts` |
-| `getCachedAllContacts()` | 6h | `contacts-search` | `src/components/contact-lookup/cached-contacts.ts` |
+| Function | Revalidate | Stale | Tags | File |
+|---|---|---|---|---|
+| `getCachedDashboardData(year)` | 6h | 24h | `dashboard-data`, `year-N` | `src/components/dashboard/cached-data.ts` |
+| `getCachedFullRangeData(year, endDate)` | 6h | 24h | `dashboard-data`, `dashboard-full-range` | `src/components/dashboard/cached-data.ts` |
+| `getCachedExtendedData(dateIso, start, end)` | 6h | 24h | `dashboard-data`, `dashboard-extended` | `src/components/dashboard/cached-data.ts` |
+| `getCachedEngagementData(dateIso, start, end)` | 6h | 24h | `dashboard-data`, `dashboard-engagement` | `src/components/dashboard/cached-data.ts` |
+| `getCachedGroupTypes(ids)` | 24h | 48h | `group-types` | `src/services/dashboardService.ts` |
+| `getCachedAllContacts()` | 6h | 24h | `contacts-search` | `src/components/contact-lookup/cached-contacts.ts` |
+
+All cached functions use **stale-while-revalidate**: after the revalidate TTL expires, stale data continues to be served instantly while fresh data is computed in the background. This prevents users from ever hitting a cold cache during normal operation. The `stale` column shows how long expired data remains servable.
 
 **Note:** Dashboard cache is shared across all authenticated users (not keyed per-user). This is intentional — the dashboard shows aggregate metrics, not per-user data. If user-specific dashboard access is ever needed, the cache would need to be keyed by user or permission level.
 

@@ -12,14 +12,14 @@
  *
  * Current cached functions that are warmed:
  *
- * | Function                    | Source File                                      | TTL  |
- * |-----------------------------|--------------------------------------------------|------|
- * | getCachedDashboardData      | src/components/dashboard/cached-data.ts           | 6h   |
- * | getCachedFullRangeData      | src/components/dashboard/cached-data.ts           | 6h   |
- * | getCachedExtendedData       | src/components/dashboard/cached-data.ts           | 6h   |
- * | getCachedEngagementData     | src/components/dashboard/cached-data.ts           | 6h   |
- * | getCachedGroupTypes         | src/services/dashboardService.ts                 | 24h  |
- * | getCachedAllContacts        | src/components/contact-lookup/cached-contacts.ts  | 6h   |
+ * | Function                    | Source File                                      | Revalidate | Stale |
+ * |-----------------------------|--------------------------------------------------|------------|-------|
+ * | getCachedDashboardData      | src/components/dashboard/cached-data.ts           | 6h         | 24h   |
+ * | getCachedFullRangeData      | src/components/dashboard/cached-data.ts           | 6h         | 24h   |
+ * | getCachedExtendedData       | src/components/dashboard/cached-data.ts           | 6h         | 24h   |
+ * | getCachedEngagementData     | src/components/dashboard/cached-data.ts           | 6h         | 24h   |
+ * | getCachedGroupTypes         | src/services/dashboardService.ts                 | 24h        | 48h   |
+ * | getCachedAllContacts        | src/components/contact-lookup/cached-contacts.ts  | 6h         | 24h   |
  *
  * Note: getCachedGroupTypes is warmed indirectly — it's called internally
  * by DashboardService during getCachedDashboardData/getCachedFullRangeData.
