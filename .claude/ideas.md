@@ -44,6 +44,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
 
 ### Technical Debt
+- [Executive Dashboard Avg Attendance Broken (#103)](#executive-dashboard-avg-attendance-broken-103)
 - [BUG: Active Communities and Small Groups Chart Needs Work (#52)](#bug-active-communities-and-small-groups-chart-needs-work-52)
 - [IDOR Mitigation — Per-Record Authorization (#57)](#idor-mitigation-per-record-authorization-57)
 - ~~[Contact Logs should not be editable unless Made_By = the Current Logged In User (#96)](#contact-logs-should-not-be-editable-unless-made_by-the-current-logged-in-user-96)~~ ✅
@@ -205,6 +206,11 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 ---
 
 ## Technical Debt
+
+### Executive Dashboard Avg Attendance Broken  ([#103](https://github.com/The-Moody-Church/mp-charts/issues/103))
+The average attendance is broken for periods beyond one month.
+
+The venn diagram doesn't show the circle and the kpi charts for in person and online show 0.
 
 ### BUG: Active Communities and Small Groups Chart Needs Work ([#52](https://github.com/The-Moody-Church/mp-charts/issues/52))
 The active communities and small groups chart on the executive dashboard needs improvement. The data or visualization is not accurately representing the information.
