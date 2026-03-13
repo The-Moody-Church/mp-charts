@@ -10,8 +10,8 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 
 ### Features
 - [Testing (#106)](#testing-106)
-- [Change feedback to create GitHub issues (#104)](#change-feedback-to-create-github-issues-104)
 - [and more specific dashboard subpages (#72)](#and-more-specific-dashboard-subpages-72)
+- ~~[Change feedback to create GitHub issues (#104)](#change-feedback-to-create-github-issues-104)~~ ✅
 - ~~[Pastoral Interface for Contact Logs (#19)](#pastoral-interface-for-contact-logs-19)~~ ✅
 - ~~[Processing Search Bar (#49)](#processing-search-bar-49)~~ ✅
 - ~~[Volunteer Processing: Show In-Process Volunteers on Active Tab (#50)](#volunteer-processing-show-in-process-volunteers-on-active-tab-50)~~ ✅
@@ -77,7 +77,7 @@ Testing testing
 **Page:** http://localhost:3000/
 **Submitted by:** Jonathon Huff
 
-### Change feedback to create GitHub issues  ([#104](https://github.com/The-Moody-Church/mp-charts/issues/104))
+### ~~Change feedback to create GitHub issues ([#104](https://github.com/The-Moody-Church/mp-charts/issues/104))~~ ✅ COMPLETED
 Adjust feedback button to create GitHub issues.
 
 Title required with optional description. Page url where feedback was generated should be appended to the end of the description along with the Name of the logged in user.
