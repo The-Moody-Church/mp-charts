@@ -13,8 +13,10 @@ export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return;
 
   // Generate a one-time token and share it via process.env (same Node process)
-  const crypto = await import('node:crypto');
-  const token = crypto.randomBytes(32).toString('hex');
+  // Use Web Crypto API (available in both Node.js and Edge) to avoid static analysis errors
+  const bytes = new Uint8Array(32);
+  globalThis.crypto.getRandomValues(bytes);
+  const token = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
   process.env.__CACHE_WARM_TOKEN = token;
 
   // Schedule cache warming after the server is ready.

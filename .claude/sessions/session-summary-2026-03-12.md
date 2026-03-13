@@ -182,3 +182,12 @@ Other methods reviewed and determined to be already optimal:
 - `getEventParticipantsByMonth()` — 2 dependent queries, already batched
 - `getRosterAndAttendanceRaw()` — marginal gain, skipped
 - `getServingLeadingRaw()` — 5 sequential dependencies, already batched
+
+#### Fix: Edge Runtime Error in instrumentation.ts
+
+**Problem**: `src/instrumentation.ts` used `await import('node:crypto')` which Next.js flags as incompatible with Edge Runtime during static analysis, even though the code has a runtime guard (`NEXT_RUNTIME !== 'nodejs'`).
+
+**Fix**: Replaced `node:crypto` with the Web Crypto API (`globalThis.crypto.getRandomValues`), which is available in both Node.js and Edge runtimes.
+
+**Files modified**:
+- `src/instrumentation.ts` — replaced `node:crypto` import with `globalThis.crypto.getRandomValues`
