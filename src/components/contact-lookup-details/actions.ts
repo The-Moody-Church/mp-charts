@@ -95,7 +95,7 @@ export async function getContactLogsByContactId(contactId: number): Promise<Cont
         ...log,
         Contact_Log_Type: logType,
         MadeByContact: madeByContact ? [madeByContact] : undefined,
-      };
+      } as ContactLogDisplay;
     });
 
     return logsWithDetails;
