@@ -9,8 +9,8 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 ## Table of Contents
 
 ### Features
-- [Testing (#106)](#testing-106)
 - [and more specific dashboard subpages (#72)](#and-more-specific-dashboard-subpages-72)
+- ~~[Testing (#106)](#testing-106)~~ ✅
 - ~~[Change feedback to create GitHub issues (#104)](#change-feedback-to-create-github-issues-104)~~ ✅
 - ~~[Pastoral Interface for Contact Logs (#19)](#pastoral-interface-for-contact-logs-19)~~ ✅
 - ~~[Processing Search Bar (#49)](#processing-search-bar-49)~~ ✅
@@ -70,7 +70,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 
 ## Features
 
-### Testing ([#106](https://github.com/The-Moody-Church/mp-charts/issues/106))
+### ~~Testing ([#106](https://github.com/The-Moody-Church/mp-charts/issues/106))~~ ✅ COMPLETED
 Testing testing
 
 ---
