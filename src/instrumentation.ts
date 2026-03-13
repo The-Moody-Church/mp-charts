@@ -2,8 +2,9 @@
  * Next.js Instrumentation Hook
  *
  * The register() function runs once when the Next.js server starts.
- * We use it to trigger cache warming via the /api/cache-warm endpoint
- * after the HTTP server is ready.
+ * We use it to:
+ * 1. Warm all caches immediately via /api/cache-warm
+ * 2. Schedule daily cache re-warming at 6:00 AM Central Time
  *
  * A random token is set on process.env at runtime so the API route can
  * verify the request came from this process — no user configuration needed.
@@ -28,6 +29,9 @@ export async function register() {
   warmWithRetry(url).catch((err) => {
     console.error('[instrumentation] Cache warming failed after all retries:', err);
   });
+
+  // Schedule daily cache re-warming at 6:00 AM Central Time
+  scheduleDailyWarm(url);
 }
 
 /**
@@ -56,4 +60,67 @@ async function warmWithRetry(url: string, maxAttempts = 10, intervalMs = 2000): 
   }
 
   console.error('[instrumentation] Server did not become ready within timeout — cache warming skipped');
+}
+
+/**
+ * Schedules cache re-warming daily at 6:00 AM Central Time.
+ *
+ * Calculates the delay to the next 6:00 AM CT, sets a one-shot timer,
+ * then repeats every 24 hours. Uses America/Chicago timezone (CT).
+ */
+function scheduleDailyWarm(url: string): void {
+  const TARGET_HOUR = 6; // 6:00 AM
+  const TZ = 'America/Chicago'; // Central Time (handles CDT/CST automatically)
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+  function msUntilNext6amCT(): number {
+    const now = new Date();
+    // Get current time components in Central Time
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: TZ,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false,
+    }).formatToParts(now);
+
+    const get = (type: string) => Number(parts.find(p => p.type === type)!.value);
+    const ctHour = get('hour');
+    const ctMinute = get('minute');
+    const ctSecond = get('second');
+
+    // Milliseconds since midnight CT
+    const msSinceMidnight = ((ctHour * 60 + ctMinute) * 60 + ctSecond) * 1000;
+    const targetMs = TARGET_HOUR * 60 * 60 * 1000; // 6:00 AM in ms
+
+    let delay = targetMs - msSinceMidnight;
+    if (delay <= 0) delay += MS_PER_DAY; // Already past 6 AM today — schedule for tomorrow
+
+    return delay;
+  }
+
+  function triggerWarm() {
+    console.log('[instrumentation] Scheduled cache re-warm triggered (6:00 AM CT)');
+    fetch(url)
+      .then(async (res) => {
+        if (res.ok) {
+          const data = await res.json();
+          console.log('[instrumentation] Scheduled cache re-warm complete:', data.success ? 'all caches warmed' : 'some caches failed');
+        } else {
+          console.error(`[instrumentation] Scheduled cache re-warm failed: HTTP ${res.status}`);
+        }
+      })
+      .catch((err) => {
+        console.error('[instrumentation] Scheduled cache re-warm error:', err);
+      });
+  }
+
+  const delay = msUntilNext6amCT();
+  const delayHours = (delay / (1000 * 60 * 60)).toFixed(1);
+  console.log(`[instrumentation] Next scheduled cache warm in ${delayHours}h (6:00 AM CT)`);
+
+  // First fire at next 6 AM CT, then every 24 hours
+  setTimeout(() => {
+    triggerWarm();
+    setInterval(triggerWarm, MS_PER_DAY);
+  }, delay);
 }

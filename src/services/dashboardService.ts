@@ -22,7 +22,7 @@ const MONTH_NAMES = [
 ];
 
 /**
- * Cached Group_Types lookup (24-hour cache via 'use cache')
+ * Cached Group_Types lookup (24-hour revalidate, 48-hour stale window).
  * The `ids` parameter is automatically part of the cache key.
  *
  * NOTE: This function is warmed indirectly by getCachedDashboardData/getCachedFullRangeData.
@@ -32,7 +32,7 @@ const MONTH_NAMES = [
  */
 async function getCachedGroupTypes(ids: string) {
   'use cache';
-  cacheLife({ revalidate: 86400 });
+  cacheLife({ revalidate: 86400, stale: 172800 });
   cacheTag('group-types');
 
   const mp = new MPHelper();

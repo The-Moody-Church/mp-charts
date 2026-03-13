@@ -39,3 +39,22 @@ Replaced the Ministry Platform Feedback_Entries integration with GitHub issue cr
 - Added `user-feedback` label to all created issues for easy filtering
 - Issue body format: description (if provided), then separator, then page URL and submitter name
 - `getInstance()` changed from `async` to sync since no MPHelper initialization needed
+
+### Stale-While-Revalidate for Cache Functions ✅ COMPLETED
+
+Added `stale` parameter to all `cacheLife()` calls so expired cache entries continue to be served instantly while fresh data is recomputed in the background. Previously, when the 6-hour revalidate TTL expired, the next user request would hit a cold cache and wait for the full API query.
+
+**Files modified:**
+- `src/components/dashboard/cached-data.ts` — Added `stale: 86400` (24h) to all 4 dashboard cache functions
+- `src/components/contact-lookup/cached-contacts.ts` — Added `stale: 86400` (24h)
+- `src/services/dashboardService.ts` — Added `stale: 172800` (48h) to `getCachedGroupTypes`
+- `src/lib/cache-warming.ts` — Updated comment table with Revalidate/Stale columns
+- `CLAUDE.md` — Updated cached functions table with Revalidate/Stale columns, added stale-while-revalidate explanation
+
+### Scheduled Daily Cache Re-Warming at 6 AM CT ✅ COMPLETED
+
+Added a daily scheduled cache re-warm so caches are always fresh before users arrive. The `scheduleDailyWarm()` function in `instrumentation.ts` calculates the delay to the next 6:00 AM Central Time, fires a one-shot timer, then repeats every 24 hours via `setInterval`. Reuses the existing `/api/cache-warm` endpoint and token.
+
+**Files modified:**
+- `src/instrumentation.ts` — Added `scheduleDailyWarm()` function with CT timezone calculation, called from `register()`
+- `CLAUDE.md` — Updated Cache Warming section to document daily 6 AM CT schedule

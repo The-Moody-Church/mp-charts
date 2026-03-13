@@ -70,10 +70,11 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 ## Features
 
 ### and more specific dashboard subpages ([#72](https://github.com/The-Moody-Church/mp-charts/issues/72))
-For each step in the journey of a lifetime, add sub pages with more detailed charts. 
-- Know God 
-- feed your soul 
+For each step in the journey of a lifetime, add sub pages with more detailed charts.
+- Know God
+- feed your soul
 - grow in love
+
 
 ### ~~Change feedback to create GitHub issues ([#104](https://github.com/The-Moody-Church/mp-charts/issues/104))~~ ✅ COMPLETED
 Adjust feedback button to create GitHub issues.
