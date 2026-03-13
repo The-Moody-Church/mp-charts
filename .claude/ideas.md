@@ -42,11 +42,11 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Dashboard Date Range Selector (#20)](#dashboard-date-range-selector-20)~~ ✅
 - ~~[Search should show closer matches first, weighted by field. (#78)](#search-should-show-closer-matches-first-weighted-by-field-78)~~ ✅
 - ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
-- ~~[Contact Logs should not be editable unless Made_By = the Current Logged In User (#96)](#contact-logs-should-not-be-editable-unless-made_by--the-current-logged-in-user-96)~~ ✅
 
 ### Technical Debt
 - [BUG: Active Communities and Small Groups Chart Needs Work (#52)](#bug-active-communities-and-small-groups-chart-needs-work-52)
 - [IDOR Mitigation — Per-Record Authorization (#57)](#idor-mitigation-per-record-authorization-57)
+- ~~[Contact Logs should not be editable unless Made_By = the Current Logged In User (#96)](#contact-logs-should-not-be-editable-unless-made_by-the-current-logged-in-user-96)~~ ✅
 - ~~[Contact Lookup Searching Error (#99)](#contact-lookup-searching-error-99)~~ ✅
 - ~~[Review Contact Lookup Search Scoring (#98)](#review-contact-lookup-search-scoring-98)~~ ✅
 - ~~[Role-Based Access Control (RBAC) (#58)](#role-based-access-control-rbac-58)~~ ✅
@@ -206,9 +206,6 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 
 ## Technical Debt
 
-### ~~Contact Logs should not be editable unless Made_By = the Current Logged In User ([#96](https://github.com/The-Moody-Church/mp-charts/issues/96))~~ ✅ COMPLETED
-Restricted contact log editing to the creator only. Server-side ownership check in `updateContactLog` verifies `Made_By` matches current user. Edit button hidden for logs created by other users. Also added "Logged by" display showing the contact name of who created each log entry.
-
 ### BUG: Active Communities and Small Groups Chart Needs Work ([#52](https://github.com/The-Moody-Church/mp-charts/issues/52))
 The active communities and small groups chart on the executive dashboard needs improvement. The data or visualization is not accurately representing the information.
 
@@ -223,6 +220,9 @@ Server actions accept record IDs from clients (contactId, participantId, etc.) a
 **Update (2026-02-26)**: Upstream PR #50 added `roles` and `userGroups` to `MPUserProfile`, now available via `useUser()` context. This enables role-based gating of features (see #58), which reduces IDOR surface area by restricting who can reach record-accessing endpoints in the first place. Full per-record authorization (e.g., "can this user see *this* contact?") still requires additional work beyond roles — either per-user access tokens or relationship checks.
 
 From security audit finding #10 (2026-02-24).
+
+### ~~Contact Logs should not be editable unless Made_By = the Current Logged In User ([#96](https://github.com/The-Moody-Church/mp-charts/issues/96))~~ ✅ COMPLETED
+Restricted contact log editing to the creator only. Server-side ownership check in `updateContactLog` verifies `Made_By` matches current user. Edit button hidden for logs created by other users. Also added "Logged by" display showing the contact name of who created each log entry.
 
 ### ~~Contact Lookup Searching Error ([#99](https://github.com/The-Moody-Church/mp-charts/issues/99))~~ ✅ COMPLETED
 Fixed null safety in `searchByNameFlat` and `searchByName` sort comparators — `Last_Name` and `First_Name` can be null for some contacts in MP, causing `localeCompare` to throw. Added `?? ""` fallback on all four `.localeCompare()` calls.
