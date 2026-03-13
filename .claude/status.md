@@ -8,7 +8,8 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
-| 2026-03-12 | **Optimize dashboard cache queries**: Activity_Log uses per-month parallel queries with `$distinct`+`$groupby` and `Page_ID <> 316`; Monthly attendance trends parallelized (~48 sequential calls → 12 parallel pairs × 2 years) | #97 | — |
+| 2026-03-12 | **Contact search null safety & scoring**: Fixed localeCompare crash on null Last_Name/First_Name (#99), added proportional prefix-match bonus to search scoring (#98) | #98, #99 | #101 |
+| 2026-03-12 | **Optimize dashboard cache queries**: Activity_Log uses per-month parallel queries with `$distinct`+`$groupby` and `Page_ID <> 316`; Monthly attendance trends parallelized (~48 sequential calls → 12 parallel pairs × 2 years) | #97 | #100 |
 | 2026-03-12 | **Contact lookup & badge improvements**: Activity log excludes Group Participants (#92), membership badge shows Date_Joined/Dropped date (#93), mixed-type search with clear button (#94), badge color updates, contact log creation fix, last activity timezone fix | #92, #93, #94 | — |
 | 2026-03-12 | **Venn diagram single-month fix**: Attendance circle now shows for single-month selections; fixed weekly→monthly conversion semantics; batch Event_Metrics query to avoid IIS URL length 404 | #83 | #89 |
 | 2026-03-12 | **Contact address + directions**: Address display (with unlisted note) and platform-aware "Get Directions" button (Apple Maps on iOS, app picker on Android, Google Maps web on desktop) | #88 | #91 |
