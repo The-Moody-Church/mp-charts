@@ -247,3 +247,7 @@ This means "Sch" matching "Schmidt" scores higher than "S" matching "Schmidt".
 
 ### Verification (Session 5)
 - Security review: `sanitizeIds()` for IN clause, `requireFeatureAccess()` before all data access, server-side ownership check prevents IDOR on contact log edits, no PII logging
+
+#### Bug Fix — Contact Log Update Zod Validation
+**Problem**: Editing a contact log failed with ZodError on `Contact_Date` — same issue as the earlier create fix. The date was converted to SQL format before Zod validation.
+**Fix**: Moved Zod validation before the SQL date conversion in `updateContactLog()` (same pattern as `createContactLog()`).
