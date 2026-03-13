@@ -519,6 +519,8 @@ jobs:
               for (const issue of realIssues) {
                 if (!existingIssueNumbers.has(issue.number)) {
                   const labelNames = issue.labels.map(l => l.name);
+                  const hasSyncLabel = labelNames.some(l => ['feature', 'improvement', 'tech-debt'].includes(l));
+                  if (!hasSyncLabel) continue; // Skip issues without a sync label
                   let targetSection = 'Features'; // default
                   for (const [label, section] of Object.entries(sectionLabels)) {
                     if (labelNames.includes(label)) {
@@ -578,8 +580,8 @@ jobs:
               const labelNames = issue.labels.map(l => l.name);
               const hasSyncLabel = labelNames.some(l => ['feature', 'improvement', 'tech-debt'].includes(l));
 
-              if (action === 'opened' && !existingIssueNumbers.has(issue.number)) {
-                // New issue → add to ideas.md
+              if (action === 'opened' && !existingIssueNumbers.has(issue.number) && hasSyncLabel) {
+                // New issue with a sync label → add to ideas.md
                 let targetSection = 'Features';
                 for (const [label, section] of Object.entries(sectionLabels)) {
                   if (labelNames.includes(label)) {
