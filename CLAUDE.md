@@ -248,14 +248,14 @@ All cached functions use **stale-while-revalidate**: after the revalidate TTL ex
 
 ### Cache Warming
 
-Caches are **pre-warmed automatically on server start** so the first user to hit the app gets instant responses instead of waiting for cold cache population.
+Caches are **pre-warmed automatically on server start** and **re-warmed daily at 6:00 AM Central Time** so users never hit a cold cache.
 
 **How it works:**
-1. `src/instrumentation.ts` — `register()` runs on server start, generates a random token on `process.env`, polls `/api/cache-warm` until the server is ready
+1. `src/instrumentation.ts` — `register()` runs on server start, generates a random token on `process.env`, polls `/api/cache-warm` until the server is ready, then schedules daily re-warming at 6:00 AM CT via `setTimeout`/`setInterval`
 2. `src/app/api/cache-warm/route.ts` — Verifies the runtime token, calls `warmAllCaches()` within the Next.js request context (required for `'use cache'` functions)
 3. `src/lib/cache-warming.ts` — Central registry that calls every `'use cache'` function with the correct parameters
 
-Cache warming runs automatically on every server start — no configuration required. The endpoint is protected by a per-process random token shared via `process.env.__CACHE_WARM_TOKEN`.
+Cache warming runs automatically on every server start and daily at 6:00 AM CT — no configuration required. The endpoint is protected by a per-process random token shared via `process.env.__CACHE_WARM_TOKEN`.
 
 **Adding a new cached function — MANDATORY steps:**
 1. Create the `'use cache'` function in a non-`'use server'` file (so it can be imported by the warming module)
