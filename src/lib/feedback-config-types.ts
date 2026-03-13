@@ -6,8 +6,6 @@ import { z } from "zod";
 
 export interface FeedbackConfig {
   enabled: boolean;
-  feedbackTypeId: number | null;
-  assignedToContactId: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -16,8 +14,6 @@ export interface FeedbackConfig {
 
 export const FeedbackConfigSchema = z.object({
   enabled: z.boolean(),
-  feedbackTypeId: z.number().int().positive().nullable(),
-  assignedToContactId: z.number().int().positive().nullable(),
 });
 
 export function validateFeedbackConfig(data: unknown): FeedbackConfig {

@@ -7,7 +7,6 @@ import {
   validateFeedbackConfig,
 } from "@/lib/feedback-config";
 import type { FeedbackConfig } from "@/lib/feedback-config";
-import { MPHelper } from "@/lib/providers/ministry-platform";
 import { z } from "zod";
 
 export async function getFeedbackConfig(): Promise<FeedbackConfig> {
@@ -21,10 +20,6 @@ export async function saveFeedbackConfigAction(
   try {
     await requireFeatureAccess("admin");
     validateFeedbackConfig(config);
-
-    if (config.enabled && !config.feedbackTypeId) {
-      return { success: false, error: "Feedback Type ID is required when feedback is enabled." };
-    }
 
     saveFeedbackConfig(config);
     return { success: true };
@@ -44,19 +39,11 @@ export async function saveFeedbackConfigAction(
   }
 }
 
-export async function getFeedbackTypes(): Promise<
-  { Feedback_Type_ID: number; Feedback_Type: string }[]
-> {
+/**
+ * Check whether the GITHUB_FEEDBACK_TOKEN env var is set.
+ * Used by the admin UI to show configuration status.
+ */
+export async function getGitHubTokenConfigured(): Promise<boolean> {
   await requireFeatureAccess("admin");
-  const mp = new MPHelper();
-  const records = await mp.getTableRecords<{
-    Feedback_Type_ID: number;
-    Feedback_Type: string;
-  }>({
-    table: "Feedback_Types",
-    select: "Feedback_Type_ID,Feedback_Type",
-    top: 100,
-    orderBy: "Feedback_Type",
-  });
-  return records;
+  return !!process.env.GITHUB_FEEDBACK_TOKEN;
 }

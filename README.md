@@ -484,7 +484,7 @@ Built with Radix UI primitives and styled with Tailwind CSS. Located in `src/com
 - **manage-members**: Membership status management with card grid, tab filtering, detail modal (expandable milestones with notes/files, deep links, contact actions), optimistic status transitions with cache invalidation
 - **compliance-processing**: Configurable compliance tracking workflows (e.g., membership)
 - **admin**: Admin tool editors for journey and compliance tool configuration
-- **feedback**: User feedback submission
+- **feedback**: User feedback submission (creates GitHub issues)
 - **processing**: Shared processing components (PersonAvatar, ProcessingGrid, MilestoneEditForm)
 - **pwa**: Progressive Web App install prompt
 - **user-menu**: User profile dropdown with sign-out
@@ -503,10 +503,10 @@ Application services provide business logic abstraction over the Ministry Platfo
 | **JourneyProcessingService** | `journeyProcessingService.ts` | Journey workflow step processing |
 | **ComplianceProcessingService** | `complianceProcessingService.ts` | Compliance workflow processing |
 | **MemberService** | `memberService.ts` | Membership status management, milestones, transitions |
-| **FeedbackService** | `feedbackService.ts` | User feedback submission |
+| **FeedbackService** | `feedbackService.ts` | User feedback (creates GitHub issues) |
 | **UserService** | `userService.ts` | User profile and roles retrieval |
 
-All services follow the singleton pattern and use `MPHelper` for API communication.
+Most services follow the singleton pattern and use `MPHelper` for API communication. `FeedbackService` uses the GitHub REST API instead.
 
 ## Testing
 

@@ -2,12 +2,13 @@
 
 Quick-reference snapshot of current project state. Read this first at session start. For full details on any item, see the relevant session summary in `.claude/sessions/`.
 
-**Last updated**: 2026-03-12
+**Last updated**: 2026-03-13
 
 ## Recently Completed
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
+| 2026-03-13 | **Feedback → GitHub issues**: Replaced MP Feedback_Entries with GitHub issue creation. Simplified config (removed feedbackTypeId/assignedToContactId), added GITHUB_FEEDBACK_TOKEN env var, appends page URL + user name to issues, admin shows token status. | #104 | — |
 | 2026-03-12 | **Restrict contact log edit by owner**: Edit button and server action only allow editing logs created by the current user (Made_By check). Added "Logged by" display showing who created each log entry. | #96 | — |
 | 2026-03-12 | **Contact search null safety & scoring**: Fixed localeCompare crash on null Last_Name/First_Name (#99), added proportional prefix-match bonus to search scoring (#98) | #98, #99 | #101 |
 | 2026-03-12 | **Optimize dashboard cache queries**: Activity_Log uses per-month parallel queries with `$distinct`+`$groupby` and `Page_ID <> 316`; Monthly attendance trends parallelized (~48 sequential calls → 12 parallel pairs × 2 years) | #97 | #100 |
