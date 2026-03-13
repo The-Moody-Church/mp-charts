@@ -220,3 +220,30 @@ This means "Sch" matching "Schmidt" scores higher than "S" matching "Schmidt".
 ### Verification (Session 4)
 - All 236 tests pass
 - Security review: changes are in pure scoring/sorting logic only, no filter params, no PII, no auth changes
+
+---
+
+### Session 5 — Issue #96: Restrict Contact Log Edit to Creator
+
+#### Issue #96 — Contact Logs Should Not Be Editable Unless Made_By = Current User ✅ COMPLETED
+
+**Server-side ownership enforcement**:
+- `src/components/contact-logs/actions.ts` — `updateContactLog()` now fetches the existing record and verifies `Made_By` matches the current user's `User_ID` before allowing edits. Added `getCurrentUserMpUserId()` action to expose current user's MP User_ID to the client.
+
+**Populate MadeByContact in contact log display**:
+- `src/components/contact-lookup-details/actions.ts` — `getContactLogsByContactId()` now queries `dp_Users` to resolve `Made_By` → contact name, populating `MadeByContact` on each log. Uses `sanitizeIds()` for safe filter construction. Also optimized log type lookup to fetch types once instead of per-log.
+
+**UI: Restrict Edit button + improve Made By display**:
+- `src/components/contact-logs/contact-logs.tsx` — Added `currentUserId` prop; Edit button only shown when `Made_By === currentUserId`; "Logged by" label added to Made By display
+- `src/components/contact-lookup-details/contact-lookup-details.tsx` — Fetches `currentUserId` via `getCurrentUserMpUserId()` in parallel with other data, passes to `ContactLogs` component
+
+### Files Modified (Session 5)
+- `src/components/contact-logs/actions.ts` — ownership check + new action
+- `src/components/contact-logs/contact-logs.tsx` — conditional Edit, improved Made By display
+- `src/components/contact-lookup-details/actions.ts` — MadeByContact population, optimized type lookup
+- `src/components/contact-lookup-details/contact-lookup-details.tsx` — pass currentUserId
+- `.claude/ideas.md` — marked #96 completed
+- `.claude/status.md` — updated
+
+### Verification (Session 5)
+- Security review: `sanitizeIds()` for IN clause, `requireFeatureAccess()` before all data access, server-side ownership check prevents IDOR on contact log edits, no PII logging
