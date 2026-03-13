@@ -44,9 +44,24 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
 
 ### Technical Debt
-- [Contact Logs should not be editable unless Made_By = the Current Logged In User (#96)](#contact-logs-should-not-be-editable-unless-made_by--the-current-logged-in-user-96)
+- [Contact Logs should not be editable unless Made_By = the Current Logged In User (#96)](#contact-logs-should-not-be-editable-unless-made_by-the-current-logged-in-user-96)
+- [BUG: Active Communities and Small Groups Chart Needs Work (#52)](#bug-active-communities-and-small-groups-chart-needs-work-52)
+- [IDOR Mitigation — Per-Record Authorization (#57)](#idor-mitigation-per-record-authorization-57)
 - ~~[Contact Lookup Searching Error (#99)](#contact-lookup-searching-error-99)~~ ✅
 - ~~[Review Contact Lookup Search Scoring (#98)](#review-contact-lookup-search-scoring-98)~~ ✅
+- ~~[Role-Based Access Control (RBAC) (#58)](#role-based-access-control-rbac-58)~~ ✅
+- ~~[BUG: Baptism Counter Doesn't Respond to Date Range Changes (#51)](#bug-baptism-counter-doesnt-respond-to-date-range-changes-51)~~ ✅
+- ~~[Extract Shared Processing Components (Person Card, Milestone Checklist, Detail Modal) (#60)](#extract-shared-processing-components-person-card-milestone-checklist-detail-modal-60)~~ ✅
+- ~~[Migrate `unstable_cache` to Cache Components (`use cache`) (#21)](#migrate-unstable_cache-to-cache-components-use-cache-21)~~ ✅
+- ~~[review upstream pr42 (#35)](#review-upstream-pr42-35)~~ ✅
+- ~~[Upgrade to Next.js 16](#upgrade-to-nextjs-16)~~ ✅
+- ~~[Refine MP Permissions (#7)](#refine-mp-permissions-7)~~ ✅
+- ~~[Migrate `middleware.ts` to `proxy.ts` (#22)](#migrate-middlewarets-to-proxyts-22)~~ ✅
+- ~~[BUG: No Volunteers in Production Builds (#27)](#bug-no-volunteers-in-production-builds-27)~~ ✅
+- ~~[Images are not showing on the volunteers. Perhaps a permssions issue? (#30)](#images-are-not-showing-on-the-volunteers-perhaps-a-permssions-issue-30)~~ ✅
+- ~~[Links to MP are not showing in production in the volunteer processing pages. (#31)](#links-to-mp-are-not-showing-in-production-in-the-volunteer-processing-pages-31)~~ ✅
+- ~~[Review upstream pr 39 (#34)](#review-upstream-pr-39-34)~~ ✅
+- ~~[No attendance circle one engagement Venn diagram for single month selections. (#83)](#no-attendance-circle-one-engagement-venn-diagram-for-single-month-selections-83)~~ ✅
 
 ---
 
@@ -191,12 +206,6 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 
 ## Technical Debt
 
-### ~~Contact Lookup Searching Error ([#99](https://github.com/The-Moody-Church/mp-charts/issues/99))~~ ✅ COMPLETED
-Fixed null safety in `searchByNameFlat` and `searchByName` sort comparators — `Last_Name` and `First_Name` can be null for some contacts in MP, causing `localeCompare` to throw. Added `?? ""` fallback on all four `.localeCompare()` calls.
-
-### ~~Review Contact Lookup Search Scoring ([#98](https://github.com/The-Moody-Church/mp-charts/issues/98))~~ ✅ COMPLETED
-Added proportional prefix-match bonus to search scoring: longer prefix matches now score higher than shorter ones (e.g., "Sch" matching "Schmidt" scores more than "S" matching "Schmidt"). Applied to single-word, multi-word first name, and multi-word last name scoring paths. The root cause of "Kent S" not working was actually #99 — null Last_Name contacts crashed the sort before results could be returned.
-
 ### Contact Logs should not be editable unless Made_By = the Current Logged In User ([#96](https://github.com/The-Moody-Church/mp-charts/issues/96))
 You should only be able to edit Contact Logs that were made by you. So, if contact_log record's made_by = user_id does not match the logged in user_id, then that contact log should not be editable.
 
@@ -214,6 +223,12 @@ Server actions accept record IDs from clients (contactId, participantId, etc.) a
 **Update (2026-02-26)**: Upstream PR #50 added `roles` and `userGroups` to `MPUserProfile`, now available via `useUser()` context. This enables role-based gating of features (see #58), which reduces IDOR surface area by restricting who can reach record-accessing endpoints in the first place. Full per-record authorization (e.g., "can this user see *this* contact?") still requires additional work beyond roles — either per-user access tokens or relationship checks.
 
 From security audit finding #10 (2026-02-24).
+
+### ~~Contact Lookup Searching Error ([#99](https://github.com/The-Moody-Church/mp-charts/issues/99))~~ ✅ COMPLETED
+Fixed null safety in `searchByNameFlat` and `searchByName` sort comparators — `Last_Name` and `First_Name` can be null for some contacts in MP, causing `localeCompare` to throw. Added `?? ""` fallback on all four `.localeCompare()` calls.
+
+### ~~Review Contact Lookup Search Scoring ([#98](https://github.com/The-Moody-Church/mp-charts/issues/98))~~ ✅ COMPLETED
+Added proportional prefix-match bonus to search scoring: longer prefix matches now score higher than shorter ones (e.g., "Sch" matching "Schmidt" scores more than "S" matching "Schmidt"). Applied to single-word, multi-word first name, and multi-word last name scoring paths. The root cause of "Kent S" not working was actually #99 — null Last_Name contacts crashed the sort before results could be returned.
 
 ### ~~Role-Based Access Control (RBAC) ([#58](https://github.com/The-Moody-Church/mp-charts/issues/58))~~ ✅ COMPLETED
 Implemented admin-managed feature-to-User-Group mapping with server-action enforcement and client-side UI gating. Features are gated by User Group IDs stored in `data/feature-access.json`, managed via an admin page at `/admin`. Super-admin groups defined in `ADMIN_USER_GROUP_IDS` env var always have full access. Server actions use `requireFeatureAccess(feature)` for enforcement, client-side uses `useAuthorization()` hook to hide inaccessible features from sidebar and home page. Profile data cached 15 minutes with admin flush button. 23 authorization tests + error boundary for "Access Denied" UX.
