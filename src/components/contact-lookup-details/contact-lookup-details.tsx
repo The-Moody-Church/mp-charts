@@ -6,6 +6,7 @@ import Link from "next/link";
 import { getContactDetails, getContactLogsByContactId, getHouseholdMembers, getContactBadges, uploadContactLookupPhoto } from "./actions";
 import { ContactLookupDetails as ContactLookupDetailsType, ContactLogDisplay, HouseholdMember, ContactBadges } from "@/lib/dto";
 import { ContactLogs } from "@/components/contact-logs";
+import { getCurrentUserMpUserId } from "@/components/contact-logs/actions";
 import { ContactLinks, DetailModalPhotoUpload } from "@/components/processing";
 import { useBreadcrumbOverride } from "@/components/layout/dynamic-breadcrumb";
 import { useRuntimeConfig } from "@/contexts";
@@ -113,6 +114,7 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
   const setBreadcrumb = useBreadcrumbOverride();
   const [contact, setContact] = useState<ContactLookupDetailsType | null>(null);
   const [contactLogs, setContactLogs] = useState<ContactLogDisplay[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [badges, setBadges] = useState<ContactBadges | null>(null);
   const [familyMembers, setFamilyMembers] = useState<HouseholdMember[]>([]);
   const [familyOpen, setFamilyOpen] = useState(true);
@@ -145,14 +147,16 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
       ]);
 
       if (contactDetails.Contact_ID) {
-        const [logs, badgeData, household] = await Promise.all([
+        const [logs, badgeData, household, userId] = await Promise.all([
           getContactLogsByContactId(contactDetails.Contact_ID),
           getContactBadges(contactDetails.Contact_ID),
           contactDetails.Household_ID
             ? getHouseholdMembers(contactDetails.Household_ID)
             : Promise.resolve([]),
+          getCurrentUserMpUserId(),
         ]);
         setContactLogs(logs);
+        setCurrentUserId(userId);
         setBadges(badgeData);
         // Filter out current contact and sort by position then DOB
         setFamilyMembers(
@@ -595,6 +599,7 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
         contactId={contact.Contact_ID}
         contactNickname={contact.Nickname}
         contactLastName={contact.Last_Name}
+        currentUserId={currentUserId}
         onRefresh={fetchContactDetails}
       />
     </>

@@ -45,6 +45,7 @@ interface ContactLogsProps {
   contactId: number;
   contactNickname?: string;
   contactLastName?: string;
+  currentUserId?: number | null;
   onRefresh?: () => void;
 }
 
@@ -72,6 +73,7 @@ export function ContactLogs({
   contactId,
   contactNickname,
   contactLastName,
+  currentUserId,
   onRefresh,
 }: ContactLogsProps) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -446,13 +448,15 @@ export function ContactLogs({
                   {formatDateTime(log.Contact_Date)}
                 </span>
               </div>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => handleEditClick(log)}
-              >
-                Edit
-              </Button>
+              {currentUserId != null && log.Made_By === currentUserId && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => handleEditClick(log)}
+                >
+                  Edit
+                </Button>
+              )}
             </div>
 
             {log.Notes && (
@@ -465,12 +469,11 @@ export function ContactLogs({
 
             {log.MadeByContact && log.MadeByContact.length > 0 && (
               <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                <div className="flex items-center space-x-1">
-                  <span className="font-medium">
-                    {log.MadeByContact[0].Nickname || log.MadeByContact[0].First_Name}{" "}
-                    {log.MadeByContact[0].Last_Name}
-                  </span>
-                </div>
+                <span>Logged by</span>
+                <span className="font-medium">
+                  {log.MadeByContact[0].Nickname || log.MadeByContact[0].First_Name}{" "}
+                  {log.MadeByContact[0].Last_Name}
+                </span>
               </div>
             )}
           </div>

@@ -71,18 +71,32 @@ export async function updateContactLog(
       throw new Error("Valid Contact Log ID is required");
     }
 
-    // Add Made_By from session (User_ID of logged-in user)
+    // Verify the current user owns this contact log entry
+    const contactLogService = await ContactLogService.getInstance();
+    const existingLog = await contactLogService.getContactLogById(contactLogId);
+
+    if (!existingLog) {
+      throw new Error("Contact log not found");
+    }
+
+    if (existingLog.Made_By !== userId) {
+      throw new Error("You can only edit contact logs that you created");
+    }
+
+    // Keep original Made_By (do not reassign ownership on edit)
     const logDataWithUser = {
       ...contactLogData,
       Made_By: userId,
     };
 
-    const contactLogService = await ContactLogService.getInstance();
     const contactLog = await contactLogService.updateContactLog(contactLogId, logDataWithUser);
 
     return contactLog;
   } catch (error) {
     console.error("Error updating contact log:", error);
+    if (error instanceof Error && error.message === "You can only edit contact logs that you created") {
+      throw error;
+    }
     throw new Error("Failed to update contact log");
   }
 }
@@ -119,6 +133,16 @@ export async function getContactLogsByContactId(contactId: number): Promise<Cont
   } catch (error) {
     console.error("Error fetching contact logs by contact ID:", error);
     throw new Error("Failed to fetch contact logs");
+  }
+}
+
+export async function getCurrentUserMpUserId(): Promise<number | null> {
+  try {
+    const session = await requireFeatureAccess("contact-lookup");
+    const userId = getMpUserId(session);
+    return userId ?? null;
+  } catch {
+    return null;
   }
 }
 
