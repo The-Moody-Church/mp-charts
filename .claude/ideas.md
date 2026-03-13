@@ -45,9 +45,9 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
 
 ### Technical Debt
-- [Executive Dashboard Avg Attendance Broken (#103)](#executive-dashboard-avg-attendance-broken-103)
 - [BUG: Active Communities and Small Groups Chart Needs Work (#52)](#bug-active-communities-and-small-groups-chart-needs-work-52)
 - [IDOR Mitigation — Per-Record Authorization (#57)](#idor-mitigation-per-record-authorization-57)
+- ~~[Executive Dashboard Avg Attendance Broken (#103)](#executive-dashboard-avg-attendance-broken-103)~~ ✅
 - ~~[Contact Logs should not be editable unless Made_By = the Current Logged In User (#96)](#contact-logs-should-not-be-editable-unless-made_by-the-current-logged-in-user-96)~~ ✅
 - ~~[Contact Lookup Searching Error (#99)](#contact-lookup-searching-error-99)~~ ✅
 - ~~[Review Contact Lookup Search Scoring (#98)](#review-contact-lookup-search-scoring-98)~~ ✅
@@ -215,11 +215,6 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 
 ## Technical Debt
 
-### Executive Dashboard Avg Attendance Broken  ([#103](https://github.com/The-Moody-Church/mp-charts/issues/103))
-The average attendance is broken for periods beyond one month.
-
-The venn diagram doesn't show the circle and the kpi charts for in person and online show 0.
-
 ### BUG: Active Communities and Small Groups Chart Needs Work ([#52](https://github.com/The-Moody-Church/mp-charts/issues/52))
 The active communities and small groups chart on the executive dashboard needs improvement. The data or visualization is not accurately representing the information.
 
@@ -234,6 +229,11 @@ Server actions accept record IDs from clients (contactId, participantId, etc.) a
 **Update (2026-02-26)**: Upstream PR #50 added `roles` and `userGroups` to `MPUserProfile`, now available via `useUser()` context. This enables role-based gating of features (see #58), which reduces IDOR surface area by restricting who can reach record-accessing endpoints in the first place. Full per-record authorization (e.g., "can this user see *this* contact?") still requires additional work beyond roles — either per-user access tokens or relationship checks.
 
 From security audit finding #10 (2026-02-24).
+
+### ~~Executive Dashboard Avg Attendance Broken ([#103](https://github.com/The-Moody-Church/mp-charts/issues/103))~~ ✅ COMPLETED
+The average attendance is broken for periods beyond one month.
+
+The venn diagram doesn't show the circle and the kpi charts for in person and online show 0.
 
 ### ~~Contact Logs should not be editable unless Made_By = the Current Logged In User ([#96](https://github.com/The-Moody-Church/mp-charts/issues/96))~~ ✅ COMPLETED
 Restricted contact log editing to the creator only. Server-side ownership check in `updateContactLog` verifies `Made_By` matches current user. Edit button hidden for logs created by other users. Also added "Logged by" display showing the contact name of who created each log entry.
