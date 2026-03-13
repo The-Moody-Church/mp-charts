@@ -24,7 +24,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Contact-Lookup badges for Member should specify thpe (#85)](#contact-lookup-badges-for-member-should-specify-thpe-85)~~ ✅
 
 ### Improvements
-- [Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)
+- ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
 - ~~[Small Group Trends Chart (#15)](#small-group-trends-chart-15)~~ ✅
 - ~~[contact lookup search improvements (#94)](#contact-lookup-search-improvements-94)~~ ✅
 - ~~[membership badge on contact lookup should include date joined (#93)](#membership-badge-on-contact-lookup-should-include-date-joined-93)~~ ✅
@@ -122,9 +122,6 @@ Extracted `statusBadgeColor` to shared utility (`src/lib/contact-badge-utils.ts`
 
 ## Improvements
 
-### Reduce Activity Log Query/Cache ([#97](https://github.com/The-Moody-Church/mp-charts/issues/97))
-We need a way to reduce the Activity log query. I think we want to make sure it is page_id <> 316 so it doesn't include group participants. also, we want to make sure that we're only returning the first instance of each contact id in each month. So maybe using the $distinct filter: `https://moody.ministryplatform.com/ministryplatformapi/tables/Activity_Log?%24select=Contact_ID&%24filter=page_id%20%3C%3E%20316&%24groupby=Contact_ID&%24distinct=true`
-
 ### ~~Small Group Trends Chart ([#15](https://github.com/The-Moody-Church/mp-charts/issues/15))~~ ✅ COMPLETED
 
 ### ~~contact lookup search improvements ([#94](https://github.com/The-Moody-Church/mp-charts/issues/94))~~ ✅ COMPLETED
@@ -184,6 +181,9 @@ Replace the hardcoded ministry year date ranges with an interactive date selecto
 
 ### ~~Search should show closer matches first, weighted by field. ([#78](https://github.com/The-Moody-Church/mp-charts/issues/78))~~ ✅ COMPLETED
 Replaced `filterByName` with `searchByName` that scores and ranks results by match quality: exact (40pts) > starts-with (25pts) > contains (10pts) > Soundex phonetic (1pt) > Levenshtein fuzzy (1pt). Multi-word queries try both "First Last" and "Last First" interpretations; comma-separated queries force "Last, First". Soundex uses first-letter equivalence groups to prevent false positives. Contact lookup uses cached dataset (6h TTL) + client-side scoring with search-as-you-type (300ms debounce). 36 tests.
+
+### ~~Reduce Activity Log Query/Cache ([#97](https://github.com/The-Moody-Church/mp-charts/issues/97))~~ ✅ COMPLETED
+Optimized the Activity_Log query for the engagement venn diagram. Replaced single bulk query with per-month parallel queries using `$distinct=true` and `$groupby=Contact_ID`. Added `Page_ID <> 316` filter to exclude Group Participants activity logs (already covered by dedicated Groups dimension).
 
 ---
 

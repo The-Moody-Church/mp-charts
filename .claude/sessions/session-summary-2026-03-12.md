@@ -149,3 +149,45 @@ Added "Timezone Handling — Ministry Platform Dates" section documenting the UT
 - TypeScript compilation passes, no new type errors
 - All 45 processing-utils tests pass
 - Security review: all filter params use existing sanitization or literal values, no PII logging
+
+### Session 3 — Issue #97: Optimize Activity Log Cache
+
+#### Issue #97 — Reduce Activity Log Query/Cache ✅ COMPLETED
+
+**Problem**: The engagement venn diagram's Activity_Log query fetched every record across a ~5-year range, making it the slowest dashboard query. It also included Group Participants activity logs (Page_ID 316) which are redundant since the venn has a dedicated Groups dimension.
+
+**Solution**: Replaced the single bulk query with per-month parallel queries using:
+- `$select=Contact_ID` (only field needed)
+- `$distinct=true` + `$groupBy=Contact_ID` (one row per unique contact per month)
+- `Page_ID <> 316` filter (excludes Group Participants activity logs)
+
+This eliminates the JS-side bucketing and Set-based deduplication — each API call directly returns unique Contact_IDs for that month.
+
+**Files modified**:
+- `src/services/dashboardService.ts` — replaced Activity_Log query + JS bucketing (lines 1333-1352) with per-month parallel queries using distinct+groupBy
+- `.claude/ideas.md` — marked #97 as completed
+- `.claude/status.md` — added to Recently Completed
+
+#### Additional: Parallelize `getMonthlyAttendanceTrends()`
+
+Reviewed all other dashboard cache queries for parallelization opportunities. Most are already optimized (dependency chains, batch queries). One high-impact candidate:
+
+**`getMonthlyAttendanceTrends()`** looped through months sequentially — 2 API calls per month (Events → EventMetrics), 12 months × 2 year invocations = **48 sequential calls**. Replaced with `Promise.all` over months. Each month's pair remains sequential internally, but all months execute in parallel.
+
+Other methods reviewed and determined to be already optimal:
+- `getGroupTypeMetrics()` — dependency chain, already batched
+- `getSmallGroupTrends()` — already reduced from 27→3 queries
+- `getWeeklyAttendanceTrends()` — 2 dependent queries, already batched
+- `getCommunityAttendanceTrends()` — dependency chain
+- `getEventParticipantsByMonth()` — 2 dependent queries, already batched
+- `getRosterAndAttendanceRaw()` — marginal gain, skipped
+- `getServingLeadingRaw()` — 5 sequential dependencies, already batched
+
+#### Fix: Edge Runtime Error in instrumentation.ts
+
+**Problem**: `src/instrumentation.ts` used `await import('node:crypto')` which Next.js flags as incompatible with Edge Runtime during static analysis, even though the code has a runtime guard (`NEXT_RUNTIME !== 'nodejs'`).
+
+**Fix**: Replaced `node:crypto` with the Web Crypto API (`globalThis.crypto.getRandomValues`), which is available in both Node.js and Edge runtimes.
+
+**Files modified**:
+- `src/instrumentation.ts` — replaced `node:crypto` import with `globalThis.crypto.getRandomValues`
