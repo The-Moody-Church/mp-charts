@@ -628,10 +628,11 @@ export class DashboardService {
         Event_Participant_ID: number;
         Event_ID: number;
         Group_ID: number;
+        Participant_ID: number;
         Participation_Status_ID: number;
       }>({
         table: 'Event_Participants',
-        select: 'Event_Participant_ID,Event_ID,Group_ID,Participation_Status_ID',
+        select: 'Event_Participant_ID,Event_ID,Group_ID,Participant_ID,Participation_Status_ID',
         filter: `Event_Participants.Group_ID IN (${sanitizeIds(communityGroupIds)}) AND Event_Participants.Participation_Status_ID IN (3, 4)`
       });
 
@@ -684,6 +685,10 @@ export class DashboardService {
         participantIds: Set<number>;
       }>>();
 
+      // Track unique Participant_IDs across all groups (for deduped totals)
+      const monthlyUniqueParticipants = new Map<string, Set<number>>();
+      const weeklyUniqueParticipants = new Map<string, Set<number>>();
+
       for (const participant of sundayParticipants) {
         const eventDate = eventDateMap.get(participant.Event_ID);
         if (!eventDate) continue;
@@ -707,6 +712,12 @@ export class DashboardService {
         monthGroupData.participantIds.add(participant.Event_Participant_ID);
         monthGroupData.eventIds.add(participant.Event_ID);
 
+        // Track unique people per month (across all groups)
+        if (!monthlyUniqueParticipants.has(monthKey)) {
+          monthlyUniqueParticipants.set(monthKey, new Set());
+        }
+        monthlyUniqueParticipants.get(monthKey)!.add(participant.Participant_ID);
+
         // Weekly aggregation
         if (!weeklyGroupData.has(dateKey)) {
           weeklyGroupData.set(dateKey, new Map());
@@ -716,6 +727,12 @@ export class DashboardService {
           weekData.set(participant.Group_ID, { participantIds: new Set() });
         }
         weekData.get(participant.Group_ID)!.participantIds.add(participant.Event_Participant_ID);
+
+        // Track unique people per week (across all groups)
+        if (!weeklyUniqueParticipants.has(dateKey)) {
+          weeklyUniqueParticipants.set(dateKey, new Set());
+        }
+        weeklyUniqueParticipants.get(dateKey)!.add(participant.Participant_ID);
       }
 
       // Build monthly trends (averages)
@@ -729,7 +746,8 @@ export class DashboardService {
         }
         monthly.push({
           weekStartDate: monthKey + '-01',
-          communityAttendance
+          communityAttendance,
+          uniqueParticipants: monthlyUniqueParticipants.get(monthKey)?.size ?? 0,
         });
       }
 
@@ -743,7 +761,8 @@ export class DashboardService {
         }
         weekly.push({
           weekStartDate: dateKey,
-          communityAttendance
+          communityAttendance,
+          uniqueParticipants: weeklyUniqueParticipants.get(dateKey)?.size ?? 0,
         });
       }
 

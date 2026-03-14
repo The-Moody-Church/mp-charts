@@ -51,6 +51,7 @@ export interface SmallGroupTrend {
 export interface CommunityAttendanceTrend {
   weekStartDate: string; // ISO date for the week start (Sunday)
   communityAttendance: { [communityName: string]: number }; // Map of community name to average attendance
+  uniqueParticipants: number; // Unique people across all communities (deduped)
 }
 
 /**

@@ -126,20 +126,6 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
             previousValue={showCompare ? data.membershipPreviousPeriod : undefined}
             format="number"
           />
-          {extendedLoading ? (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Unique Event Participants</CardTitle>
-              </CardHeader>
-              <CardContent><LoadingSkeleton height={60} /></CardContent>
-            </Card>
-          ) : (
-            <MetricCard
-              title="Unique Event Participants"
-              value={data.uniqueEventParticipants}
-              format="number"
-            />
-          )}
         </div>
 
         {/* Worship Service Attendance */}
@@ -175,18 +161,18 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
       {/* Section 2: Feed Your Soul */}
       {/* ============================================================ */}
       <SectionWrapper title="Feed Your Soul">
-        {/* Community Attendance — total across all communities */}
+        {/* Community Attendance — unique individuals across all communities */}
         <Card>
           <CardHeader>
             <CardTitle>Community Attendance</CardTitle>
             <CardDescription>
-              {isSingleMonth ? 'Weekly total attendance across all communities' : `Monthly total attendance across all communities${showCompare ? ' comparison' : ''}`}
+              {isSingleMonth ? 'Weekly unique individuals across all communities' : `Monthly unique individuals across all communities${showCompare ? ' comparison' : ''}`}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <ExpandableChart
               title="Community Attendance"
-              description={isSingleMonth ? 'Weekly total attendance' : `Monthly total attendance${showCompare ? ' comparison' : ''}`}
+              description={isSingleMonth ? 'Weekly unique individuals' : `Monthly unique individuals${showCompare ? ' comparison' : ''}`}
               expandedChildren={
                 <CommunityTotalAttendanceChart
                   currentYear={data.communityAttendanceTrends}
