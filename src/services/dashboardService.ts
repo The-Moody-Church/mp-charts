@@ -149,7 +149,8 @@ export class DashboardService {
       weeklyAttendanceTrends,
       baptismDates,
       membershipDates,
-      membershipDroppedDates,
+      associateMemberDates,
+      youthMemberDates,
     ] = await Promise.all([
       this.getPeriodMetrics(currentYearStart, currentYearEnd),
       this.getPeriodMetrics(previousYearStart, previousYearEnd),
@@ -161,7 +162,8 @@ export class DashboardService {
       this.getWeeklyAttendanceTrends(currentYearStart, currentYearEnd),
       this.getMilestoneDates(3, currentYearStart, currentYearEnd),           // Baptism
       this.getMilestoneDates(48, currentYearStart, currentYearEnd),          // Registered Member
-      this.getMilestoneDates(49, currentYearStart, currentYearEnd),          // Dropped Membership
+      this.getMilestoneDates(51, currentYearStart, currentYearEnd),          // Associate Member
+      this.getMilestoneDates(52, currentYearStart, currentYearEnd),          // Youth Member
     ]);
 
     return {
@@ -179,7 +181,8 @@ export class DashboardService {
       weeklyCommunityAttendanceTrends: communityTrends.weekly,
       baptismDates,
       membershipDates,
-      membershipDroppedDates,
+      associateMemberDates,
+      youthMemberDates,
       baptismsCurrentPeriod: 0,  // Computed client-side by filterDashboardData
       baptismsPreviousPeriod: 0,
       membershipCurrentPeriod: 0,
@@ -1304,7 +1307,7 @@ export class DashboardService {
 
   /**
    * Gets raw engagement data for the venn diagram.
-   * Three dimensions: Activity (Activity_Log), Groups (Ministry_ID=8), Serving (contact IDs).
+   * Three dimensions: Activity (Activity_Log), Groups (Ministry_ID 8/14/19 + Group_ID 763), Serving (contact IDs).
    * All data is bucketed/dated so client can filter by selected date range.
    * Adult filter is pre-computed once and stored for client-side intersection.
    * Self-contained: fetches serving contact IDs internally for the adult filter.
@@ -1348,11 +1351,12 @@ export class DashboardService {
         .filter(m => m.contactIds.length > 0)
         .sort((a, b) => a.month.localeCompare(b.month));
 
-      // Step 2: Groups — Ministry_ID=8, with date ranges for client-side filtering
+      // Step 2: Groups — Communities & Groups (Ministry_ID=8), Choir (Group_ID=763),
+      // Men's Ministry (Ministry_ID=14), Women's Ministry (Ministry_ID=19)
       const groups = await this.mp!.getTableRecords<{ Group_ID: number }>({
         table: 'Groups',
         select: 'Group_ID',
-        filter: `Ministry_ID = 8 AND Start_Date <= '${endIso}' AND (End_Date IS NULL OR End_Date >= '${startIso}')`
+        filter: `(Ministry_ID IN (8, 14, 19) OR Group_ID = 763) AND Start_Date <= '${endIso}' AND (End_Date IS NULL OR End_Date >= '${startIso}')`
       });
 
       let groupRecords: EngagementRawData['groupRecords'] = [];

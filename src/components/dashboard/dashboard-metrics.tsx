@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { DashboardData } from '@/lib/dto';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { MetricCard } from './metric-card';
@@ -34,24 +36,65 @@ function LoadingSkeleton({ height = 300 }: { height?: number }) {
   );
 }
 
+function EngagementOverviewCard({ data, engagementLoading }: { data: DashboardData; engagementLoading: boolean }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Engagement Overview</CardTitle>
+        <CardDescription className="space-y-2">
+          <button
+            type="button"
+            onClick={() => setDetailsOpen(prev => !prev)}
+            className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors group"
+          >
+            <span>Unique adults (18+ or unknown birthdate) engaged across three dimensions</span>
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${detailsOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {detailsOpen && (
+            <div className="text-sm text-muted-foreground space-y-3 pt-1 border-t">
+              <div>
+                <p className="font-medium text-foreground">Any Activity (Red)</p>
+                <p>Any individual with at least one Activity Log entry during the selected period. This includes event participation (registered or attended), completed milestones, submitted responses (contact cards, volunteer responses), form responses (registrations, applications), donations, etc. Group Participant activity logs are excluded because it is possible to be on a group roster and have no engagement during that period.</p>
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Communities &amp; Groups (Blue)</p>
+                <p>Any individual who is on the group roster from Communities &amp; Groups (Ministry ID 8; includes Precepts and classes like it), Choir (Group ID 763; but not seasonal choir), and recurring Men&apos;s and Women&apos;s Ministry Groups (Ministry ID 14; 19).</p>
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Serving / Leading (Yellow)</p>
+                <p>Any individual with an active group role of type Serving or Leading during any part of the selected period.</p>
+              </div>
+              <div className="text-xs text-muted-foreground/80 italic">
+                Overlap regions show individuals who appear in multiple dimensions.
+              </div>
+            </div>
+          )}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {engagementLoading ? <LoadingSkeleton /> : (
+          <VennDiagram
+            data={data.engagementOverlap}
+            averageTotalAttendance={data.currentPeriod.averageInPersonAttendance + data.currentPeriod.averageOnlineAttendance}
+            averageInPersonAttendance={data.currentPeriod.averageInPersonAttendance}
+          />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function DashboardMetrics({ data, showCompare = true, isSingleMonth = false, extendedLoading = false, engagementLoading = false }: DashboardMetricsProps) {
   return (
     <div className="space-y-10">
       {/* Engagement Venn Diagram */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Engagement Overview</CardTitle>
-          <CardDescription>People engaged across three dimensions: activity attendance, communities &amp; groups, and serving/leading</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {engagementLoading ? <LoadingSkeleton /> : (
-            <VennDiagram
-              data={data.engagementOverlap}
-              averageTotalAttendance={data.currentPeriod.averageInPersonAttendance + data.currentPeriod.averageOnlineAttendance}
-            />
-          )}
-        </CardContent>
-      </Card>
+      <EngagementOverviewCard
+        data={data}
+        engagementLoading={engagementLoading}
+      />
 
       {/* ============================================================ */}
       {/* Section 1: Know God */}
@@ -186,12 +229,12 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
           <Card>
             <CardHeader>
               <CardTitle>Small Group Trends</CardTitle>
-              <CardDescription>Monthly small group participation{showCompare ? ' comparison' : ''}</CardDescription>
+              <CardDescription>Monthly active group count and total participants{showCompare ? ' comparison' : ''}</CardDescription>
             </CardHeader>
             <CardContent>
               <ExpandableChart
                 title="Small Group Trends"
-                description={`Monthly small group participation${showCompare ? ' comparison' : ''}`}
+                description={`Monthly active group count and total participants${showCompare ? ' comparison' : ''}`}
                 expandedChildren={
                   <SmallGroupTrends
                     data={data.smallGroupTrends}
@@ -214,12 +257,12 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
           <Card>
             <CardHeader>
               <CardTitle>Group Participation by Type</CardTitle>
-              <CardDescription>Active participants by group type</CardDescription>
+              <CardDescription>Unique participants by group type</CardDescription>
             </CardHeader>
             <CardContent>
               <ExpandableChart
                 title="Group Participation"
-                description="Active participants by group type"
+                description="Unique participants by group type"
                 expandedChildren={
                   <GroupParticipationChart data={data.groupTypeMetrics} height={600} radius={200} />
                 }
@@ -233,13 +276,13 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
           <Card>
             <CardHeader>
               <CardTitle>Roster vs Attendance</CardTitle>
-              <CardDescription>Group roster count vs actual event check-in count</CardDescription>
+              <CardDescription>Unique people on group rosters vs unique people who checked in to events</CardDescription>
             </CardHeader>
             <CardContent>
               {extendedLoading ? <LoadingSkeleton /> : (
                 <ExpandableChart
                   title="Roster vs Attendance"
-                  description="Comparison of people on group rosters vs people who attended events"
+                  description="Unique people on group rosters vs unique people who checked in to events"
                   expandedChildren={
                     <RosterVsAttendanceChart data={data.rosterVsAttendance} height={600} />
                   }
@@ -337,7 +380,7 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
           <Card>
             <CardHeader>
               <CardTitle>Period Comparison</CardTitle>
-              <CardDescription>Performance vs. previous period</CardDescription>
+              <CardDescription>Worship attendance and event metrics vs. previous period</CardDescription>
             </CardHeader>
             <CardContent>
               <YearOverYearComparison data={data.yearOverYear} />

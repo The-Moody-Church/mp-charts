@@ -206,9 +206,11 @@ export function filterDashboardData(
   const baptismsCurrentPeriod = countDatesInRange(fullData.baptismDates, startDate, endDate);
   const baptismsPreviousPeriod = countDatesInRange(fullData.baptismDates, prevStart, prevMetricsEnd);
   const membershipCurrentPeriod = countDatesInRange(fullData.membershipDates, startDate, endDate)
-    - countDatesInRange(fullData.membershipDroppedDates, startDate, endDate);
+    + countDatesInRange(fullData.associateMemberDates, startDate, endDate)
+    + countDatesInRange(fullData.youthMemberDates, startDate, endDate);
   const membershipPreviousPeriod = countDatesInRange(fullData.membershipDates, prevStart, prevMetricsEnd)
-    - countDatesInRange(fullData.membershipDroppedDates, prevStart, prevMetricsEnd);
+    + countDatesInRange(fullData.associateMemberDates, prevStart, prevMetricsEnd)
+    + countDatesInRange(fullData.youthMemberDates, prevStart, prevMetricsEnd);
 
   // Unique Event Participants: filter monthly buckets to selected range, count unique PIDs
   const filteredEPMonths = filterMonthlyByDate(fullData.eventParticipantsByMonth, startDate, endDate);
@@ -385,14 +387,14 @@ function computeYearOverYear(
 
   return [
     {
-      metric: 'Average Attendance',
+      metric: 'Avg Total Attendance',
       currentYear: current.averageAttendance,
       previousYear: previous.averageAttendance,
       percentageChange: pctChange(current.averageAttendance, previous.averageAttendance),
       trend: trend(current.averageAttendance, previous.averageAttendance),
     },
     {
-      metric: 'Total Events',
+      metric: 'Worship Services',
       currentYear: current.totalEvents,
       previousYear: previous.totalEvents,
       percentageChange: pctChange(current.totalEvents, previous.totalEvents),

@@ -34,7 +34,7 @@ const { getEnabledJourneyTools } = await import("@/lib/journey-tools-config");
 
 const mockConfig = {
   dashboard: {
-    label: "Executive Dashboard",
+    label: "Dashboard: Journey of a Lifetime",
     description: "View metrics",
     allowedGroupIds: [29, 45],
   },

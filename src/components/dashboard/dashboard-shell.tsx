@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useTransition, useCallback, useMemo } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DashboardData } from '@/lib/dto';
 import { DashboardMetrics } from './dashboard-metrics';
@@ -50,6 +50,7 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
   const [engagementLoading, setEngagementLoading] = useState(true);
   const [isRefreshing, startRefreshTransition] = useTransition();
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [filterExpanded, setFilterExpanded] = useState(false);
 
   // Stage 1: Load extended data (serving, EP, roster) — fast
   useEffect(() => {
@@ -122,7 +123,7 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
       {/* Header */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <h1 className="text-2xl sm:text-4xl font-bold tracking-tight">Executive Dashboard</h1>
+          <h1 className="text-2xl sm:text-4xl font-bold tracking-tight">Dashboard: Journey of a Lifetime</h1>
           <div className="flex items-center gap-2">
             {lastRefresh && (
               <p className="text-xs text-muted-foreground">
@@ -142,16 +143,24 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
           </div>
         </div>
 
-        <p className="text-muted-foreground">
-          Church health metrics across discipleship, community, serving, and giving for {description}
-        </p>
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => setFilterExpanded(prev => !prev)}
+            className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors group"
+          >
+            <span>Metrics for <span className="underline decoration-dotted underline-offset-4 group-hover:decoration-solid">{description}</span></span>
+            <ChevronDown className={`h-4 w-4 transition-transform ${filterExpanded ? 'rotate-180' : ''}`} />
+          </button>
 
-        {/* Date Range Filter */}
-        <DateRangeFilter
-          selection={selection}
-          onSelectionChange={handleSelectionChange}
-          disabled={isRefreshing}
-        />
+          {filterExpanded && (
+            <DateRangeFilter
+              selection={selection}
+              onSelectionChange={handleSelectionChange}
+              disabled={isRefreshing}
+            />
+          )}
+        </div>
       </div>
 
       {/* Dashboard Content */}

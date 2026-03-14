@@ -227,10 +227,12 @@ export interface DashboardData {
   weeklyCommunityAttendanceTrends: CommunityAttendanceTrend[];
   /** Baptism milestone dates (Date_Accomplished ISO strings) for client-side filtering */
   baptismDates: string[];
-  /** Registered Member milestone dates (net of Dropped) for client-side filtering */
+  /** Registered Member milestone dates for client-side filtering */
   membershipDates: string[];
-  /** Dropped Membership milestone dates for net membership calculation */
-  membershipDroppedDates: string[];
+  /** Associate Member milestone dates for client-side filtering */
+  associateMemberDates: string[];
+  /** Youth Member milestone dates for client-side filtering */
+  youthMemberDates: string[];
   /** Computed counts for the selected period (set by filterDashboardData) */
   baptismsCurrentPeriod: number;
   baptismsPreviousPeriod: number;

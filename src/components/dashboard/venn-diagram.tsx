@@ -7,6 +7,8 @@ interface VennDiagramProps {
   data: EngagementOverlap;
   /** Average total attendance (in-person + online) for the selected period */
   averageTotalAttendance?: number;
+  /** Average in-person service attendance for the selected period */
+  averageInPersonAttendance?: number;
 }
 
 // ─── Geometry helpers ──────────────────────────────────────────
@@ -51,7 +53,7 @@ function textWidthVB(text: string, fontSize: number): number {
 }
 
 /** Exported for testing — computes circle positions, radii, labels, and viewBox */
-export function computeLayout(data: EngagementOverlap, averageTotalAttendance?: number) {
+export function computeLayout(data: EngagementOverlap, averageTotalAttendance?: number, averageInPersonAttendance?: number) {
   const tA = data.totalActivity, tB = data.totalGroup, tC = data.totalServing;
   const maxT = Math.max(tA, tB, tC, 1);
   const MAX_R = 120;
@@ -139,14 +141,20 @@ export function computeLayout(data: EngagementOverlap, averageTotalAttendance?: 
     visible: c.r > 0,
   }));
 
-  // Attendance circle: centered at the centroid of the engagement circles (or origin if none)
+  // Attendance circles: centered at the centroid of the engagement circles (or origin if none)
+  // The scale reference is shared so both circles are proportional to each other
+  const attendanceScaleRef = activeCircles.length > 0 ? maxT : (averageTotalAttendance ?? averageInPersonAttendance ?? 1);
+
   let attendanceCircle: Circle | null = null;
   if (averageTotalAttendance && averageTotalAttendance > 0) {
-    // When no engagement circles exist, use averageTotalAttendance as the scale reference
-    // so the circle renders at MAX_R instead of being infinitely large
-    const scaleRef = activeCircles.length > 0 ? maxT : averageTotalAttendance;
-    const rAttendance = MAX_R * Math.sqrt(averageTotalAttendance / scaleRef);
+    const rAttendance = MAX_R * Math.sqrt(averageTotalAttendance / attendanceScaleRef);
     attendanceCircle = { x: gx, y: gy, r: rAttendance };
+  }
+
+  let inPersonCircle: Circle | null = null;
+  if (averageInPersonAttendance && averageInPersonAttendance > 0) {
+    const rInPerson = MAX_R * Math.sqrt(averageInPersonAttendance / attendanceScaleRef);
+    inPersonCircle = { x: gx, y: gy, r: rInPerson };
   }
 
   // Build bounding box from circles + label text extents
@@ -160,12 +168,35 @@ export function computeLayout(data: EngagementOverlap, averageTotalAttendance?: 
     maxY = Math.max(maxY, c.y + c.r);
   }
 
-  // Include attendance circle in bounding box
-  if (attendanceCircle) {
-    minX = Math.min(minX, attendanceCircle.x - attendanceCircle.r);
-    maxX = Math.max(maxX, attendanceCircle.x + attendanceCircle.r);
-    minY = Math.min(minY, attendanceCircle.y - attendanceCircle.r);
-    maxY = Math.max(maxY, attendanceCircle.y + attendanceCircle.r);
+  // Include attendance circles in bounding box (total is always >= in-person, so it dominates)
+  // Also reserve vertical space above for the stacked pill labels
+  const outerRefCircle = attendanceCircle ?? inPersonCircle;
+  for (const refCircle of [attendanceCircle, inPersonCircle]) {
+    if (refCircle) {
+      minX = Math.min(minX, refCircle.x - refCircle.r);
+      maxX = Math.max(maxX, refCircle.x + refCircle.r);
+      minY = Math.min(minY, refCircle.y - refCircle.r);
+      maxY = Math.max(maxY, refCircle.y + refCircle.r);
+    }
+  }
+  // Reserve space for attendance pill labels stacked above the outer circle
+  if (outerRefCircle) {
+    const pillRh = FONT_SUB + 6; // padY=3 each side
+    const pillGap = 4;
+    let pillCount = 0;
+    if (averageTotalAttendance && averageTotalAttendance > 0) pillCount++;
+    if (averageInPersonAttendance && averageInPersonAttendance > 0) pillCount++;
+    if (pillCount > 0) {
+      const pillsHeight = pillCount * pillRh + (pillCount - 1) * pillGap;
+      minY = Math.min(minY, outerRefCircle.y - outerRefCircle.r - pillGap - pillsHeight);
+      // Also include pill width in horizontal bounds
+      const longestPillText = averageTotalAttendance
+        ? `Avg Total Attendance: ${Math.round(averageTotalAttendance).toLocaleString()}`
+        : `Avg In-Person: ${Math.round(averageInPersonAttendance ?? 0).toLocaleString()}`;
+      const pillTw = textWidthVB(longestPillText, FONT_SUB) + 12; // padX=6 each side
+      minX = Math.min(minX, outerRefCircle.x - pillTw / 2);
+      maxX = Math.max(maxX, outerRefCircle.x + pillTw / 2);
+    }
   }
 
   for (const lbl of labels) {
@@ -195,6 +226,7 @@ export function computeLayout(data: EngagementOverlap, averageTotalAttendance?: 
   return {
     circles: [cA, cB, cC] as [Circle, Circle, Circle],
     attendanceCircle,
+    inPersonCircle,
     labels,
     vb: `${minX - PAD} ${minY - PAD} ${maxX - minX + PAD * 2} ${maxY - minY + PAD * 2}`,
   };
@@ -249,7 +281,8 @@ const CLR = {
   A: { fill: 'rgba(220,38,38,0.35)', stroke: '#dc2626', text: '#dc2626' },   // red
   B: { fill: 'rgba(37,99,235,0.35)', stroke: '#2563eb', text: '#2563eb' },   // blue
   C: { fill: 'rgba(202,138,4,0.35)',  stroke: '#ca8a04', text: '#a16207' },   // yellow (darker text)
-  attendance: { fill: 'rgba(16,185,129,0.12)', stroke: '#059669', text: '#047857' }, // emerald/green
+  attendance: { fill: 'rgba(16,185,129,0.12)', stroke: '#059669', text: '#047857' }, // emerald/green (total)
+  inPerson: { fill: 'rgba(16,185,129,0.08)', stroke: '#10b981', text: '#047857' }, // emerald/green (in-person, lighter)
 };
 
 // Per-region colors: primaries + blended overlap colors
@@ -265,21 +298,24 @@ const REGION_CLR: Record<string, { text: string; bg: string }> = {
 
 // ─── Component ─────────────────────────────────────────────────
 
-export function VennDiagram({ data, averageTotalAttendance }: VennDiagramProps) {
+export function VennDiagram({ data, averageTotalAttendance, averageInPersonAttendance }: VennDiagramProps) {
   const [hovered, setHovered] = useState<string | null>(null);
-  const { circles, attendanceCircle, labels, vb } = useMemo(() => computeLayout(data, averageTotalAttendance), [data, averageTotalAttendance]);
+  const { circles, attendanceCircle, inPersonCircle, labels, vb } = useMemo(
+    () => computeLayout(data, averageTotalAttendance, averageInPersonAttendance),
+    [data, averageTotalAttendance, averageInPersonAttendance]
+  );
 
   const [cA, cB, cC] = circles;
   const all = [cA, cB, cC];
 
   const regions = useMemo(() => [
-    { id: 'activity-only',   inside: [0],       outside: [1, 2], label: 'Activity Only',      count: data.activityOnly,       desc: 'Attended events but not in a group or serving' },
-    { id: 'group-only',      inside: [1],       outside: [0, 2], label: 'Groups Only',        count: data.groupOnly,          desc: 'In a group but not attending events or serving' },
-    { id: 'serving-only',    inside: [2],       outside: [0, 1], label: 'Serving Only',       count: data.servingOnly,        desc: 'Serving/leading but not attending events or in a group' },
-    { id: 'activity-group',  inside: [0, 1],    outside: [2],    label: 'Activity + Groups',  count: data.activityAndGroup,   desc: 'Attending events and in a group' },
-    { id: 'activity-serving',inside: [0, 2],    outside: [1],    label: 'Activity + Serving', count: data.activityAndServing, desc: 'Attending events and serving/leading' },
+    { id: 'activity-only',   inside: [0],       outside: [1, 2], label: 'Activity Only',      count: data.activityOnly,       desc: 'Checked in to events but not in a group or serving' },
+    { id: 'group-only',      inside: [1],       outside: [0, 2], label: 'Groups Only',        count: data.groupOnly,          desc: 'In a group but no event check-ins or serving roles' },
+    { id: 'serving-only',    inside: [2],       outside: [0, 1], label: 'Serving Only',       count: data.servingOnly,        desc: 'Serving/leading but no event check-ins or group membership' },
+    { id: 'activity-group',  inside: [0, 1],    outside: [2],    label: 'Activity + Groups',  count: data.activityAndGroup,   desc: 'Checked in to events and in a group' },
+    { id: 'activity-serving',inside: [0, 2],    outside: [1],    label: 'Activity + Serving', count: data.activityAndServing, desc: 'Checked in to events and serving/leading' },
     { id: 'group-serving',   inside: [1, 2],    outside: [0],    label: 'Groups + Serving',   count: data.groupAndServing,    desc: 'In a group and serving/leading' },
-    { id: 'all-three',       inside: [0, 1, 2], outside: [],     label: 'All Three',          count: data.allThree,           desc: 'Attending, in a group, and serving/leading' },
+    { id: 'all-three',       inside: [0, 1, 2], outside: [],     label: 'All Three',          count: data.allThree,           desc: 'Checked in to events, in a group, and serving/leading' },
   ], [data]);
 
   const totalUnique = data.activityOnly + data.groupOnly + data.servingOnly
@@ -311,7 +347,7 @@ export function VennDiagram({ data, averageTotalAttendance }: VennDiagramProps) 
       {/* Proportional Venn Diagram */}
       <div className="flex-1 min-w-0 flex items-center justify-center">
         <svg viewBox={vb} className="w-full h-full max-w-lg">
-          {/* Attendance circle (behind engagement circles) */}
+          {/* Total attendance circle (outermost, behind everything) */}
           {attendanceCircle && attendanceCircle.r > 0 && (
             <circle
               cx={attendanceCircle.x}
@@ -321,6 +357,19 @@ export function VennDiagram({ data, averageTotalAttendance }: VennDiagramProps) 
               stroke={CLR.attendance.stroke}
               strokeWidth={2}
               strokeDasharray="6 3"
+            />
+          )}
+
+          {/* In-person attendance circle (between total and engagement circles) */}
+          {inPersonCircle && inPersonCircle.r > 0 && (
+            <circle
+              cx={inPersonCircle.x}
+              cy={inPersonCircle.y}
+              r={inPersonCircle.r}
+              fill={CLR.inPerson.fill}
+              stroke={CLR.inPerson.stroke}
+              strokeWidth={2}
+              strokeDasharray="4 4"
             />
           )}
 
@@ -354,47 +403,58 @@ export function VennDiagram({ data, averageTotalAttendance }: VennDiagramProps) 
             </g>
           ))}
 
-          {/* Attendance circle label — centered inside */}
-          {attendanceCircle && attendanceCircle.r > 0 && averageTotalAttendance != null && (
-            <g>
-              {/* Pill background */}
-              {(() => {
-                const text = `Avg Attendance: ${Math.round(averageTotalAttendance).toLocaleString()}`;
-                const tw = textWidthVB(text, FONT_SUB);
-                const padX = 6, padY = 3;
-                const rw = tw + padX * 2;
-                const rh = FONT_SUB + padY * 2;
-                // Position at top of the attendance circle
-                const labelY = attendanceCircle.y - attendanceCircle.r + rh / 2 + 4;
-                return (
-                  <>
-                    <rect
-                      x={attendanceCircle.x - rw / 2}
-                      y={labelY - rh / 2}
-                      width={rw}
-                      height={rh}
-                      rx={rh / 2}
-                      fill="white"
-                      stroke={CLR.attendance.stroke}
-                      strokeWidth={1}
-                      opacity={0.92}
-                    />
-                    <text
-                      x={attendanceCircle.x}
-                      y={labelY}
-                      textAnchor="middle"
-                      dominantBaseline="central"
-                      fontSize={FONT_SUB}
-                      fontWeight={600}
-                      fill={CLR.attendance.text}
-                    >
-                      {text}
-                    </text>
-                  </>
-                );
-              })()}
-            </g>
-          )}
+          {/* Attendance pill labels — stacked above the outermost circle */}
+          {(() => {
+            const outerCircle = attendanceCircle ?? inPersonCircle;
+            if (!outerCircle || outerCircle.r <= 0) return null;
+
+            const padX = 6, padY = 3;
+            const rh = FONT_SUB + padY * 2;
+            const gap = 4;
+            // Start above the outermost circle
+            let nextY = outerCircle.y - outerCircle.r - gap - rh / 2;
+
+            const pills: { text: string; clr: typeof CLR.attendance; y: number }[] = [];
+
+            if (averageInPersonAttendance != null && averageInPersonAttendance > 0 && inPersonCircle) {
+              pills.unshift({ text: `Avg In-Person: ${Math.round(averageInPersonAttendance).toLocaleString()}`, clr: CLR.inPerson, y: nextY });
+              nextY -= rh + gap;
+            }
+            if (averageTotalAttendance != null && averageTotalAttendance > 0 && attendanceCircle) {
+              pills.unshift({ text: `Avg Total Attendance: ${Math.round(averageTotalAttendance).toLocaleString()}`, clr: CLR.attendance, y: nextY });
+            }
+
+            return pills.map((pill, i) => {
+              const tw = textWidthVB(pill.text, FONT_SUB);
+              const rw = tw + padX * 2;
+              return (
+                <g key={`att-pill-${i}`}>
+                  <rect
+                    x={outerCircle.x - rw / 2}
+                    y={pill.y - rh / 2}
+                    width={rw}
+                    height={rh}
+                    rx={rh / 2}
+                    fill="white"
+                    stroke={pill.clr.stroke}
+                    strokeWidth={1}
+                    opacity={0.92}
+                  />
+                  <text
+                    x={outerCircle.x}
+                    y={pill.y}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fontSize={FONT_SUB}
+                    fontWeight={600}
+                    fill={pill.clr.text}
+                  >
+                    {pill.text}
+                  </text>
+                </g>
+              );
+            });
+          })()}
 
           {/* Region count labels — pill badges with white background, rendered last to stay on top */}
           {regions.map(({ id, count }) => {
@@ -458,8 +518,16 @@ export function VennDiagram({ data, averageTotalAttendance }: VennDiagramProps) 
             {/* Average Total Attendance */}
             {averageTotalAttendance != null && averageTotalAttendance > 0 && (
               <tr className="border-b bg-emerald-50/50">
-                <td className="py-2 px-3 font-medium" style={{ color: CLR.attendance.text }}>Avg Sunday Attendance</td>
+                <td className="py-2 px-3 font-medium" style={{ color: CLR.attendance.text }}>Avg Total Attendance</td>
                 <td className="text-right py-2 px-3 tabular-nums">{Math.round(averageTotalAttendance).toLocaleString()}</td>
+                <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">—</td>
+              </tr>
+            )}
+            {/* Average In-Person Attendance */}
+            {averageInPersonAttendance != null && averageInPersonAttendance > 0 && (
+              <tr className="border-b bg-emerald-50/30">
+                <td className="py-2 px-3 font-medium" style={{ color: CLR.inPerson.text }}>Avg In-Person Attendance</td>
+                <td className="text-right py-2 px-3 tabular-nums">{Math.round(averageInPersonAttendance).toLocaleString()}</td>
                 <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">—</td>
               </tr>
             )}

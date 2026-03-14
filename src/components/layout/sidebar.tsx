@@ -22,7 +22,7 @@ interface NavItem {
 
 const navigation: NavItem[] = [
   { name: "Home", href: "/", icon: HomeIcon },
-  { name: "Executive Dashboard", href: "/dashboard", icon: ChartBarIcon, feature: "dashboard" },
+  { name: "Dashboard: Journey of a Lifetime", href: "/dashboard", icon: ChartBarIcon, feature: "dashboard" },
   { name: "Contact Lookup", href: "/contact-lookup", icon: UsersIcon, feature: "contact-lookup" },
   { name: "Manage Members", href: "/manage-members", icon: UserGroupIcon, feature: "manage-members" },
   { name: "Setup", href: "/admin", icon: ShieldCheckIcon, adminOnly: true },
