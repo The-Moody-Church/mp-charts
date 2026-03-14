@@ -35,14 +35,13 @@ export interface YearOverYearMetrics {
 }
 
 /**
- * Small group trend data (monthly aggregation)
+ * Small group trend data (monthly aggregation, broken down by group type)
  */
 export interface SmallGroupTrend {
   month: string; // YYYY-MM
   monthName: string; // e.g., "September"
-  activeGroupCount: number;
-  totalParticipants: number;
-  averageAttendance: number;
+  activeGroupCount: number; // total active groups across all types
+  groupCountByType: { [groupTypeName: string]: number }; // active group count per group type
 }
 
 /**

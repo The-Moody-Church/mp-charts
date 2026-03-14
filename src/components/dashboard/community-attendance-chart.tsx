@@ -17,6 +17,7 @@ interface TooltipPayloadEntry {
   name: string;
   fill?: string;
   color?: string;
+  payload?: Record<string, unknown>;
 }
 
 interface CustomTooltipProps {
@@ -26,8 +27,11 @@ interface CustomTooltipProps {
 }
 
 // Custom tooltip component that sorts communities by value (largest first)
-const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
+const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
   if (!active || !payload || payload.length === 0) return null;
+
+  // Get the tooltip title from the data point
+  const tooltipTitle = (payload[0]?.payload?.tooltipTitle as string) || '';
 
   // Sort payload by value (descending: largest to smallest)
   const sortedPayload = [...payload].sort((a, b) => (b.value || 0) - (a.value || 0));
@@ -43,7 +47,7 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
         maxWidth: '85vw',
       }}
     >
-      <p style={{ marginBottom: '8px', fontWeight: 'bold' }}>{label}</p>
+      <p style={{ marginBottom: '8px', fontWeight: 'bold' }}>{tooltipTitle}</p>
       {sortedPayload.map((entry, index: number) => (
         <div key={`item-${index}`} style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
           <div
@@ -60,6 +64,11 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
           </span>
         </div>
       ))}
+      <div style={{ borderTop: '1px solid rgba(0, 0, 0, 0.15)', marginTop: '4px', paddingTop: '4px' }}>
+        <span style={{ fontSize: '14px', fontWeight: 'bold' }}>
+          Total: {sortedPayload.reduce((sum, entry) => sum + (entry.value || 0), 0)}
+        </span>
+      </div>
     </div>
   );
 };
@@ -87,7 +96,7 @@ export function CommunityAttendanceChart({ data, height = 400 }: CommunityAttend
     });
   });
 
-  // Sort communities by average attendance (ascending: smallest to largest)
+  // Sort communities by average attendance (ascending: smallest at bottom, largest on top)
   const sortedCommunityNames = Array.from(communityTotals.entries())
     .map(([name, totals]) => ({ name, average: totals.sum / totals.count }))
     .sort((a, b) => a.average - b.average)
@@ -104,10 +113,15 @@ export function CommunityAttendanceChart({ data, height = 400 }: CommunityAttend
     const date = new Date(year, month - 1, day); // month is 0-indexed in Date constructor
     const formattedDate = isWeekly
       ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-      : date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+      : `${date.toLocaleDateString('en-US', { month: 'short' })} '${date.toLocaleDateString('en-US', { year: '2-digit' })}`;
+
+    const tooltipTitle = isWeekly
+      ? `Attendance For ${date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}`
+      : `Average Weekly Attendance For ${date.toLocaleDateString('en-US', { month: 'long' })}`;
 
     return {
       date: formattedDate,
+      tooltipTitle,
       ...week.communityAttendance
     };
   });

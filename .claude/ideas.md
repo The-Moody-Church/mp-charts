@@ -45,8 +45,8 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
 
 ### Technical Debt
-- [BUG: Active Communities and Small Groups Chart Needs Work (#52)](#bug-active-communities-and-small-groups-chart-needs-work-52)
 - [IDOR Mitigation — Per-Record Authorization (#57)](#idor-mitigation-per-record-authorization-57)
+- ~~[BUG: Active Communities and Small Groups Chart Needs Work (#52)](#bug-active-communities-and-small-groups-chart-needs-work-52)~~ ✅
 - ~~[Executive Dashboard Avg Attendance Broken (#103)](#executive-dashboard-avg-attendance-broken-103)~~ ✅
 - ~~[Contact Logs should not be editable unless Made_By = the Current Logged In User (#96)](#contact-logs-should-not-be-editable-unless-made_by-the-current-logged-in-user-96)~~ ✅
 - ~~[Contact Lookup Searching Error (#99)](#contact-lookup-searching-error-99)~~ ✅
@@ -216,8 +216,8 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 
 ## Technical Debt
 
-### BUG: Active Communities and Small Groups Chart Needs Work ([#52](https://github.com/The-Moody-Church/mp-charts/issues/52))
-The active communities and small groups chart on the executive dashboard needs improvement. The data or visualization is not accurately representing the information.
+### ~~BUG: Active Communities and Small Groups Chart Needs Work ([#52](https://github.com/The-Moody-Church/mp-charts/issues/52))~~ ✅ COMPLETED
+Renamed to "Communities and Groups Trends". Refactored to show active groups by group type (Small Group, Class, Community — Group_Type_ID 1, 3, 11) as a line chart with YoY comparison. Removed participants/averageAttendance from DTO, added groupCountByType breakdown. Added total line and removed Group Participation pie chart.
 
 ### IDOR Mitigation — Per-Record Authorization ([#57](https://github.com/The-Moody-Church/mp-charts/issues/57))
 Server actions accept record IDs from clients (contactId, participantId, etc.) and only check session presence — not whether the requesting user should access that specific record. An authenticated user could enumerate IDs to access any contact's details, volunteer background check data, or membership information.

@@ -2,12 +2,13 @@
 
 Quick-reference snapshot of current project state. Read this first at session start. For full details on any item, see the relevant session summary in `.claude/sessions/`.
 
-**Last updated**: 2026-03-13
+**Last updated**: 2026-03-14
 
 ## Recently Completed
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
+| 2026-03-14 | **Dashboard Feed Your Soul polish**: Renamed Small Group Trends → Communities and Groups Trends with group type breakdown (1, 3, 11). Custom tooltip titles, totals, stacked area sorting, year format fixes, removed Group Participation pie chart, 2-col grid layout. | #52 | — |
 | 2026-03-13 | **Feedback → GitHub issues**: Replaced MP Feedback_Entries with GitHub issue creation. Simplified config (removed feedbackTypeId/assignedToContactId), added GITHUB_FEEDBACK_TOKEN env var, appends page URL + user name to issues, admin shows token status. | #104 | — |
 | 2026-03-12 | **Restrict contact log edit by owner**: Edit button and server action only allow editing logs created by the current user (Made_By check). Added "Logged by" display showing who created each log entry. | #96 | — |
 | 2026-03-12 | **Contact search null safety & scoring**: Fixed localeCompare crash on null Last_Name/First_Name (#99), added proportional prefix-match bonus to search scoring (#98) | #98, #99 | #101 |
@@ -31,9 +32,7 @@ Quick-reference snapshot of current project state. Read this first at session st
 ## Open Issues
 
 - [**#72** — Dashboard subpages per journey step](ideas.md#and-more-specific-dashboard-subpages-72)
-- [**#52** — Active Communities and Small Groups chart needs work](ideas.md#bug-active-communities-and-small-groups-chart-needs-work-52)
 - [**#57** — IDOR mitigation (per-record authorization)](ideas.md#idor-mitigation-per-record-authorization-57)
-- [**#15** — Small Group Trends chart visualization improvements](ideas.md#small-group-trends-chart-15)
 
 ## Key Architecture Notes
 

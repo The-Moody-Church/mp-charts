@@ -27,6 +27,15 @@ function aggregateToMonthlyTotals(data: CommunityAttendanceTrend[]): { month: st
   });
 }
 
+/** Format a YYYY-MM key into "Mon '25" */
+function formatMonthLabel(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  const date = new Date(y, m - 1, 1);
+  const mon = date.toLocaleDateString('en-US', { month: 'short' });
+  const yr = date.toLocaleDateString('en-US', { year: '2-digit' });
+  return `${mon} '${yr}`;
+}
+
 /**
  * For weekly data (single month), use unique participant counts per week.
  */
@@ -64,7 +73,7 @@ export function CommunityTotalAttendanceChart({ currentYear, previousYear, heigh
     const previousWeekly = showComparison ? aggregateWeeklyTotals(previousYear) : [];
 
     // Build merged dataset keyed by month-day so same-day entries combine
-    const mergedMap = new Map<string, { name: string; daySortKey: string; currentTotal?: number; previousTotal?: number }>();
+    const mergedMap = new Map<string, { name: string; daySortKey: string; previousOnly?: boolean; currentTotal?: number; previousTotal?: number }>();
     for (const w of currentWeekly) {
       const key = w.date.slice(5); // MM-DD
       mergedMap.set(key, { name: w.dateLabel, daySortKey: key, currentTotal: w.total });
@@ -75,7 +84,7 @@ export function CommunityTotalAttendanceChart({ currentYear, previousYear, heigh
       if (existing) {
         existing.previousTotal = w.total;
       } else {
-        mergedMap.set(key, { name: w.dateLabel, daySortKey: key, previousTotal: w.total });
+        mergedMap.set(key, { name: w.dateLabel, daySortKey: key, previousOnly: true, previousTotal: w.total });
       }
     }
     const chartData = Array.from(mergedMap.values()).sort((a, b) => a.daySortKey.localeCompare(b.daySortKey));
@@ -84,7 +93,15 @@ export function CommunityTotalAttendanceChart({ currentYear, previousYear, heigh
       <ResponsiveContainer width="100%" height={height}>
         <LineChart data={chartData} margin={{ top: 5, right: isMobile ? 5 : 20, left: isMobile ? 5 : 20, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-          <XAxis dataKey="name" className="text-xs" padding={{ left: isMobile ? 5 : 20, right: isMobile ? 5 : 20 }} />
+          <XAxis
+            dataKey="name"
+            className="text-xs"
+            padding={{ left: isMobile ? 5 : 20, right: isMobile ? 5 : 20 }}
+            tickFormatter={(value: string, index: number) => {
+              const entry = chartData[index];
+              return entry?.previousOnly ? `*${value}*` : value;
+            }}
+          />
           <YAxis className="text-xs" />
           <Tooltip
             trigger={isMobile ? 'click' : 'hover'}
@@ -97,9 +114,9 @@ export function CommunityTotalAttendanceChart({ currentYear, previousYear, heigh
             }}
           />
           {!isMobile && <Legend />}
-          <Line type="monotone" dataKey="currentTotal" stroke="#3b82f6" strokeWidth={2} dot={false} connectNulls name={showComparison ? 'Current Year' : 'Unique Individuals'} />
+          <Line dataKey="currentTotal" stroke="#3b82f6" strokeWidth={2} connectNulls name={showComparison ? 'Current Year' : 'Unique Individuals'} />
           {showComparison && (
-            <Line type="monotone" dataKey="previousTotal" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" dot={false} connectNulls name="Previous Year" />
+            <Line dataKey="previousTotal" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" connectNulls name="Previous Year" />
           )}
         </LineChart>
       </ResponsiveContainer>
@@ -116,15 +133,14 @@ export function CommunityTotalAttendanceChart({ currentYear, previousYear, heigh
     name: string;
     monthName: string;
     sortKey: string;
+    previousOnly?: boolean;
     currentTotal?: number;
     previousTotal?: number;
   }>();
 
   for (const item of currentMonthly) {
-    const [y, m] = item.month.split('-').map(Number);
-    const label = new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
     monthsMap.set(item.monthName, {
-      name: label,
+      name: formatMonthLabel(item.month),
       monthName: item.monthName,
       sortKey: item.month,
       currentTotal: item.total,
@@ -137,12 +153,11 @@ export function CommunityTotalAttendanceChart({ currentYear, previousYear, heigh
       if (existing) {
         existing.previousTotal = item.total;
       } else {
-        const [y, m] = item.month.split('-').map(Number);
-        const label = new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
         monthsMap.set(item.monthName, {
-          name: label,
+          name: formatMonthLabel(item.month),
           monthName: item.monthName,
           sortKey: item.month,
+          previousOnly: true,
           previousTotal: item.total,
         });
       }
@@ -157,7 +172,15 @@ export function CommunityTotalAttendanceChart({ currentYear, previousYear, heigh
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={chartData} margin={{ top: 5, right: isMobile ? 5 : 20, left: isMobile ? 5 : 20, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-        <XAxis dataKey="name" className="text-xs" padding={{ left: isMobile ? 5 : 20, right: isMobile ? 5 : 20 }} />
+        <XAxis
+          dataKey="name"
+          className="text-xs"
+          padding={{ left: isMobile ? 5 : 20, right: isMobile ? 5 : 20 }}
+          tickFormatter={(value: string, index: number) => {
+            const entry = chartData[index];
+            return entry?.previousOnly ? `*${value}*` : value;
+          }}
+        />
         <YAxis className="text-xs" />
         <Tooltip
           trigger={isMobile ? 'click' : 'hover'}
@@ -170,9 +193,9 @@ export function CommunityTotalAttendanceChart({ currentYear, previousYear, heigh
           }}
         />
         {!isMobile && <Legend />}
-        <Line type="monotone" dataKey="currentTotal" stroke="#3b82f6" strokeWidth={2} dot={false} name={showComparison ? 'Unique Participants (Current)' : 'Unique Participants'} />
+        <Line dataKey="currentTotal" stroke="#3b82f6" strokeWidth={2} name={showComparison ? 'Unique Participants (Current)' : 'Unique Participants'} />
         {showComparison && (
-          <Line type="monotone" dataKey="previousTotal" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Unique Participants (Previous)" />
+          <Line dataKey="previousTotal" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" name="Unique Participants (Previous)" />
         )}
       </LineChart>
     </ResponsiveContainer>

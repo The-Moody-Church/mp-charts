@@ -25,7 +25,9 @@ export function AttendanceChart({ currentYear, previousYear, height = 300 }: Att
     if (isWeekly) return monthName; // Already "Feb 1" etc. from dateLabel
     const [y, m] = sortKey.split('-').map(Number);
     const date = new Date(y, m - 1, 1);
-    return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+    const mon = date.toLocaleDateString('en-US', { month: 'short' });
+    const yr = date.toLocaleDateString('en-US', { year: '2-digit' });
+    return `${mon} '${yr}`;
   };
 
   // Create a map of all unique data points (keyed by monthName for merging)
@@ -33,6 +35,7 @@ export function AttendanceChart({ currentYear, previousYear, height = 300 }: Att
     name: string;       // display label for X-axis
     mergeKey: string;   // monthName used for current/previous year matching
     sortKey: string;
+    previousOnly?: boolean;
     currentInPerson?: number;
     currentOnline?: number;
     currentTotal?: number;
@@ -67,6 +70,7 @@ export function AttendanceChart({ currentYear, previousYear, height = 300 }: Att
           name: formatLabel(item.month, item.monthName),
           mergeKey: item.monthName,
           sortKey: item.month,
+          previousOnly: true,
           previousInPerson: item.averageInPersonAttendance,
           previousOnline: item.averageOnlineAttendance,
           previousTotal: item.averageTotalAttendance
@@ -89,6 +93,7 @@ export function AttendanceChart({ currentYear, previousYear, height = 300 }: Att
           name: formatLabel(item.month, item.monthName),
           mergeKey: key,
           sortKey: item.month,
+          previousOnly: true,
           previousInPerson: item.averageInPersonAttendance,
           previousOnline: item.averageOnlineAttendance,
           previousTotal: item.averageTotalAttendance,
@@ -126,6 +131,10 @@ export function AttendanceChart({ currentYear, previousYear, height = 300 }: Att
           dataKey="name"
           className="text-xs"
           padding={{ left: isMobile ? 5 : 20, right: isMobile ? 5 : 20 }}
+          tickFormatter={(value: string, index: number) => {
+            const entry = chartData[index];
+            return entry?.previousOnly ? `*${value}*` : value;
+          }}
         />
         <YAxis className="text-xs" />
         <Tooltip

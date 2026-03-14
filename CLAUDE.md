@@ -477,7 +477,7 @@ All time-series charts must use consistent short date labels on the X-axis:
 Charts that follow this standard:
 - `AttendanceChart` — monthly and weekly views
 - `CommunityAttendanceChart` — monthly and weekly views
-- `SmallGroupTrends` — monthly only
+- `SmallGroupTrends` (Communities and Groups Trends) — monthly only
 
 When adding new time-series charts, use the same `toLocaleDateString('en-US', ...)` pattern with the options above.
 

@@ -499,8 +499,9 @@ export class DashboardService {
     const endIso = endDate.toISOString();
 
     try {
-      // Step 1: Get active groups in Ministry_ID = 8 for the entire period (1 query)
-      const smallGroups = await this.mp!.getTableRecords<{
+      // Step 1: Get active groups by type: Small Group (1), Class (3), Community (11)
+      // Matches the same group types used by Roster vs Attendance
+      const filteredGroups = await this.mp!.getTableRecords<{
         Group_ID: number;
         Group_Type_ID: number;
         Start_Date: string;
@@ -509,37 +510,20 @@ export class DashboardService {
         table: 'Groups',
         select: 'Group_ID,Group_Type_ID,Start_Date,End_Date',
         filter: `
-          Ministry_ID = 8 AND
+          Group_Type_ID IN (1, 3, 11) AND
           Groups.Start_Date <= '${endIso}' AND
           (Groups.End_Date IS NULL OR Groups.End_Date >= '${startIso}')
         `
       });
 
-      if (smallGroups.length === 0) return [];
+      if (filteredGroups.length === 0) return [];
 
-      const smallGroupIds = new Set(smallGroups.map(g => g.Group_ID));
+      // Step 2: Resolve group type names
+      const groupTypeIds = new Set(filteredGroups.map(g => g.Group_Type_ID));
+      const groupTypes = await this.getGroupTypesWithCache(groupTypeIds);
+      const groupTypeMap = new Map(groupTypes.map(gt => [gt.Group_Type_ID, gt.Group_Type]));
 
-      // Step 3: Get all group participants for the entire period (1 query)
-      const groupParticipants = await this.mp!.getTableRecords<{
-        Group_Participant_ID: number;
-        Group_ID: number;
-        Participant_ID: number;
-        Start_Date: string;
-        End_Date: string | null;
-      }>({
-        table: 'Group_Participants',
-        select: 'Group_Participant_ID,Group_ID,Participant_ID,Start_Date,End_Date',
-        filter: `
-          Group_Participants.Group_ID IN (${sanitizeIds(Array.from(smallGroupIds))}) AND
-          Group_Participants.Start_Date <= '${endIso}' AND
-          (Group_Participants.End_Date IS NULL OR Group_Participants.End_Date >= '${startIso}')
-        `
-      });
-
-      // Create a map of group ID to group info for quick lookup
-      const groupMap = new Map(smallGroups.map(g => [g.Group_ID, g]));
-
-      // Step 4: Aggregate by month in JavaScript
+      // Step 3: Aggregate by month in JavaScript
       const trends: SmallGroupTrend[] = [];
       const currentDate = new Date(startDate);
 
@@ -547,37 +531,35 @@ export class DashboardService {
         const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
         const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
 
-        // Filter groups and participants active during this month
-        const activeGroupsThisMonth = new Set<number>();
-        const activeParticipantsThisMonth = new Set<number>();
+        // Count active groups per type this month
+        const activeGroupsByType = new Map<string, Set<number>>();
 
-        for (const gp of groupParticipants) {
-          const group = groupMap.get(gp.Group_ID);
-          if (!group) continue;
-
-          const gpStart = new Date(gp.Start_Date);
-          const gpEnd = gp.End_Date ? new Date(gp.End_Date) : null;
+        for (const group of filteredGroups) {
           const groupStart = new Date(group.Start_Date);
           const groupEnd = group.End_Date ? new Date(group.End_Date) : null;
+          const isActive = groupStart <= monthEnd && (!groupEnd || groupEnd >= monthStart);
 
-          // Check if group participant was active during this month
-          const isGpActive = gpStart <= monthEnd && (!gpEnd || gpEnd >= monthStart);
-          const isGroupActive = groupStart <= monthEnd && (!groupEnd || groupEnd >= monthStart);
-
-          if (isGpActive && isGroupActive) {
-            activeGroupsThisMonth.add(gp.Group_ID);
-            activeParticipantsThisMonth.add(gp.Participant_ID);
+          if (isActive) {
+            const typeName = groupTypeMap.get(group.Group_Type_ID) || `Type ${group.Group_Type_ID}`;
+            if (!activeGroupsByType.has(typeName)) {
+              activeGroupsByType.set(typeName, new Set());
+            }
+            activeGroupsByType.get(typeName)!.add(group.Group_ID);
           }
+        }
+
+        const groupCountByType: { [name: string]: number } = {};
+        let totalActive = 0;
+        for (const [typeName, groupIds] of activeGroupsByType) {
+          groupCountByType[typeName] = groupIds.size;
+          totalActive += groupIds.size;
         }
 
         trends.push({
           month: `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`,
           monthName: MONTH_NAMES[currentDate.getMonth()],
-          activeGroupCount: activeGroupsThisMonth.size,
-          totalParticipants: activeParticipantsThisMonth.size,
-          averageAttendance: activeGroupsThisMonth.size > 0
-            ? Math.round(activeParticipantsThisMonth.size / activeGroupsThisMonth.size)
-            : 0
+          activeGroupCount: totalActive,
+          groupCountByType,
         });
 
         // Move to next month

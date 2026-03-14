@@ -6,7 +6,6 @@ import { DashboardData } from '@/lib/dto';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { MetricCard } from './metric-card';
 import { AttendanceChart } from './attendance-chart';
-import { GroupParticipationChart } from './group-participation-chart';
 import { YearOverYearComparison } from './year-over-year-comparison';
 import { SmallGroupTrends } from './small-group-trends';
 import { CommunityAttendanceChart } from './community-attendance-chart';
@@ -161,41 +160,41 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
       {/* Section 2: Feed Your Soul */}
       {/* ============================================================ */}
       <SectionWrapper title="Feed Your Soul">
-        {/* Community Attendance — unique individuals across all communities */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Community Attendance</CardTitle>
-            <CardDescription>
-              {isSingleMonth ? 'Weekly unique individuals across all communities' : `Monthly unique individuals across all communities${showCompare ? ' comparison' : ''}`}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ExpandableChart
-              title="Community Attendance"
-              description={isSingleMonth ? 'Weekly unique individuals' : `Monthly unique individuals${showCompare ? ' comparison' : ''}`}
-              expandedChildren={
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* Community Attendance — unique individuals across all communities */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Community Attendance</CardTitle>
+              <CardDescription>
+                {isSingleMonth ? 'Weekly unique individuals who checked in to a Community' : 'Monthly unique individuals who checked in to a Community'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ExpandableChart
+                title="Community Attendance"
+                description={isSingleMonth ? 'Weekly unique individuals' : `Monthly unique individuals${showCompare ? ' comparison' : ''}`}
+                expandedChildren={
+                  <CommunityTotalAttendanceChart
+                    currentYear={data.communityAttendanceTrends}
+                    previousYear={showCompare ? data.previousYearCommunityAttendanceTrends : []}
+                    height={600}
+                  />
+                }
+              >
                 <CommunityTotalAttendanceChart
                   currentYear={data.communityAttendanceTrends}
                   previousYear={showCompare ? data.previousYearCommunityAttendanceTrends : []}
-                  height={600}
                 />
-              }
-            >
-              <CommunityTotalAttendanceChart
-                currentYear={data.communityAttendanceTrends}
-                previousYear={showCompare ? data.previousYearCommunityAttendanceTrends : []}
-              />
-            </ExpandableChart>
-          </CardContent>
-        </Card>
+              </ExpandableChart>
+            </CardContent>
+          </Card>
 
-        <div className="grid gap-6 md:grid-cols-2">
           {/* Community Sunday Gathering — per-community breakdown */}
           <Card>
             <CardHeader>
               <CardTitle>Community Sunday Gathering</CardTitle>
               <CardDescription>
-                {isSingleMonth ? 'Weekly attendance by community' : 'Average weekly attendance by community'}
+                {isSingleMonth ? 'Weekly attendance by Community' : 'Average weekly attendance by Community'}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -211,16 +210,16 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
             </CardContent>
           </Card>
 
-          {/* Small Group Trends */}
+          {/* Communities and Groups Trends */}
           <Card>
             <CardHeader>
-              <CardTitle>Small Group Trends</CardTitle>
-              <CardDescription>Monthly active group count and total participants{showCompare ? ' comparison' : ''}</CardDescription>
+              <CardTitle>Communities and Groups Trends</CardTitle>
+              <CardDescription>Monthly active groups in the Communities and Groups Ministry by group type</CardDescription>
             </CardHeader>
             <CardContent>
               <ExpandableChart
-                title="Small Group Trends"
-                description={`Monthly active group count and total participants${showCompare ? ' comparison' : ''}`}
+                title="Communities and Groups Trends"
+                description="Monthly active groups in the Communities and Groups Ministry by group type"
                 expandedChildren={
                   <SmallGroupTrends
                     data={data.smallGroupTrends}
@@ -233,27 +232,6 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
                   data={data.smallGroupTrends}
                   previousYear={showCompare ? data.previousYearSmallGroupTrends : []}
                 />
-              </ExpandableChart>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Group Participation */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Group Participation by Type</CardTitle>
-              <CardDescription>Unique participants by group type</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ExpandableChart
-                title="Group Participation"
-                description="Unique participants by group type"
-                expandedChildren={
-                  <GroupParticipationChart data={data.groupTypeMetrics} height={600} radius={200} />
-                }
-              >
-                <GroupParticipationChart data={data.groupTypeMetrics} />
               </ExpandableChart>
             </CardContent>
           </Card>
