@@ -100,7 +100,7 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
       {/* ============================================================ */}
       <SectionWrapper title="Know God">
         {/* Metric Cards */}
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
           <MetricCard
             title="Avg In-Person Attendance"
             value={data.currentPeriod.averageInPersonAttendance}
