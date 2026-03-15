@@ -6,7 +6,7 @@ import { DashboardData } from '@/lib/dto';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { MetricCard } from './metric-card';
 import { AttendanceChart } from './attendance-chart';
-import { YearOverYearComparison } from './year-over-year-comparison';
+
 import { SmallGroupTrends } from './small-group-trends';
 import { CommunityAttendanceChart } from './community-attendance-chart';
 import { ExpandableChart } from './expandable-chart';
@@ -100,7 +100,7 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
       {/* ============================================================ */}
       <SectionWrapper title="Know God">
         {/* Metric Cards */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-4 md:grid-cols-4">
           <MetricCard
             title="Avg In-Person Attendance"
             value={data.currentPeriod.averageInPersonAttendance}
@@ -271,16 +271,48 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
           </Card>
         ) : (
           <>
-            {/* Serving Trends */}
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Serving by Role Type (with total as header value) */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Serving by Role Type</CardTitle>
+                  <CardDescription>{data.totalServingLeading.toLocaleString()} unique people with an active Serving or Leading group role at any point during the selected period</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ServingByRoleTypeChart data={data.servingByRoleType} height={200} />
+                </CardContent>
+              </Card>
+
+              {/* Where People Serve */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Where People Serve</CardTitle>
+                  <CardDescription>Unique people by the Ministry assigned to their group role. One person serving in multiple ministries is counted in each. &quot;Other&quot; includes roles without an assigned Ministry.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ExpandableChart
+                    title="Where People Serve"
+                    description="Unique people by the Ministry assigned to their group role"
+                    expandedChildren={
+                      <ServingByMinistryChart data={data.servingByMinistry} height={600} />
+                    }
+                  >
+                    <ServingByMinistryChart data={data.servingByMinistry} />
+                  </ExpandableChart>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Serving Trends — full width */}
             <Card>
               <CardHeader>
                 <CardTitle>Serving Trends</CardTitle>
-                <CardDescription>Monthly active servers and leaders{showCompare ? ' comparison' : ''}</CardDescription>
+                <CardDescription>Unique people with an active Serving or Leading group role in each month{showCompare ? ', compared to the same months in the previous year' : ''}</CardDescription>
               </CardHeader>
               <CardContent>
                 <ExpandableChart
                   title="Serving Trends"
-                  description={`Monthly active servers and leaders${showCompare ? ' comparison' : ''}`}
+                  description={`Unique people with an active Serving or Leading group role in each month${showCompare ? ', compared to the same months in the previous year' : ''}`}
                   expandedChildren={
                     <ServingTrendsChart
                       data={data.servingTrends}
@@ -296,62 +328,10 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
                 </ExpandableChart>
               </CardContent>
             </Card>
-
-            {/* Serving metrics — second row */}
-            <div className="grid gap-4 md:grid-cols-2">
-              <MetricCard
-                title="Total Serving/Leading"
-                value={data.totalServingLeading}
-                format="number"
-              />
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Serving by Role Type</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ServingByRoleTypeChart data={data.servingByRoleType} height={200} />
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Where People Serve — full width */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Where People Serve</CardTitle>
-                <CardDescription>Distribution of volunteers across ministries</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ExpandableChart
-                  title="Where People Serve"
-                  description="Distribution of volunteers across ministries"
-                  expandedChildren={
-                    <ServingByMinistryChart data={data.servingByMinistry} height={600} />
-                  }
-                >
-                  <ServingByMinistryChart data={data.servingByMinistry} />
-                </ExpandableChart>
-              </CardContent>
-            </Card>
           </>
         )}
       </SectionWrapper>
 
-      {/* ============================================================ */}
-      {/* Section 4: Other */}
-      {/* ============================================================ */}
-      {showCompare && (
-        <SectionWrapper title="Other">
-          <Card>
-            <CardHeader>
-              <CardTitle>Period Comparison</CardTitle>
-              <CardDescription>Worship attendance and event metrics vs. previous period</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <YearOverYearComparison data={data.yearOverYear} />
-            </CardContent>
-          </Card>
-        </SectionWrapper>
-      )}
 
     </div>
   );

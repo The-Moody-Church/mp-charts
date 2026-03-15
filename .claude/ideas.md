@@ -25,6 +25,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Contact-Lookup badges for Member should specify thpe (#85)](#contact-lookup-badges-for-member-should-specify-thpe-85)~~ ✅
 
 ### Improvements
+- [Serving metrics: reconcile adult-only vs all-ages counts](#serving-metrics-reconcile-adult-only-vs-all-ages-counts)
 - ~~[Small Group Trends Chart (#15)](#small-group-trends-chart-15)~~ ✅
 - ~~[contact lookup search improvements (#94)](#contact-lookup-search-improvements-94)~~ ✅
 - ~~[membership badge on contact lookup should include date joined (#93)](#membership-badge-on-contact-lookup-should-include-date-joined-93)~~ ✅
@@ -148,6 +149,9 @@ Extracted `statusBadgeColor` to shared utility (`src/lib/contact-badge-utils.ts`
 ---
 
 ## Improvements
+
+### Serving metrics: reconcile adult-only vs all-ages counts
+The Engagement Overview Venn diagram filters serving/leading to **adults only** (18+ or unknown birthdate), showing ~830. The Grow in Love section's "Serving by Role Type" counts **all ages**, showing ~1,022. The ~192-person gap is minors with active serving/leading roles (e.g., student volunteers). Need to decide: should the Grow in Love charts also filter to adults, or should the Venn diagram include all ages? Or add an "(all ages)" note to the Grow in Love description to make the difference explicit?
 
 ### ~~Small Group Trends Chart ([#15](https://github.com/The-Moody-Church/mp-charts/issues/15))~~ ✅ COMPLETED
 

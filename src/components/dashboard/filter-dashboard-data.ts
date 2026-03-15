@@ -517,13 +517,16 @@ function computeServingMetrics(
   }));
 
   // By Ministry: group by ministryId, count unique contacts, sort descending
+  // Records without a Ministry_ID are grouped under "Other"
+  const OTHER_MINISTRY_ID = -1;
   const byMinistry = new Map<number, { name: string; contacts: Set<number> }>();
   for (const r of active) {
-    if (r.ministryId === null) continue;
-    if (!byMinistry.has(r.ministryId)) {
-      byMinistry.set(r.ministryId, { name: r.ministryName || 'Unknown', contacts: new Set() });
+    const mid = r.ministryId ?? OTHER_MINISTRY_ID;
+    const mname = r.ministryId === null ? 'Other' : (r.ministryName || 'Unknown');
+    if (!byMinistry.has(mid)) {
+      byMinistry.set(mid, { name: mname, contacts: new Set() });
     }
-    byMinistry.get(r.ministryId)!.contacts.add(r.contactId);
+    byMinistry.get(mid)!.contacts.add(r.contactId);
   }
   const servingByMinistry: ServingByMinistry[] = Array.from(byMinistry.entries())
     .map(([ministryId, data]) => ({

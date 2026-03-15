@@ -2,7 +2,7 @@
 
 ## Objectives
 
-Polish the Journey of a Lifetime dashboard, reviewing the Feed Your Soul section charts.
+Polish the Journey of a Lifetime dashboard — Feed Your Soul, Grow in Love, and Know God sections.
 
 ## Issues Addressed
 
@@ -27,6 +27,13 @@ Polish the Journey of a Lifetime dashboard, reviewing the Feed Your Soul section
 - Removed Group Participation by Type pie chart and its import
 - All four Feed Your Soul charts in a single `md:grid-cols-2` grid
 - Updated descriptions for Communities and Groups Trends
+- **Know God**: Changed metric cards grid from `md:grid-cols-2 lg:grid-cols-5` to `md:grid-cols-4`
+- **Grow in Love**: Combined Total Serving/Leading into Serving by Role Type card header. 2-col grid for pie charts, full-width Serving Trends below.
+- Removed "Other" section with Period Comparison (YearOverYearComparison) chart entirely
+- Added detailed chart descriptions explaining what each metric measures and why numbers differ
+
+### Serving Data Fix (`filter-dashboard-data.ts`)
+- "Where People Serve" now includes an "Other" bucket for group roles without an assigned Ministry_ID (previously ~229 people were silently excluded)
 
 ### Other Chart Updates (from earlier in session / prior context)
 - `attendance-chart.tsx`: Year format "Mon '25", previousOnly asterisk markers, tickFormatter
@@ -39,7 +46,8 @@ Polish the Journey of a Lifetime dashboard, reviewing the Feed Your Soul section
 - `src/services/dashboardService.ts` — getSmallGroupTrends query and aggregation
 - `src/components/dashboard/community-attendance-chart.tsx` — tooltip title + total
 - `src/components/dashboard/small-group-trends.tsx` — full rewrite
-- `src/components/dashboard/dashboard-metrics.tsx` — layout, descriptions, removed pie chart
+- `src/components/dashboard/dashboard-metrics.tsx` — layout, descriptions, removed pie chart, removed Other/Period Comparison section
+- `src/components/dashboard/filter-dashboard-data.ts` — "Other" ministry bucket for null Ministry_IDs
 - `src/components/dashboard/attendance-chart.tsx` — year format, previousOnly markers
 - `src/components/dashboard/community-total-attendance-chart.tsx` — line style, previousOnly markers
 
@@ -48,3 +56,7 @@ Polish the Journey of a Lifetime dashboard, reviewing the Feed Your Soul section
 - Group type filter changed from Ministry_ID=8 exclusion-based to explicit `Group_Type_ID IN (1, 3, 11)` to match Roster vs Attendance chart
 - Removed legend from Communities & Groups Trends because with YoY comparison it produced 10+ legend entries that obscured the tooltip
 - Kept line chart (not stacked area) for group trends to support previous period comparison
+- Combined Total Serving/Leading metric into Serving by Role Type card header (saves space, reduces confusion)
+- Removed Period Comparison chart — redundant with per-chart YoY comparisons
+- Added "Other" bucket for null Ministry_IDs rather than silently dropping ~229 people
+- Filed idea for reconciling adult-only (Venn) vs all-ages (Grow in Love) serving counts

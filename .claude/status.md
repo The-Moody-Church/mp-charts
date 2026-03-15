@@ -8,7 +8,7 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
-| 2026-03-14 | **Dashboard Feed Your Soul polish**: Renamed Small Group Trends → Communities and Groups Trends with group type breakdown (1, 3, 11). Custom tooltip titles, totals, stacked area sorting, year format fixes, removed Group Participation pie chart, 2-col grid layout. | #52 | — |
+| 2026-03-14 | **Dashboard polish**: Feed Your Soul (Communities & Groups Trends rewrite, tooltip titles, totals, sorting), Know God (4-col metrics), Grow in Love (combined serving total into role type card, 2-col layout, detailed descriptions, "Other" ministry bucket), removed Period Comparison section. | #52 | — |
 | 2026-03-13 | **Feedback → GitHub issues**: Replaced MP Feedback_Entries with GitHub issue creation. Simplified config (removed feedbackTypeId/assignedToContactId), added GITHUB_FEEDBACK_TOKEN env var, appends page URL + user name to issues, admin shows token status. | #104 | — |
 | 2026-03-12 | **Restrict contact log edit by owner**: Edit button and server action only allow editing logs created by the current user (Made_By check). Added "Logged by" display showing who created each log entry. | #96 | — |
 | 2026-03-12 | **Contact search null safety & scoring**: Fixed localeCompare crash on null Last_Name/First_Name (#99), added proportional prefix-match bonus to search scoring (#98) | #98, #99 | #101 |
