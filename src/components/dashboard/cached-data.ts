@@ -47,21 +47,18 @@ export async function getCachedFullRangeData(earliestYear: number, endDateIso: s
 /**
  * Cached extended dashboard data (heavy queries) loaded separately.
  * Revalidates every 6 hours; serves stale for up to 24 hours (stale-while-revalidate).
- * Uses a date string cache key so it refreshes daily.
+ * Cache key is the full-range start/end dates (stable within a ministry year),
+ * so stale data survives container restarts until the next revalidation.
  * Date-filterable data (event participants, roster/attendance) uses the full
  * selectable range so filterDashboardData can recompute on the client.
  */
 export async function getCachedExtendedData(
-  dateIso: string,
   fullRangeStartIso: string,
   fullRangeEndIso: string
 ): Promise<Partial<DashboardData>> {
   'use cache';
   cacheLife({ revalidate: 21600, stale: 86400 });
   cacheTag('dashboard-data', 'dashboard-extended');
-
-  // dateIso is used as cache key only — suppress unused lint
-  void dateIso;
 
   const [startYear, startMonth, startDay] = fullRangeStartIso.split('-').map(Number);
   const [endYear, endMonth, endDay] = fullRangeEndIso.split('-').map(Number);
@@ -77,19 +74,15 @@ export async function getCachedExtendedData(
  * Cached engagement venn data (Activity_Log query — slowest query) loaded last.
  * Revalidates every 6 hours; serves stale for up to 24 hours (stale-while-revalidate).
  * Separated from extended data so serving/roster/EP charts can render first.
- * Uses a date string cache key so it refreshes daily.
+ * Cache key is the full-range start/end dates (stable within a ministry year).
  */
 export async function getCachedEngagementData(
-  dateIso: string,
   fullRangeStartIso: string,
   fullRangeEndIso: string
 ): Promise<Partial<DashboardData>> {
   'use cache';
   cacheLife({ revalidate: 21600, stale: 86400 });
   cacheTag('dashboard-data', 'dashboard-engagement');
-
-  // dateIso is used as cache key only — suppress unused lint
-  void dateIso;
 
   const [startYear, startMonth, startDay] = fullRangeStartIso.split('-').map(Number);
   const [endYear, endMonth, endDay] = fullRangeEndIso.split('-').map(Number);

@@ -237,8 +237,8 @@ async function getCachedData(key: string) {
 |---|---|---|---|---|
 | `getCachedDashboardData(year)` | 6h | 24h | `dashboard-data`, `year-N` | `src/components/dashboard/cached-data.ts` |
 | `getCachedFullRangeData(year, endDate)` | 6h | 24h | `dashboard-data`, `dashboard-full-range` | `src/components/dashboard/cached-data.ts` |
-| `getCachedExtendedData(dateIso, start, end)` | 6h | 24h | `dashboard-data`, `dashboard-extended` | `src/components/dashboard/cached-data.ts` |
-| `getCachedEngagementData(dateIso, start, end)` | 6h | 24h | `dashboard-data`, `dashboard-engagement` | `src/components/dashboard/cached-data.ts` |
+| `getCachedExtendedData(start, end)` | 6h | 24h | `dashboard-data`, `dashboard-extended` | `src/components/dashboard/cached-data.ts` |
+| `getCachedEngagementData(start, end)` | 6h | 24h | `dashboard-data`, `dashboard-engagement` | `src/components/dashboard/cached-data.ts` |
 | `getCachedGroupTypes(ids)` | 24h | 48h | `group-types` | `src/services/dashboardService.ts` |
 | `getCachedAllContacts()` | 6h | 24h | `contacts-search` | `src/components/contact-lookup/cached-contacts.ts` |
 

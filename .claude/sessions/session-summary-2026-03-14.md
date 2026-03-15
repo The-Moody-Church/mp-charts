@@ -51,6 +51,19 @@ Polish the Journey of a Lifetime dashboard — Feed Your Soul, Grow in Love, and
 - `src/components/dashboard/attendance-chart.tsx` — year format, previousOnly markers
 - `src/components/dashboard/community-total-attendance-chart.tsx` — line style, previousOnly markers
 
+### Dashboard Cache Key Fix (issue #108)
+- **Removed `dateIso` parameter** from `getCachedExtendedData` and `getCachedEngagementData` — was causing daily cold cache misses because the cache key changed every day, defeating stale-while-revalidate
+- Cache keys now use only the full-range start/end dates (stable within a ministry year)
+- Daily 6 AM warming + 6h revalidate still ensure fresh data; no need for daily key rotation
+- **Fixed `new Date()` PPR error** in dashboard page.tsx — moved dev debug banner into async `DashboardContent` after `await connection()` to comply with Next.js 16 prerender rules
+
+### Files Modified (cache fix)
+- `src/components/dashboard/cached-data.ts` — removed `dateIso` param from 2 functions
+- `src/components/dashboard/actions.ts` — stopped computing/passing `dateIso`
+- `src/lib/cache-warming.ts` — updated warming calls to match new signatures
+- `src/app/(web)/dashboard/page.tsx` — moved `new Date()` after `connection()`
+- `CLAUDE.md` — updated cached functions table
+
 ## Key Decisions
 
 - Group type filter changed from Ministry_ID=8 exclusion-based to explicit `Group_Type_ID IN (1, 3, 11)` to match Roster vs Attendance chart
