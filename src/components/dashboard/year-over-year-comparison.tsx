@@ -13,8 +13,8 @@ export function YearOverYearComparison({ data }: YearOverYearComparisonProps) {
 
   const chartData = data.map(item => ({
     metric: item.metric,
-    'Current Year': item.currentYear,
-    'Previous Year': item.previousYear
+    'Current Period': item.currentYear,
+    'Previous Period': item.previousYear
   }));
 
   if (chartData.length === 0) {
@@ -41,8 +41,8 @@ export function YearOverYearComparison({ data }: YearOverYearComparisonProps) {
           }}
         />
         {!isMobile && <Legend />}
-        <Bar dataKey="Current Year" fill="#3b82f6" />
-        <Bar dataKey="Previous Year" fill="#94a3b8" />
+        <Bar dataKey="Current Period" fill="#3b82f6" />
+        <Bar dataKey="Previous Period" fill="#94a3b8" />
       </BarChart>
     </ResponsiveContainer>
   );

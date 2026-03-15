@@ -24,7 +24,7 @@ export function DashboardHeader() {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <h1 className="text-4xl font-bold tracking-tight">Executive Dashboard</h1>
+        <h1 className="text-4xl font-bold tracking-tight">Dashboard: Journey of a Lifetime</h1>
         <Button
           onClick={handleRefresh}
           disabled={isPending}

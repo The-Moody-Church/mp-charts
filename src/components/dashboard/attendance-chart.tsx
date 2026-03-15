@@ -25,7 +25,9 @@ export function AttendanceChart({ currentYear, previousYear, height = 300 }: Att
     if (isWeekly) return monthName; // Already "Feb 1" etc. from dateLabel
     const [y, m] = sortKey.split('-').map(Number);
     const date = new Date(y, m - 1, 1);
-    return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+    const mon = date.toLocaleDateString('en-US', { month: 'short' });
+    const yr = date.toLocaleDateString('en-US', { year: '2-digit' });
+    return `${mon} '${yr}`;
   };
 
   // Create a map of all unique data points (keyed by monthName for merging)
@@ -33,6 +35,7 @@ export function AttendanceChart({ currentYear, previousYear, height = 300 }: Att
     name: string;       // display label for X-axis
     mergeKey: string;   // monthName used for current/previous year matching
     sortKey: string;
+    previousOnly?: boolean;
     currentInPerson?: number;
     currentOnline?: number;
     currentTotal?: number;
@@ -67,19 +70,47 @@ export function AttendanceChart({ currentYear, previousYear, height = 300 }: Att
           name: formatLabel(item.month, item.monthName),
           mergeKey: item.monthName,
           sortKey: item.month,
+          previousOnly: true,
           previousInPerson: item.averageInPersonAttendance,
           previousOnline: item.averageOnlineAttendance,
           previousTotal: item.averageTotalAttendance
         });
       }
     });
+  } else {
+    // For weekly data, merge previous year dates by month-day (MM-DD)
+    previousFiltered.forEach(item => {
+      const dayKey = item.month.slice(5); // MM-DD
+      // Check if a current year entry shares this month-day
+      const existingEntry = Array.from(monthsMap.values()).find(e => e.sortKey.slice(5) === dayKey);
+      if (existingEntry) {
+        existingEntry.previousInPerson = item.averageInPersonAttendance;
+        existingEntry.previousOnline = item.averageOnlineAttendance;
+        existingEntry.previousTotal = item.averageTotalAttendance;
+      } else {
+        const key = `prev-${item.month}`;
+        monthsMap.set(key, {
+          name: formatLabel(item.month, item.monthName),
+          mergeKey: key,
+          sortKey: item.month,
+          previousOnly: true,
+          previousInPerson: item.averageInPersonAttendance,
+          previousOnline: item.averageOnlineAttendance,
+          previousTotal: item.averageTotalAttendance,
+        });
+      }
+    });
   }
+
+  // Check if any previous year data was merged in
+  const hasPrevious = Array.from(monthsMap.values()).some(d => d.previousTotal != null);
 
   // Sort: by ministry year order for monthly data, chronologically for weekly
   const monthOrder = ['September', 'October', 'November', 'December', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August'];
   const chartData = Array.from(monthsMap.values()).sort((a, b) => {
     if (isWeekly) {
-      return a.sortKey.localeCompare(b.sortKey);
+      // Sort by month-day only (strip year) so current & previous year dates interleave
+      return a.sortKey.slice(5).localeCompare(b.sortKey.slice(5));
     }
     return monthOrder.indexOf(a.mergeKey) - monthOrder.indexOf(b.mergeKey);
   });
@@ -100,6 +131,10 @@ export function AttendanceChart({ currentYear, previousYear, height = 300 }: Att
           dataKey="name"
           className="text-xs"
           padding={{ left: isMobile ? 5 : 20, right: isMobile ? 5 : 20 }}
+          tickFormatter={(value: string, index: number) => {
+            const entry = chartData[index];
+            return entry?.previousOnly ? `*${value}*` : value;
+          }}
         />
         <YAxis className="text-xs" />
         <Tooltip
@@ -113,12 +148,12 @@ export function AttendanceChart({ currentYear, previousYear, height = 300 }: Att
           }}
         />
         {!isMobile && <Legend />}
-        <Line dataKey="currentInPerson" stroke="#3b82f6" strokeWidth={2} name={isWeekly ? 'In-Person' : 'In-Person (Current)'} />
-        {!isWeekly && <Line dataKey="previousInPerson" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" name="In-Person (Previous)" />}
-        <Line dataKey="currentOnline" stroke="#10b981" strokeWidth={2} name={isWeekly ? 'Online' : 'Online (Current)'} />
-        {!isWeekly && <Line dataKey="previousOnline" stroke="#10b981" strokeWidth={2} strokeDasharray="5 5" name="Online (Previous)" />}
-        <Line dataKey="currentTotal" stroke="#f59e0b" strokeWidth={2} name={isWeekly ? 'Total' : 'Total (Current)'} />
-        {!isWeekly && <Line dataKey="previousTotal" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" name="Total (Previous)" />}
+        <Line dataKey="currentInPerson" stroke="#3b82f6" strokeWidth={2} connectNulls name={hasPrevious ? 'In-Person (Current)' : 'In-Person'} />
+        {hasPrevious && <Line dataKey="previousInPerson" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" connectNulls name="In-Person (Previous)" />}
+        <Line dataKey="currentOnline" stroke="#10b981" strokeWidth={2} connectNulls name={hasPrevious ? 'Online (Current)' : 'Online'} />
+        {hasPrevious && <Line dataKey="previousOnline" stroke="#10b981" strokeWidth={2} strokeDasharray="5 5" connectNulls name="Online (Previous)" />}
+        <Line dataKey="currentTotal" stroke="#f59e0b" strokeWidth={2} connectNulls name={hasPrevious ? 'Total (Current)' : 'Total'} />
+        {hasPrevious && <Line dataKey="previousTotal" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" connectNulls name="Total (Previous)" />}
       </LineChart>
     </ResponsiveContainer>
   );

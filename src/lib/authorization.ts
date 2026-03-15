@@ -29,7 +29,7 @@ export type FeatureAccessConfig = Record<string, FeatureConfig>;
 
 const DEFAULT_CONFIG: FeatureAccessConfig = {
   "dashboard": {
-    label: "Executive Dashboard",
+    label: "Dashboard: Journey of a Lifetime",
     description: "View ministry metrics and attendance data",
     allowedGroupIds: [],
   },

@@ -58,3 +58,28 @@ Added a daily scheduled cache re-warm so caches are always fresh before users ar
 **Files modified:**
 - `src/instrumentation.ts` — Added `scheduleDailyWarm()` function with CT timezone calculation, called from `register()`
 - `CLAUDE.md` — Updated Cache Warming section to document daily 6 AM CT schedule
+
+### Dashboard Chart Improvements (branch: `fix/dashboard-chart-descriptions`) ⚠️ IN PROGRESS
+
+Improving executive dashboard charts: data accuracy, descriptions, and year-over-year comparisons in single-month (weekly) views.
+
+**Changes in this session:**
+1. Removed Unique Event Participants KPI card from dashboard metrics (UI only, underlying data kept)
+2. Changed Community Attendance total chart to count unique Participant_IDs (deduped across groups) instead of summing per-group attendance
+3. Changed label wording from "unique participants" to "unique individuals"
+4. Added previous-year comparison to single-month (weekly) views for both Worship Service Attendance and Community Attendance charts
+5. Interleaved dates from both years on same x-axis sorted by MM-DD, with solid/dashed lines
+6. Fixed duplicate x-axis entries when both years share the same day-of-month — entries now merge into a single point
+
+**Files modified:**
+- `src/components/dashboard/dashboard-metrics.tsx` — Removed Unique Event Participants card, updated descriptions
+- `src/lib/dto/dashboard.ts` — Added `uniqueParticipants: number` to `CommunityAttendanceTrend`
+- `src/services/dashboardService.ts` — Added `Participant_ID` tracking, deduplication per month/week
+- `src/components/dashboard/community-total-attendance-chart.tsx` — Rewrote to use `uniqueParticipants`, added weekly YoY comparison with MM-DD merge
+- `src/components/dashboard/attendance-chart.tsx` — Added weekly YoY comparison with MM-DD merge, `connectNulls`, dynamic labels
+- `CLAUDE.md` — Documented "Year-over-Year Weekly Comparison" pattern in Chart Formatting Standards
+
+**Key decisions:**
+- Sort by `date.slice(5)` (MM-DD only) to interleave dates from both years
+- Use a Map keyed by MM-DD to merge same-day entries into single x-axis points
+- `connectNulls` on all lines so each year's line draws through gaps where only the other year has data

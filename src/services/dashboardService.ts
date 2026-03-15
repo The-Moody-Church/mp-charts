@@ -149,7 +149,8 @@ export class DashboardService {
       weeklyAttendanceTrends,
       baptismDates,
       membershipDates,
-      membershipDroppedDates,
+      associateMemberDates,
+      youthMemberDates,
     ] = await Promise.all([
       this.getPeriodMetrics(currentYearStart, currentYearEnd),
       this.getPeriodMetrics(previousYearStart, previousYearEnd),
@@ -161,7 +162,8 @@ export class DashboardService {
       this.getWeeklyAttendanceTrends(currentYearStart, currentYearEnd),
       this.getMilestoneDates(3, currentYearStart, currentYearEnd),           // Baptism
       this.getMilestoneDates(48, currentYearStart, currentYearEnd),          // Registered Member
-      this.getMilestoneDates(49, currentYearStart, currentYearEnd),          // Dropped Membership
+      this.getMilestoneDates(51, currentYearStart, currentYearEnd),          // Associate Member
+      this.getMilestoneDates(52, currentYearStart, currentYearEnd),          // Youth Member
     ]);
 
     return {
@@ -179,7 +181,8 @@ export class DashboardService {
       weeklyCommunityAttendanceTrends: communityTrends.weekly,
       baptismDates,
       membershipDates,
-      membershipDroppedDates,
+      associateMemberDates,
+      youthMemberDates,
       baptismsCurrentPeriod: 0,  // Computed client-side by filterDashboardData
       baptismsPreviousPeriod: 0,
       membershipCurrentPeriod: 0,
@@ -496,8 +499,9 @@ export class DashboardService {
     const endIso = endDate.toISOString();
 
     try {
-      // Step 1: Get active groups in Ministry_ID = 8 for the entire period (1 query)
-      const smallGroups = await this.mp!.getTableRecords<{
+      // Step 1: Get active groups by type: Small Group (1), Class (3), Community (11)
+      // Matches the same group types used by Roster vs Attendance
+      const filteredGroups = await this.mp!.getTableRecords<{
         Group_ID: number;
         Group_Type_ID: number;
         Start_Date: string;
@@ -506,37 +510,20 @@ export class DashboardService {
         table: 'Groups',
         select: 'Group_ID,Group_Type_ID,Start_Date,End_Date',
         filter: `
-          Ministry_ID = 8 AND
+          Group_Type_ID IN (1, 3, 11) AND
           Groups.Start_Date <= '${endIso}' AND
           (Groups.End_Date IS NULL OR Groups.End_Date >= '${startIso}')
         `
       });
 
-      if (smallGroups.length === 0) return [];
+      if (filteredGroups.length === 0) return [];
 
-      const smallGroupIds = new Set(smallGroups.map(g => g.Group_ID));
+      // Step 2: Resolve group type names
+      const groupTypeIds = new Set(filteredGroups.map(g => g.Group_Type_ID));
+      const groupTypes = await this.getGroupTypesWithCache(groupTypeIds);
+      const groupTypeMap = new Map(groupTypes.map(gt => [gt.Group_Type_ID, gt.Group_Type]));
 
-      // Step 3: Get all group participants for the entire period (1 query)
-      const groupParticipants = await this.mp!.getTableRecords<{
-        Group_Participant_ID: number;
-        Group_ID: number;
-        Participant_ID: number;
-        Start_Date: string;
-        End_Date: string | null;
-      }>({
-        table: 'Group_Participants',
-        select: 'Group_Participant_ID,Group_ID,Participant_ID,Start_Date,End_Date',
-        filter: `
-          Group_Participants.Group_ID IN (${sanitizeIds(Array.from(smallGroupIds))}) AND
-          Group_Participants.Start_Date <= '${endIso}' AND
-          (Group_Participants.End_Date IS NULL OR Group_Participants.End_Date >= '${startIso}')
-        `
-      });
-
-      // Create a map of group ID to group info for quick lookup
-      const groupMap = new Map(smallGroups.map(g => [g.Group_ID, g]));
-
-      // Step 4: Aggregate by month in JavaScript
+      // Step 3: Aggregate by month in JavaScript
       const trends: SmallGroupTrend[] = [];
       const currentDate = new Date(startDate);
 
@@ -544,37 +531,35 @@ export class DashboardService {
         const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
         const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
 
-        // Filter groups and participants active during this month
-        const activeGroupsThisMonth = new Set<number>();
-        const activeParticipantsThisMonth = new Set<number>();
+        // Count active groups per type this month
+        const activeGroupsByType = new Map<string, Set<number>>();
 
-        for (const gp of groupParticipants) {
-          const group = groupMap.get(gp.Group_ID);
-          if (!group) continue;
-
-          const gpStart = new Date(gp.Start_Date);
-          const gpEnd = gp.End_Date ? new Date(gp.End_Date) : null;
+        for (const group of filteredGroups) {
           const groupStart = new Date(group.Start_Date);
           const groupEnd = group.End_Date ? new Date(group.End_Date) : null;
+          const isActive = groupStart <= monthEnd && (!groupEnd || groupEnd >= monthStart);
 
-          // Check if group participant was active during this month
-          const isGpActive = gpStart <= monthEnd && (!gpEnd || gpEnd >= monthStart);
-          const isGroupActive = groupStart <= monthEnd && (!groupEnd || groupEnd >= monthStart);
-
-          if (isGpActive && isGroupActive) {
-            activeGroupsThisMonth.add(gp.Group_ID);
-            activeParticipantsThisMonth.add(gp.Participant_ID);
+          if (isActive) {
+            const typeName = groupTypeMap.get(group.Group_Type_ID) || `Type ${group.Group_Type_ID}`;
+            if (!activeGroupsByType.has(typeName)) {
+              activeGroupsByType.set(typeName, new Set());
+            }
+            activeGroupsByType.get(typeName)!.add(group.Group_ID);
           }
+        }
+
+        const groupCountByType: { [name: string]: number } = {};
+        let totalActive = 0;
+        for (const [typeName, groupIds] of activeGroupsByType) {
+          groupCountByType[typeName] = groupIds.size;
+          totalActive += groupIds.size;
         }
 
         trends.push({
           month: `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`,
           monthName: MONTH_NAMES[currentDate.getMonth()],
-          activeGroupCount: activeGroupsThisMonth.size,
-          totalParticipants: activeParticipantsThisMonth.size,
-          averageAttendance: activeGroupsThisMonth.size > 0
-            ? Math.round(activeParticipantsThisMonth.size / activeGroupsThisMonth.size)
-            : 0
+          activeGroupCount: totalActive,
+          groupCountByType,
         });
 
         // Move to next month
@@ -625,10 +610,11 @@ export class DashboardService {
         Event_Participant_ID: number;
         Event_ID: number;
         Group_ID: number;
+        Participant_ID: number;
         Participation_Status_ID: number;
       }>({
         table: 'Event_Participants',
-        select: 'Event_Participant_ID,Event_ID,Group_ID,Participation_Status_ID',
+        select: 'Event_Participant_ID,Event_ID,Group_ID,Participant_ID,Participation_Status_ID',
         filter: `Event_Participants.Group_ID IN (${sanitizeIds(communityGroupIds)}) AND Event_Participants.Participation_Status_ID IN (3, 4)`
       });
 
@@ -681,6 +667,10 @@ export class DashboardService {
         participantIds: Set<number>;
       }>>();
 
+      // Track unique Participant_IDs across all groups (for deduped totals)
+      const monthlyUniqueParticipants = new Map<string, Set<number>>();
+      const weeklyUniqueParticipants = new Map<string, Set<number>>();
+
       for (const participant of sundayParticipants) {
         const eventDate = eventDateMap.get(participant.Event_ID);
         if (!eventDate) continue;
@@ -704,6 +694,12 @@ export class DashboardService {
         monthGroupData.participantIds.add(participant.Event_Participant_ID);
         monthGroupData.eventIds.add(participant.Event_ID);
 
+        // Track unique people per month (across all groups)
+        if (!monthlyUniqueParticipants.has(monthKey)) {
+          monthlyUniqueParticipants.set(monthKey, new Set());
+        }
+        monthlyUniqueParticipants.get(monthKey)!.add(participant.Participant_ID);
+
         // Weekly aggregation
         if (!weeklyGroupData.has(dateKey)) {
           weeklyGroupData.set(dateKey, new Map());
@@ -713,6 +709,12 @@ export class DashboardService {
           weekData.set(participant.Group_ID, { participantIds: new Set() });
         }
         weekData.get(participant.Group_ID)!.participantIds.add(participant.Event_Participant_ID);
+
+        // Track unique people per week (across all groups)
+        if (!weeklyUniqueParticipants.has(dateKey)) {
+          weeklyUniqueParticipants.set(dateKey, new Set());
+        }
+        weeklyUniqueParticipants.get(dateKey)!.add(participant.Participant_ID);
       }
 
       // Build monthly trends (averages)
@@ -726,7 +728,8 @@ export class DashboardService {
         }
         monthly.push({
           weekStartDate: monthKey + '-01',
-          communityAttendance
+          communityAttendance,
+          uniqueParticipants: monthlyUniqueParticipants.get(monthKey)?.size ?? 0,
         });
       }
 
@@ -740,7 +743,8 @@ export class DashboardService {
         }
         weekly.push({
           weekStartDate: dateKey,
-          communityAttendance
+          communityAttendance,
+          uniqueParticipants: weeklyUniqueParticipants.get(dateKey)?.size ?? 0,
         });
       }
 
@@ -1304,7 +1308,7 @@ export class DashboardService {
 
   /**
    * Gets raw engagement data for the venn diagram.
-   * Three dimensions: Activity (Activity_Log), Groups (Ministry_ID=8), Serving (contact IDs).
+   * Three dimensions: Activity (Activity_Log), Groups (Ministry_ID 8/14/19 + Group_ID 763), Serving (contact IDs).
    * All data is bucketed/dated so client can filter by selected date range.
    * Adult filter is pre-computed once and stored for client-side intersection.
    * Self-contained: fetches serving contact IDs internally for the adult filter.
@@ -1348,11 +1352,12 @@ export class DashboardService {
         .filter(m => m.contactIds.length > 0)
         .sort((a, b) => a.month.localeCompare(b.month));
 
-      // Step 2: Groups — Ministry_ID=8, with date ranges for client-side filtering
+      // Step 2: Groups — Communities & Groups (Ministry_ID=8), Choir (Group_ID=763),
+      // Men's Ministry (Ministry_ID=14), Women's Ministry (Ministry_ID=19)
       const groups = await this.mp!.getTableRecords<{ Group_ID: number }>({
         table: 'Groups',
         select: 'Group_ID',
-        filter: `Ministry_ID = 8 AND Start_Date <= '${endIso}' AND (End_Date IS NULL OR End_Date >= '${startIso}')`
+        filter: `(Ministry_ID IN (8, 14, 19) OR Group_ID = 763) AND Start_Date <= '${endIso}' AND (End_Date IS NULL OR End_Date >= '${startIso}')`
       });
 
       let groupRecords: EngagementRawData['groupRecords'] = [];

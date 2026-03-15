@@ -11,42 +11,42 @@ interface CommunityTotalAttendanceChartProps {
 }
 
 /**
- * Aggregate CommunityAttendanceTrend[] into monthly totals.
- * Input weekStartDate is YYYY-MM-DD; output groups by YYYY-MM and sums attendance.
+ * Aggregate CommunityAttendanceTrend[] into monthly unique participant counts.
+ * Uses the pre-computed uniqueParticipants field (deduped across all groups).
  */
 function aggregateToMonthlyTotals(data: CommunityAttendanceTrend[]): { month: string; monthName: string; total: number }[] {
-  const monthMap = new Map<string, { sum: number; count: number }>();
-
-  for (const week of data) {
-    const monthKey = week.weekStartDate.slice(0, 7); // YYYY-MM
-    const total = Object.values(week.communityAttendance).reduce((s, v) => s + v, 0);
-    const existing = monthMap.get(monthKey) || { sum: 0, count: 0 };
-    monthMap.set(monthKey, { sum: existing.sum + total, count: existing.count + 1 });
-  }
-
-  return Array.from(monthMap.entries()).map(([monthKey, { sum, count }]) => {
-    const [y, m] = monthKey.split('-').map(Number);
+  // Monthly data already has one entry per month with uniqueParticipants set
+  return data.map(entry => {
+    const [y, m] = entry.weekStartDate.split('-').map(Number);
     const date = new Date(y, m - 1, 1);
     return {
-      month: monthKey,
+      month: entry.weekStartDate.slice(0, 7),
       monthName: date.toLocaleDateString('en-US', { month: 'long' }),
-      total: Math.round(sum / count),
+      total: entry.uniqueParticipants,
     };
   });
 }
 
+/** Format a YYYY-MM key into "Mon '25" */
+function formatMonthLabel(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  const date = new Date(y, m - 1, 1);
+  const mon = date.toLocaleDateString('en-US', { month: 'short' });
+  const yr = date.toLocaleDateString('en-US', { year: '2-digit' });
+  return `${mon} '${yr}`;
+}
+
 /**
- * For weekly data (single month), compute per-week totals.
+ * For weekly data (single month), use unique participant counts per week.
  */
 function aggregateWeeklyTotals(data: CommunityAttendanceTrend[]): { date: string; dateLabel: string; total: number }[] {
   return data.map(week => {
-    const total = Object.values(week.communityAttendance).reduce((s, v) => s + v, 0);
     const [y, m, d] = week.weekStartDate.split('-').map(Number);
     const date = new Date(y, m - 1, d);
     return {
       date: week.weekStartDate,
       dateLabel: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      total,
+      total: week.uniqueParticipants,
     };
   });
 }
@@ -65,22 +65,43 @@ export function CommunityTotalAttendanceChart({ currentYear, previousYear, heigh
   // Detect if weekly granularity (multiple entries within same month)
   const monthKeys = new Set(currentYear.map(w => w.weekStartDate.slice(0, 7)));
   const isWeekly = currentYear.length > monthKeys.size;
-  const showComparison = previousYear.length > 0 && !isWeekly;
+  const showComparison = previousYear.length > 0;
 
   if (isWeekly) {
-    // Weekly view — single line, no comparison
-    const weeklyData = aggregateWeeklyTotals(currentYear);
-    const chartData = weeklyData.map(w => ({
-      name: w.dateLabel,
-      sortKey: w.date,
-      'Total Attendance': w.total,
-    })).sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+    // Weekly view — interleave current & previous year dates on same axis
+    const currentWeekly = aggregateWeeklyTotals(currentYear);
+    const previousWeekly = showComparison ? aggregateWeeklyTotals(previousYear) : [];
+
+    // Build merged dataset keyed by month-day so same-day entries combine
+    const mergedMap = new Map<string, { name: string; daySortKey: string; previousOnly?: boolean; currentTotal?: number; previousTotal?: number }>();
+    for (const w of currentWeekly) {
+      const key = w.date.slice(5); // MM-DD
+      mergedMap.set(key, { name: w.dateLabel, daySortKey: key, currentTotal: w.total });
+    }
+    for (const w of previousWeekly) {
+      const key = w.date.slice(5); // MM-DD
+      const existing = mergedMap.get(key);
+      if (existing) {
+        existing.previousTotal = w.total;
+      } else {
+        mergedMap.set(key, { name: w.dateLabel, daySortKey: key, previousOnly: true, previousTotal: w.total });
+      }
+    }
+    const chartData = Array.from(mergedMap.values()).sort((a, b) => a.daySortKey.localeCompare(b.daySortKey));
 
     return (
       <ResponsiveContainer width="100%" height={height}>
         <LineChart data={chartData} margin={{ top: 5, right: isMobile ? 5 : 20, left: isMobile ? 5 : 20, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-          <XAxis dataKey="name" className="text-xs" padding={{ left: isMobile ? 5 : 20, right: isMobile ? 5 : 20 }} />
+          <XAxis
+            dataKey="name"
+            className="text-xs"
+            padding={{ left: isMobile ? 5 : 20, right: isMobile ? 5 : 20 }}
+            tickFormatter={(value: string, index: number) => {
+              const entry = chartData[index];
+              return entry?.previousOnly ? `*${value}*` : value;
+            }}
+          />
           <YAxis className="text-xs" />
           <Tooltip
             trigger={isMobile ? 'click' : 'hover'}
@@ -93,7 +114,10 @@ export function CommunityTotalAttendanceChart({ currentYear, previousYear, heigh
             }}
           />
           {!isMobile && <Legend />}
-          <Line type="monotone" dataKey="Total Attendance" stroke="#3b82f6" strokeWidth={2} dot={false} />
+          <Line dataKey="currentTotal" stroke="#3b82f6" strokeWidth={2} connectNulls name={showComparison ? 'Current Year' : 'Unique Individuals'} />
+          {showComparison && (
+            <Line dataKey="previousTotal" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" connectNulls name="Previous Year" />
+          )}
         </LineChart>
       </ResponsiveContainer>
     );
@@ -109,15 +133,14 @@ export function CommunityTotalAttendanceChart({ currentYear, previousYear, heigh
     name: string;
     monthName: string;
     sortKey: string;
+    previousOnly?: boolean;
     currentTotal?: number;
     previousTotal?: number;
   }>();
 
   for (const item of currentMonthly) {
-    const [y, m] = item.month.split('-').map(Number);
-    const label = new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
     monthsMap.set(item.monthName, {
-      name: label,
+      name: formatMonthLabel(item.month),
       monthName: item.monthName,
       sortKey: item.month,
       currentTotal: item.total,
@@ -130,12 +153,11 @@ export function CommunityTotalAttendanceChart({ currentYear, previousYear, heigh
       if (existing) {
         existing.previousTotal = item.total;
       } else {
-        const [y, m] = item.month.split('-').map(Number);
-        const label = new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
         monthsMap.set(item.monthName, {
-          name: label,
+          name: formatMonthLabel(item.month),
           monthName: item.monthName,
           sortKey: item.month,
+          previousOnly: true,
           previousTotal: item.total,
         });
       }
@@ -150,7 +172,15 @@ export function CommunityTotalAttendanceChart({ currentYear, previousYear, heigh
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={chartData} margin={{ top: 5, right: isMobile ? 5 : 20, left: isMobile ? 5 : 20, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-        <XAxis dataKey="name" className="text-xs" padding={{ left: isMobile ? 5 : 20, right: isMobile ? 5 : 20 }} />
+        <XAxis
+          dataKey="name"
+          className="text-xs"
+          padding={{ left: isMobile ? 5 : 20, right: isMobile ? 5 : 20 }}
+          tickFormatter={(value: string, index: number) => {
+            const entry = chartData[index];
+            return entry?.previousOnly ? `*${value}*` : value;
+          }}
+        />
         <YAxis className="text-xs" />
         <Tooltip
           trigger={isMobile ? 'click' : 'hover'}
@@ -163,9 +193,9 @@ export function CommunityTotalAttendanceChart({ currentYear, previousYear, heigh
           }}
         />
         {!isMobile && <Legend />}
-        <Line type="monotone" dataKey="currentTotal" stroke="#3b82f6" strokeWidth={2} dot={false} name={showComparison ? 'Total (Current)' : 'Total Attendance'} />
+        <Line dataKey="currentTotal" stroke="#3b82f6" strokeWidth={2} name={showComparison ? 'Unique Participants (Current)' : 'Unique Participants'} />
         {showComparison && (
-          <Line type="monotone" dataKey="previousTotal" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Total (Previous)" />
+          <Line dataKey="previousTotal" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" name="Unique Participants (Previous)" />
         )}
       </LineChart>
     </ResponsiveContainer>

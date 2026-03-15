@@ -19,7 +19,7 @@ interface FeatureCard {
 
 const featureCards: FeatureCard[] = [
   {
-    title: "Executive Dashboard",
+    title: "Dashboard: Journey of a Lifetime",
     description: "View ministry year metrics including attendance trends, group participation, and year-over-year comparisons",
     href: "/dashboard",
     buttonText: "View Dashboard",

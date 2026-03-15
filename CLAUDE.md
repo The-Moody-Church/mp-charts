@@ -477,9 +477,40 @@ All time-series charts must use consistent short date labels on the X-axis:
 Charts that follow this standard:
 - `AttendanceChart` — monthly and weekly views
 - `CommunityAttendanceChart` — monthly and weekly views
-- `SmallGroupTrends` — monthly only
+- `SmallGroupTrends` (Communities and Groups Trends) — monthly only
 
 When adding new time-series charts, use the same `toLocaleDateString('en-US', ...)` pattern with the options above.
+
+### Year-over-Year Weekly Comparison (Single-Month View)
+
+When a chart shows weekly data for a single month with previous-year comparison enabled, **interleave** dates from both years on the same x-axis sorted by month-day (MM-DD). Use solid lines for the current year and dashed lines (`strokeDasharray="5 5"`) for the previous year, with `connectNulls` so each line draws through gaps where only the other year has data.
+
+**Merging same-day entries**: When both years have data on the same day-of-month (e.g., Dec 24), merge them into a **single x-axis point** with both `currentTotal` and `previousTotal` populated. Never create duplicate x-axis entries for the same MM-DD.
+
+```typescript
+// ✅ CORRECT — use a Map keyed by MM-DD to merge same-day entries
+const mergedMap = new Map<string, { name: string; daySortKey: string; currentTotal?: number; previousTotal?: number }>();
+for (const w of currentWeekly) {
+  const key = w.date.slice(5); // MM-DD
+  mergedMap.set(key, { name: w.dateLabel, daySortKey: key, currentTotal: w.total });
+}
+for (const w of previousWeekly) {
+  const key = w.date.slice(5); // MM-DD
+  const existing = mergedMap.get(key);
+  if (existing) {
+    existing.previousTotal = w.total; // merge into same entry
+  } else {
+    mergedMap.set(key, { name: w.dateLabel, daySortKey: key, previousTotal: w.total });
+  }
+}
+const chartData = Array.from(mergedMap.values()).sort((a, b) => a.daySortKey.localeCompare(b.daySortKey));
+
+// ❌ NEVER push current and previous into separate array entries without checking for duplicates
+```
+
+Charts that follow this pattern:
+- `AttendanceChart` — weekly single-month view
+- `CommunityTotalAttendanceChart` — weekly single-month view
 
 ## Mobile & Responsive Guidelines
 

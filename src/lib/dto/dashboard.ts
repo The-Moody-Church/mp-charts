@@ -35,14 +35,13 @@ export interface YearOverYearMetrics {
 }
 
 /**
- * Small group trend data (monthly aggregation)
+ * Small group trend data (monthly aggregation, broken down by group type)
  */
 export interface SmallGroupTrend {
   month: string; // YYYY-MM
   monthName: string; // e.g., "September"
-  activeGroupCount: number;
-  totalParticipants: number;
-  averageAttendance: number;
+  activeGroupCount: number; // total active groups across all types
+  groupCountByType: { [groupTypeName: string]: number }; // active group count per group type
 }
 
 /**
@@ -51,6 +50,7 @@ export interface SmallGroupTrend {
 export interface CommunityAttendanceTrend {
   weekStartDate: string; // ISO date for the week start (Sunday)
   communityAttendance: { [communityName: string]: number }; // Map of community name to average attendance
+  uniqueParticipants: number; // Unique people across all communities (deduped)
 }
 
 /**
@@ -227,10 +227,12 @@ export interface DashboardData {
   weeklyCommunityAttendanceTrends: CommunityAttendanceTrend[];
   /** Baptism milestone dates (Date_Accomplished ISO strings) for client-side filtering */
   baptismDates: string[];
-  /** Registered Member milestone dates (net of Dropped) for client-side filtering */
+  /** Registered Member milestone dates for client-side filtering */
   membershipDates: string[];
-  /** Dropped Membership milestone dates for net membership calculation */
-  membershipDroppedDates: string[];
+  /** Associate Member milestone dates for client-side filtering */
+  associateMemberDates: string[];
+  /** Youth Member milestone dates for client-side filtering */
+  youthMemberDates: string[];
   /** Computed counts for the selected period (set by filterDashboardData) */
   baptismsCurrentPeriod: number;
   baptismsPreviousPeriod: number;

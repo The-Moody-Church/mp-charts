@@ -206,9 +206,11 @@ export function filterDashboardData(
   const baptismsCurrentPeriod = countDatesInRange(fullData.baptismDates, startDate, endDate);
   const baptismsPreviousPeriod = countDatesInRange(fullData.baptismDates, prevStart, prevMetricsEnd);
   const membershipCurrentPeriod = countDatesInRange(fullData.membershipDates, startDate, endDate)
-    - countDatesInRange(fullData.membershipDroppedDates, startDate, endDate);
+    + countDatesInRange(fullData.associateMemberDates, startDate, endDate)
+    + countDatesInRange(fullData.youthMemberDates, startDate, endDate);
   const membershipPreviousPeriod = countDatesInRange(fullData.membershipDates, prevStart, prevMetricsEnd)
-    - countDatesInRange(fullData.membershipDroppedDates, prevStart, prevMetricsEnd);
+    + countDatesInRange(fullData.associateMemberDates, prevStart, prevMetricsEnd)
+    + countDatesInRange(fullData.youthMemberDates, prevStart, prevMetricsEnd);
 
   // Unique Event Participants: filter monthly buckets to selected range, count unique PIDs
   const filteredEPMonths = filterMonthlyByDate(fullData.eventParticipantsByMonth, startDate, endDate);
@@ -385,14 +387,14 @@ function computeYearOverYear(
 
   return [
     {
-      metric: 'Average Attendance',
+      metric: 'Avg Total Attendance',
       currentYear: current.averageAttendance,
       previousYear: previous.averageAttendance,
       percentageChange: pctChange(current.averageAttendance, previous.averageAttendance),
       trend: trend(current.averageAttendance, previous.averageAttendance),
     },
     {
-      metric: 'Total Events',
+      metric: 'Worship Services',
       currentYear: current.totalEvents,
       previousYear: previous.totalEvents,
       percentageChange: pctChange(current.totalEvents, previous.totalEvents),
@@ -515,13 +517,16 @@ function computeServingMetrics(
   }));
 
   // By Ministry: group by ministryId, count unique contacts, sort descending
+  // Records without a Ministry_ID are grouped under "Other"
+  const OTHER_MINISTRY_ID = -1;
   const byMinistry = new Map<number, { name: string; contacts: Set<number> }>();
   for (const r of active) {
-    if (r.ministryId === null) continue;
-    if (!byMinistry.has(r.ministryId)) {
-      byMinistry.set(r.ministryId, { name: r.ministryName || 'Unknown', contacts: new Set() });
+    const mid = r.ministryId ?? OTHER_MINISTRY_ID;
+    const mname = r.ministryId === null ? 'Other' : (r.ministryName || 'Unknown');
+    if (!byMinistry.has(mid)) {
+      byMinistry.set(mid, { name: mname, contacts: new Set() });
     }
-    byMinistry.get(r.ministryId)!.contacts.add(r.contactId);
+    byMinistry.get(mid)!.contacts.add(r.contactId);
   }
   const servingByMinistry: ServingByMinistry[] = Array.from(byMinistry.entries())
     .map(([ministryId, data]) => ({
