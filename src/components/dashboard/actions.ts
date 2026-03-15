@@ -59,14 +59,12 @@ export async function getExtendedDashboardMetrics(): Promise<Partial<DashboardDa
   const earliestYear = currentYear - 4;
 
   const today = new Date();
-  const dateIso = today.toISOString().split('T')[0];
 
   const fullRangeStart = new Date(earliestYear, 8, 1); // September 1, 5 years ago
   const maxEnd = new Date(currentYear + 1, 7, 31);
   const fullRangeEnd = today < maxEnd ? today : maxEnd;
 
   return getCachedExtendedData(
-    dateIso,
     fullRangeStart.toISOString().split('T')[0],
     fullRangeEnd.toISOString().split('T')[0]
   );
@@ -83,14 +81,12 @@ export async function getEngagementDashboardMetrics(): Promise<Partial<Dashboard
   const earliestYear = currentYear - 4;
 
   const today = new Date();
-  const dateIso = today.toISOString().split('T')[0];
 
   const fullRangeStart = new Date(earliestYear, 8, 1);
   const maxEnd = new Date(currentYear + 1, 7, 31);
   const fullRangeEnd = today < maxEnd ? today : maxEnd;
 
   return getCachedEngagementData(
-    dateIso,
     fullRangeStart.toISOString().split('T')[0],
     fullRangeEnd.toISOString().split('T')[0]
   );

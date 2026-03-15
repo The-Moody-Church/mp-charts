@@ -60,12 +60,11 @@ function getDashboardDateParams() {
   const maxEnd = new Date(currentYear + 1, 7, 31);
   const endDate = today < maxEnd ? today : maxEnd;
 
-  const dateIso = today.toISOString().split('T')[0];
   const endDateIso = endDate.toISOString().split('T')[0];
   const fullRangeStartIso = new Date(earliestYear, 8, 1).toISOString().split('T')[0];
   const fullRangeEndIso = endDateIso;
 
-  return { currentYear, earliestYear, dateIso, endDateIso, fullRangeStartIso, fullRangeEndIso };
+  return { currentYear, earliestYear, endDateIso, fullRangeStartIso, fullRangeEndIso };
 }
 
 /**
@@ -107,11 +106,11 @@ export async function warmAllCaches(): Promise<WarmingResult[]> {
     ),
     // Dashboard: extended data (serving, roster, event participants)
     warmOne('getCachedExtendedData', () =>
-      getCachedExtendedData(params.dateIso, params.fullRangeStartIso, params.fullRangeEndIso)
+      getCachedExtendedData(params.fullRangeStartIso, params.fullRangeEndIso)
     ),
     // Dashboard: engagement venn (Activity_Log — slowest query)
     warmOne('getCachedEngagementData', () =>
-      getCachedEngagementData(params.dateIso, params.fullRangeStartIso, params.fullRangeEndIso)
+      getCachedEngagementData(params.fullRangeStartIso, params.fullRangeEndIso)
     ),
     // Contact search: all contacts dataset
     warmOne('getCachedAllContacts', () =>

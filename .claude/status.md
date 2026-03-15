@@ -8,6 +8,7 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
+| 2026-03-14 | **Dashboard cache fix**: Removed `dateIso` from cache keys to prevent daily cold cache misses; fixed `new Date()` PPR error in dashboard page. | #108 | — |
 | 2026-03-14 | **Dashboard polish**: Feed Your Soul (Communities & Groups Trends rewrite, tooltip titles, totals, sorting), Know God (4-col metrics), Grow in Love (combined serving total into role type card, 2-col layout, detailed descriptions, "Other" ministry bucket), removed Period Comparison section. | #52 | — |
 | 2026-03-13 | **Feedback → GitHub issues**: Replaced MP Feedback_Entries with GitHub issue creation. Simplified config (removed feedbackTypeId/assignedToContactId), added GITHUB_FEEDBACK_TOKEN env var, appends page URL + user name to issues, admin shows token status. | #104 | — |
 | 2026-03-12 | **Restrict contact log edit by owner**: Edit button and server action only allow editing logs created by the current user (Made_By check). Added "Logged by" display showing who created each log entry. | #96 | — |
