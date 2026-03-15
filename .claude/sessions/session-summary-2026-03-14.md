@@ -64,6 +64,9 @@ Polish the Journey of a Lifetime dashboard — Feed Your Soul, Grow in Love, and
 - `src/app/(web)/dashboard/page.tsx` — moved `new Date()` after `connection()`
 - `CLAUDE.md` — updated cached functions table
 
+### Know God Metric Cards Grid Fix
+- `src/components/dashboard/dashboard-metrics.tsx` — changed grid from `gap-4 md:grid-cols-4` to `gap-4 sm:grid-cols-2 md:grid-cols-4` so cards show 2-col on sm screens instead of stacking to 1-col
+
 ## Key Decisions
 
 - Group type filter changed from Ministry_ID=8 exclusion-based to explicit `Group_Type_ID IN (1, 3, 11)` to match Roster vs Attendance chart
