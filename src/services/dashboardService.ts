@@ -16,6 +16,33 @@ import {
   AttendanceMonthRecord,
 } from '@/lib/dto';
 
+/**
+ * Run an array of async tasks with limited concurrency to avoid overwhelming
+ * the Ministry Platform API with too many simultaneous connections.
+ */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex++;
+      try {
+        results[index] = { status: 'fulfilled', value: await fn(items[index]) };
+      } catch (reason) {
+        results[index] = { status: 'rejected', reason };
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
+  return results;
+}
+
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
@@ -766,76 +793,91 @@ export class DashboardService {
     startDate: Date,
     endDate: Date
   ): Promise<MonthlyAttendanceTrend[]> {
-    try {
-      // Build month ranges, then query all months in parallel.
-      // Each month needs 2 sequential calls (Events → EventMetrics), but
-      // months are independent — parallelizing cuts ~24 sequential calls to ~12 parallel pairs.
-      const months: { start: Date; end: Date; key: string; monthIndex: number }[] = [];
-      const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-      while (cursor <= endDate) {
-        const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-        const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
-        const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
-        months.push({ start: monthStart, end: monthEnd, key, monthIndex: cursor.getMonth() });
-        cursor.setMonth(cursor.getMonth() + 1);
+    // Build month ranges, then query with limited concurrency.
+    // Each month needs 2 sequential calls (Events → EventMetrics), but
+    // months are independent — concurrency limit prevents overwhelming the MP API.
+    const months: { start: Date; end: Date; key: string; monthIndex: number }[] = [];
+    const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    while (cursor <= endDate) {
+      const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+      const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
+      const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
+      months.push({ start: monthStart, end: monthEnd, key, monthIndex: cursor.getMonth() });
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+
+    const results = await mapWithConcurrency(months, 6, async ({ start, end, key, monthIndex }) => {
+      const monthStartIso = start.toISOString();
+      const monthEndIso = end.toISOString();
+
+      // Get worship service events for this month (Event_Type_ID = 7)
+      const events = await this.mp!.getTableRecords<{ Event_ID: number }>({
+        table: 'Events',
+        select: 'Event_ID',
+        filter: `Events.Event_Start_Date >= '${monthStartIso}' AND Events.Event_End_Date <= '${monthEndIso}' AND Events.Cancelled = 0 AND Events.Event_Type_ID = 7`
+      });
+
+      let totalInPerson = 0;
+      let totalOnline = 0;
+      let eventCount = 0;
+
+      if (events.length > 0) {
+        const eventIds = events.map(e => e.Event_ID);
+        const eventMetrics = await this.mp!.getTableRecords<{
+          Event_ID: number;
+          Metric_ID: number;
+          Numerical_Value: number;
+        }>({
+          table: 'Event_Metrics',
+          select: 'Event_ID,Metric_ID,Numerical_Value',
+          filter: `Event_Metrics.Event_ID IN (${sanitizeIds(eventIds)}) AND Event_Metrics.Metric_ID IN (2, 3)`
+        });
+
+        const eventsWithMetrics = new Set<number>();
+        for (const metric of eventMetrics) {
+          eventsWithMetrics.add(metric.Event_ID);
+          if (metric.Metric_ID === 2) {
+            totalInPerson += metric.Numerical_Value;
+          } else if (metric.Metric_ID === 3) {
+            totalOnline += metric.Numerical_Value;
+          }
+        }
+        eventCount = eventsWithMetrics.size;
       }
 
-      const trends = await Promise.all(
-        months.map(async ({ start, end, key, monthIndex }) => {
-          const monthStartIso = start.toISOString();
-          const monthEndIso = end.toISOString();
+      return {
+        month: key,
+        monthName: MONTH_NAMES[monthIndex],
+        averageInPersonAttendance: eventCount > 0 ? Math.round(totalInPerson / eventCount) : 0,
+        averageOnlineAttendance: eventCount > 0 ? Math.round(totalOnline / eventCount) : 0,
+        averageTotalAttendance: eventCount > 0 ? Math.round((totalInPerson + totalOnline) / eventCount) : 0,
+        eventCount
+      };
+    });
 
-          // Get worship service events for this month (Event_Type_ID = 7)
-          const events = await this.mp!.getTableRecords<{ Event_ID: number }>({
-            table: 'Events',
-            select: 'Event_ID',
-            filter: `Events.Event_Start_Date >= '${monthStartIso}' AND Events.Event_End_Date <= '${monthEndIso}' AND Events.Cancelled = 0 AND Events.Event_Type_ID = 7`
-          });
-
-          let totalInPerson = 0;
-          let totalOnline = 0;
-          let eventCount = 0;
-
-          if (events.length > 0) {
-            const eventIds = events.map(e => e.Event_ID);
-            const eventMetrics = await this.mp!.getTableRecords<{
-              Event_ID: number;
-              Metric_ID: number;
-              Numerical_Value: number;
-            }>({
-              table: 'Event_Metrics',
-              select: 'Event_ID,Metric_ID,Numerical_Value',
-              filter: `Event_Metrics.Event_ID IN (${sanitizeIds(eventIds)}) AND Event_Metrics.Metric_ID IN (2, 3)`
-            });
-
-            const eventsWithMetrics = new Set<number>();
-            for (const metric of eventMetrics) {
-              eventsWithMetrics.add(metric.Event_ID);
-              if (metric.Metric_ID === 2) {
-                totalInPerson += metric.Numerical_Value;
-              } else if (metric.Metric_ID === 3) {
-                totalOnline += metric.Numerical_Value;
-              }
-            }
-            eventCount = eventsWithMetrics.size;
-          }
-
-          return {
-            month: key,
-            monthName: MONTH_NAMES[monthIndex],
-            averageInPersonAttendance: eventCount > 0 ? Math.round(totalInPerson / eventCount) : 0,
-            averageOnlineAttendance: eventCount > 0 ? Math.round(totalOnline / eventCount) : 0,
-            averageTotalAttendance: eventCount > 0 ? Math.round((totalInPerson + totalOnline) / eventCount) : 0,
-            eventCount
-          };
-        })
-      );
-
-      return trends;
-    } catch (error) {
-      console.error('Error fetching monthly attendance trends:', error);
-      return [];
+    // Collect successful months, log failures individually
+    const trends: MonthlyAttendanceTrend[] = [];
+    let failures = 0;
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        trends.push(result.value);
+      } else {
+        failures++;
+        console.error('Error fetching attendance for one month:', result.reason);
+      }
     }
+
+    if (failures > 0) {
+      console.warn(`Monthly attendance trends: ${failures}/${months.length} months failed, ${trends.length} succeeded`);
+    }
+
+    // If ALL months failed, throw so the cache layer doesn't store empty data
+    // over previously valid cached data (stale-while-revalidate preserves old value on error)
+    if (trends.length === 0 && months.length > 0) {
+      throw new Error(`All ${months.length} monthly attendance queries failed`);
+    }
+
+    return trends;
   }
 
   /**
