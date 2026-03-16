@@ -8,6 +8,7 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
+| 2026-03-16 | **Contact search: wait for Enter**: Removed debounced search-as-you-type that caused laggy flashing results. Search now fires on Enter/click only. | #112 | — |
 | 2026-03-16 | **Stable cache keys**: Changed dashboard cache keys from today's date to end-of-ministry-year (Aug 31) so they're stable all year. Eliminates daily cold cache at midnight. Service methods cap month iteration at today to avoid wasted API calls. | #113 | #114 |
 | 2026-03-15 | **Concurrency control**: Added `mapWithConcurrency` (limit 6) to monthly attendance API calls. Prevents 55+ parallel requests from overwhelming MP API. | — | — |
 | 2026-03-14 | **Dashboard cache fix**: Removed redundant `dateIso` from cache keys; fixed `new Date()` PPR error. | #108 | #111 |
