@@ -147,123 +147,15 @@ When adding, removing, or renaming environment variables, update `.env.example` 
 
 ## Caching & PPR
 
-The project uses **Cache Components** (`cacheComponents: true`) with **Partial Prerendering (PPR)**. All authenticated pages render as `◐ (Partial Prerender)` — the static HTML shell loads instantly, then dynamic content streams in via Suspense boundaries.
+Uses **Cache Components** (`cacheComponents: true`) with **Partial Prerendering (PPR)** and stale-while-revalidate. Caches are pre-warmed on server start and daily at 6:00 AM CT.
 
-### `'use cache'` Directive
+**Critical rules:**
+- `new Date()` must stay OUTSIDE `'use cache'` functions — pass as serializable parameters
+- **Never silently return empty data** in cached code paths — let errors propagate so stale data is served
+- Cache keys must be stable (not date-based) to avoid cold cache misses
+- New cached functions MUST be registered in `src/lib/cache-warming.ts`
 
-Data-fetching functions use the `'use cache'` directive with `cacheLife()` and `cacheTag()` from `next/cache`:
-
-```typescript
-import { cacheLife, cacheTag } from 'next/cache';
-
-async function getCachedData(key: string) {
-  'use cache';
-  cacheLife({ revalidate: 21600 }); // 6 hours
-  cacheTag('my-tag');
-  // ... fetch data ...
-}
-```
-
-**Rules for `'use cache'` functions:**
-- `new Date()` and other non-deterministic expressions must stay OUTSIDE the function — pass as serializable parameters
-- Function arguments automatically become the cache key
-- Invalidate with `revalidateTag('my-tag', { expire: 0 })` from server actions
-
-**Current cached functions:**
-| Function | Revalidate | Stale | Tags | File |
-|---|---|---|---|---|
-| `getCachedDashboardData(year)` | 6h | 24h | `dashboard-data`, `year-N` | `src/components/dashboard/cached-data.ts` |
-| `getCachedFullRangeData(year, endDate)` | 6h | 24h | `dashboard-data`, `dashboard-full-range` | `src/components/dashboard/cached-data.ts` |
-| `getCachedExtendedData(start, end)` | 6h | 24h | `dashboard-data`, `dashboard-extended` | `src/components/dashboard/cached-data.ts` |
-| `getCachedEngagementData(start, end)` | 6h | 24h | `dashboard-data`, `dashboard-engagement` | `src/components/dashboard/cached-data.ts` |
-| `getCachedGroupTypes(ids)` | 24h | 48h | `group-types` | `src/services/dashboardService.ts` |
-| `getCachedAllContacts()` | 6h | 24h | `contacts-search` | `src/components/contact-lookup/cached-contacts.ts` |
-
-All cached functions use **stale-while-revalidate**: after the revalidate TTL expires, stale data continues to be served instantly while fresh data is computed in the background. This prevents users from ever hitting a cold cache during normal operation. The `stale` column shows how long expired data remains servable.
-
-**IMPORTANT — Cache keys must be stable.** Dashboard cache keys use end-of-ministry-year (Aug 31) instead of today's date, so they change only once per year (at ministry year rollover in September). If a cache key changes daily, stale-while-revalidate can't serve stale data after midnight because the new key has no stale entry — causing cold cache misses. Service methods that iterate over months (e.g., `getMonthlyAttendanceTrends`, `getEngagementRawData`) cap their iteration at `new Date()` internally to avoid wasting API calls on future months.
-
-**Note:** Dashboard cache is shared across all authenticated users (not keyed per-user). This is intentional — the dashboard shows aggregate metrics, not per-user data. If user-specific dashboard access is ever needed, the cache would need to be keyed by user or permission level.
-
-**CRITICAL — Never silently return empty data in cached code paths.** If a function called within a `'use cache'` boundary catches an error and returns a fallback (e.g., `return []`), that fallback gets cached as a valid result — overwriting previously good stale data. Instead:
-- **Let errors propagate** (throw) so stale-while-revalidate serves the previous good value
-- If partial failure is possible (e.g., fetching many months in parallel), use `Promise.allSettled` to keep successful results, and only throw when ALL sub-tasks fail
-- See `getMonthlyAttendanceTrends` in `dashboardService.ts` for the reference pattern
-
-### Cache Warming
-
-Caches are **pre-warmed automatically on server start** and **re-warmed daily at 6:00 AM Central Time** so users never hit a cold cache.
-
-**How it works:**
-1. `src/instrumentation.ts` — `register()` runs on server start, generates a random token on `process.env`, polls `/api/cache-warm` until the server is ready, then schedules daily re-warming at 6:00 AM CT via `setTimeout`/`setInterval`
-2. `src/app/api/cache-warm/route.ts` — Verifies the runtime token, calls `warmAllCaches()` within the Next.js request context (required for `'use cache'` functions)
-3. `src/lib/cache-warming.ts` — Central registry that calls every `'use cache'` function with the correct parameters
-
-Cache warming runs automatically on every server start and daily at 6:00 AM CT — no configuration required. The endpoint is protected by a per-process random token shared via `process.env.__CACHE_WARM_TOKEN`.
-
-**Adding a new cached function — MANDATORY steps:**
-1. Create the `'use cache'` function in a non-`'use server'` file (so it can be imported by the warming module)
-2. Register it in `src/lib/cache-warming.ts` → `warmAllCaches()` with the correct parameters
-3. Update the "Current cached functions" table above
-4. Add a comment at the top of the source file pointing to `cache-warming.ts`
-
-```typescript
-// Example: registering a new cached function in cache-warming.ts
-import { getCachedNewData } from '@/components/feature/cached-data';
-
-export async function warmAllCaches(): Promise<WarmingResult[]> {
-  const results = await Promise.all([
-    // ... existing entries ...
-    warmOne('getCachedNewData', () => getCachedNewData(params)),
-  ]);
-  return results;
-}
-```
-
-### Suspense & PPR Pattern for Pages
-
-Pages with dynamic data access (`params`, `searchParams`, `headers()`) must use the Suspense pattern:
-
-```typescript
-// Sync wrapper — pre-renders as static HTML shell
-export default function MyPage({ searchParams }: Props) {
-  return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <MyPageContent searchParams={searchParams} />
-    </Suspense>
-  );
-}
-
-// Async inner component — streams at request time
-async function MyPageContent({ searchParams }: Props) {
-  const params = await searchParams;
-  return <ClientComponent data={params} />;
-}
-```
-
-For pages that call `'use cache'` functions but depend on runtime APIs (e.g., dashboard), use `connection()` from `next/server` to skip build-time prerendering:
-
-```typescript
-import { connection } from 'next/server';
-
-async function DashboardContent() {
-  await connection(); // Defer to runtime — API not available at build time
-  const data = await getCachedData();
-  return <Dashboard data={data} />;
-}
-```
-
-### Layout Auth Pattern
-
-The web layout wraps `AuthWrapper` (which uses `headers()`) in a Suspense boundary so the outer HTML shell pre-renders:
-
-```typescript
-<Suspense fallback={<Loading />}>
-  <AuthWrapper>
-    <Providers>{children}</Providers>
-  </AuthWrapper>
-</Suspense>
-```
+Full details, cached function registry, Suspense/PPR patterns, and cache warming architecture: `.claude/references/caching-ppr.md`
 
 ## Code Style
 
@@ -363,55 +255,13 @@ Feature visibility is configured in:
 
 ## Import Patterns
 
-```typescript
-// Feature components (using barrel exports)
-import { ContactLookup } from '@/components/contact-lookup';
-
-// Application DTOs
-import { ContactSearch, ContactLookupDetails } from '@/lib/dto';
-
-// Ministry Platform models (generated)
-import { ContactLog, Congregation } from '@/lib/providers/ministry-platform/models';
-
-// Ministry Platform Zod schemas (for runtime validation)
-import { ContactLogSchema } from '@/lib/providers/ministry-platform/models';
-
-// Service classes (used in server actions)
-import { ContactService } from '@/services/contactService';
-
-// Auth - server-side (used in server actions and server components)
-import { auth } from '@/lib/auth';
-import { requireSession, getMpUserId, getUserGuid } from '@/lib/auth-helpers';
-
-// Auth - client-side (used in "use client" components)
-import { authClient } from '@/lib/auth-client';
-
-// React contexts
-import { UserProvider, useUser } from '@/contexts';
-
-// Ministry Platform helper (used by services, not directly by components)
-import { MPHelper } from '@/lib/providers/ministry-platform';
-
-// Feature-specific actions (relative path within same folder)
-import { searchContacts } from './actions';
-
-// Layout components (barrel export)
-import { AuthWrapper, Header, Sidebar, DynamicBreadcrumb } from '@/components/layout';
-
-// Shared processing components (barrel export)
-import { PersonAvatar, ProcessingGrid, MilestoneEditForm } from '@/components/processing';
-
-// Shared processing utilities
-import { getDisplayName, formatDate, MAX_FILE_SIZE } from '@/lib/processing-utils';
-
-// Shared actions (used across multiple features)
-import { getCurrentUserProfile } from '@/components/shared-actions/user';
-import { extractValidatedFiles, uploadContactPhoto } from '@/components/shared-actions/processing';
-
-// Named exports (required)
-export function MyComponent() { ... }  // ✅ Correct
-export default MyComponent;            // ❌ Avoid
-```
+- Use `@/` alias for all internal imports (e.g., `@/components/`, `@/services/`, `@/lib/`)
+- Feature components use barrel exports: `import { ContactLookup } from '@/components/contact-lookup'`
+- Auth server-side: `import { requireSession, getMpUserId } from '@/lib/auth-helpers'`
+- Auth client-side: `import { authClient } from '@/lib/auth-client'`
+- Services in actions: `import { ContactService } from '@/services/contactService'`
+- Feature-specific actions use relative path: `import { searchContacts } from './actions'`
+- **Named exports only** — no default exports
 
 ## Chart Formatting Standards
 
@@ -507,44 +357,9 @@ Components using this pattern:
 
 ## Timezone Handling — Ministry Platform Dates
 
-Ministry Platform returns dates **without timezone information** (e.g., `"2026-03-12"`, `"2026-03-12T14:30:00"`). These represent **US Central Time** (the server's local time), but JavaScript's `new Date()` parses them inconsistently:
+MP returns dates without timezone info in **US Central Time**. `new Date("2026-03-12")` parses as UTC, showing the wrong day in Central.
 
-| Input format | `new Date()` interpretation | Problem |
-|---|---|---|
-| `"2026-03-12"` (date-only) | **UTC** midnight | Shows March 11 in Central Time (UTC-5/6) |
-| `"2026-03-12T14:30:00"` (no Z) | **Local** time | Usually correct, but inconsistent with date-only |
-| `"2026-03-12T00:00:00Z"` (with Z) | **UTC** | Shows previous day in Central Time |
-
-**Rule**: When displaying MP dates to users, always parse as **local time** by extracting the date components. Never rely on `new Date(dateStr)` alone for date-only or timezone-less strings from MP.
-
-### Pattern: `parseLocalDate()`
-
-A reusable helper exists in `src/components/contact-lookup-details/contact-lookup-details.tsx`. If needed in more places, extract to a shared utility:
-
-```typescript
-/** Parse a date string as local time (avoids UTC shift from MP dates) */
-function parseLocalDate(dateStr: string): Date {
-  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (match) {
-    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  }
-  return new Date(dateStr);
-}
-```
-
-### When Sending Dates to MP
-
-Ministry Platform expects SQL Server datetime format (`YYYY-MM-DD HH:MM:SS`), not ISO format. Convert **after** any Zod validation (which expects ISO datetime), not before:
-
-```typescript
-// ✅ Validate first (ISO format), then convert for MP
-const validated = schema.parse(data);        // Zod validates ISO datetime
-validated.Date_Field = toSqlDatetime(date);  // Convert to SQL format for MP API
-
-// ❌ NEVER convert to SQL format before Zod validation
-data.Date_Field = toSqlDatetime(date);       // Now "YYYY-MM-DD HH:MM:SS"
-schema.parse(data);                          // ZodError: invalid ISO datetime
-```
+**Rule**: Parse MP dates as local time using `parseLocalDate()` (in `src/components/contact-lookup-details/contact-lookup-details.tsx`) — extracts year/month/day components to avoid UTC shift. When sending dates to MP, use SQL format (`YYYY-MM-DD HH:MM:SS`) — convert **after** Zod validation, not before.
 
 ## Validation Best Practices
 
@@ -584,133 +399,10 @@ await mp.createTableRecords('Contact_Log', records, {
 
 ## Security Best Practices
 
-This project handles **PII** (names, emails, phones, dates of birth, background check data). All code must follow these security practices. These rules apply during development — catch issues at write time, not in review.
+This project handles **PII**. Every string in a `filter:` parameter MUST use `sanitizeFilterValue()`, `sanitizeIds()`, or `sanitizeGuid()` from `@/lib/providers/ministry-platform/utils/filter-sanitize`. Every server action MUST call `requireSession()` before data access. Never log PII in production.
 
-### Filter & Query Safety
-
-Ministry Platform's REST API accepts OData-style `$filter` parameters that map to SQL WHERE clauses. **Never interpolate raw strings into filters.**
-
-```typescript
-import { sanitizeFilterValue, sanitizeIds, sanitizeGuid } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
-
-// ✅ LIKE clauses — escape single quotes
-const safe = sanitizeFilterValue(userInput);
-filter: `Last_Name LIKE '%${safe}%'`
-
-// ✅ IN clauses — validate all IDs are finite positive numbers
-filter: `Contact_ID IN (${sanitizeIds(ids)})`
-
-// ✅ GUID values — validate format before interpolation
-const validGuid = sanitizeGuid(guid);
-filter: `Contact_GUID = '${validGuid}'`
-
-// ❌ NEVER do this — allows filter injection
-filter: `Last_Name LIKE '%${search}%'`          // breaks on O'Brien, injectable
-filter: `Contact_ID IN (${ids.join(',')})`       // no numeric validation
-filter: `User_GUID = '${profile.sub}'`           // no format validation
-```
-
-**Rule**: Every string interpolated into a `filter:` parameter MUST pass through a sanitization function from `filter-sanitize.ts`. This applies to:
-- User search input → `sanitizeFilterValue()`
-- Arrays of IDs (even from DB results) → `sanitizeIds()` or `sanitizeIdsOptional()`
-- GUIDs (even from trusted sources like OIDC) → `sanitizeGuid()`
-
-### File Upload Validation
-
-All file upload endpoints must validate MIME type **and** file size on the server side. Limits match Ministry Platform: **20 MB max**, standard file formats (PNG, JPG, BMP, GIF, PDF, TXT, CSV):
-
-```typescript
-const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/bmp', 'image/webp'];
-const ALLOWED_DOCUMENT_TYPES = [...ALLOWED_IMAGE_TYPES, 'application/pdf', 'text/plain', 'text/csv'];
-
-// ✅ Validate before processing
-if (!ALLOWED_DOCUMENT_TYPES.includes(file.type)) {
-  return { success: false, error: `Invalid file type: ${file.type}` };
-}
-
-// ❌ NEVER skip MIME validation — size checks alone are insufficient
-```
-
-### URL & Redirect Safety
-
-Never use user-supplied URLs for redirects without validation:
-
-```typescript
-// ✅ Validate callback URLs are relative paths
-function getSafeCallbackUrl(url: string | null): string {
-  if (!url) return "/";
-  if (url.startsWith("/") && !url.startsWith("//") && !url.includes("://")) {
-    return url;
-  }
-  return "/";
-}
-
-// ❌ NEVER redirect to unvalidated URLs
-window.location.href = searchParams.get("callbackUrl");  // open redirect
-```
-
-### Logging & PII
-
-**Never log PII in production.** This includes contact records, emails, phone numbers, notes, and any data from Ministry Platform tables that contain personal information.
-
-```typescript
-// ✅ Log operation context, not data
-console.error("Error updating contact:", error);
-
-// ✅ Gate verbose logging behind NODE_ENV
-if (process.env.NODE_ENV === 'development') {
-  console.log("Debug:", data);
-}
-
-// ❌ NEVER log PII
-console.log("Contact:", JSON.stringify(record));         // leaks email, phone
-console.log("HTTP PUT:", JSON.stringify(body, null, 2)); // leaks request payloads
-```
-
-### Authentication & Authorization
-
-- Every server action MUST call `requireSession()` before any data access
-- Use `getMpUserId(session)` for audit attribution on write operations
-- The proxy (`src/proxy.ts`) protects routes but only checks session presence — it does not check roles
-- IDOR risk: server actions accept record IDs from clients without per-record authorization. When adding new endpoints that access sensitive data, consider whether the requesting user should have access to that specific record
-
-### Security Headers
-
-Security headers are configured in `next.config.ts` via the `headers()` function. When modifying, ensure these headers remain present:
-- `X-Frame-Options: DENY` — prevents clickjacking
-- `X-Content-Type-Options: nosniff` — prevents MIME sniffing
-- `Strict-Transport-Security` — enforces HTTPS
-- `Referrer-Policy: strict-origin-when-cross-origin`
-- `Permissions-Policy` — disables unused browser APIs
-
-### Rate Limiting
-
-Server actions are rate-limited per authenticated user via `src/lib/rate-limit.ts` (in-memory sliding window). The general limit is enforced automatically in `requireSession()`; stricter tiers must be called explicitly with `enforceRateLimit()`:
-
-```typescript
-import { enforceRateLimit } from "@/lib/rate-limit";
-
-// In a write server action:
-const session = await requireSession(); // ← auto-enforces "general" (120/min)
-enforceRateLimit(session.user.id, "write"); // ← explicit stricter limit (30/min)
-```
-
-| Tier | Limit | Window | Applied to |
-|------|-------|--------|------------|
-| `general` | 120 req | 1 min | All server actions (via `requireSession()`) |
-| `write` | 30 req | 1 min | Create/update/delete operations |
-| `upload` | 10 req | 10 min | Photo and document uploads |
-| `search` | 30 req | 1 min | Contact search (PII access) |
-| `cacheRefresh` | 5 req | 1 hour | Dashboard cache invalidation |
-
-When adding new server actions:
-- **Read-only actions**: No extra work — `requireSession()` handles the general limit
-- **Write actions**: Add `enforceRateLimit(session.user.id, "write")` after `requireSession()`
-- **File uploads**: Add `enforceRateLimit(session.user.id, "upload")` after `requireSession()`
-
-### Security Audit Reference
-
-The full security audit report is at `.claude/notes/security-audit-2026-02-24.md`. It documents all 15 findings, their status, and remaining open items (RBAC, IDOR mitigation).
+Full rules, code examples, rate limiting tiers, and security headers: `.claude/references/security-best-practices.md`
+Audit report: `.claude/notes/security-audit-2026-02-24.md`
 
 ## Memory & Context Management
 
