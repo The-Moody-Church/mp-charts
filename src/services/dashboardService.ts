@@ -796,9 +796,13 @@ export class DashboardService {
     // Build month ranges, then query with limited concurrency.
     // Each month needs 2 sequential calls (Events → EventMetrics), but
     // months are independent — concurrency limit prevents overwhelming the MP API.
+    // Cap at today so we don't waste API calls on future months when
+    // the cache key uses end-of-ministry-year.
+    const today = new Date();
+    const effectiveEnd = endDate < today ? endDate : today;
     const months: { start: Date; end: Date; key: string; monthIndex: number }[] = [];
     const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-    while (cursor <= endDate) {
+    while (cursor <= effectiveEnd) {
       const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
       const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
       const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
@@ -1367,13 +1371,17 @@ export class DashboardService {
       // Step 1: Activity — query each month in parallel for distinct Contact_IDs.
       // Exclude Page_ID 316 (Group Participants) — engagement venn has a
       // dedicated "Groups" dimension via Group_Participants table.
+      // Cap at today so we don't waste API calls on future months when
+      // the cache key uses end-of-ministry-year.
+      const today = new Date();
+      const effectiveEnd = endDate < today ? endDate : today;
       const months: { start: Date; end: Date; key: string }[] = [];
       const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-      while (cursor <= endDate) {
+      while (cursor <= effectiveEnd) {
         const monthStart = new Date(cursor);
         const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0, 23, 59, 59);
         const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
-        months.push({ start: monthStart, end: monthEnd > endDate ? endDate : monthEnd, key });
+        months.push({ start: monthStart, end: monthEnd > effectiveEnd ? effectiveEnd : monthEnd, key });
         cursor.setMonth(cursor.getMonth() + 1);
       }
 

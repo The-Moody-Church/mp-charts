@@ -30,41 +30,7 @@ gh pr create --title "..." --body "..."
 
 ### Pre-PR Security Review
 
-**MANDATORY**: Before creating any PR, perform a security review of all changed files in the branch. This replaces an automated CI check — it must happen during development.
-
-**Steps:**
-1. Run `git diff main...HEAD --name-only` to list all changed files
-2. For each changed file, review against the checklist below
-3. Include a "Security Review" section in the PR description summarizing what was checked and any findings
-
-**Checklist — check every changed file for:**
-
-**Critical (must fix before PR):**
-- [ ] Filter injection: Any string interpolated into a `filter:` parameter without `sanitizeFilterValue()`, `sanitizeIds()`, or `sanitizeGuid()` from `@/lib/providers/ministry-platform/utils/filter-sanitize`
-- [ ] Open redirects: User-supplied URLs used for redirects without validation
-- [ ] Missing authentication: Server actions without `requireSession()` call before data access
-- [ ] Hardcoded secrets or credentials
-
-**High (must fix before PR):**
-- [ ] PII logged via `console.log` — contact records, emails, phones, notes, request/response bodies
-- [ ] File uploads without MIME type validation (`ALLOWED_IMAGE_TYPES` / `ALLOWED_DOCUMENT_TYPES`)
-- [ ] Missing input validation on user-supplied IDs (NaN, type coercion, negative numbers)
-
-**Medium (flag in PR description):**
-- [ ] New endpoints accepting record IDs without per-record authorization (IDOR risk)
-- [ ] Verbose logging not gated behind `NODE_ENV === 'development'`
-- [ ] New dependencies added (check `npm audit` output)
-
-**PR description format:**
-```markdown
-## Security Review
-- **Files reviewed**: N files
-- **Issues found**: None | N issues (list them)
-- **Checklist**: All critical/high items pass
-- **Notes**: (any medium-severity items or architectural observations)
-```
-
-Refer to `.claude/notes/security-audit-2026-02-24.md` for the full audit report and the "Security Best Practices" section below for detailed rules and code examples.
+**MANDATORY**: Before creating any PR, review all changed files against the security checklist in `.claude/notes/security-review-checklist.md`. Include a "Security Review" section in the PR description summarizing what was checked and any findings.
 
 ### Pre-PR Documentation Update
 
@@ -86,38 +52,9 @@ This ensures context files are part of the PR's commit history and ideas.md stay
 
 ### Upstream Sync
 
-This fork tracks `MinistryPlatform-Community/MPNext`. Upstream changes are reviewed periodically and cherry-picked selectively — we do **not** merge upstream directly, since the fork has intentionally diverged (e.g., Next.js 16 — upstream recently upgraded to 16 as well).
+This fork tracks `MinistryPlatform-Community/MPNext`. Upstream changes are reviewed periodically and cherry-picked selectively — we do **not** merge upstream directly. **GitHub will show "N commits behind"** — this is expected and harmless.
 
-To check for new upstream changes:
-
-```bash
-git fetch upstream
-git log main..upstream/main --oneline
-```
-
-Or review PRs at: https://github.com/MinistryPlatform-Community/MPNext/pulls
-
-#### Last Review: 2026-02-28
-
-Reviewed all open/merged upstream PRs through PR #52 (release v2026.02.28.1353). Status:
-
-| PR | Title | Action | Notes |
-|----|-------|--------|-------|
-| #37 | Security patches (Next.js + React) | Incorporated | Already on Next.js 16; `react`/`react-dom` at `^19.2.4` exceeds the `≥19.1.0` pin |
-| #38 | Dependency version updates | Incorporated | Bumped minimum pinned versions for all packages including lucide-react |
-| #39 | sanitizeTypeName digit-leading fix | Already incorporated | Same fix as #40; our `sanitizeTypeName` already prefixes `_` for digit-leading names |
-| #40 | Generator fix for digit-leading names | Incorporated | `sanitizeTypeName` prefixes `_` when result starts with a digit |
-| #41 | Upgrade to Next.js 16 + all deps | Incorporated | Already on Next.js 16; cherry-picked: `middleware.ts` → `proxy.ts` rename, removed unused `@eslint/eslintrc`. Bumped all deps to match upstream pins: zod v4, openai v6, dotenv v17, @types/node ^25, jsdom ^28, all Radix UI, tailwindcss ^4.2, typescript ^5.9.3, and 10+ more |
-| #42 | Docs + `@inquirer/prompts` v8 | Incorporated | Upgraded `@inquirer/prompts` ^7→^8; updated `components.md` layout import patterns. Cherry-picked CLAUDE.md additions: Next.js 16 Notes section, Services Layer + Contexts in Architecture, Data Flow section, service import patterns |
-| #45 | Improve test coverage (137→228 tests) | Skipped | Our test suite has diverged; upstream tests cover different features |
-| #46 | Testing reference guide | Skipped | We have our own testing docs and patterns |
-| #47 | GitHub Actions test workflow + Codecov | Skipped | Upstream-specific CI infrastructure |
-| #49 | Restore CODECOV_TOKEN | Skipped | Only relevant with #47 |
-| #50 | Load user roles/groups into MPUserProfile | Incorporated | Added `roles`/`userGroups` to MPUserProfile, parallel fetch from `dp_User_Roles`/`dp_User_User_Groups`; kept our `sanitizeGuid()` + `sanitizeIds()` security (upstream doesn't sanitize); kept `requireSession()` in shared action |
-| #51 | Update deps + fix security vulns | Incorporated | `npm audit fix` resolved 3 CVEs: rollup CVE-2026-27606 (High), minimatch GHSA-3ppc-4f35-3m26 (High), ajv GHSA-2g4f-4pwh-qvx6 (Moderate). Lockfile-only changes, no `package.json` updates needed |
-| #52 | Replace NextAuth refs with Better Auth | Incorporated | Code already aligned (env vars, function names). Cherry-picked: `totalSteps` 10→9 fix in `setup.ts`; updated stale NextAuth references in `docs/OAUTH_LOGOUT_SETUP.md` and `src/lib/providers/ministry-platform/docs/README.md` |
-
-**GitHub will show "N commits behind"** — this is expected and harmless. It reflects diverged commit history, not missing changes.
+Sync instructions and review history: `.claude/notes/upstream-sync-log.md`
 
 ### Auto-Commit `.claude/settings.local.json`
 
@@ -243,6 +180,8 @@ async function getCachedData(key: string) {
 | `getCachedAllContacts()` | 6h | 24h | `contacts-search` | `src/components/contact-lookup/cached-contacts.ts` |
 
 All cached functions use **stale-while-revalidate**: after the revalidate TTL expires, stale data continues to be served instantly while fresh data is computed in the background. This prevents users from ever hitting a cold cache during normal operation. The `stale` column shows how long expired data remains servable.
+
+**IMPORTANT — Cache keys must be stable.** Dashboard cache keys use end-of-ministry-year (Aug 31) instead of today's date, so they change only once per year (at ministry year rollover in September). If a cache key changes daily, stale-while-revalidate can't serve stale data after midnight because the new key has no stale entry — causing cold cache misses. Service methods that iterate over months (e.g., `getMonthlyAttendanceTrends`, `getEngagementRawData`) cap their iteration at `new Date()` internally to avoid wasting API calls on future months.
 
 **Note:** Dashboard cache is shared across all authenticated users (not keyed per-user). This is intentional — the dashboard shows aggregate metrics, not per-user data. If user-specific dashboard access is ever needed, the cache would need to be keyed by user or permission level.
 
@@ -424,55 +363,13 @@ Feature visibility is configured in:
 
 ## Import Patterns
 
-```typescript
-// Feature components (using barrel exports)
-import { ContactLookup } from '@/components/contact-lookup';
-
-// Application DTOs
-import { ContactSearch, ContactLookupDetails } from '@/lib/dto';
-
-// Ministry Platform models (generated)
-import { ContactLog, Congregation } from '@/lib/providers/ministry-platform/models';
-
-// Ministry Platform Zod schemas (for runtime validation)
-import { ContactLogSchema } from '@/lib/providers/ministry-platform/models';
-
-// Service classes (used in server actions)
-import { ContactService } from '@/services/contactService';
-
-// Auth - server-side (used in server actions and server components)
-import { auth } from '@/lib/auth';
-import { requireSession, getMpUserId, getUserGuid } from '@/lib/auth-helpers';
-
-// Auth - client-side (used in "use client" components)
-import { authClient } from '@/lib/auth-client';
-
-// React contexts
-import { UserProvider, useUser } from '@/contexts';
-
-// Ministry Platform helper (used by services, not directly by components)
-import { MPHelper } from '@/lib/providers/ministry-platform';
-
-// Feature-specific actions (relative path within same folder)
-import { searchContacts } from './actions';
-
-// Layout components (barrel export)
-import { AuthWrapper, Header, Sidebar, DynamicBreadcrumb } from '@/components/layout';
-
-// Shared processing components (barrel export)
-import { PersonAvatar, ProcessingGrid, MilestoneEditForm } from '@/components/processing';
-
-// Shared processing utilities
-import { getDisplayName, formatDate, MAX_FILE_SIZE } from '@/lib/processing-utils';
-
-// Shared actions (used across multiple features)
-import { getCurrentUserProfile } from '@/components/shared-actions/user';
-import { extractValidatedFiles, uploadContactPhoto } from '@/components/shared-actions/processing';
-
-// Named exports (required)
-export function MyComponent() { ... }  // ✅ Correct
-export default MyComponent;            // ❌ Avoid
-```
+- Use `@/` alias for all internal imports (e.g., `@/components/`, `@/services/`, `@/lib/`)
+- Feature components use barrel exports: `import { ContactLookup } from '@/components/contact-lookup'`
+- Auth server-side: `import { requireSession, getMpUserId } from '@/lib/auth-helpers'`
+- Auth client-side: `import { authClient } from '@/lib/auth-client'`
+- Services in actions: `import { ContactService } from '@/services/contactService'`
+- Feature-specific actions use relative path: `import { searchContacts } from './actions'`
+- **Named exports only** — no default exports
 
 ## Chart Formatting Standards
 
@@ -496,28 +393,7 @@ When adding new time-series charts, use the same `toLocaleDateString('en-US', ..
 
 When a chart shows weekly data for a single month with previous-year comparison enabled, **interleave** dates from both years on the same x-axis sorted by month-day (MM-DD). Use solid lines for the current year and dashed lines (`strokeDasharray="5 5"`) for the previous year, with `connectNulls` so each line draws through gaps where only the other year has data.
 
-**Merging same-day entries**: When both years have data on the same day-of-month (e.g., Dec 24), merge them into a **single x-axis point** with both `currentTotal` and `previousTotal` populated. Never create duplicate x-axis entries for the same MM-DD.
-
-```typescript
-// ✅ CORRECT — use a Map keyed by MM-DD to merge same-day entries
-const mergedMap = new Map<string, { name: string; daySortKey: string; currentTotal?: number; previousTotal?: number }>();
-for (const w of currentWeekly) {
-  const key = w.date.slice(5); // MM-DD
-  mergedMap.set(key, { name: w.dateLabel, daySortKey: key, currentTotal: w.total });
-}
-for (const w of previousWeekly) {
-  const key = w.date.slice(5); // MM-DD
-  const existing = mergedMap.get(key);
-  if (existing) {
-    existing.previousTotal = w.total; // merge into same entry
-  } else {
-    mergedMap.set(key, { name: w.dateLabel, daySortKey: key, previousTotal: w.total });
-  }
-}
-const chartData = Array.from(mergedMap.values()).sort((a, b) => a.daySortKey.localeCompare(b.daySortKey));
-
-// ❌ NEVER push current and previous into separate array entries without checking for duplicates
-```
+**Merging same-day entries**: When both years have data on the same day-of-month, merge into a **single x-axis point** using a `Map` keyed by MM-DD. Never create duplicate x-axis entries for the same MM-DD. See `AttendanceChart` for the reference implementation.
 
 Charts that follow this pattern:
 - `AttendanceChart` — weekly single-month view
@@ -525,170 +401,9 @@ Charts that follow this pattern:
 
 ## Mobile & Responsive Guidelines
 
-All features must work on mobile (375px+). Use **mobile-first** Tailwind classes and test at iPhone SE width (375px) in Chrome DevTools.
+All features must work on mobile (375px+). Use **mobile-first** Tailwind classes. Use `useIsMobile()` from `@/hooks/use-mobile` when component **behavior** must change by screen size; use Tailwind responsive prefixes (`sm:`, `md:`, `lg:`) for layout-only changes.
 
-### Viewport Configuration
-
-The `viewport` export in `src/app/(web)/layout.tsx` must include `width: "device-width"` and `initialScale: 1`:
-
-```typescript
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  themeColor: "#000000",
-}
-```
-
-### Responsive Hook
-
-Use `useIsMobile()` from `@/hooks/use-mobile` when component **behavior** must change by screen size (e.g., Recharts prop values, conditional rendering). For **layout-only** changes, use Tailwind responsive prefixes (`sm:`, `md:`, `lg:`).
-
-```typescript
-import { useIsMobile } from '@/hooks/use-mobile';
-const isMobile = useIsMobile(); // true when viewport < 768px (md breakpoint)
-```
-
-### Padding & Spacing
-
-| Context | Classes | Rationale |
-|---------|---------|-----------|
-| Page containers | `p-4 sm:p-6 lg:p-8` | Never `p-8` alone — wastes 64px on a 375px screen |
-| Page titles | `text-2xl sm:text-4xl` | `text-4xl` is too large for narrow screens |
-| Dialog/modal content | Base is `p-4 sm:p-6` | Set in `dialog.tsx` base component |
-
-### Tab Navigation
-
-When tabs contain long labels (e.g., "New Volunteers In Process"), they overflow on narrow screens. Use responsive classes:
-
-```tsx
-<TabsList className="w-full sm:w-fit h-auto">
-  <TabsTrigger value="tab1" className="flex-1 sm:flex-initial whitespace-normal sm:whitespace-nowrap text-xs sm:text-sm py-1.5">
-    Long Tab Label
-  </TabsTrigger>
-</TabsList>
-```
-
-| Class | Purpose |
-|-------|---------|
-| `w-full sm:w-fit` on TabsList | Full-width on mobile, auto-sized on desktop |
-| `h-auto` on TabsList | Allows multi-line tab labels to expand height |
-| `flex-1 sm:flex-initial` on TabsTrigger | Equal-width tabs on mobile, auto-sized on desktop |
-| `whitespace-normal sm:whitespace-nowrap` | Wraps text on mobile, single line on desktop |
-| `text-xs sm:text-sm` | Smaller text on mobile to fit labels |
-
-### Form Select Elements
-
-Native `<select>` elements must use `text-base` (16px) on mobile to **prevent iOS Safari auto-zoom** on focus. Browsers zoom when input font size is below 16px.
-
-```tsx
-<select className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm ...">
-```
-
-| Pattern | Implementation |
-|---------|---------------|
-| **Font size** | `text-base sm:text-sm` — 16px on mobile (prevents iOS zoom), 14px on desktop |
-| **Height** | `h-10` (40px) — matches touch-friendly sizing guidelines |
-
-### Chart Standards (Recharts)
-
-All chart components must follow these mobile patterns:
-
-| Pattern | Implementation |
-|---------|---------------|
-| **Touch-friendly tooltips** | `<Tooltip trigger={isMobile ? 'click' : 'hover'} />` — tap to show, tap elsewhere to dismiss |
-| **Tooltip max-width** | Add `maxWidth: '85vw'` to `contentStyle` — prevents tooltip from exceeding viewport |
-| **Tooltip dismiss on outside tap** | Handled by `ExpandableChart` wrapper — tapping outside the chart forces a re-mount via React key toggle to clear Recharts' internal tooltip state |
-| **Responsive margins** | `margin={{ top: 5, right: isMobile ? 5 : 20, left: isMobile ? 5 : 20, bottom: 5 }}` |
-| **Hide legend on mobile** | `{!isMobile && <Legend />}` — lines are identifiable by color; legend wastes vertical space |
-| **Hide secondary Y-axis** | For dual-axis charts: `{!isMobile && <YAxis yAxisId="right" ... />}` |
-| **Hide pie chart labels** | `label={isMobile ? false : renderLabel}` — labels overlap on small screens |
-| **Horizontal bar Y-axis width** | `width={isMobile ? 80 : 150}` — 150px is 40% of a 375px screen |
-| **Empty state heights** | Use `style={{ height }}`, **not** `` h-[${height}px] `` — Tailwind can't compile dynamic values |
-
-**ExpandableChart wrapper** (`src/components/dashboard/expandable-chart.tsx`): All dashboard charts are wrapped in this component. On mobile, click-to-expand on the chart area is disabled to avoid intercepting Recharts' click-triggered tooltips — users tap the expand icon button instead. The wrapper also handles tooltip dismiss: a `pointerdown` listener on `document` detects taps outside the chart container and increments a React key to force the chart to re-mount, clearing the tooltip. Do **not** try to dismiss tooltips via Recharts' `onClick` prop or `active` prop override — these interfere with Recharts' internal tooltip state management.
-
-### Dialog & Modal Standards
-
-| Pattern | Implementation |
-|---------|---------------|
-| **Base padding** | `p-4 sm:p-6` (set in `dialog.tsx`) |
-| **Wide modals (max-w-2xl)** | Add `w-[calc(100vw-1rem)]` before `sm:max-w-2xl` to prevent overflow |
-| **Modal close button** | Base `DialogContent` includes an X button at `right-4 top-4` — always accessible |
-
-### Form Layout Standards
-
-| Pattern | Implementation |
-|---------|---------------|
-| **Side-by-side fields** | `flex flex-col sm:flex-row` — stacks vertically on mobile |
-| **Fixed-width inputs** | `w-full sm:w-36` — full width on mobile, fixed on desktop |
-| **Badge/icon rows** | Always include `flex-wrap` — prevents horizontal overflow |
-
-### Touch Interaction Standards
-
-- **Never rely solely on `:hover`** for critical UI. Use `opacity-60 sm:opacity-0 sm:group-hover:opacity-100` for reveal buttons.
-- **Interactive SVG elements** need `onClick` alongside `onMouseEnter`/`onMouseLeave` for tap support.
-- **Recharts tooltips** must use `trigger={isMobile ? 'click' : 'hover'}` — default hover tooltips are unusable on touch devices.
-
-### Anti-Patterns to Avoid
-
-```typescript
-// ❌ Dynamic Tailwind classes — won't be compiled
-<div className={`h-[${height}px]`}>
-
-// ✅ Use inline style for dynamic values
-<div style={{ height }}>
-
-// ❌ Fixed padding on all breakpoints
-<div className="p-8">
-
-// ✅ Mobile-first responsive padding
-<div className="p-4 sm:p-6 lg:p-8">
-
-// ❌ Wide modal without mobile constraint
-<DialogContent className="max-w-2xl">
-
-// ✅ Viewport-aware modal width
-<DialogContent className="w-[calc(100vw-1rem)] sm:max-w-2xl">
-
-// ❌ Fixed Y-axis width on horizontal bar chart
-<YAxis width={150} />
-
-// ✅ Responsive Y-axis width
-<YAxis width={isMobile ? 80 : 150} />
-
-// ❌ Hover-only button visibility
-className="opacity-0 group-hover:opacity-100"
-
-// ✅ Touch-friendly visibility
-className="opacity-60 sm:opacity-0 sm:group-hover:opacity-100"
-
-// ❌ Small select font (causes iOS auto-zoom)
-<select className="text-xs">
-<select className="text-sm">
-
-// ✅ 16px base prevents iOS auto-zoom, smaller on desktop
-<select className="text-base sm:text-sm h-10">
-
-// ❌ Fixed-width tabs that overflow on mobile
-<TabsList>
-  <TabsTrigger>Long Tab Label Here</TabsTrigger>
-</TabsList>
-
-// ✅ Responsive tabs that wrap and fit mobile
-<TabsList className="w-full sm:w-fit h-auto">
-  <TabsTrigger className="flex-1 sm:flex-initial whitespace-normal sm:whitespace-nowrap text-xs sm:text-sm py-1.5">
-    Long Tab Label Here
-  </TabsTrigger>
-</TabsList>
-
-// ❌ Trying to dismiss Recharts tooltips via onClick/active prop
-<BarChart onClick={() => setActive(false)}>
-  <Tooltip active={active} />
-</BarChart>
-
-// ✅ Let ExpandableChart handle tooltip dismiss via key toggle
-// (no extra code needed in individual chart components)
-```
+Full patterns, anti-patterns, and standards: `.claude/references/mobile-responsive.md`
 
 ## UI Style Guide
 
@@ -729,79 +444,25 @@ Components using this pattern:
 
 ## Timezone Handling — Ministry Platform Dates
 
-Ministry Platform returns dates **without timezone information** (e.g., `"2026-03-12"`, `"2026-03-12T14:30:00"`). These represent **US Central Time** (the server's local time), but JavaScript's `new Date()` parses them inconsistently:
+MP returns dates without timezone info in **US Central Time**. `new Date("2026-03-12")` parses as UTC, showing the wrong day in Central.
 
-| Input format | `new Date()` interpretation | Problem |
-|---|---|---|
-| `"2026-03-12"` (date-only) | **UTC** midnight | Shows March 11 in Central Time (UTC-5/6) |
-| `"2026-03-12T14:30:00"` (no Z) | **Local** time | Usually correct, but inconsistent with date-only |
-| `"2026-03-12T00:00:00Z"` (with Z) | **UTC** | Shows previous day in Central Time |
-
-**Rule**: When displaying MP dates to users, always parse as **local time** by extracting the date components. Never rely on `new Date(dateStr)` alone for date-only or timezone-less strings from MP.
-
-### Pattern: `parseLocalDate()`
-
-A reusable helper exists in `src/components/contact-lookup-details/contact-lookup-details.tsx`. If needed in more places, extract to a shared utility:
-
-```typescript
-/** Parse a date string as local time (avoids UTC shift from MP dates) */
-function parseLocalDate(dateStr: string): Date {
-  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (match) {
-    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  }
-  return new Date(dateStr);
-}
-```
-
-### When Sending Dates to MP
-
-Ministry Platform expects SQL Server datetime format (`YYYY-MM-DD HH:MM:SS`), not ISO format. Convert **after** any Zod validation (which expects ISO datetime), not before:
-
-```typescript
-// ✅ Validate first (ISO format), then convert for MP
-const validated = schema.parse(data);        // Zod validates ISO datetime
-validated.Date_Field = toSqlDatetime(date);  // Convert to SQL format for MP API
-
-// ❌ NEVER convert to SQL format before Zod validation
-data.Date_Field = toSqlDatetime(date);       // Now "YYYY-MM-DD HH:MM:SS"
-schema.parse(data);                          // ZodError: invalid ISO datetime
-```
+**Rule**: Parse MP dates as local time using `parseLocalDate()` (in `src/components/contact-lookup-details/contact-lookup-details.tsx`) — extracts year/month/day components to avoid UTC shift. When sending dates to MP, use SQL format (`YYYY-MM-DD HH:MM:SS`) — convert **after** Zod validation, not before.
 
 ## Validation Best Practices
 
 When working with Ministry Platform data:
 
 ```typescript
-import { MPHelper } from '@/lib/providers/ministry-platform';
 import { ContactLogSchema } from '@/lib/providers/ministry-platform/models';
 
-const mp = new MPHelper();
+// ✅ Validate on create
+await mp.createTableRecords('Contact_Log', records, { schema: ContactLogSchema, $userId });
 
-// ✅ Good: Validate data before creating records
-await mp.createTableRecords('Contact_Log', records, {
-  schema: ContactLogSchema,
-  $userId: currentUser.Contact_ID
-});
+// ✅ Partial validation for updates (default: partial: true)
+await mp.updateTableRecords('Contact_Log', records, { schema: ContactLogSchema, $userId });
 
-// ✅ Good: Partial validation for updates (default)
-await mp.updateTableRecords('Contact_Log', partialRecords, {
-  schema: ContactLogSchema,
-  partial: true, // default, allows partial updates
-  $userId: currentUser.Contact_ID
-});
-
-// ✅ Good: Strict validation for full record updates
-await mp.updateTableRecords('Contact_Log', fullRecords, {
-  schema: ContactLogSchema,
-  partial: false, // require all fields
-  $userId: currentUser.Contact_ID
-});
-
-// ⚠️ Acceptable: Skip validation (backward compatible)
-await mp.createTableRecords('Contact_Log', records, {
-  $userId: currentUser.Contact_ID
-});
+// ✅ Strict validation (all fields required)
+await mp.updateTableRecords('Contact_Log', records, { schema: ContactLogSchema, partial: false, $userId });
 ```
 
 ## Security Best Practices
@@ -957,34 +618,11 @@ AI assistants maintain context files in `.claude/` to track project state across
 
 ### Status File
 
-`.claude/status.md` is a **lightweight snapshot** of current project state — recently completed work, in-progress items, and open issues. Read it first at session start to orient quickly without scanning all session summaries. Keep it short (under 50 lines). Update it when completing significant work or when the project state changes meaningfully.
+`.claude/status.md` is a **lightweight snapshot** of current project state — recently completed work, in-progress items, and open issues. Read it first at session start to orient quickly without scanning all session summaries. Keep it short (under 50 lines). Update it when completing significant work. **Retention: keep only the last 7 days** in the "Recently Completed" table — older entries are preserved in git history and session summaries. When adding a new entry, remove any entries older than 7 days.
 
 ### Session Summaries
 
-Each session gets a dated file at `.claude/sessions/session-summary-YYYY-MM-DD.md`. This is the primary record of what happened during a session.
-
-**Session start — create immediately:**
-1. Create (or open) today's session summary file before any code work begins
-2. Write a brief plan at the top: what the user is asking for, what you expect to do
-
-**During the session — update continuously:**
-- **After each user message**: If the user gives a command, asks a question, or provides feedback that changes direction, append a note capturing it
-- **Before each non-documentation commit**: Update the summary with what's being committed (files changed, decisions made). Include it in the commit.
-- **On key decisions**: Record the decision and rationale as it happens, not later
-
-**At session end:**
-- Review and clean up for clarity. Remove noise, consolidate duplicate entries, ensure file lists are complete and accurate
-- Respond to user cues: "thanks", "that's all", "we're done", "end of session"
-- User can request: "Create a session summary" or "Update context files"
-
-**What to include:**
-- Session plan / objectives (at the top)
-- Issues addressed (with `#N` references)
-- Files created / modified / removed (with line numbers for significant changes)
-- Key decisions and their rationale
-- User feedback and direction changes
-- Known issues or follow-ups
-- Status markers: ✅ COMPLETED, ⚠️ IN PROGRESS, ❌ BLOCKED
+Each session gets a dated file at `.claude/sessions/session-summary-YYYY-MM-DD.md`. Create it at session start with a brief plan. Update continuously: after direction changes, before commits, on key decisions. Include: objectives, issues addressed (`#N`), files changed, decisions + rationale, follow-ups. Use status markers: ✅ COMPLETED, ⚠️ IN PROGRESS, ❌ BLOCKED.
 
 ### Pre-Commit Checklist
 
@@ -1032,31 +670,7 @@ This will close issue #5 on next push to main.
 
 ### Entry Ordering
 
-Within each section (`## Features`, `## Improvements`, `## Technical Debt`) **and** the Table of Contents, entries must be ordered:
-
-1. **Incomplete items first** (active/open) — newest on top
-2. **Completed items last** (~~strikethrough~~ ✅) — at the bottom of the section
-
-When adding a new entry, insert it as the **first `###` heading** after the `## Section` header (above existing entries). When marking an entry completed, move it below all incomplete entries in the same section. The Table of Contents mirrors this order automatically.
-
-This ordering is enforced in three places:
-- **AI assistants**: Follow this convention when editing ideas.md during sessions
-- **GitHub Actions**: The `sync-issues-to-ideas` workflow sorts entries after every sync
-- **Manual edits**: If editing ideas.md by hand, maintain this order
-
-### Labels
-
-Issues are categorized by label, which maps to ideas.md sections:
-
-| Label | Section |
-|---|---|
-| `feature` | Features |
-| `improvement` | Improvements |
-| `tech-debt` | Technical Debt |
-
-### Loop Prevention
-
-The workflow uses `[skip ci]` in bot commits and checks `github.actor` to prevent infinite loops between the two sync directions.
+Within each section, order: **incomplete items first** (newest on top), **completed items last** (~~strikethrough~~ ✅ at bottom). New entries go as the first `###` after the `## Section` header. Labels map to sections: `feature` → Features, `improvement` → Improvements, `tech-debt` → Technical Debt.
 
 ## Reference Documents
 
