@@ -30,41 +30,7 @@ gh pr create --title "..." --body "..."
 
 ### Pre-PR Security Review
 
-**MANDATORY**: Before creating any PR, perform a security review of all changed files in the branch. This replaces an automated CI check — it must happen during development.
-
-**Steps:**
-1. Run `git diff main...HEAD --name-only` to list all changed files
-2. For each changed file, review against the checklist below
-3. Include a "Security Review" section in the PR description summarizing what was checked and any findings
-
-**Checklist — check every changed file for:**
-
-**Critical (must fix before PR):**
-- [ ] Filter injection: Any string interpolated into a `filter:` parameter without `sanitizeFilterValue()`, `sanitizeIds()`, or `sanitizeGuid()` from `@/lib/providers/ministry-platform/utils/filter-sanitize`
-- [ ] Open redirects: User-supplied URLs used for redirects without validation
-- [ ] Missing authentication: Server actions without `requireSession()` call before data access
-- [ ] Hardcoded secrets or credentials
-
-**High (must fix before PR):**
-- [ ] PII logged via `console.log` — contact records, emails, phones, notes, request/response bodies
-- [ ] File uploads without MIME type validation (`ALLOWED_IMAGE_TYPES` / `ALLOWED_DOCUMENT_TYPES`)
-- [ ] Missing input validation on user-supplied IDs (NaN, type coercion, negative numbers)
-
-**Medium (flag in PR description):**
-- [ ] New endpoints accepting record IDs without per-record authorization (IDOR risk)
-- [ ] Verbose logging not gated behind `NODE_ENV === 'development'`
-- [ ] New dependencies added (check `npm audit` output)
-
-**PR description format:**
-```markdown
-## Security Review
-- **Files reviewed**: N files
-- **Issues found**: None | N issues (list them)
-- **Checklist**: All critical/high items pass
-- **Notes**: (any medium-severity items or architectural observations)
-```
-
-Refer to `.claude/notes/security-audit-2026-02-24.md` for the full audit report and the "Security Best Practices" section below for detailed rules and code examples.
+**MANDATORY**: Before creating any PR, review all changed files against the security checklist in `.claude/notes/security-review-checklist.md`. Include a "Security Review" section in the PR description summarizing what was checked and any findings.
 
 ### Pre-PR Documentation Update
 
@@ -86,38 +52,9 @@ This ensures context files are part of the PR's commit history and ideas.md stay
 
 ### Upstream Sync
 
-This fork tracks `MinistryPlatform-Community/MPNext`. Upstream changes are reviewed periodically and cherry-picked selectively — we do **not** merge upstream directly, since the fork has intentionally diverged (e.g., Next.js 16 — upstream recently upgraded to 16 as well).
+This fork tracks `MinistryPlatform-Community/MPNext`. Upstream changes are reviewed periodically and cherry-picked selectively — we do **not** merge upstream directly. **GitHub will show "N commits behind"** — this is expected and harmless.
 
-To check for new upstream changes:
-
-```bash
-git fetch upstream
-git log main..upstream/main --oneline
-```
-
-Or review PRs at: https://github.com/MinistryPlatform-Community/MPNext/pulls
-
-#### Last Review: 2026-02-28
-
-Reviewed all open/merged upstream PRs through PR #52 (release v2026.02.28.1353). Status:
-
-| PR | Title | Action | Notes |
-|----|-------|--------|-------|
-| #37 | Security patches (Next.js + React) | Incorporated | Already on Next.js 16; `react`/`react-dom` at `^19.2.4` exceeds the `≥19.1.0` pin |
-| #38 | Dependency version updates | Incorporated | Bumped minimum pinned versions for all packages including lucide-react |
-| #39 | sanitizeTypeName digit-leading fix | Already incorporated | Same fix as #40; our `sanitizeTypeName` already prefixes `_` for digit-leading names |
-| #40 | Generator fix for digit-leading names | Incorporated | `sanitizeTypeName` prefixes `_` when result starts with a digit |
-| #41 | Upgrade to Next.js 16 + all deps | Incorporated | Already on Next.js 16; cherry-picked: `middleware.ts` → `proxy.ts` rename, removed unused `@eslint/eslintrc`. Bumped all deps to match upstream pins: zod v4, openai v6, dotenv v17, @types/node ^25, jsdom ^28, all Radix UI, tailwindcss ^4.2, typescript ^5.9.3, and 10+ more |
-| #42 | Docs + `@inquirer/prompts` v8 | Incorporated | Upgraded `@inquirer/prompts` ^7→^8; updated `components.md` layout import patterns. Cherry-picked CLAUDE.md additions: Next.js 16 Notes section, Services Layer + Contexts in Architecture, Data Flow section, service import patterns |
-| #45 | Improve test coverage (137→228 tests) | Skipped | Our test suite has diverged; upstream tests cover different features |
-| #46 | Testing reference guide | Skipped | We have our own testing docs and patterns |
-| #47 | GitHub Actions test workflow + Codecov | Skipped | Upstream-specific CI infrastructure |
-| #49 | Restore CODECOV_TOKEN | Skipped | Only relevant with #47 |
-| #50 | Load user roles/groups into MPUserProfile | Incorporated | Added `roles`/`userGroups` to MPUserProfile, parallel fetch from `dp_User_Roles`/`dp_User_User_Groups`; kept our `sanitizeGuid()` + `sanitizeIds()` security (upstream doesn't sanitize); kept `requireSession()` in shared action |
-| #51 | Update deps + fix security vulns | Incorporated | `npm audit fix` resolved 3 CVEs: rollup CVE-2026-27606 (High), minimatch GHSA-3ppc-4f35-3m26 (High), ajv GHSA-2g4f-4pwh-qvx6 (Moderate). Lockfile-only changes, no `package.json` updates needed |
-| #52 | Replace NextAuth refs with Better Auth | Incorporated | Code already aligned (env vars, function names). Cherry-picked: `totalSteps` 10→9 fix in `setup.ts`; updated stale NextAuth references in `docs/OAUTH_LOGOUT_SETUP.md` and `src/lib/providers/ministry-platform/docs/README.md` |
-
-**GitHub will show "N commits behind"** — this is expected and harmless. It reflects diverged commit history, not missing changes.
+Sync instructions and review history: `.claude/notes/upstream-sync-log.md`
 
 ### Auto-Commit `.claude/settings.local.json`
 
@@ -243,6 +180,8 @@ async function getCachedData(key: string) {
 | `getCachedAllContacts()` | 6h | 24h | `contacts-search` | `src/components/contact-lookup/cached-contacts.ts` |
 
 All cached functions use **stale-while-revalidate**: after the revalidate TTL expires, stale data continues to be served instantly while fresh data is computed in the background. This prevents users from ever hitting a cold cache during normal operation. The `stale` column shows how long expired data remains servable.
+
+**IMPORTANT — Cache keys must be stable.** Dashboard cache keys use end-of-ministry-year (Aug 31) instead of today's date, so they change only once per year (at ministry year rollover in September). If a cache key changes daily, stale-while-revalidate can't serve stale data after midnight because the new key has no stale entry — causing cold cache misses. Service methods that iterate over months (e.g., `getMonthlyAttendanceTrends`, `getEngagementRawData`) cap their iteration at `new Date()` internally to avoid wasting API calls on future months.
 
 **Note:** Dashboard cache is shared across all authenticated users (not keyed per-user). This is intentional — the dashboard shows aggregate metrics, not per-user data. If user-specific dashboard access is ever needed, the cache would need to be keyed by user or permission level.
 
@@ -525,170 +464,9 @@ Charts that follow this pattern:
 
 ## Mobile & Responsive Guidelines
 
-All features must work on mobile (375px+). Use **mobile-first** Tailwind classes and test at iPhone SE width (375px) in Chrome DevTools.
+All features must work on mobile (375px+). Use **mobile-first** Tailwind classes. Use `useIsMobile()` from `@/hooks/use-mobile` when component **behavior** must change by screen size; use Tailwind responsive prefixes (`sm:`, `md:`, `lg:`) for layout-only changes.
 
-### Viewport Configuration
-
-The `viewport` export in `src/app/(web)/layout.tsx` must include `width: "device-width"` and `initialScale: 1`:
-
-```typescript
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  themeColor: "#000000",
-}
-```
-
-### Responsive Hook
-
-Use `useIsMobile()` from `@/hooks/use-mobile` when component **behavior** must change by screen size (e.g., Recharts prop values, conditional rendering). For **layout-only** changes, use Tailwind responsive prefixes (`sm:`, `md:`, `lg:`).
-
-```typescript
-import { useIsMobile } from '@/hooks/use-mobile';
-const isMobile = useIsMobile(); // true when viewport < 768px (md breakpoint)
-```
-
-### Padding & Spacing
-
-| Context | Classes | Rationale |
-|---------|---------|-----------|
-| Page containers | `p-4 sm:p-6 lg:p-8` | Never `p-8` alone — wastes 64px on a 375px screen |
-| Page titles | `text-2xl sm:text-4xl` | `text-4xl` is too large for narrow screens |
-| Dialog/modal content | Base is `p-4 sm:p-6` | Set in `dialog.tsx` base component |
-
-### Tab Navigation
-
-When tabs contain long labels (e.g., "New Volunteers In Process"), they overflow on narrow screens. Use responsive classes:
-
-```tsx
-<TabsList className="w-full sm:w-fit h-auto">
-  <TabsTrigger value="tab1" className="flex-1 sm:flex-initial whitespace-normal sm:whitespace-nowrap text-xs sm:text-sm py-1.5">
-    Long Tab Label
-  </TabsTrigger>
-</TabsList>
-```
-
-| Class | Purpose |
-|-------|---------|
-| `w-full sm:w-fit` on TabsList | Full-width on mobile, auto-sized on desktop |
-| `h-auto` on TabsList | Allows multi-line tab labels to expand height |
-| `flex-1 sm:flex-initial` on TabsTrigger | Equal-width tabs on mobile, auto-sized on desktop |
-| `whitespace-normal sm:whitespace-nowrap` | Wraps text on mobile, single line on desktop |
-| `text-xs sm:text-sm` | Smaller text on mobile to fit labels |
-
-### Form Select Elements
-
-Native `<select>` elements must use `text-base` (16px) on mobile to **prevent iOS Safari auto-zoom** on focus. Browsers zoom when input font size is below 16px.
-
-```tsx
-<select className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm ...">
-```
-
-| Pattern | Implementation |
-|---------|---------------|
-| **Font size** | `text-base sm:text-sm` — 16px on mobile (prevents iOS zoom), 14px on desktop |
-| **Height** | `h-10` (40px) — matches touch-friendly sizing guidelines |
-
-### Chart Standards (Recharts)
-
-All chart components must follow these mobile patterns:
-
-| Pattern | Implementation |
-|---------|---------------|
-| **Touch-friendly tooltips** | `<Tooltip trigger={isMobile ? 'click' : 'hover'} />` — tap to show, tap elsewhere to dismiss |
-| **Tooltip max-width** | Add `maxWidth: '85vw'` to `contentStyle` — prevents tooltip from exceeding viewport |
-| **Tooltip dismiss on outside tap** | Handled by `ExpandableChart` wrapper — tapping outside the chart forces a re-mount via React key toggle to clear Recharts' internal tooltip state |
-| **Responsive margins** | `margin={{ top: 5, right: isMobile ? 5 : 20, left: isMobile ? 5 : 20, bottom: 5 }}` |
-| **Hide legend on mobile** | `{!isMobile && <Legend />}` — lines are identifiable by color; legend wastes vertical space |
-| **Hide secondary Y-axis** | For dual-axis charts: `{!isMobile && <YAxis yAxisId="right" ... />}` |
-| **Hide pie chart labels** | `label={isMobile ? false : renderLabel}` — labels overlap on small screens |
-| **Horizontal bar Y-axis width** | `width={isMobile ? 80 : 150}` — 150px is 40% of a 375px screen |
-| **Empty state heights** | Use `style={{ height }}`, **not** `` h-[${height}px] `` — Tailwind can't compile dynamic values |
-
-**ExpandableChart wrapper** (`src/components/dashboard/expandable-chart.tsx`): All dashboard charts are wrapped in this component. On mobile, click-to-expand on the chart area is disabled to avoid intercepting Recharts' click-triggered tooltips — users tap the expand icon button instead. The wrapper also handles tooltip dismiss: a `pointerdown` listener on `document` detects taps outside the chart container and increments a React key to force the chart to re-mount, clearing the tooltip. Do **not** try to dismiss tooltips via Recharts' `onClick` prop or `active` prop override — these interfere with Recharts' internal tooltip state management.
-
-### Dialog & Modal Standards
-
-| Pattern | Implementation |
-|---------|---------------|
-| **Base padding** | `p-4 sm:p-6` (set in `dialog.tsx`) |
-| **Wide modals (max-w-2xl)** | Add `w-[calc(100vw-1rem)]` before `sm:max-w-2xl` to prevent overflow |
-| **Modal close button** | Base `DialogContent` includes an X button at `right-4 top-4` — always accessible |
-
-### Form Layout Standards
-
-| Pattern | Implementation |
-|---------|---------------|
-| **Side-by-side fields** | `flex flex-col sm:flex-row` — stacks vertically on mobile |
-| **Fixed-width inputs** | `w-full sm:w-36` — full width on mobile, fixed on desktop |
-| **Badge/icon rows** | Always include `flex-wrap` — prevents horizontal overflow |
-
-### Touch Interaction Standards
-
-- **Never rely solely on `:hover`** for critical UI. Use `opacity-60 sm:opacity-0 sm:group-hover:opacity-100` for reveal buttons.
-- **Interactive SVG elements** need `onClick` alongside `onMouseEnter`/`onMouseLeave` for tap support.
-- **Recharts tooltips** must use `trigger={isMobile ? 'click' : 'hover'}` — default hover tooltips are unusable on touch devices.
-
-### Anti-Patterns to Avoid
-
-```typescript
-// ❌ Dynamic Tailwind classes — won't be compiled
-<div className={`h-[${height}px]`}>
-
-// ✅ Use inline style for dynamic values
-<div style={{ height }}>
-
-// ❌ Fixed padding on all breakpoints
-<div className="p-8">
-
-// ✅ Mobile-first responsive padding
-<div className="p-4 sm:p-6 lg:p-8">
-
-// ❌ Wide modal without mobile constraint
-<DialogContent className="max-w-2xl">
-
-// ✅ Viewport-aware modal width
-<DialogContent className="w-[calc(100vw-1rem)] sm:max-w-2xl">
-
-// ❌ Fixed Y-axis width on horizontal bar chart
-<YAxis width={150} />
-
-// ✅ Responsive Y-axis width
-<YAxis width={isMobile ? 80 : 150} />
-
-// ❌ Hover-only button visibility
-className="opacity-0 group-hover:opacity-100"
-
-// ✅ Touch-friendly visibility
-className="opacity-60 sm:opacity-0 sm:group-hover:opacity-100"
-
-// ❌ Small select font (causes iOS auto-zoom)
-<select className="text-xs">
-<select className="text-sm">
-
-// ✅ 16px base prevents iOS auto-zoom, smaller on desktop
-<select className="text-base sm:text-sm h-10">
-
-// ❌ Fixed-width tabs that overflow on mobile
-<TabsList>
-  <TabsTrigger>Long Tab Label Here</TabsTrigger>
-</TabsList>
-
-// ✅ Responsive tabs that wrap and fit mobile
-<TabsList className="w-full sm:w-fit h-auto">
-  <TabsTrigger className="flex-1 sm:flex-initial whitespace-normal sm:whitespace-nowrap text-xs sm:text-sm py-1.5">
-    Long Tab Label Here
-  </TabsTrigger>
-</TabsList>
-
-// ❌ Trying to dismiss Recharts tooltips via onClick/active prop
-<BarChart onClick={() => setActive(false)}>
-  <Tooltip active={active} />
-</BarChart>
-
-// ✅ Let ExpandableChart handle tooltip dismiss via key toggle
-// (no extra code needed in individual chart components)
-```
+Full patterns, anti-patterns, and standards: `.claude/references/mobile-responsive.md`
 
 ## UI Style Guide
 

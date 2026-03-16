@@ -27,9 +27,9 @@ export async function getCachedDashboardData(ministryYear: number): Promise<Dash
 /**
  * Cached full-range dashboard data for 5 ministry years.
  * Revalidates every 6 hours; serves stale for up to 24 hours (stale-while-revalidate).
- * The endDateIso parameter (YYYY-MM-DD) is computed by the caller so that
- * `new Date()` stays outside the cache boundary. The date string becomes part
- * of the automatic cache key, meaning the cache refreshes daily.
+ * Cache key uses end-of-ministry-year (Aug 31) — stable within a ministry year,
+ * so stale data survives container restarts and midnight rollovers.
+ * The service methods cap month iteration at today internally.
  */
 export async function getCachedFullRangeData(earliestYear: number, endDateIso: string): Promise<DashboardData> {
   'use cache';

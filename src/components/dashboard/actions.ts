@@ -39,11 +39,10 @@ export async function getFullRangeDashboardMetrics(): Promise<DashboardData> {
   const currentYear = getCurrentMinistryYear();
   const earliestYear = currentYear - 4;
 
-  // Compute end date outside the cache boundary (new Date() is dynamic data)
-  const today = new Date();
-  const maxEnd = new Date(currentYear + 1, 7, 31);
-  const endDate = today < maxEnd ? today : maxEnd;
-  const endDateIso = endDate.toISOString().split('T')[0]; // "YYYY-MM-DD"
+  // Use end-of-ministry-year (Aug 31) as a stable cache key — changes only once
+  // per ministry year instead of daily. The service methods cap month iteration
+  // at today internally, so no wasted API calls for future months.
+  const endDateIso = `${currentYear + 1}-08-31`;
 
   return getCachedFullRangeData(earliestYear, endDateIso);
 }
@@ -58,16 +57,11 @@ export async function getExtendedDashboardMetrics(): Promise<Partial<DashboardDa
   const currentYear = getCurrentMinistryYear();
   const earliestYear = currentYear - 4;
 
-  const today = new Date();
+  // Use stable full-range dates (changes only at ministry year rollover in September)
+  const fullRangeStartIso = `${earliestYear}-09-01`;
+  const fullRangeEndIso = `${currentYear + 1}-08-31`;
 
-  const fullRangeStart = new Date(earliestYear, 8, 1); // September 1, 5 years ago
-  const maxEnd = new Date(currentYear + 1, 7, 31);
-  const fullRangeEnd = today < maxEnd ? today : maxEnd;
-
-  return getCachedExtendedData(
-    fullRangeStart.toISOString().split('T')[0],
-    fullRangeEnd.toISOString().split('T')[0]
-  );
+  return getCachedExtendedData(fullRangeStartIso, fullRangeEndIso);
 }
 
 /**
@@ -80,16 +74,11 @@ export async function getEngagementDashboardMetrics(): Promise<Partial<Dashboard
   const currentYear = getCurrentMinistryYear();
   const earliestYear = currentYear - 4;
 
-  const today = new Date();
+  // Use stable full-range dates (changes only at ministry year rollover in September)
+  const fullRangeStartIso = `${earliestYear}-09-01`;
+  const fullRangeEndIso = `${currentYear + 1}-08-31`;
 
-  const fullRangeStart = new Date(earliestYear, 8, 1);
-  const maxEnd = new Date(currentYear + 1, 7, 31);
-  const fullRangeEnd = today < maxEnd ? today : maxEnd;
-
-  return getCachedEngagementData(
-    fullRangeStart.toISOString().split('T')[0],
-    fullRangeEnd.toISOString().split('T')[0]
-  );
+  return getCachedEngagementData(fullRangeStartIso, fullRangeEndIso);
 }
 
 /**

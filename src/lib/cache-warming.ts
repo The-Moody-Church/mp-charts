@@ -52,16 +52,17 @@ function getCurrentMinistryYear(): number {
 /**
  * Computes common date parameters used by dashboard cached functions.
  * Mirrors the parameter computation in dashboard server actions.
+ *
+ * Uses end-of-ministry-year (Aug 31) as end date instead of today,
+ * so cache keys are stable within a ministry year — no daily key changes.
+ * The service methods cap month iteration at today internally.
  */
 function getDashboardDateParams() {
   const currentYear = getCurrentMinistryYear();
   const earliestYear = currentYear - 4;
-  const today = new Date();
-  const maxEnd = new Date(currentYear + 1, 7, 31);
-  const endDate = today < maxEnd ? today : maxEnd;
 
-  const endDateIso = endDate.toISOString().split('T')[0];
-  const fullRangeStartIso = new Date(earliestYear, 8, 1).toISOString().split('T')[0];
+  const endDateIso = `${currentYear + 1}-08-31`;
+  const fullRangeStartIso = `${earliestYear}-09-01`;
   const fullRangeEndIso = endDateIso;
 
   return { currentYear, earliestYear, endDateIso, fullRangeStartIso, fullRangeEndIso };
