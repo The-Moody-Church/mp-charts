@@ -8,28 +8,12 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
-| 2026-03-16 | **Stable cache keys**: Changed dashboard cache keys from today's date to end-of-ministry-year (Aug 31) so they're stable all year. Eliminates daily cold cache at midnight. Service methods cap month iteration at today to avoid wasted API calls. | #113 | — |
-| 2026-03-14 | **Dashboard cache fix**: Removed `dateIso` from cache keys to prevent daily cold cache misses; fixed `new Date()` PPR error in dashboard page. | #108 | — |
-| 2026-03-14 | **Dashboard polish**: Feed Your Soul (Communities & Groups Trends rewrite, tooltip titles, totals, sorting), Know God (4-col metrics), Grow in Love (combined serving total into role type card, 2-col layout, detailed descriptions, "Other" ministry bucket), removed Period Comparison section. | #52 | — |
-| 2026-03-13 | **Feedback → GitHub issues**: Replaced MP Feedback_Entries with GitHub issue creation. Simplified config (removed feedbackTypeId/assignedToContactId), added GITHUB_FEEDBACK_TOKEN env var, appends page URL + user name to issues, admin shows token status. | #104 | — |
-| 2026-03-12 | **Restrict contact log edit by owner**: Edit button and server action only allow editing logs created by the current user (Made_By check). Added "Logged by" display showing who created each log entry. | #96 | — |
-| 2026-03-12 | **Contact search null safety & scoring**: Fixed localeCompare crash on null Last_Name/First_Name (#99), added proportional prefix-match bonus to search scoring (#98) | #98, #99 | #101 |
-| 2026-03-12 | **Optimize dashboard cache queries**: Activity_Log uses per-month parallel queries with `$distinct`+`$groupby` and `Page_ID <> 316`; Monthly attendance trends parallelized (~48 sequential calls → 12 parallel pairs × 2 years) | #97 | #100 |
-| 2026-03-12 | **Contact lookup & badge improvements**: Activity log excludes Group Participants (#92), membership badge shows Date_Joined/Dropped date (#93), mixed-type search with clear button (#94), badge color updates, contact log creation fix, last activity timezone fix | #92, #93, #94 | — |
-| 2026-03-12 | **Venn diagram single-month fix**: Attendance circle now shows for single-month selections; fixed weekly→monthly conversion semantics; batch Event_Metrics query to avoid IIS URL length 404 | #83 | #89 |
-| 2026-03-12 | **Contact address + directions**: Address display (with unlisted note) and platform-aware "Get Directions" button (Apple Maps on iOS, app picker on Android, Google Maps web on desktop) | #88 | #91 |
-| 2026-03-12 | **Member badge specificity + last activity**: Extract shared `statusBadgeColor` utility, add member status badges to search results, show specific MP membership types, add "Last Activity" badge from Activity_Log | #85 | #90 |
-| 2026-03-11 | **Auth callback redirect**: Preserve original URL through login redirect | — | #86 |
-| 2026-03-11 | **Member photo upload fix**: Correct form field name mismatch in member detail modal | — | #87 |
-| 2026-03-11 | **Manage Members**: Card-based membership management with status tabs, detail modal, expandable milestones, deep links, client-side transition overrides, cache refresh button, rate limit resilience | — | #84 |
-| 2026-03-11 | **Cache warming everywhere**: Audited all `'use cache'` functions, confirmed all 6 are registered in `cache-warming.ts`, added missing cross-reference comments to `dashboardService.ts` and `cached-contacts.ts` | #80 | — |
-| 2026-03-10 | **Contact lookup enhancements**: route rename, breadcrumbs, badges, family section, birthday, photo upload, View in MP, Copy Link, email/phone search, remove delete from logs, consolidate permissions | #19 | #81 |
-| 2026-03-10 | **PWA**: service worker, offline fallback, iOS install prompt | — | #77 |
-| 2026-03-10 | **Search ranking**: scored search with exact/starts-with/contains/Soundex/Levenshtein, both name orderings, search-as-you-type, cached contact lookup | #78 | #79 |
-| 2026-03-06 | **Chart YoY comparisons**: Community Attendance chart, Serving Trends YoY, date filter improvements (shift+click range, year auto-select, gap fill) | #68 | #76 |
-| 2026-03-06 | **Venn diagram attendance circle**: average total attendance (in-person + online) | #67 | #75 |
-| 2026-03-06 | **Permissions sort**: selected groups sorted to top in admin | #70 | #74 |
-| 2026-03-05 | **Stale feature keys**: filter stale keys from permissions config | — | — |
+| 2026-03-16 | **Stable cache keys**: Changed dashboard cache keys from today's date to end-of-ministry-year (Aug 31) so they're stable all year. Eliminates daily cold cache at midnight. Service methods cap month iteration at today to avoid wasted API calls. | #113 | #114 |
+| 2026-03-15 | **Concurrency control**: Added `mapWithConcurrency` (limit 6) to monthly attendance API calls. Prevents 55+ parallel requests from overwhelming MP API. | — | — |
+| 2026-03-14 | **Dashboard cache fix**: Removed redundant `dateIso` from cache keys; fixed `new Date()` PPR error. | #108 | #111 |
+| 2026-03-14 | **Dashboard polish**: Feed Your Soul rewrite, Know God 4-col metrics, Grow in Love descriptions + "Other" bucket, removed Period Comparison. | #52 | #109 |
+| 2026-03-13 | **Feedback → GitHub issues**: Replaced MP Feedback_Entries with GitHub issue creation. | #104 | — |
+| 2026-03-12 | **Contact lookup improvements**: Owner-only log editing (#96), null safety (#99), search scoring (#98), badge improvements (#92-94), address + directions (#88), venn fix (#83) | #83-99 | #89-101 |
 
 ## Open Issues
 

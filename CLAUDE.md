@@ -618,7 +618,7 @@ AI assistants maintain context files in `.claude/` to track project state across
 
 ### Status File
 
-`.claude/status.md` is a **lightweight snapshot** of current project state — recently completed work, in-progress items, and open issues. Read it first at session start to orient quickly without scanning all session summaries. Keep it short (under 50 lines). Update it when completing significant work or when the project state changes meaningfully.
+`.claude/status.md` is a **lightweight snapshot** of current project state — recently completed work, in-progress items, and open issues. Read it first at session start to orient quickly without scanning all session summaries. Keep it short (under 50 lines). Update it when completing significant work. **Retention: keep only the last 7 days** in the "Recently Completed" table — older entries are preserved in git history and session summaries. When adding a new entry, remove any entries older than 7 days.
 
 ### Session Summaries
 
