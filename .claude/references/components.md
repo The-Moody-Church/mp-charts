@@ -7,18 +7,20 @@ This document provides detailed context about the `src/components/` folder struc
 ```
 src/components/
 ├── shared-actions/             # Shared server actions
-├── ui/                         # shadcn/ui components (19 components)
-├── processing/                 # Shared processing UI components (8 components)
-├── baptism-processing/         # Baptism applicant workflow
+├── ui/                         # shadcn/ui components (20 components)
+├── processing/                 # Shared processing UI components (9 components)
+├── admin/                      # Admin settings (journey tools, compliance tools, permissions, feedback)
+├── compliance-processing/      # Compliance applicant workflow (background checks, certifications)
 ├── contact-logs/               # Contact log CRUD feature
 ├── contact-lookup/             # Contact search feature
 ├── contact-lookup-details/     # Contact details view
 ├── dashboard/                  # Executive dashboard feature
-├── membership-processing/      # Membership applicant workflow
-├── tool/                       # Tool layout components (ToolContainer, ToolHeader, ToolFooter, ToolParamsDebug)
-├── user-tools-debug/           # Debug: User permissions display (dev only)
+├── feedback/                   # In-app feedback button and wrapper
+├── home/                       # Home page feature cards
+├── journey-processing/         # Journey applicant milestone workflow
+├── manage-members/             # Member management with status transitions
+├── pwa/                        # Progressive Web App install prompt
 ├── user-menu/                  # User dropdown menu
-├── volunteer-processing/       # Volunteer onboarding workflow
 └── layout/                     # Layout components with barrel export
     ├── index.ts                # Barrel export for all layout components
     ├── auth-wrapper.tsx        # Authentication wrapper (Server Component)
@@ -43,19 +45,22 @@ src/components/
 
 | Folder | Purpose | Has Actions |
 |--------|---------|-------------|
-| `baptism-processing/` | Baptism applicant milestone tracking with pause/resume | Yes |
+| `admin/` | Admin settings page with sub-pages for journey tools, compliance tools, permissions, feedback | Yes |
+| `compliance-processing/` | Compliance applicant tracking with background checks, certifications, group assignment | Yes |
 | `contact-logs/` | Contact log CRUD with modal forms | Yes |
 | `contact-lookup/` | Contact search with results display | Yes |
 | `contact-lookup-details/` | Contact profile and logs view | Yes |
 | `dashboard/` | Executive dashboard with charts and filters | Yes |
-| `membership-processing/` | Membership applicant milestone tracking with completion | Yes |
+| `feedback/` | In-app feedback button with modal form | Yes |
+| `home/` | Home page feature cards (RBAC-filtered) | No |
+| `journey-processing/` | Journey applicant milestone tracking with pause/resume | Yes |
+| `manage-members/` | Member management with tabs, status transitions, detail modals | Yes |
+| `pwa/` | PWA install prompt banner | No |
 | `user-menu/` | User dropdown with sign-out | Yes |
-| `volunteer-processing/` | Volunteer onboarding with background checks, certifications, group assignment | Yes |
-| `tool/` | Tool layout components (ToolContainer, ToolHeader, ToolFooter, ToolParamsDebug) | No |
 
 ### Shared Processing Components (`processing/` folder)
 
-Domain-specific shared components used by all three processing features. These are NOT general-purpose UI primitives (those go in `ui/`).
+Domain-specific shared components used by journey and compliance processing features. These are NOT general-purpose UI primitives (those go in `ui/`).
 
 ```
 processing/
@@ -64,6 +69,7 @@ processing/
 ├── detail-modal-photo-upload.tsx # Clickable photo with upload overlay
 ├── contact-links.tsx             # Email/phone bordered pill-style buttons
 ├── processing-grid.tsx           # Card grid with loading/error/empty states
+├── processing-search-bar.tsx     # Search bar for filtering processing grids
 ├── file-type-icon.tsx            # PDF/image/generic file icon
 ├── milestone-expanded-view.tsx   # Read-only milestone detail (notes + file list)
 ├── milestone-edit-form.tsx       # Edit mode: date, notes, file input, save/cancel
@@ -72,14 +78,15 @@ processing/
 
 | Component | Purpose | Used By |
 |---|---|---|
-| `PersonAvatar` | Photo circle (MP file URL) with initials fallback | All 3 cards, all 3 detail modals |
-| `DetailModalPhotoUpload` | Clickable avatar with upload overlay + file validation | All 3 detail modals |
-| `ContactLinks` | Bordered pill-style email/phone links | Baptism + membership modals |
-| `ProcessingGrid` | Card grid with skeleton loading, error, and empty states | All 3 main page components |
+| `PersonAvatar` | Photo circle (MP file URL) with initials fallback | Processing cards and detail modals |
+| `DetailModalPhotoUpload` | Clickable avatar with upload overlay + file validation | Processing detail modals |
+| `ContactLinks` | Bordered pill-style email/phone links | Processing detail modals |
+| `ProcessingGrid` | Card grid with skeleton loading, error, and empty states | Processing main page components |
+| `ProcessingSearchBar` | Search bar for filtering processing grids | Processing main page components |
 | `FileTypeIcon` | PDF/image/generic file icon | Milestone expanded view, milestone edit form |
-| `MilestoneExpandedView` | Read-only milestone detail: notes + downloadable file list | All 3 detail modals |
-| `MilestoneEditForm` | Edit mode: date picker, notes textarea, file input, save/cancel | All 3 detail modals |
-| `QuickActionsPanel` | Milestone dropdown + date/notes/file/submit for quick creation | Baptism + membership modals |
+| `MilestoneExpandedView` | Read-only milestone detail: notes + downloadable file list | Processing detail modals |
+| `MilestoneEditForm` | Edit mode: date picker, notes textarea, file input, save/cancel | Processing detail modals |
+| `QuickActionsPanel` | Milestone dropdown + date/notes/file/submit for quick creation | Processing detail modals |
 
 **Import**: `import { PersonAvatar, ProcessingGrid, MilestoneEditForm } from '@/components/processing';`
 
@@ -90,7 +97,7 @@ processing/
 
 ### Processing Features — Shared Architecture
 
-All three processing features (`baptism-processing`, `membership-processing`, `volunteer-processing`) follow the same pattern:
+Journey and compliance processing features follow the same pattern:
 
 ```
 feature-processing/
@@ -105,43 +112,35 @@ feature-processing/
 
 **Common capabilities**: Contact photo upload (1MB limit), file attachments on milestones, deep link support (`?applicant=ID`), milestone progress checklist, "View in MP" links, bordered pill-style email/phone buttons.
 
-### Debug Components (Development Only)
-
-| Folder | Purpose | Remove Before Production |
-|--------|---------|-------------------------|
-| `tool/` (ToolParamsDebug) | Displays parsed URL tool parameters | Yes |
-| `user-tools-debug/` | Shows user's authorized tool paths | Yes |
-
-**Note**: `ToolParamsDebug` is located inside the consolidated `tool/` folder alongside the other tool layout components.
-
 ### UI Components (shadcn/ui)
 
-19 components following shadcn conventions:
+20 components following shadcn conventions:
 - `alert.tsx`, `alert-dialog.tsx`, `avatar.tsx`, `breadcrumb.tsx`
 - `button.tsx`, `card.tsx`, `checkbox.tsx`, `dialog.tsx`
 - `drawer.tsx`, `dropdown-menu.tsx`, `form.tsx`, `input.tsx`
 - `label.tsx`, `radio-group.tsx`, `select.tsx`, `skeleton.tsx`
-- `switch.tsx`, `textarea.tsx`, `tooltip.tsx`
+- `switch.tsx`, `tabs.tsx`, `textarea.tsx`, `tooltip.tsx`
 
 ## Server Actions Location
 
 Actions are co-located with their feature components:
 
-| Feature | Actions File | Functions |
+| Feature | Actions File | Key Functions |
 |---------|--------------|-----------|
-| baptism-processing | `baptism-processing/actions.ts` | `getCurrentApplicants`, `getPausedApplicants`, `getApplicantDetail`, `createBaptismMilestone`, `updateBaptismMilestone`, `getBaptismMilestoneFiles`, `uploadApplicantPhoto`, `pauseApplicant`, `resumeApplicant` |
-| contact-logs | `contact-logs/actions.ts` | `getContactLogTypes`, `createContactLog`, `updateContactLog`, `deleteContactLog`, `getContactLogsByContactId`, `getContactLogById` |
+| admin | `admin/actions.ts` | Admin settings operations |
+| compliance-processing | `compliance-processing/actions.ts` | Compliance applicant CRUD, milestone operations |
+| contact-logs | `contact-logs/actions.ts` | `getContactLogTypes`, `createContactLog`, `updateContactLog`, `deleteContactLog` |
 | contact-lookup | `contact-lookup/actions.ts` | `searchContacts` |
 | contact-lookup-details | `contact-lookup-details/actions.ts` | `getContactDetails`, `getContactLogsByContactId` |
 | dashboard | `dashboard/actions.ts` | `getDashboardMetrics`, `getFullRangeDashboardMetrics`, `refreshDashboardCache` |
-| membership-processing | `membership-processing/actions.ts` | `getApplicants`, `getApplicantDetail`, `createMembershipMilestone`, `updateMembershipMilestone`, `confirmMembershipCompletion`, `getMembershipMilestoneFiles`, `uploadApplicantPhoto` |
+| feedback | `feedback/actions.ts` | Feedback submission |
+| journey-processing | `journey-processing/actions.ts` | Journey applicant CRUD, milestone operations, pause/resume |
+| manage-members | `manage-members/actions.ts` | Member listing, status transitions, detail operations |
 | user-menu | `user-menu/actions.ts` | `handleSignOut` |
-| user-tools-debug | `user-tools-debug/actions.ts` | `getUserTools` |
-| volunteer-processing | `volunteer-processing/actions.ts` | `getInProcessVolunteers`, `getApprovedVolunteers`, `getVolunteerDetail`, `getMilestoneFiles`, `getCertificationFiles`, `getFormResponseFiles`, `createFormResponse`, `uploadVolunteerPhoto`, `createVolunteerMilestone`, `updateVolunteerMilestone`, `updateVolunteerCertification`, `updateVolunteerFormResponse`, `getApprovedGroupRoles`, `getApprovedGroupsList`, `assignVolunteerToGroup` |
 | **shared** | `shared-actions/user.ts` | `getCurrentUserProfile` |
 | **shared** | `shared-actions/processing.ts` | `extractValidatedFiles`, `extractValidatedFilesResult`, `uploadContactPhoto` |
 
-**Shared Actions Folder**: `src/components/shared-actions/` contains actions used across multiple features. See the README in that folder for guidelines on when to use shared vs co-located actions.
+**Shared Actions Folder**: `src/components/shared-actions/` contains actions used across multiple features.
 
 ## Import Patterns
 
@@ -149,13 +148,10 @@ Actions are co-located with their feature components:
 // Feature components (use barrel exports)
 import { ContactLookup } from '@/components/contact-lookup';
 import { ContactLogs } from '@/components/contact-logs';
-import { BaptismProcessing } from '@/components/baptism-processing';
-import { MembershipProcessing } from '@/components/membership-processing';
-import { VolunteerProcessing } from '@/components/volunteer-processing';
+import { JourneyProcessing } from '@/components/journey-processing';
+import { ComplianceProcessing } from '@/components/compliance-processing';
+import { ManageMembersShell } from '@/components/manage-members';
 import { UserMenu } from '@/components/user-menu';
-
-// Tool components (use barrel export)
-import { ToolContainer, ToolHeader, ToolFooter, ToolParamsDebug } from '@/components/tool';
 
 // UI components (individual imports)
 import { Button } from '@/components/ui/button';
@@ -190,110 +186,19 @@ feature-name/
 └── [sub-components].tsx  # Additional components (optional)
 ```
 
-## Compliance Summary
-
-All components pass the following checks:
-
-| Criterion | Status |
-|-----------|--------|
-| File naming (kebab-case) | PASS |
-| Component naming (PascalCase) | PASS |
-| Named exports only (no default) | PASS |
-| `@/` alias for imports | PASS |
-| Barrel exports for features | PASS |
-| `"use client"` where needed | PASS |
-| `"use server"` for actions | PASS |
-| TypeScript strict typing | PASS |
-
-## Known Issues & Recommendations
-
-### UI Component Notes
-
-- **dialog.tsx**: Uses mixed patterns (direct assignment vs forwardRef) - works but inconsistent.
-- **tooltip.tsx**: Auto-wraps with `TooltipProvider` internally - no need to wrap manually.
-
-### Debug Components
-
-The `ToolParamsDebug` (inside `tool/`) and `user-tools-debug` components are marked for removal before production. They are currently used in `src/app/(web)/tools/template/template-tool.tsx`.
-
-Consider conditional rendering:
-```typescript
-import { ToolParamsDebug } from '@/components/tool';
-
-{process.env.NODE_ENV === 'development' && <ToolParamsDebug params={params} />}
-```
-
-## Quick Reference: Component Responsibilities
-
-### baptism-processing
-- **Purpose**: Track baptism applicants through a 9-step milestone workflow
-- **Components**: `BaptismProcessing` (tabs + grid), `BaptismCard` (grid card), `BaptismDetailModal` (detail view)
-- **Features**: Two tabs (Current / Paused), pause/resume workflow, milestone checklist with progress bar, approval decision after interview, deep link support, contact photo upload, file attachments, end date alert for group participants with future End_Date
-- **DTOs**: `BaptismApplicantInfo`, `BaptismChecklistItem`, `BaptismCard`, `BaptismDetail`, `BaptismMilestoneDetail`, `BaptismMilestoneFileInfo`, `BaptismWriteBackConfig`
-- **Environment**: 13 env vars (group IDs, program ID, role ID, 9 milestone IDs, pause milestone ID)
-
-### membership-processing
-- **Purpose**: Track membership applicants through an 8-step milestone workflow
-- **Components**: `MembershipProcessing` (grid), `MembershipCard` (grid card), `MembershipDetailModal` (detail view)
-- **Features**: Single group (no tabs), milestone checklist with progress bar, completion confirmation (sets End_Date on Group_Participant), deep link support, contact photo upload, file attachments
-- **DTOs**: `MembershipApplicantInfo`, `MembershipChecklistItem`, `MembershipCard`, `MembershipDetail`, `MembershipMilestoneDetail`, `MembershipMilestoneFileInfo`, `MembershipWriteBackConfig`
-- **Environment**: 10 env vars (group ID, program ID, 8 milestone IDs)
-
-### volunteer-processing
-- **Purpose**: Track volunteer onboarding with background checks, certifications, and group assignment
-- **Components**: `VolunteerProcessing` (tabs + grid), `VolunteerCard` (grid card), `VolunteerDetailModal` (detail view)
-- **Features**: Two tabs (In Process / Approved Active), rich checklist statuses (complete, in_progress, expired, expiring_soon, not_started, presumed_complete), background check tracking, certification expiration monitoring (30-day warning), form response creation, group assignment with role selection, group filter dropdown on approved tab, deep link support, contact photo upload
-- **DTOs**: `VolunteerInfo`, `ChecklistItemStatus`, `VolunteerCard`, `VolunteerDetail`, `BackgroundCheckDetail`, `CertificationDetail`, `FormResponseDetail`, `MilestoneDetail`, `MilestoneFileInfo`, `WriteBackConfig`, `GroupFilterOption`, `GroupRoleOption`, `ApprovedVolunteersResult`
-- **Environment**: 12+ env vars (group IDs, program ID, milestone IDs, form ID)
-
-### contact-logs
-- **Purpose**: CRUD interface for contact log entries
-- **Features**: Create/edit modals, delete confirmation, log type filtering
-- **Dependencies**: ContactLogService, React Hook Form, Zod validation
-
-### contact-lookup
-- **Purpose**: Search contacts by name/email/phone
-- **Components**: `ContactLookup` (container), `ContactLookupSearch` (input), `ContactLookupResults` (display)
-- **Features**: Debounced search, avatar display, selection callbacks
-
-### contact-lookup-details
-- **Purpose**: Display full contact profile with associated logs
-- **Features**: Profile info display, embedded ContactLogs component, loading/error states
-
-### tool
-- **Purpose**: Consolidated folder containing reusable layout components for tool interfaces
-- **Components**: `ToolContainer`, `ToolHeader`, `ToolFooter`, `ToolParamsDebug`
-- **Usage**: Wrap tool content with consistent header/footer styling
-- **Pattern**: Composition via children prop
-- **Import**: `import { ToolContainer, ToolHeader, ToolFooter, ToolParamsDebug } from '@/components/tool';`
-- **Note**: `ToolParamsDebug` is a debug component for development only
-
-### dashboard
-- **Purpose**: Executive dashboard with attendance/group metrics and interactive date filtering
-- **Components**: `DashboardShell` (client container), `DashboardMetrics` (layout), `DateRangeFilter` (month/year selector), `AttendanceChart`, `CommunityAttendanceChart`, `GroupParticipationChart`, `SmallGroupTrends`, `YearOverYearComparison`, `MetricCard`
-- **Utilities**: `filterDashboardData` (client-side date filtering), `selectionToDateRange`, `getPreviousPeriodRange`
-- **Data flow**: Full 5-year dataset preloaded on page load → `useMemo` filters client-side on selection change → no server round-trip for filter changes
-- **Actions**: `getDashboardMetrics` (single ministry year), `getFullRangeDashboardMetrics` (full selectable range), `refreshDashboardCache` (manual cache invalidation)
-- **Import**: `import { DashboardShell, filterDashboardData } from '@/components/dashboard';`
-
-### user-menu
-- **Purpose**: User profile dropdown with sign-out
-- **Features**: Displays user name/email, implements OIDC logout flow
-- **Note**: `handleSignOut` implements RP-initiated logout for Ministry Platform OAuth
-
 ## Services Used
 
 Components interact with these service classes:
 
 | Service | Location | Used By |
 |---------|----------|---------|
-| BaptismService | `@/services/baptismService` | baptism-processing |
+| ComplianceProcessingService | `@/services/complianceProcessingService` | compliance-processing |
 | ContactService | `@/services/contactService` | contact-lookup, contact-lookup-details |
 | ContactLogService | `@/services/contactLogService` | contact-logs |
 | DashboardService | `@/services/dashboardService` | dashboard |
-| MembershipService | `@/services/membershipService` | membership-processing |
-| ToolService | `@/services/toolService` | user-tools-debug |
+| FeedbackService | `@/services/feedbackService` | feedback |
+| JourneyProcessingService | `@/services/journeyProcessingService` | journey-processing |
+| MemberService | `@/services/memberService` | manage-members |
 | UserService | `@/services/userService` | user-menu |
-| VolunteerService | `@/services/volunteerService` | volunteer-processing |
 
 All services are singletons using `getInstance()` and ultimately use `MPHelper` from `@/lib/providers/ministry-platform` for API calls.

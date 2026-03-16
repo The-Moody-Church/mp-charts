@@ -39,7 +39,24 @@ Two prior fixes were partially related:
 
 **Why end-of-year instead of today?** The service queries use the end date as an upper bound. Since no future data exists in the DB, querying up to Aug 31 returns the same results as querying up to today. The two methods that iterate per-month (`getMonthlyAttendanceTrends`, `getEngagementRawData`) cap at `new Date()` internally to skip future months. This gives us a stable cache key AND no wasted API calls.
 
+### docs: documentation and context file cleanup
+
+**Modified files:**
+
+- `CLAUDE.md` — Added missing `MemberService` to Services Layer list (line 133)
+- `.claude/references/components.md` — Full rewrite to match current codebase: replaced stale `baptism-processing/`, `membership-processing/`, `volunteer-processing/` with `journey-processing/` and `compliance-processing/`; added missing folders (`admin/`, `feedback/`, `home/`, `manage-members/`, `pwa/`); removed deleted folders (`tool/`, `user-tools-debug/`); updated services table, UI component count (19→20), processing components (8→9)
+
+**Archived files:**
+
+- `.claude/sessions/archive/` — 6 session summaries older than 30 days (Jan 27 – Feb 13)
+- `.claude/plans/archive/` — 6 completed plans (dashboard redesign, baptism, membership, RBAC, member badges)
+
+**Deleted files:**
+
+- `.claude/notes/community-attendance-debugging.md` — resolved debugging artifact (225 lines)
+
 ## Status
 
 - ✅ Cache key stability fix implemented
+- ✅ Documentation and context file cleanup completed
 - ⚠️ Issue #113 not yet closed — contact lookup slowness not addressed by this fix

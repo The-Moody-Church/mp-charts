@@ -1,6 +1,7 @@
 {
   "permissions": {
     "allow": [
+      "Read(**)",
       "Edit(**)",
       "Write(**)",
       "Bash(git *)",
@@ -16,7 +17,10 @@
       "Bash(curl *)",
       "Bash(python3 *)",
       "Bash(brew *)",
-      "Bash(wc *)"
+      "Bash(wc *)",
+      "Bash(ls:*)",
+      "Bash(head:*)",
+      "Bash(mkdir:*)"
     ],
     "deny": [],
     "ask": [],
