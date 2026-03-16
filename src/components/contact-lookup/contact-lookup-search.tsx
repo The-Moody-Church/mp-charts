@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useTransition, useEffect, useRef } from "react";
+import React, { useState, useTransition } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { searchContacts } from "./actions";
@@ -23,7 +23,6 @@ export const ContactLookupSearch: React.FC<ContactLookupSearchProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [isPending, startTransition] = useTransition();
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSearch = async (query: string) => {
     if (!query.trim()) {
@@ -48,37 +47,7 @@ export const ContactLookupSearch: React.FC<ContactLookupSearchProps> = ({
     });
   };
 
-  // Debounced search-as-you-type (300ms, minimum 2 characters)
-  useEffect(() => {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-
-    const trimmed = searchTerm.trim();
-    if (trimmed.length < 2) {
-      if (trimmed.length === 0) {
-        onSearchResults?.([]);
-      }
-      return;
-    }
-
-    debounceRef.current = setTimeout(() => {
-      handleSearch(trimmed);
-    }, 300);
-
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm]);
-
-  // Instant search on Enter or button click
   const performSearch = () => {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
     if (searchTerm.trim()) {
       handleSearch(searchTerm.trim());
     }
@@ -101,7 +70,7 @@ export const ContactLookupSearch: React.FC<ContactLookupSearchProps> = ({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <p className="text-sm text-muted-foreground">Search by name, email, or phone number</p>
+      <p className="text-sm text-muted-foreground">Search by name, email, or phone number. Press Enter or click Search.</p>
       <div className="flex gap-2 items-center">
         <div className="relative flex-1">
           <Input
