@@ -246,6 +246,11 @@ All cached functions use **stale-while-revalidate**: after the revalidate TTL ex
 
 **Note:** Dashboard cache is shared across all authenticated users (not keyed per-user). This is intentional — the dashboard shows aggregate metrics, not per-user data. If user-specific dashboard access is ever needed, the cache would need to be keyed by user or permission level.
 
+**CRITICAL — Never silently return empty data in cached code paths.** If a function called within a `'use cache'` boundary catches an error and returns a fallback (e.g., `return []`), that fallback gets cached as a valid result — overwriting previously good stale data. Instead:
+- **Let errors propagate** (throw) so stale-while-revalidate serves the previous good value
+- If partial failure is possible (e.g., fetching many months in parallel), use `Promise.allSettled` to keep successful results, and only throw when ALL sub-tasks fail
+- See `getMonthlyAttendanceTrends` in `dashboardService.ts` for the reference pattern
+
 ### Cache Warming
 
 Caches are **pre-warmed automatically on server start** and **re-warmed daily at 6:00 AM Central Time** so users never hit a cold cache.
@@ -372,6 +377,12 @@ Server actions in `actions.ts` should call **service classes** (not MPHelper dir
 ```
 Component → Server Action → Service (singleton) → MPHelper → Ministry Platform API
 ```
+
+### Ministry Platform API Concurrency
+
+The MP API (`moody.ministryplatform.com`) has limited connection capacity. **Never fire unbounded parallel requests** — use the `mapWithConcurrency` utility in `dashboardService.ts` to limit concurrent API calls (currently capped at 6). This is especially important for methods that iterate over many months or records.
+
+Without concurrency control, bursts of 50+ simultaneous connections cause `ConnectTimeoutError` (TCP timeout), which can cascade into token refresh failures and silent data loss. This was the root cause of intermittent 0-attendance on the dashboard (fixed 2026-03-15).
 
 ## Admin Tool Editors (Journey & Compliance)
 
