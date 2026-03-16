@@ -14,6 +14,7 @@
 - [ ] Open redirects: User-supplied URLs used for redirects without validation
 - [ ] Missing authentication: Server actions without `requireSession()` call before data access
 - [ ] Hardcoded secrets or credentials
+- [ ] Internal infrastructure details: IP addresses, hostnames, SSH usernames, internal file paths, or deployment details that would expose network topology in a public repo
 
 **High (must fix before PR):**
 - [ ] PII logged via `console.log` — contact records, emails, phones, notes, request/response bodies
