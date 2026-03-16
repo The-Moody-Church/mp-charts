@@ -393,28 +393,7 @@ When adding new time-series charts, use the same `toLocaleDateString('en-US', ..
 
 When a chart shows weekly data for a single month with previous-year comparison enabled, **interleave** dates from both years on the same x-axis sorted by month-day (MM-DD). Use solid lines for the current year and dashed lines (`strokeDasharray="5 5"`) for the previous year, with `connectNulls` so each line draws through gaps where only the other year has data.
 
-**Merging same-day entries**: When both years have data on the same day-of-month (e.g., Dec 24), merge them into a **single x-axis point** with both `currentTotal` and `previousTotal` populated. Never create duplicate x-axis entries for the same MM-DD.
-
-```typescript
-// ✅ CORRECT — use a Map keyed by MM-DD to merge same-day entries
-const mergedMap = new Map<string, { name: string; daySortKey: string; currentTotal?: number; previousTotal?: number }>();
-for (const w of currentWeekly) {
-  const key = w.date.slice(5); // MM-DD
-  mergedMap.set(key, { name: w.dateLabel, daySortKey: key, currentTotal: w.total });
-}
-for (const w of previousWeekly) {
-  const key = w.date.slice(5); // MM-DD
-  const existing = mergedMap.get(key);
-  if (existing) {
-    existing.previousTotal = w.total; // merge into same entry
-  } else {
-    mergedMap.set(key, { name: w.dateLabel, daySortKey: key, previousTotal: w.total });
-  }
-}
-const chartData = Array.from(mergedMap.values()).sort((a, b) => a.daySortKey.localeCompare(b.daySortKey));
-
-// ❌ NEVER push current and previous into separate array entries without checking for duplicates
-```
+**Merging same-day entries**: When both years have data on the same day-of-month, merge into a **single x-axis point** using a `Map` keyed by MM-DD. Never create duplicate x-axis entries for the same MM-DD. See `AttendanceChart` for the reference implementation.
 
 Charts that follow this pattern:
 - `AttendanceChart` — weekly single-month view
@@ -474,35 +453,16 @@ MP returns dates without timezone info in **US Central Time**. `new Date("2026-0
 When working with Ministry Platform data:
 
 ```typescript
-import { MPHelper } from '@/lib/providers/ministry-platform';
 import { ContactLogSchema } from '@/lib/providers/ministry-platform/models';
 
-const mp = new MPHelper();
+// ✅ Validate on create
+await mp.createTableRecords('Contact_Log', records, { schema: ContactLogSchema, $userId });
 
-// ✅ Good: Validate data before creating records
-await mp.createTableRecords('Contact_Log', records, {
-  schema: ContactLogSchema,
-  $userId: currentUser.Contact_ID
-});
+// ✅ Partial validation for updates (default: partial: true)
+await mp.updateTableRecords('Contact_Log', records, { schema: ContactLogSchema, $userId });
 
-// ✅ Good: Partial validation for updates (default)
-await mp.updateTableRecords('Contact_Log', partialRecords, {
-  schema: ContactLogSchema,
-  partial: true, // default, allows partial updates
-  $userId: currentUser.Contact_ID
-});
-
-// ✅ Good: Strict validation for full record updates
-await mp.updateTableRecords('Contact_Log', fullRecords, {
-  schema: ContactLogSchema,
-  partial: false, // require all fields
-  $userId: currentUser.Contact_ID
-});
-
-// ⚠️ Acceptable: Skip validation (backward compatible)
-await mp.createTableRecords('Contact_Log', records, {
-  $userId: currentUser.Contact_ID
-});
+// ✅ Strict validation (all fields required)
+await mp.updateTableRecords('Contact_Log', records, { schema: ContactLogSchema, partial: false, $userId });
 ```
 
 ## Security Best Practices
@@ -662,30 +622,7 @@ AI assistants maintain context files in `.claude/` to track project state across
 
 ### Session Summaries
 
-Each session gets a dated file at `.claude/sessions/session-summary-YYYY-MM-DD.md`. This is the primary record of what happened during a session.
-
-**Session start — create immediately:**
-1. Create (or open) today's session summary file before any code work begins
-2. Write a brief plan at the top: what the user is asking for, what you expect to do
-
-**During the session — update continuously:**
-- **After each user message**: If the user gives a command, asks a question, or provides feedback that changes direction, append a note capturing it
-- **Before each non-documentation commit**: Update the summary with what's being committed (files changed, decisions made). Include it in the commit.
-- **On key decisions**: Record the decision and rationale as it happens, not later
-
-**At session end:**
-- Review and clean up for clarity. Remove noise, consolidate duplicate entries, ensure file lists are complete and accurate
-- Respond to user cues: "thanks", "that's all", "we're done", "end of session"
-- User can request: "Create a session summary" or "Update context files"
-
-**What to include:**
-- Session plan / objectives (at the top)
-- Issues addressed (with `#N` references)
-- Files created / modified / removed (with line numbers for significant changes)
-- Key decisions and their rationale
-- User feedback and direction changes
-- Known issues or follow-ups
-- Status markers: ✅ COMPLETED, ⚠️ IN PROGRESS, ❌ BLOCKED
+Each session gets a dated file at `.claude/sessions/session-summary-YYYY-MM-DD.md`. Create it at session start with a brief plan. Update continuously: after direction changes, before commits, on key decisions. Include: objectives, issues addressed (`#N`), files changed, decisions + rationale, follow-ups. Use status markers: ✅ COMPLETED, ⚠️ IN PROGRESS, ❌ BLOCKED.
 
 ### Pre-Commit Checklist
 
@@ -733,31 +670,7 @@ This will close issue #5 on next push to main.
 
 ### Entry Ordering
 
-Within each section (`## Features`, `## Improvements`, `## Technical Debt`) **and** the Table of Contents, entries must be ordered:
-
-1. **Incomplete items first** (active/open) — newest on top
-2. **Completed items last** (~~strikethrough~~ ✅) — at the bottom of the section
-
-When adding a new entry, insert it as the **first `###` heading** after the `## Section` header (above existing entries). When marking an entry completed, move it below all incomplete entries in the same section. The Table of Contents mirrors this order automatically.
-
-This ordering is enforced in three places:
-- **AI assistants**: Follow this convention when editing ideas.md during sessions
-- **GitHub Actions**: The `sync-issues-to-ideas` workflow sorts entries after every sync
-- **Manual edits**: If editing ideas.md by hand, maintain this order
-
-### Labels
-
-Issues are categorized by label, which maps to ideas.md sections:
-
-| Label | Section |
-|---|---|
-| `feature` | Features |
-| `improvement` | Improvements |
-| `tech-debt` | Technical Debt |
-
-### Loop Prevention
-
-The workflow uses `[skip ci]` in bot commits and checks `github.actor` to prevent infinite loops between the two sync directions.
+Within each section, order: **incomplete items first** (newest on top), **completed items last** (~~strikethrough~~ ✅ at bottom). New entries go as the first `###` after the `## Section` header. Labels map to sections: `feature` → Features, `improvement` → Improvements, `tech-debt` → Technical Debt.
 
 ## Reference Documents
 
