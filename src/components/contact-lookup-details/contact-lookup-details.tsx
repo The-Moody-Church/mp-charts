@@ -289,7 +289,16 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
 
   return (
     <>
-      <div className="bg-white shadow rounded-lg">
+      <div className="bg-white shadow rounded-lg relative">
+        <Link
+          href="/contact-lookup"
+          className="absolute top-3 right-3 sm:top-4 sm:right-4 p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+          aria-label="Close contact card"
+        >
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </Link>
         <div className="px-4 py-5 sm:p-6">
           {/* Header: Avatar + Name + Badges */}
           <div className="flex items-center space-x-5">
