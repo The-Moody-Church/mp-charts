@@ -25,8 +25,8 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Contact-Lookup badges for Member should specify thpe (#85)](#contact-lookup-badges-for-member-should-specify-thpe-85)~~ ✅
 
 ### Improvements
-- ~~[Add "X" to the top right of the contact card (#116)](#add-x-to-the-top-right-of-the-contact-card-116)~~ ✅
 - [Serving metrics: reconcile adult-only vs all-ages counts (#110)](#serving-metrics-reconcile-adult-only-vs-all-ages-counts-110)
+- ~~[Add "X" to the top right of the contact card (#116)](#add-x-to-the-top-right-of-the-contact-card-116)~~ ✅
 - ~~[Small Group Trends Chart (#15)](#small-group-trends-chart-15)~~ ✅
 - ~~[contact lookup search improvements (#94)](#contact-lookup-search-improvements-94)~~ ✅
 - ~~[membership badge on contact lookup should include date joined (#93)](#membership-badge-on-contact-lookup-should-include-date-joined-93)~~ ✅
