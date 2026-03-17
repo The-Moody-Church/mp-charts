@@ -3,7 +3,9 @@
     "allow": [
       "Read(**)",
       "Edit(**)",
+      "Edit(.claude/**)",
       "Write(**)",
+      "Write(.claude/**)",
       "Bash(git *)",
       "Bash(gh *)",
       "Bash(npm *)",
