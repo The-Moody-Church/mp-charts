@@ -20,7 +20,8 @@
       "Bash(wc *)",
       "Bash(ls:*)",
       "Bash(head:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": [],
