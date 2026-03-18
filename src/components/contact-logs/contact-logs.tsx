@@ -385,9 +385,21 @@ export function ContactLogs({
   return (
     <div className="bg-card shadow rounded-lg p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-medium text-foreground">
-          Contact Logs ({contactLogs.length})
-        </h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-lg font-medium text-foreground">
+            Contact Logs ({contactLogs.length})
+          </h3>
+          {mpBaseOrigin && (
+            <a
+              href={`${mpBaseOrigin}/mp/292/${contactId}/268/`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-blue-600 hover:underline inline-flex items-center gap-0.5"
+            >
+              View in MP
+            </a>
+          )}
+        </div>
         <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
           <DialogTrigger asChild>
             <Button
