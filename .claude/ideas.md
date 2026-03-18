@@ -25,8 +25,8 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Contact-Lookup badges for Member should specify thpe (#85)](#contact-lookup-badges-for-member-should-specify-thpe-85)~~ ✅
 
 ### Improvements
-- [Auto contact log on action link clicks (#121)](#auto-contact-log-on-action-link-clicks-121)
 - [Serving metrics: reconcile adult-only vs all-ages counts (#110)](#serving-metrics-reconcile-adult-only-vs-all-ages-counts-110)
+- ~~[Auto contact log on action link clicks (#121)](#auto-contact-log-on-action-link-clicks-121)~~ ✅
 - ~~[Add "X" to the top right of the contact card (#116)](#add-x-to-the-top-right-of-the-contact-card-116)~~ ✅
 - ~~[Small Group Trends Chart (#15)](#small-group-trends-chart-15)~~ ✅
 - ~~[contact lookup search improvements (#94)](#contact-lookup-search-improvements-94)~~ ✅
@@ -152,11 +152,11 @@ Extracted `statusBadgeColor` to shared utility (`src/lib/contact-badge-utils.ts`
 
 ## Improvements
 
-### Auto contact log on action link clicks ([#121](https://github.com/The-Moody-Church/mp-charts/issues/121))
-Clicking email, phone, text, or directions links — or copying email, phone, or address — on the contact card automatically creates a Contact Log entry. Maps to Contact Log Types: E-mail (5), Phone Call (1), Text Message (3), Meeting (4). Fire-and-forget: never blocks the user's action.
-
 ### Serving metrics: reconcile adult-only vs all-ages counts ([#110](https://github.com/The-Moody-Church/mp-charts/issues/110))
 The Engagement Overview Venn diagram filters serving/leading to **adults only** (18+ or unknown birthdate), showing ~830. The Grow in Love section's "Serving by Role Type" counts **all ages**, showing ~1,022. The ~192-person gap is minors with active serving/leading roles (e.g., student volunteers). Need to decide: should the Grow in Love charts also filter to adults, or should the Venn diagram include all ages? Or add an "(all ages)" note to the Grow in Love description to make the difference explicit?
+
+### ~~Auto contact log on action link clicks ([#121](https://github.com/The-Moody-Church/mp-charts/issues/121))~~ ✅ COMPLETED
+Clicking email, phone, text, or directions links — or copying email, phone, or address — on the contact card automatically creates a Contact Log entry. Maps to Contact Log Types: E-mail (5), Phone Call (1), Text Message (3), Meeting (4). Fire-and-forget: never blocks the user's action.
 
 ### ~~Add "X" to the top right of the contact card ([#116](https://github.com/The-Moody-Church/mp-charts/issues/116))~~ ✅ COMPLETED
 When viewing contact details, added an "X" close button to the top right of the contact card that returns the user to the search page.
