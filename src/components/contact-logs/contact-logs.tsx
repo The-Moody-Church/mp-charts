@@ -469,8 +469,7 @@ export function ContactLogs({
                 {currentUserId != null && log.Made_By === currentUserId && (
                   <Button
                     size="sm"
-                    variant="ghost"
-                    className="h-6 px-2 text-xs"
+                    variant="outline"
                     onClick={() => handleEditClick(log)}
                   >
                     Edit
