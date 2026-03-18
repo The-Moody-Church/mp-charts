@@ -141,9 +141,19 @@ Ask the user to confirm the plan before making any changes. The user may:
 
 ### 6. Apply Approved Changes
 
-For each commit marked "Incorporate":
+#### Create a branch first
 
-#### Option A: Clean cherry-pick (no conflicts expected)
+**Before making any file changes**, create a feature branch:
+
+```bash
+git checkout -b upstream/pr-<id>
+```
+
+This keeps `main` clean and ensures upstream incorporations go through a PR, consistent with the project's branch-before-commit rule.
+
+#### Apply each commit marked "Incorporate"
+
+**Option A: Clean cherry-pick** (no conflicts expected)
 ```bash
 git cherry-pick <sha> --no-commit
 # Review the staged changes
@@ -151,11 +161,11 @@ git diff --cached
 # If clean, commit with attribution
 ```
 
-#### Option B: Manual application (conflicts or partial incorporation)
+**Option B: Manual application** (conflicts or partial incorporation)
 - Apply changes manually using Edit tool
 - Stage only the relevant files
 
-#### Option C: Partial incorporation
+**Option C: Partial incorporation**
 - Cherry-pick specific files from the commit, not the whole thing
 
 For **all** incorporated changes, commit with a message referencing the upstream PR:
@@ -188,9 +198,44 @@ Update `.claude/status.md` to reflect the new upstream sync checkpoint (e.g., "U
 #### c) Session Summary
 If a session summary exists for today, update it with the upstream review details.
 
-### 8. Final Report
+### 8. Pre-Commit Checklist
+
+**MANDATORY** — Run the full pre-commit checklist from CLAUDE.md before creating the PR. This command does NOT bypass the standard process:
+
+1. **CLAUDE.md check**: Do the incorporated changes introduce new patterns, conventions, or architectural decisions? If so, update CLAUDE.md.
+2. **README.md check**: Do the changes affect anything documented in README.md (new features, changed env vars, updated services, etc.)? If so, update README.md.
+3. **Session summary**: Update `.claude/sessions/session-summary-YYYY-MM-DD.md` with what's being committed.
+4. **ideas.md**: If any issues were completed by the upstream changes, update `.claude/ideas.md`.
+5. **status.md**: Update `.claude/status.md` to reflect completed work (already done in Step 7, but verify it's current).
+6. **Security review**: Review all changed files against `.claude/notes/security-review-checklist.md`.
+7. Include all updated context files in the commit.
+
+### 9. Create Pull Request
+
+Push the branch and create a PR to merge back to `main`:
+
+```bash
+git push -u origin upstream/pr-<id>
+
+gh pr create --repo The-Moody-Church/mp-charts \
+  --title "cherry-pick upstream PR #<id>: <pr-title>" \
+  --body "## Summary
+- Upstream PR: https://github.com/MinistryPlatform-Community/MPNext/pull/<id>
+- Incorporated commits: <list>
+- Skipped commits: <list with reasons>
+
+## Security Review
+<summary of security checklist review>
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)"
+```
+
+Present the PR URL to the user.
+
+### 10. Final Report
 
 Present a final summary:
+- PR URL
 - Which commits were incorporated and what they changed in our codebase
 - Which commits were skipped and why
 - Any follow-up items (e.g., "upstream added a new dependency we should evaluate separately")
