@@ -308,7 +308,9 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
   const displayName = getDisplayName(contact.First_Name, contact.Nickname);
 
   return (
-    <>
+    <div className="lg:grid lg:grid-cols-[1fr_380px] lg:gap-6">
+      {/* Left column: contact card + family */}
+      <div className="space-y-6">
       <div className="bg-white shadow rounded-lg relative">
         <Link
           href="/contact-lookup"
@@ -628,14 +630,21 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
         </div>
       )}
 
-      <ContactLogs
-        contactLogs={contactLogs}
-        contactId={contact.Contact_ID}
-        contactNickname={contact.Nickname}
-        contactLastName={contact.Last_Name}
-        currentUserId={currentUserId}
-        onRefresh={fetchContactDetails}
-      />
-    </>
+      </div>
+
+      {/* Right column: contact logs sidebar */}
+      <div className="mt-6 lg:mt-0">
+        <div className="lg:sticky lg:top-6">
+          <ContactLogs
+            contactLogs={contactLogs}
+            contactId={contact.Contact_ID}
+            contactNickname={contact.Nickname}
+            contactLastName={contact.Last_Name}
+            currentUserId={currentUserId}
+            onRefresh={fetchContactDetails}
+          />
+        </div>
+      </div>
+    </div>
   );
 };

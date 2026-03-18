@@ -429,7 +429,7 @@ export function ContactLogs({
         </Dialog>
       </div>
 
-      <div className="space-y-4 max-h-96 overflow-y-auto">
+      <div className="space-y-4 max-h-96 lg:max-h-[calc(100vh-12rem)] overflow-y-auto">
         {contactLogs.map((log) => (
           <div
             key={log.Contact_Log_ID}
