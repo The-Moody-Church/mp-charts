@@ -25,7 +25,6 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 - [**#110** — Serving metrics: reconcile adult-only vs all-ages counts](ideas.md#serving-metrics-reconcile-adult-only-vs-all-ages-counts-110)
 - [**#72** — Dashboard subpages per journey step](ideas.md#and-more-specific-dashboard-subpages-72)
-- [**#57** — IDOR mitigation (per-record authorization)](ideas.md#idor-mitigation-per-record-authorization-57)
 
 ## Key Architecture Notes
 

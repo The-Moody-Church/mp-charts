@@ -228,17 +228,8 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 
 ## Technical Debt
 
-### ~~IDOR Mitigation — Per-Record Authorization ([#57](https://github.com/The-Moody-Church/mp-charts/issues/57))~~ ✅ COMPLETED
-Server actions accept record IDs from clients (contactId, participantId, etc.) and only check session presence — not whether the requesting user should access that specific record. An authenticated user could enumerate IDs to access any contact's details, volunteer background check data, or membership information.
-
-**Options to evaluate:**
-1. **Per-user access tokens**: Use the user's OIDC access token instead of client credentials so Ministry Platform enforces its own security model per-user. Requires token refresh logic and per-user MPHelper instances.
-2. **Relationship checks**: Verify the requesting user's relationship to the record (e.g., are they a group leader for this volunteer's group?).
-3. **Audit logging** (interim): Log user ID + accessed record IDs for abuse detection while a proper authorization model is designed.
-
-**Update (2026-02-26)**: Upstream PR #50 added `roles` and `userGroups` to `MPUserProfile`, now available via `useUser()` context. This enables role-based gating of features (see #58), which reduces IDOR surface area by restricting who can reach record-accessing endpoints in the first place. Full per-record authorization (e.g., "can this user see *this* contact?") still requires additional work beyond roles — either per-user access tokens or relationship checks.
-
-From security audit finding #10 (2026-02-24).
+### ~~IDOR Mitigation — Per-Record Authorization ([#57](https://github.com/The-Moody-Church/mp-charts/issues/57))~~ ✅ CLOSED (won't-fix)
+Closed as not planned. RBAC (feature-level gating by User Group), rate limiting, and staff-only access sufficiently mitigate IDOR risk. All authenticated users are trusted staff with MP accounts — if they have access to a feature, they should have access to all records within it. The same data is accessible directly in Ministry Platform with the same permissions model.
 
 ### ~~BUG: Active Communities and Small Groups Chart Needs Work ([#52](https://github.com/The-Moody-Church/mp-charts/issues/52))~~ ✅ COMPLETED
 Renamed to "Communities and Groups Trends". Refactored to show active groups by group type (Small Group, Class, Community — Group_Type_ID 1, 3, 11) as a line chart with YoY comparison. Removed participants/averageAttendance from DTO, added groupCountByType breakdown. Added total line and removed Group Participation pie chart.
