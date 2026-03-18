@@ -452,7 +452,7 @@ export function ContactLogs({
                 </span>
                 {mpBaseOrigin && (
                   <a
-                    href={`${mpBaseOrigin}/mp/387/${log.Contact_Log_ID}`}
+                    href={`${mpBaseOrigin}/mp/292/${contactId}/268/${log.Contact_Log_ID}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-[10px] text-blue-600 hover:underline flex-shrink-0 inline-flex items-center gap-0.5"
