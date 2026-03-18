@@ -472,13 +472,6 @@ export function ContactLogs({
                 )}
               </div>
             </div>
-            {/* Row 1b: Made By */}
-            {log.MadeByContact && log.MadeByContact.length > 0 && (
-              <div className="text-xs text-muted-foreground mb-2">
-                Made By: <span className="font-medium">{log.MadeByContact[0].Nickname || log.MadeByContact[0].First_Name} {log.MadeByContact[0].Last_Name}</span>
-              </div>
-            )}
-
             {/* Row 2: Note content */}
             {log.Notes && (
               <p className="text-sm text-foreground whitespace-pre-wrap mb-2">
@@ -486,10 +479,16 @@ export function ContactLogs({
               </p>
             )}
 
-            {/* Row 3: Date/Time */}
-            <span className="text-xs text-muted-foreground">
+            {/* Row 3: Made By + Date/Time */}
+            <div className="text-xs text-muted-foreground">
+              {log.MadeByContact && log.MadeByContact.length > 0 && (
+                <span>
+                  <span className="font-medium">{log.MadeByContact[0].Nickname || log.MadeByContact[0].First_Name} {log.MadeByContact[0].Last_Name}</span>
+                  {" · "}
+                </span>
+              )}
               {formatDateTime(log.Contact_Date)}
-            </span>
+            </div>
           </div>
         ))}
       </div>
