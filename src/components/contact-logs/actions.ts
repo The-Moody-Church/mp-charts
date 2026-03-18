@@ -160,11 +160,14 @@ export async function createAutoContactLog(
       throw new Error("Unable to determine user User_ID for audit logging");
     }
 
+    const userName = session.user.name || "User";
+    const personalizedNotes = notes.replace("User", userName);
+
     const contactLogService = await ContactLogService.getInstance();
     await contactLogService.createContactLog({
       Contact_ID: contactId,
       Contact_Log_Type_ID: contactLogTypeId,
-      Notes: notes,
+      Notes: personalizedNotes,
       Contact_Date: new Date().toISOString(),
       Made_By: userId,
       Planned_Contact_ID: null,
