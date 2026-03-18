@@ -20,7 +20,7 @@
 - **Also**: Enabled Dependabot security alerts + security updates in GitHub repo settings (immediate CVE notification + auto-PRs).
 - **Committed directly to main**: `13ea09a`
 
-### Dependency updates ⚠️ IN PROGRESS
+### Dependency updates ✅ COMPLETED
 - Updated 8 packages: @tailwindcss/postcss 4.2.2, tailwindcss 4.2.2, autoprefixer 10.4.27, eslint 9.39.4, eslint-config-next 16.1.7, react-hook-form 7.71.2, recharts 3.8.0, @vitejs/plugin-react 6.0.1
 - ESLint 10 deferred — will upgrade when Next.js incorporates it
 - All 236 tests pass, 0 audit vulnerabilities
