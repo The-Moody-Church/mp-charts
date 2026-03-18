@@ -1,11 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Read(**)",
-      "Edit(**)",
-      "Edit(.claude/**)",
-      "Write(**)",
-      "Write(.claude/**)",
+      "Read",
+      "Edit",
+      "Write",
       "Bash(git *)",
       "Bash(gh *)",
       "Bash(npm *)",
@@ -23,7 +21,11 @@
       "Bash(ls:*)",
       "Bash(head:*)",
       "Bash(mkdir:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Skill(update-config)",
+      "Bash(kill:*)",
+      "Bash(find /Users/jonathon.huff/Claude/Code/mp-charts/mp-charts -type f \\\\\\(-name *.yml -o -name *.yaml -o -name Dockerfile* -o -name docker-compose* -o -name .trivy* -o -name .snyk* \\\\\\))",
+      "Bash(find /Users/jonathon.huff/Claude/Code/mp-charts/mp-charts -type f \\\\\\(-name *scan* -o -name *security* -o -name *audit* -o -name *.trivy* -o -name *.snyk* \\\\\\))"
     ],
     "deny": [],
     "ask": [],
