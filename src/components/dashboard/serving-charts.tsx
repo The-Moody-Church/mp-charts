@@ -230,7 +230,7 @@ export function ServingByMinistryChart({ data, height = 300 }: ServingByMinistry
             boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
             maxWidth: '85vw',
           }}
-          formatter={(value: number | undefined) => [(value ?? 0).toLocaleString(), 'People']}
+          formatter={(value) => [(typeof value === 'number' ? value : 0).toLocaleString(), 'People']}
           labelFormatter={(label) => {
             const item = chartData.find(d => d.name === String(label));
             return item?.fullName || String(label);

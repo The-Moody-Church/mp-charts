@@ -8,6 +8,8 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
+| 2026-03-18 | **CI: npm audit step** + **Dependabot security alerts** enabled. Added `npm audit --audit-level=high` to Docker build workflow. | — | — |
+| 2026-03-18 | **Dependency updates**: 8 packages updated (tailwindcss 4.2.2, recharts 3.8.0, @vitejs/plugin-react 6.0.1, etc). Fixed recharts Tooltip type. | — | #119 |
 | 2026-03-18 | **Upstream PR #54**: Incorporated dependency updates + security fixes. 10 version pin bumps, 0 audit vulnerabilities, Next.js 16.1.7, better-auth 1.5.5. | — | — |
 | 2026-03-17 | **Contact card close button**: Added "X" button to top-right of contact detail card to return to search. | #116 | — |
 | 2026-03-16 | **Contact search: wait for Enter**: Removed debounced search-as-you-type that caused laggy flashing results. Search now fires on Enter/click only. | #112 | — |

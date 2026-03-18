@@ -2,6 +2,8 @@
 
 ## Objectives
 - Review and incorporate upstream PR #54 (dependency updates + security fixes)
+- Investigate CI/CD gap for npm vulnerability detection
+- Update all outdated dependencies
 
 ## Work Completed
 
@@ -12,9 +14,22 @@
 - **Verification**: `npm audit` 0 vulnerabilities, build passes (Next.js 16.1.7), lint clean (pre-existing issues only), 236/236 tests pass
 - **Branch**: `upstream/pr-54`
 
+### CI/CD: npm audit step ✅ COMPLETED
+- **Gap identified**: Trivy scans Docker image (OS/library) but not npm dependencies directly. Dependabot version updates are weekly/advisory only. No `npm audit` in CI pipeline.
+- **Fix**: Added `npm audit --audit-level=high` step to `docker-build-push.yml` before Docker build — fails fast on HIGH/CRITICAL npm CVEs.
+- **Also**: Enabled Dependabot security alerts + security updates in GitHub repo settings (immediate CVE notification + auto-PRs).
+- **Committed directly to main**: `13ea09a`
+
+### Dependency updates ✅ COMPLETED
+- Updated 8 packages: @tailwindcss/postcss 4.2.2, tailwindcss 4.2.2, autoprefixer 10.4.27, eslint 9.39.4, eslint-config-next 16.1.7, react-hook-form 7.71.2, recharts 3.8.0, @vitejs/plugin-react 6.0.1
+- ESLint 10 deferred — will upgrade when Next.js incorporates it
+- All 236 tests pass, 0 audit vulnerabilities
+- **Branch**: `chore/update-dependencies`
+
 ## Files Modified
-- `package.json` — 10 version pin bumps
+- `package.json` — 10 version pin bumps (upstream), 8 dependency updates
 - `package-lock.json` — regenerated lockfile
+- `.github/workflows/docker-build-push.yml` — added npm audit step
 - `.claude/notes/upstream-sync-log.md` — added PR #54 entry
 - `.claude/status.md` — updated upstream sync checkpoint
 - `.claude/sessions/session-summary-2026-03-18.md` — this file
