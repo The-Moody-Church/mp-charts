@@ -438,8 +438,8 @@ export function ContactLogs({
             key={log.Contact_Log_ID}
             className="border border-border rounded-lg p-4 hover:bg-accent hover:text-accent-foreground transition-colors"
           >
-            {/* Row 1: Type Badge | MP Link | Made By | Edit */}
-            <div className="flex items-center gap-2 mb-2">
+            {/* Row 1: Type Badge | MP Link | Edit (right) */}
+            <div className="flex items-center gap-2 mb-1">
               <span
                 className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getLogTypeColor(
                   log.Contact_Log_Type
@@ -460,11 +460,6 @@ export function ContactLogs({
                   MP
                 </a>
               )}
-              {log.MadeByContact && log.MadeByContact.length > 0 && (
-                <span className="text-xs text-muted-foreground">
-                  Made By: <span className="font-medium">{log.MadeByContact[0].Nickname || log.MadeByContact[0].First_Name} {log.MadeByContact[0].Last_Name}</span>
-                </span>
-              )}
               <div className="ml-auto">
                 {currentUserId != null && log.Made_By === currentUserId && (
                   <Button
@@ -477,6 +472,12 @@ export function ContactLogs({
                 )}
               </div>
             </div>
+            {/* Row 1b: Made By */}
+            {log.MadeByContact && log.MadeByContact.length > 0 && (
+              <div className="text-xs text-muted-foreground mb-2">
+                Made By: <span className="font-medium">{log.MadeByContact[0].Nickname || log.MadeByContact[0].First_Name} {log.MadeByContact[0].Last_Name}</span>
+              </div>
+            )}
 
             {/* Row 2: Note content */}
             {log.Notes && (
