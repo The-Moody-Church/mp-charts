@@ -48,7 +48,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
 
 ### Technical Debt
-- ~~[IDOR Mitigation — Per-Record Authorization (#57)](#idor-mitigation-per-record-authorization-57)~~ ✅
+- [~~IDOR Mitigation — Per-Record Authorization ([#57](https://github.com/The-Moody-Church/mp-charts/issues/57))~~ ✅ CLOSED (won't-fix) (#122)](#idor-mitigation-per-record-authorization-57httpsgithubcomthe-moody-churchmp-chartsissues57-closed-wont-fix-122)
 - ~~[BUG: Active Communities and Small Groups Chart Needs Work (#52)](#bug-active-communities-and-small-groups-chart-needs-work-52)~~ ✅
 - ~~[Executive Dashboard Avg Attendance Broken (#103)](#executive-dashboard-avg-attendance-broken-103)~~ ✅
 - ~~[Contact Logs should not be editable unless Made_By = the Current Logged In User (#96)](#contact-logs-should-not-be-editable-unless-made_by-the-current-logged-in-user-96)~~ ✅
@@ -228,7 +228,7 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 
 ## Technical Debt
 
-### ~~IDOR Mitigation — Per-Record Authorization ([#57](https://github.com/The-Moody-Church/mp-charts/issues/57))~~ ✅ CLOSED (won't-fix)
+### ~~IDOR Mitigation — Per-Record Authorization ([#57](https://github.com/The-Moody-Church/mp-charts/issues/57))~~ ✅ CLOSED (won't-fix) ([#122](https://github.com/The-Moody-Church/mp-charts/issues/122))
 Closed as not planned. RBAC (feature-level gating by User Group), rate limiting, and staff-only access sufficiently mitigate IDOR risk. All authenticated users are trusted staff with MP accounts — if they have access to a feature, they should have access to all records within it. The same data is accessible directly in Ministry Platform with the same permissions model.
 
 ### ~~BUG: Active Communities and Small Groups Chart Needs Work ([#52](https://github.com/The-Moody-Church/mp-charts/issues/52))~~ ✅ COMPLETED
