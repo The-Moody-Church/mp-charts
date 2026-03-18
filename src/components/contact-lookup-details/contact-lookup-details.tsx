@@ -6,7 +6,7 @@ import Link from "next/link";
 import { getContactDetails, getContactLogsByContactId, getHouseholdMembers, getContactBadges, uploadContactLookupPhoto } from "./actions";
 import { ContactLookupDetails as ContactLookupDetailsType, ContactLogDisplay, HouseholdMember, ContactBadges } from "@/lib/dto";
 import { ContactLogs } from "@/components/contact-logs";
-import { getCurrentUserMpUserId } from "@/components/contact-logs/actions";
+import { getCurrentUserMpUserId, createAutoContactLog } from "@/components/contact-logs/actions";
 import { ContactLinks, DetailModalPhotoUpload } from "@/components/processing";
 import { useBreadcrumbOverride } from "@/components/layout/dynamic-breadcrumb";
 import { useRuntimeConfig } from "@/contexts";
@@ -224,11 +224,31 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
     });
   };
 
+  const refreshLogs = async () => {
+    if (!contact?.Contact_ID) return;
+    const logs = await getContactLogsByContactId(contact.Contact_ID);
+    setContactLogs(logs);
+  };
+
   const handleCopyField = (value: string, field: string) => {
     navigator.clipboard.writeText(value).then(() => {
       setCopiedField(field);
       setTimeout(() => setCopiedField(null), 2000);
     });
+
+    if (contact?.Contact_ID) {
+      const logMap: Record<string, { typeId: number; note: string }> = {
+        phone: { typeId: 1, note: "User copied phone number in MP Tools" },
+        email: { typeId: 5, note: "User copied email address in MP Tools" },
+        address: { typeId: 4, note: "User copied address in MP Tools" },
+      };
+      const entry = logMap[field];
+      if (entry) {
+        createAutoContactLog(contact.Contact_ID, entry.typeId, entry.note).then(
+          (success) => { if (success) refreshLogs(); }
+        );
+      }
+    }
   };
 
   useEffect(() => {
@@ -288,7 +308,9 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
   const displayName = getDisplayName(contact.First_Name, contact.Nickname);
 
   return (
-    <>
+    <div className="lg:grid lg:grid-cols-[1fr_380px] lg:gap-6">
+      {/* Left column: contact card + family */}
+      <div className="space-y-6">
       <div className="bg-white shadow rounded-lg relative">
         <Link
           href="/contact-lookup"
@@ -385,7 +407,9 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
             <ContactLinks
               email={contact.Email_Address}
               phone={contact.Mobile_Phone}
+              contactId={contact.Contact_ID}
               showSms
+              onLogCreated={refreshLogs}
             />
             {contact.Address_Line_1 && (() => {
               const addr = formatAddress(
@@ -400,6 +424,9 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
                   href={getDirectionsUrl(addr)}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={() => createAutoContactLog(contact.Contact_ID, 4, "User clicked directions in MP Tools").then(
+                    (success) => { if (success) refreshLogs(); }
+                  )}
                   className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
                 >
                   <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -603,14 +630,21 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
         </div>
       )}
 
-      <ContactLogs
-        contactLogs={contactLogs}
-        contactId={contact.Contact_ID}
-        contactNickname={contact.Nickname}
-        contactLastName={contact.Last_Name}
-        currentUserId={currentUserId}
-        onRefresh={fetchContactDetails}
-      />
-    </>
+      </div>
+
+      {/* Right column: contact logs sidebar */}
+      <div className="mt-6 lg:mt-0">
+        <div className="lg:sticky lg:top-6">
+          <ContactLogs
+            contactLogs={contactLogs}
+            contactId={contact.Contact_ID}
+            contactNickname={contact.Nickname}
+            contactLastName={contact.Last_Name}
+            currentUserId={currentUserId}
+            onRefresh={fetchContactDetails}
+          />
+        </div>
+      </div>
+    </div>
   );
 };

@@ -27,6 +27,7 @@ import { Plus, Save } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useRuntimeConfig } from "@/contexts";
 
 const ContactLogFormSchema = z.object({
   notes: z
@@ -76,6 +77,8 @@ export function ContactLogs({
   currentUserId,
   onRefresh,
 }: ContactLogsProps) {
+  const { mpFileUrl } = useRuntimeConfig();
+  const mpBaseOrigin = mpFileUrl ? new URL(mpFileUrl).origin : null;
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -382,9 +385,21 @@ export function ContactLogs({
   return (
     <div className="bg-card shadow rounded-lg p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-medium text-foreground">
-          Contact Logs ({contactLogs.length})
-        </h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-lg font-medium text-foreground">
+            Contact Logs ({contactLogs.length})
+          </h3>
+          {mpBaseOrigin && (
+            <a
+              href={`${mpBaseOrigin}/mp/292/${contactId}/268/`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-blue-600 hover:underline inline-flex items-center gap-0.5"
+            >
+              View in MP
+            </a>
+          )}
+        </div>
         <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
           <DialogTrigger asChild>
             <Button
@@ -429,53 +444,63 @@ export function ContactLogs({
         </Dialog>
       </div>
 
-      <div className="space-y-4 max-h-96 overflow-y-auto">
+      <div className="space-y-4 max-h-96 lg:max-h-[calc(100vh-12rem)] overflow-y-auto">
         {contactLogs.map((log) => (
           <div
             key={log.Contact_Log_ID}
             className="border border-border rounded-lg p-4 hover:bg-accent hover:text-accent-foreground transition-colors"
           >
-            <div className="flex items-start justify-between mb-2">
-              <div className="flex items-center space-x-2">
-                <span
-                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getLogTypeColor(
-                    log.Contact_Log_Type
-                  )}`}
+            {/* Row 1: Type Badge | MP Link | Edit (right) */}
+            <div className="flex items-center gap-2 mb-1">
+              <span
+                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getLogTypeColor(
+                  log.Contact_Log_Type
+                )}`}
+              >
+                {getDisplayLogType(log.Contact_Log_Type)}
+              </span>
+              {mpBaseOrigin && (
+                <a
+                  href={`${mpBaseOrigin}/mp/292/${contactId}/268/${log.Contact_Log_ID}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] text-blue-600 hover:underline flex-shrink-0 inline-flex items-center gap-0.5"
                 >
-                  {getDisplayLogType(log.Contact_Log_Type)}
-                </span>
-                <span className="text-sm text-muted-foreground">
-                  {formatDateTime(log.Contact_Date)}
-                </span>
-              </div>
-              {currentUserId != null && log.Made_By === currentUserId && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => handleEditClick(log)}
-                >
-                  Edit
-                </Button>
+                  <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 7h3a5 5 0 010 10h-3m-6 0H6A5 5 0 016 7h3M8 12h8" />
+                  </svg>
+                  MP
+                </a>
               )}
+              <div className="ml-auto">
+                {currentUserId != null && log.Made_By === currentUserId && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleEditClick(log)}
+                  >
+                    Edit
+                  </Button>
+                )}
+              </div>
             </div>
-
+            {/* Row 2: Note content */}
             {log.Notes && (
-              <div className="mb-3">
-                <p className="text-sm text-foreground whitespace-pre-wrap">
-                  {log.Notes}
-                </p>
-              </div>
+              <p className="text-sm text-foreground whitespace-pre-wrap mb-2">
+                {log.Notes}
+              </p>
             )}
 
-            {log.MadeByContact && log.MadeByContact.length > 0 && (
-              <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                <span>Logged by</span>
-                <span className="font-medium">
-                  {log.MadeByContact[0].Nickname || log.MadeByContact[0].First_Name}{" "}
-                  {log.MadeByContact[0].Last_Name}
+            {/* Row 3: Made By + Date/Time */}
+            <div className="text-xs text-muted-foreground">
+              {log.MadeByContact && log.MadeByContact.length > 0 && (
+                <span>
+                  <span className="font-medium">{log.MadeByContact[0].Nickname || log.MadeByContact[0].First_Name} {log.MadeByContact[0].Last_Name}</span>
+                  {" · "}
                 </span>
-              </div>
-            )}
+              )}
+              {formatDateTime(log.Contact_Date)}
+            </div>
           </div>
         ))}
       </div>

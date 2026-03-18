@@ -146,6 +146,43 @@ export async function getCurrentUserMpUserId(): Promise<number | null> {
   }
 }
 
+export async function createAutoContactLog(
+  contactId: number,
+  contactLogTypeId: number,
+  notes: string,
+): Promise<boolean> {
+  try {
+    const session = await requireFeatureAccess("contact-lookup");
+    enforceRateLimit(session.user.id, "write");
+    const userId = getMpUserId(session);
+
+    if (!userId) {
+      throw new Error("Unable to determine user User_ID for audit logging");
+    }
+
+    const userName = session.user.name || "User";
+    const personalizedNotes = notes.replace("User", userName);
+
+    const contactLogService = await ContactLogService.getInstance();
+    await contactLogService.createContactLog({
+      Contact_ID: contactId,
+      Contact_Log_Type_ID: contactLogTypeId,
+      Notes: personalizedNotes,
+      Contact_Date: new Date().toISOString(),
+      Made_By: userId,
+      Planned_Contact_ID: null,
+      Contact_Successful: null,
+      Original_Contact_Log_Entry: null,
+      Feedback_Entry_ID: null,
+    });
+    return true;
+  } catch (error) {
+    // Fire-and-forget: log but don't throw — don't block the user's action
+    console.error("Error creating auto contact log:", error);
+    return false;
+  }
+}
+
 export async function getContactLogById(contactLogId: number): Promise<ContactLog | null> {
   try {
     await requireFeatureAccess("contact-lookup");

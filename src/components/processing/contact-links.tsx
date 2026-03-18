@@ -1,19 +1,30 @@
 "use client";
 
+import { createAutoContactLog } from "@/components/contact-logs/actions";
+
 interface ContactLinksProps {
   email: string | null;
   phone: string | null;
+  contactId?: number;
   showSms?: boolean;
+  onLogCreated?: () => void;
 }
 
-export function ContactLinks({ email, phone, showSms = false }: ContactLinksProps) {
+export function ContactLinks({ email, phone, contactId, showSms = false, onLogCreated }: ContactLinksProps) {
   if (!email && !phone) return null;
+
+  const logAction = async (logTypeId: number, notes: string) => {
+    if (!contactId) return;
+    const success = await createAutoContactLog(contactId, logTypeId, notes);
+    if (success && onLogCreated) onLogCreated();
+  };
 
   return (
     <div className="flex flex-wrap gap-2">
       {email && (
         <a
           href={`mailto:${email}`}
+          onClick={() => logAction(5, "User clicked send an email in MP Tools")}
           className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 transition-colors max-w-full"
         >
           <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -25,6 +36,7 @@ export function ContactLinks({ email, phone, showSms = false }: ContactLinksProp
       {phone && (
         <a
           href={`tel:${phone}`}
+          onClick={() => logAction(1, "User clicked call phone number in MP Tools")}
           className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
         >
           <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -36,6 +48,7 @@ export function ContactLinks({ email, phone, showSms = false }: ContactLinksProp
       {showSms && phone && (
         <a
           href={`sms:${phone}`}
+          onClick={() => logAction(3, "User clicked send a text in MP Tools")}
           className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
         >
           <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
