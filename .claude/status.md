@@ -2,12 +2,13 @@
 
 Quick-reference snapshot of current project state. Read this first at session start. For full details on any item, see the relevant session summary in `.claude/sessions/`.
 
-**Last updated**: 2026-03-17
+**Last updated**: 2026-03-18
 
 ## Recently Completed
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
+| 2026-03-18 | **Upstream PR #54**: Incorporated dependency updates + security fixes. 10 version pin bumps, 0 audit vulnerabilities, Next.js 16.1.7, better-auth 1.5.5. | — | — |
 | 2026-03-17 | **Contact card close button**: Added "X" button to top-right of contact detail card to return to search. | #116 | — |
 | 2026-03-16 | **Contact search: wait for Enter**: Removed debounced search-as-you-type that caused laggy flashing results. Search now fires on Enter/click only. | #112 | — |
 | 2026-03-16 | **Stable cache keys**: Changed dashboard cache keys from today's date to end-of-ministry-year (Aug 31) so they're stable all year. Eliminates daily cold cache at midnight. Service methods cap month iteration at today to avoid wasted API calls. | #113 | #114 |
@@ -25,7 +26,7 @@ Quick-reference snapshot of current project state. Read this first at session st
 ## Key Architecture Notes
 
 - Next.js 16 with PPR/Cache Components, Better Auth, Zod v4
-- Upstream sync current through PR #52 / release v2026.02.28.1353 (reviewed 2026-02-28)
+- Upstream sync current through PR #54 / release v2026.03.18.1156 (reviewed 2026-03-18)
 - Docker CI/CD via GitHub Actions → GitLab Container Registry
 - All processing features (volunteer, baptism, membership) use shared components in `src/components/processing/`
 - RBAC: Admin-managed feature-to-User-Group mapping via `data/feature-access.json` + `ADMIN_USER_GROUP_IDS` env var; server actions enforce via `requireFeatureAccess()`; admin page at `/admin`
