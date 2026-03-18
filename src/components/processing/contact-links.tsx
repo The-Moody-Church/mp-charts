@@ -7,14 +7,16 @@ interface ContactLinksProps {
   phone: string | null;
   contactId?: number;
   showSms?: boolean;
+  onLogCreated?: () => void;
 }
 
-export function ContactLinks({ email, phone, contactId, showSms = false }: ContactLinksProps) {
+export function ContactLinks({ email, phone, contactId, showSms = false, onLogCreated }: ContactLinksProps) {
   if (!email && !phone) return null;
 
-  const logAction = (logTypeId: number, notes: string) => {
+  const logAction = async (logTypeId: number, notes: string) => {
     if (!contactId) return;
-    createAutoContactLog(contactId, logTypeId, notes);
+    const success = await createAutoContactLog(contactId, logTypeId, notes);
+    if (success && onLogCreated) onLogCreated();
   };
 
   return (

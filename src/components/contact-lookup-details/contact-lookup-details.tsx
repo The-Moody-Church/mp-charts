@@ -224,6 +224,12 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
     });
   };
 
+  const refreshLogs = async () => {
+    if (!contact?.Contact_ID) return;
+    const logs = await getContactLogsByContactId(contact.Contact_ID);
+    setContactLogs(logs);
+  };
+
   const handleCopyField = (value: string, field: string) => {
     navigator.clipboard.writeText(value).then(() => {
       setCopiedField(field);
@@ -238,7 +244,9 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
       };
       const entry = logMap[field];
       if (entry) {
-        createAutoContactLog(contact.Contact_ID, entry.typeId, entry.note);
+        createAutoContactLog(contact.Contact_ID, entry.typeId, entry.note).then(
+          (success) => { if (success) refreshLogs(); }
+        );
       }
     }
   };
@@ -399,6 +407,7 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
               phone={contact.Mobile_Phone}
               contactId={contact.Contact_ID}
               showSms
+              onLogCreated={refreshLogs}
             />
             {contact.Address_Line_1 && (() => {
               const addr = formatAddress(
@@ -413,7 +422,9 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
                   href={getDirectionsUrl(addr)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  onClick={() => createAutoContactLog(contact.Contact_ID, 4, "User clicked directions in MP Tools")}
+                  onClick={() => createAutoContactLog(contact.Contact_ID, 4, "User clicked directions in MP Tools").then(
+                    (success) => { if (success) refreshLogs(); }
+                  )}
                   className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
                 >
                   <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

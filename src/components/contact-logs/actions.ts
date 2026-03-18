@@ -150,7 +150,7 @@ export async function createAutoContactLog(
   contactId: number,
   contactLogTypeId: number,
   notes: string,
-): Promise<void> {
+): Promise<boolean> {
   try {
     const session = await requireFeatureAccess("contact-lookup");
     enforceRateLimit(session.user.id, "write");
@@ -175,9 +175,11 @@ export async function createAutoContactLog(
       Original_Contact_Log_Entry: null,
       Feedback_Entry_ID: null,
     });
+    return true;
   } catch (error) {
     // Fire-and-forget: log but don't throw — don't block the user's action
     console.error("Error creating auto contact log:", error);
+    return false;
   }
 }
 
