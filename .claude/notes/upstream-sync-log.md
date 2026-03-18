@@ -11,9 +11,9 @@ git log main..upstream/main --oneline
 
 Or review PRs at: https://github.com/MinistryPlatform-Community/MPNext/pulls
 
-## Last Review: 2026-02-28
+## Last Review: 2026-03-18
 
-Reviewed all open/merged upstream PRs through PR #52 (release v2026.02.28.1353). Status:
+Reviewed all open/merged upstream PRs through PR #54 (release v2026.03.18.1156). Status:
 
 | PR | Title | Action | Notes |
 |----|-------|--------|-------|
@@ -30,5 +30,6 @@ Reviewed all open/merged upstream PRs through PR #52 (release v2026.02.28.1353).
 | #50 | Load user roles/groups into MPUserProfile | Incorporated | Added `roles`/`userGroups` to MPUserProfile, parallel fetch from `dp_User_Roles`/`dp_User_User_Groups`; kept our `sanitizeGuid()` + `sanitizeIds()` security (upstream doesn't sanitize); kept `requireSession()` in shared action |
 | #51 | Update deps + fix security vulns | Incorporated | `npm audit fix` resolved 3 CVEs: rollup CVE-2026-27606 (High), minimatch GHSA-3ppc-4f35-3m26 (High), ajv GHSA-2g4f-4pwh-qvx6 (Moderate). Lockfile-only changes, no `package.json` updates needed |
 | #52 | Replace NextAuth refs with Better Auth | Incorporated | Code already aligned (env vars, function names). Cherry-picked: `totalSteps` 10→9 fix in `setup.ts`; updated stale NextAuth references in `docs/OAUTH_LOGOUT_SETUP.md` and `src/lib/providers/ministry-platform/docs/README.md` |
+| #54 | Fix vulnerabilities and update dependencies | Incorporated | Updated 10 package.json version pins + regenerated lockfile. Security: flatted DoS, undici 6 CVEs, Next.js 16.1.6→16.1.7 (5 moderate CVEs). Deps: better-auth ^1.5.5, openai ^6.32.0, vitest ^4.1.0, jsdom ^29.0.0, and 6 more. 0 audit vulnerabilities, 236 tests pass |
 
 **GitHub will show "N commits behind"** — this is expected and harmless. It reflects diverged commit history, not missing changes.
