@@ -27,6 +27,7 @@ import { Plus, Save } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useRuntimeConfig } from "@/contexts";
 
 const ContactLogFormSchema = z.object({
   notes: z
@@ -76,6 +77,8 @@ export function ContactLogs({
   currentUserId,
   onRefresh,
 }: ContactLogsProps) {
+  const { mpFileUrl } = useRuntimeConfig();
+  const mpBaseOrigin = mpFileUrl ? new URL(mpFileUrl).origin : null;
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -447,6 +450,19 @@ export function ContactLogs({
                 <span className="text-sm text-muted-foreground">
                   {formatDateTime(log.Contact_Date)}
                 </span>
+                {mpBaseOrigin && (
+                  <a
+                    href={`${mpBaseOrigin}/mp/387/${log.Contact_Log_ID}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10px] text-blue-600 hover:underline flex-shrink-0 inline-flex items-center gap-0.5"
+                  >
+                    <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 7h3a5 5 0 010 10h-3m-6 0H6A5 5 0 016 7h3M8 12h8" />
+                    </svg>
+                    MP
+                  </a>
+                )}
               </div>
               {currentUserId != null && log.Made_By === currentUserId && (
                 <Button
