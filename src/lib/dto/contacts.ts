@@ -42,6 +42,7 @@ export interface HouseholdMember {
   Last_Name: string;
   Image_GUID: string;
   Household_Position_ID: number | null;
+  Household_Position: string | null;
   Date_of_Birth: string | null;
 }
 
@@ -52,4 +53,5 @@ export interface ContactBadges {
   inGroup: boolean;
   serving: boolean;
   lastActivity: string | null;
+  ageGradeGroups: string[];
 }

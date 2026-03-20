@@ -121,7 +121,7 @@ export async function getHouseholdMembers(householdId: number): Promise<Househol
   }
 }
 
-export async function getContactBadges(contactId: number): Promise<ContactBadges> {
+export async function getContactBadges(contactId: number, householdPositionId?: number | null): Promise<ContactBadges> {
   try {
     await requireFeatureAccess("contact-lookup");
 
@@ -130,10 +130,10 @@ export async function getContactBadges(contactId: number): Promise<ContactBadges
     }
 
     const contactService = await ContactService.getInstance();
-    return contactService.getContactBadges(contactId);
+    return contactService.getContactBadges(contactId, householdPositionId);
   } catch (error) {
     console.error('Error fetching contact badges:', error);
-    return { membershipStatus: null, membershipStatusId: null, membershipDate: null, inGroup: false, serving: false, lastActivity: null };
+    return { membershipStatus: null, membershipStatusId: null, membershipDate: null, inGroup: false, serving: false, lastActivity: null, ageGradeGroups: [] };
   }
 }
 

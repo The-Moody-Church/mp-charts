@@ -149,7 +149,7 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
       if (contactDetails.Contact_ID) {
         const [logs, badgeData, household, userId] = await Promise.all([
           getContactLogsByContactId(contactDetails.Contact_ID),
-          getContactBadges(contactDetails.Contact_ID),
+          getContactBadges(contactDetails.Contact_ID, contactDetails.Household_Position_ID),
           contactDetails.Household_ID
             ? getHouseholdMembers(contactDetails.Household_ID)
             : Promise.resolve([]),
@@ -392,6 +392,14 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
                       Last Activity: {formatLastActivity(badges.lastActivity)}
                     </span>
                   )}
+                  {badges.ageGradeGroups.map((groupName) => (
+                    <span
+                      key={groupName}
+                      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-violet-100 text-violet-800"
+                    >
+                      {groupName}
+                    </span>
+                  ))}
                 </div>
               )}
             </div>
@@ -621,6 +629,11 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
                       <span className="text-sm font-medium text-gray-900 text-center truncate w-full">
                         {memberDisplayName} {member.Last_Name}
                       </span>
+                      {member.Household_Position && (
+                        <span className="text-xs text-gray-500">
+                          {member.Household_Position}
+                        </span>
+                      )}
                     </Link>
                   );
                 })}
