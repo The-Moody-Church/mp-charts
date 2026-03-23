@@ -258,7 +258,7 @@ export class ContactService {
     // Get active group participations in Age or Grade groups (Group_Type_ID = 4)
     const records = await this.mp!.getTableRecords<{ Group_Name: string }>({
       table: "Group_Participants",
-      filter: `Participant_ID IN (${safeParticipantIds}) AND Start_Date <= '${today}' AND (End_Date IS NULL OR End_Date >= '${today}') AND Group_ID_Table.[Group_Type_ID] = ${ContactService.AGE_GRADE_GROUP_TYPE_ID} AND Group_ID_Table.[Start_Date] <= '${today}' AND (Group_ID_Table.[End_Date] IS NULL OR Group_ID_Table.[End_Date] >= '${today}')`,
+      filter: `Participant_ID IN (${safeParticipantIds}) AND Group_Participants.[Start_Date] <= '${today}' AND (Group_Participants.[End_Date] IS NULL OR Group_Participants.[End_Date] >= '${today}') AND Group_ID_Table.[Group_Type_ID] = ${ContactService.AGE_GRADE_GROUP_TYPE_ID} AND Group_ID_Table.[Start_Date] <= '${today}' AND (Group_ID_Table.[End_Date] IS NULL OR Group_ID_Table.[End_Date] >= '${today}')`,
       select: "Group_ID_Table.[Group_Name]",
     });
     return records.map(r => r.Group_Name);
