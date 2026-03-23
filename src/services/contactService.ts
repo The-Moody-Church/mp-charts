@@ -108,8 +108,8 @@ export class ContactService {
     return this.mp!.getTableRecords<HouseholdMember>({
       table: "Contacts",
       filter: `Household_ID IN (${safeId})`,
-      select: "Contact_ID, Contact_GUID, First_Name, Nickname, Last_Name, dp_fileUniqueId AS Image_GUID, Household_Position_ID, Household_Position_ID_Table.[Household_Position], Date_of_Birth",
-      orderBy: "Household_Position_ID, Date_of_Birth",
+      select: "Contact_ID, Contact_GUID, First_Name, Nickname, Last_Name, dp_fileUniqueId AS Image_GUID, Contacts.[Household_Position_ID], Household_Position_ID_Table.[Household_Position], Date_of_Birth",
+      orderBy: "Contacts.[Household_Position_ID], Date_of_Birth",
     });
   }
 
