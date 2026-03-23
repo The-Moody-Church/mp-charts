@@ -108,12 +108,17 @@ export class ContactService {
     return this.mp!.getTableRecords<HouseholdMember>({
       table: "Contacts",
       filter: `Household_ID IN (${safeId})`,
-      select: "Contact_ID, Contact_GUID, First_Name, Nickname, Last_Name, dp_fileUniqueId AS Image_GUID, Household_Position_ID, Date_of_Birth",
-      orderBy: "Household_Position_ID, Date_of_Birth",
+      select: "Contact_ID, Contact_GUID, First_Name, Nickname, Last_Name, dp_fileUniqueId AS Image_GUID, Contacts.[Household_Position_ID], Household_Position_ID_Table.[Household_Position], Date_of_Birth",
+      orderBy: "Contacts.[Household_Position_ID], Date_of_Birth",
     });
   }
 
-  public async getContactBadges(contactId: number): Promise<ContactBadges> {
+  /** Minor Child household position ID */
+  private static MINOR_CHILD_POSITION_ID = 2;
+  /** Age or Grade group type ID */
+  private static AGE_GRADE_GROUP_TYPE_ID = 4;
+
+  public async getContactBadges(contactId: number, householdPositionId?: number | null): Promise<ContactBadges> {
     const safeContactId = sanitizeIds([contactId]);
 
     // Step 1: Get the participant record for this contact (including Member_Status string and Date_Joined)
@@ -146,7 +151,7 @@ export class ContactService {
     // If no participant record, no group/serving data possible — but still fetch last activity
     if (participants.length === 0) {
       const lastActivity = await this.getLastActivityDate(safeContactId);
-      return { membershipStatus, membershipStatusId, membershipDate, inGroup: false, serving: false, lastActivity };
+      return { membershipStatus, membershipStatusId, membershipDate, inGroup: false, serving: false, lastActivity, ageGradeGroups: [] };
     }
 
     const participantIds = participants.map(p => p.Participant_ID);
@@ -154,8 +159,10 @@ export class ContactService {
     const today = new Date().toISOString().split('T')[0];
     const isDropped = membershipStatusId != null && [5, 6, 7, 8, 9].includes(membershipStatusId);
 
-    // Step 2: Check group membership, serving roles, last activity, and dropped date in parallel
-    const [groupParticipants, servingParticipants, lastActivity, droppedDate] = await Promise.all([
+    const isMinorChild = householdPositionId === ContactService.MINOR_CHILD_POSITION_ID;
+
+    // Step 2: Check group membership, serving roles, last activity, dropped date, and age/grade groups in parallel
+    const [groupParticipants, servingParticipants, lastActivity, droppedDate, ageGradeGroups] = await Promise.all([
       // In a Group: active Group_Participant in Small Group (1) or Community (11)
       this.getActiveGroupParticipants(safeParticipantIds, today, [1, 11]),
       // Serving: active Group_Participant with a role that has Group_Role_Type_ID 1 (Leader) or 3 (Servant)
@@ -164,6 +171,8 @@ export class ContactService {
       this.getLastActivityDate(safeContactId),
       // Dropped date: milestone 49 for dropped members (status 5-9)
       isDropped ? this.getDroppedMilestoneDate(safeParticipantIds) : Promise.resolve(null),
+      // Age/Grade groups: only for Minor Child contacts
+      isMinorChild ? this.getAgeGradeGroupNames(safeParticipantIds, today) : Promise.resolve([]),
     ]);
 
     // For dropped members, use the milestone date if available
@@ -178,6 +187,7 @@ export class ContactService {
       inGroup: groupParticipants.length > 0,
       serving: servingParticipants.length > 0,
       lastActivity,
+      ageGradeGroups,
     };
   }
 
@@ -239,6 +249,19 @@ export class ContactService {
       top: 1,
     });
     return logs.length > 0 ? logs[0].Activity_Date : null;
+  }
+
+  private async getAgeGradeGroupNames(
+    safeParticipantIds: string,
+    today: string,
+  ): Promise<string[]> {
+    // Get active group participations in Age or Grade groups (Group_Type_ID = 4)
+    const records = await this.mp!.getTableRecords<{ Group_Name: string }>({
+      table: "Group_Participants",
+      filter: `Participant_ID IN (${safeParticipantIds}) AND Group_Participants.[Start_Date] <= '${today}' AND (Group_Participants.[End_Date] IS NULL OR Group_Participants.[End_Date] >= '${today}') AND Group_ID_Table.[Group_Type_ID] = ${ContactService.AGE_GRADE_GROUP_TYPE_ID} AND Group_ID_Table.[Start_Date] <= '${today}' AND (Group_ID_Table.[End_Date] IS NULL OR Group_ID_Table.[End_Date] >= '${today}')`,
+      select: "Group_ID_Table.[Group_Name]",
+    });
+    return records.map(r => r.Group_Name);
   }
 
   private async getDroppedMilestoneDate(safeParticipantIds: string): Promise<string | null> {

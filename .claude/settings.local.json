@@ -1,5 +1,6 @@
 {
   "permissions": {
+    "defaultMode": "auto",
     "allow": [
       "Read",
       "Edit",
@@ -25,7 +26,8 @@
       "Skill(update-config)",
       "Bash(kill:*)",
       "Bash(find /Users/jonathon.huff/Claude/Code/mp-charts/mp-charts -type f \\\\\\(-name *.yml -o -name *.yaml -o -name Dockerfile* -o -name docker-compose* -o -name .trivy* -o -name .snyk* \\\\\\))",
-      "Bash(find /Users/jonathon.huff/Claude/Code/mp-charts/mp-charts -type f \\\\\\(-name *scan* -o -name *security* -o -name *audit* -o -name *.trivy* -o -name *.snyk* \\\\\\))"
+      "Bash(find /Users/jonathon.huff/Claude/Code/mp-charts/mp-charts -type f \\\\\\(-name *scan* -o -name *security* -o -name *audit* -o -name *.trivy* -o -name *.snyk* \\\\\\))",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": [],
