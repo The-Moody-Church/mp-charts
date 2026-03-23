@@ -427,3 +427,6 @@ data/feedback-config.json
 # Snyk Security Extension - AI Rules (auto-generated)
 .github\instructions\snyk_rules.instructions.md
 .claude/plans/test-plan-journey-compliance-admin.md
+
+# Deploy command contains infrastructure details (IPs, SSH users, paths)
+.claude/commands/deploy.md
