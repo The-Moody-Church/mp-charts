@@ -1,6 +1,5 @@
 {
   "permissions": {
-    "defaultMode": "auto",
     "allow": [
       "Read",
       "Edit",
@@ -27,10 +26,13 @@
       "Bash(kill:*)",
       "Bash(find /Users/jonathon.huff/Claude/Code/mp-charts/mp-charts -type f \\\\\\(-name *.yml -o -name *.yaml -o -name Dockerfile* -o -name docker-compose* -o -name .trivy* -o -name .snyk* \\\\\\))",
       "Bash(find /Users/jonathon.huff/Claude/Code/mp-charts/mp-charts -type f \\\\\\(-name *scan* -o -name *security* -o -name *audit* -o -name *.trivy* -o -name *.snyk* \\\\\\))",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(grep -r \"revalidateTag\\\\|revalidatePath\\\\|contacts-search\" /Users/jonathon.huff/Claude/Code/mp-charts/mp-charts/src --include=*.ts --include=*.tsx)",
+      "Bash(grep -A 10 -B 5 \"connection\\\\|''''use cache''''\" /Users/jonathon.huff/Claude/Code/mp-charts/mp-charts/src/components/dashboard/*.tsx)"
     ],
     "deny": [],
     "ask": [],
+    "defaultMode": "auto",
     "additionalDirectories": [
       "/Users/jonathon.huff/.claude/plans",
       "/Users/jonathon.huff/Claude/Code/choir-seating-chart/.github/workflows"
