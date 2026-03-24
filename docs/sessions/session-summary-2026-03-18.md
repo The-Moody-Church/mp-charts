@@ -1,11 +1,11 @@
 # Session Summary — 2026-03-18
 
-## Objectives
+## Session 1: Upstream PR #54 + CI/CD + Dependency Updates
+
+### Objectives
 - Review and incorporate upstream PR #54 (dependency updates + security fixes)
 - Investigate CI/CD gap for npm vulnerability detection
 - Update all outdated dependencies
-
-## Work Completed
 
 ### Upstream PR #54: chore: fix vulnerabilities and update dependencies ✅ COMPLETED
 - **Action**: Incorporated — updated `package.json` version pins + regenerated lockfile
@@ -26,10 +26,38 @@
 - All 236 tests pass, 0 audit vulnerabilities
 - **Branch**: `chore/update-dependencies`
 
+---
+
+## Session 2: Auto Contact Logging on Action Links
+
+### Objective
+Auto-create Contact Log entries when users interact with action links on the contact card.
+
+### Auto Contact Logging on Action Links ✅ COMPLETED
+
+Added fire-and-forget contact log creation for 7 user actions on the contact card:
+
+| Action | Log Type | Note |
+|--------|----------|------|
+| Click mailto: | E-mail (5) | "User clicked send an email in MP Tools" |
+| Copy email | E-mail (5) | "User copied email address in MP Tools" |
+| Click sms: | Text Message (3) | "User clicked send a text in MP Tools" |
+| Click tel: | Phone Call (1) | "User clicked call phone number in MP Tools" |
+| Copy phone | Phone Call (1) | "User copied phone number in MP Tools" |
+| Click directions | Meeting (4) | "User clicked directions in MP Tools" |
+| Copy address | Meeting (4) | "User copied address in MP Tools" |
+
+### Decisions
+- Fire-and-forget pattern: errors are caught and logged but never thrown, so the user's intended action always proceeds
+- `ContactLinks` accepts optional `contactId` — logging only fires when provided, so existing usages in other modals are unaffected
+
 ## Files Modified
 - `package.json` — 10 version pin bumps (upstream), 8 dependency updates
 - `package-lock.json` — regenerated lockfile
 - `.github/workflows/docker-build-push.yml` — added npm audit step
 - `.claude/notes/upstream-sync-log.md` — added PR #54 entry
 - `.claude/status.md` — updated upstream sync checkpoint
-- `.claude/sessions/session-summary-2026-03-18.md` — this file
+- `src/components/contact-logs/actions.ts` — added `createAutoContactLog` server action
+- `src/components/processing/contact-links.tsx` — added optional `contactId` prop, onClick logging
+- `src/components/contact-lookup-details/contact-lookup-details.tsx` — pass contactId, log directions/copy actions
+- `.claude/ideas.md` — added entry
