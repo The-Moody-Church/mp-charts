@@ -61,7 +61,7 @@ export const auth = betterAuth({
               const records = await mp.getTableRecords<MPUserProfile>({
                 table: "dp_Users",
                 filter: `User_GUID = '${validGuid}'`,
-                select: "User_ID,Contact_ID,Contact_ID_TABLE.Nickname",
+                select: "User_ID,Contact_ID_TABLE.Contact_ID,Contact_ID_TABLE.Nickname",
                 top: 1,
               });
               if (records[0]) {
