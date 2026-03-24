@@ -1,6 +1,6 @@
 'use server';
 
-import { revalidateTag } from "next/cache";
+import { updateTag } from "next/cache";
 import { requireFeatureAccess } from "@/lib/authorization";
 import { getMpUserId } from "@/lib/auth-helpers";
 import { enforceRateLimit } from "@/lib/rate-limit";
@@ -226,7 +226,7 @@ export async function refreshMemberCache(): Promise<{ success: boolean; error?: 
   try {
     const session = await requireFeatureAccess("manage-members");
     enforceRateLimit(session.user.id, "cacheRefresh");
-    revalidateTag('contacts-search', { expire: 0 });
+    updateTag('contacts-search');
     return { success: true };
   } catch (error) {
     return {

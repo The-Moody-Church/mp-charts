@@ -167,7 +167,7 @@ async function getCachedData(key: string) {
 **Rules for `'use cache'` functions:**
 - `new Date()` and other non-deterministic expressions must stay OUTSIDE the function — pass as serializable parameters
 - Function arguments automatically become the cache key
-- Invalidate with `revalidateTag('my-tag', { expire: 0 })` from server actions
+- Invalidate with `updateTag('my-tag')` from server actions (serves stale data while revalidating in background; use `revalidateTag('my-tag', { expire: 0 })` only when stale data must NOT be served)
 
 **Current cached functions:**
 | Function | Revalidate | Stale | Tags | File |
