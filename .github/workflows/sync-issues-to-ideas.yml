@@ -4,7 +4,7 @@ on:
   # Direction 1: ideas.md changed → sync to GitHub issues
   push:
     branches: [main]
-    paths: ['.claude/ideas.md']
+    paths: ['docs/ideas.md']
 
   # Direction 2: issue event → sync to ideas.md
   issues:
@@ -33,7 +33,7 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const content = fs.readFileSync('.claude/ideas.md', 'utf8');
+            const content = fs.readFileSync('docs/ideas.md', 'utf8');
             const repoUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}`;
 
             // ── Helpers: ToC reconciliation ──
@@ -339,7 +339,7 @@ jobs:
 
             // ── Write back ideas.md if updated ──
             if (ideasUpdated) {
-              fs.writeFileSync('.claude/ideas.md', fileLines.join('\n'));
+              fs.writeFileSync('docs/ideas.md', fileLines.join('\n'));
               console.log('Updated ideas.md with new issue links');
             }
 
@@ -347,7 +347,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .claude/ideas.md
+          git add docs/ideas.md
           if git diff --cached --quiet; then
             echo "No changes to ideas.md"
           else
@@ -372,7 +372,7 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const content = fs.readFileSync('.claude/ideas.md', 'utf8');
+            const content = fs.readFileSync('docs/ideas.md', 'utf8');
             const repoUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}`;
 
             // ── Helpers: ToC reconciliation ──
@@ -739,7 +739,7 @@ jobs:
             }
 
             if (changed) {
-              fs.writeFileSync('.claude/ideas.md', lines.join('\n'));
+              fs.writeFileSync('docs/ideas.md', lines.join('\n'));
               console.log('ideas.md updated');
             } else {
               console.log('No changes needed for ideas.md');
@@ -749,7 +749,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .claude/ideas.md
+          git add docs/ideas.md
           if git diff --cached --quiet; then
             echo "No changes to ideas.md"
           else
