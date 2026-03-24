@@ -1,6 +1,6 @@
 # Project Status
 
-Quick-reference snapshot of current project state. Read this first at session start. For full details on any item, see the relevant session summary in `.claude/sessions/`.
+Quick-reference snapshot of current project state. Read this first at session start. For full details on any item, see the relevant session summary in `docs/sessions/`.
 
 **Last updated**: 2026-03-23
 

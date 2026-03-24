@@ -193,7 +193,7 @@ Append a new row to the review table in `.claude/notes/upstream-sync-log.md`:
 Update the "Last Review" date at the top of the section.
 
 #### b) Status File
-Update `.claude/status.md` to reflect the new upstream sync checkpoint (e.g., "Upstream sync current through PR #N").
+Update `docs/status.md` to reflect the new upstream sync checkpoint (e.g., "Upstream sync current through PR #N").
 
 #### c) Session Summary
 If a session summary exists for today, update it with the upstream review details.
@@ -204,9 +204,9 @@ If a session summary exists for today, update it with the upstream review detail
 
 1. **CLAUDE.md check**: Do the incorporated changes introduce new patterns, conventions, or architectural decisions? If so, update CLAUDE.md.
 2. **README.md check**: Do the changes affect anything documented in README.md (new features, changed env vars, updated services, etc.)? If so, update README.md.
-3. **Session summary**: Update `.claude/sessions/session-summary-YYYY-MM-DD.md` with what's being committed.
-4. **ideas.md**: If any issues were completed by the upstream changes, update `.claude/ideas.md`.
-5. **status.md**: Update `.claude/status.md` to reflect completed work (already done in Step 7, but verify it's current).
+3. **Session summary**: Update `docs/sessions/session-summary-YYYY-MM-DD.md` with what's being committed.
+4. **ideas.md**: If any issues were completed by the upstream changes, update `docs/ideas.md`.
+5. **status.md**: Update `docs/status.md` to reflect completed work (already done in Step 7, but verify it's current).
 6. **Security review**: Review all changed files against `.claude/notes/security-review-checklist.md`.
 7. Include all updated context files in the commit.
 
