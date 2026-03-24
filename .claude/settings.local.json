@@ -5,7 +5,7 @@
       "Edit",
       "Write",
       "Bash(git *)",
-      "Bash(gh *)",
+      "Bash(gh:*)",
       "Bash(npm *)",
       "Bash(npx *)",
       "Bash(node *)",
@@ -28,7 +28,8 @@
       "Bash(find /Users/jonathon.huff/Claude/Code/mp-charts/mp-charts -type f \\\\\\(-name *scan* -o -name *security* -o -name *audit* -o -name *.trivy* -o -name *.snyk* \\\\\\))",
       "Bash(git add:*)",
       "Bash(grep -r \"revalidateTag\\\\|revalidatePath\\\\|contacts-search\" /Users/jonathon.huff/Claude/Code/mp-charts/mp-charts/src --include=*.ts --include=*.tsx)",
-      "Bash(grep -A 10 -B 5 \"connection\\\\|''''use cache''''\" /Users/jonathon.huff/Claude/Code/mp-charts/mp-charts/src/components/dashboard/*.tsx)"
+      "Bash(grep -A 10 -B 5 \"connection\\\\|''''use cache''''\" /Users/jonathon.huff/Claude/Code/mp-charts/mp-charts/src/components/dashboard/*.tsx)",
+      "Bash(jq:*)"
     ],
     "deny": [],
     "ask": [],

@@ -25,6 +25,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Contact-Lookup badges for Member should specify thpe (#85)](#contact-lookup-badges-for-member-should-specify-thpe-85)~~ ✅
 
 ### Improvements
+- ~~[Use Nickname Last name on contact logs (#129)](#use-nickname-last-name-on-contact-logs-129)~~ ✅
 - [Serving metrics: reconcile adult-only vs all-ages counts (#110)](#serving-metrics-reconcile-adult-only-vs-all-ages-counts-110)
 - ~~[Auto contact log on action link clicks (#121)](#auto-contact-log-on-action-link-clicks-121)~~ ✅
 - ~~[Add "X" to the top right of the contact card (#116)](#add-x-to-the-top-right-of-the-contact-card-116)~~ ✅
@@ -151,6 +152,9 @@ Extracted `statusBadgeColor` to shared utility (`src/lib/contact-badge-utils.ts`
 ---
 
 ## Improvements
+
+### ~~Use Nickname Last name on contact logs ([#129](https://github.com/The-Moody-Church/mp-charts/issues/129))~~ ✅ COMPLETED
+Auto-created contact logs now use the user's MP Contact Nickname (e.g., "Jonny Huff") instead of the formal OIDC given_name (e.g., "Jonathon Huff"). The nickname is fetched from the Contact record during login and stored in the session.
 
 ### Serving metrics: reconcile adult-only vs all-ages counts ([#110](https://github.com/The-Moody-Church/mp-charts/issues/110))
 The Engagement Overview Venn diagram filters serving/leading to **adults only** (18+ or unknown birthdate), showing ~830. The Grow in Love section's "Serving by Role Type" counts **all ages**, showing ~1,022. The ~192-person gap is minors with active serving/leading roles (e.g., student volunteers). Need to decide: should the Grow in Love charts also filter to adults, or should the Venn diagram include all ages? Or add an "(all ages)" note to the Grow in Love description to make the difference explicit?
