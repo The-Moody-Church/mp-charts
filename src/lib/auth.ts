@@ -53,6 +53,7 @@ export const auth = betterAuth({
             // Also fetch User_ID and Contact_ID from dp_Users for audit logging
             let mpUserId: number | undefined;
             let mpContactId: number | undefined;
+            let mpNickname: string | undefined;
 
             try {
               const validGuid = sanitizeGuid(profile.sub);
@@ -60,12 +61,13 @@ export const auth = betterAuth({
               const records = await mp.getTableRecords<MPUserProfile>({
                 table: "dp_Users",
                 filter: `User_GUID = '${validGuid}'`,
-                select: "User_ID,Contact_ID",
+                select: "User_ID,Contact_ID,Contact_ID_TABLE.Nickname",
                 top: 1,
               });
               if (records[0]) {
                 mpUserId = records[0].User_ID;
                 mpContactId = records[0].Contact_ID;
+                mpNickname = records[0].Nickname;
               }
             } catch (error) {
               console.error("Auth: Error fetching MP user profile during login:", error);
@@ -74,7 +76,7 @@ export const auth = betterAuth({
             return {
               id: profile.sub,
               email: profile.email,
-              name: `${profile.given_name || ""} ${profile.family_name || ""}`.trim(),
+              name: `${mpNickname || profile.given_name || ""} ${profile.family_name || ""}`.trim(),
               image: undefined,
               emailVerified: true,
               userGuid: profile.sub,
