@@ -157,7 +157,7 @@ Extracted `statusBadgeColor` to shared utility (`src/lib/contact-badge-utils.ts`
 The Engagement Overview Venn diagram filters serving/leading to **adults only** (18+ or unknown birthdate), showing ~830. The Grow in Love section's "Serving by Role Type" counts **all ages**, showing ~1,022. The ~192-person gap is minors with active serving/leading roles (e.g., student volunteers). Need to decide: should the Grow in Love charts also filter to adults, or should the Venn diagram include all ages? Or add an "(all ages)" note to the Grow in Love description to make the difference explicit?
 
 ### ~~Use Nickname Last name on contact logs ([#129](https://github.com/The-Moody-Church/mp-charts/issues/129))~~ ✅ COMPLETED
-Auto-created contact logs now use the user's MP Contact Nickname (e.g., "Jonny Huff") instead of the formal OIDC given_name (e.g., "Jonathon Huff"). The nickname is fetched from the Contact record during login and stored in the session.
+Auto-created contact logs now use the user's MP Contact Nickname (e.g., "Jonny Huff") instead of the formal OIDC given_name (e.g., "Jonathon Huff"). The nickname is fetched from the Contact record during login and stored in the session. Also fixed contact log dates to convert to Central Time in the service layer (was using server-local UTC in Docker).
 
 ### ~~Auto contact log on action link clicks ([#121](https://github.com/The-Moody-Church/mp-charts/issues/121))~~ ✅ COMPLETED
 Clicking email, phone, text, or directions links — or copying email, phone, or address — on the contact card automatically creates a Contact Log entry. Maps to Contact Log Types: E-mail (5), Phone Call (1), Text Message (3), Meeting (4). Fire-and-forget: never blocks the user's action.

@@ -8,7 +8,7 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
-| 2026-03-23 | **Use nickname on contact logs**: Session name now uses MP Contact Nickname instead of OIDC given_name, so auto-created contact logs show "Jonny Huff" instead of "Jonathon Huff". | #129 | TBD |
+| 2026-03-23 | **Use nickname on contact logs + timezone fix**: Session name uses MP Contact Nickname; contact log dates now correctly convert to Central Time in the service layer (was using server-local/UTC). Fixed ambiguous `Contact_ID` column in login query. | #129 | #130 |
 | 2026-03-23 | **Fix cache stale-while-revalidate**: Changed `revalidateTag({expire:0})` → `updateTag()` so dashboard and contact cache refreshes serve stale data instantly instead of causing 20-30s cold misses. | #124, #125, #127 | TBD |
 | 2026-03-23 | **Contact card: age/grade badges & household positions**: Violet badges for minor children's age/grade groups; household position labels under each member. | — | #126 |
 | 2026-03-18 | **Auto contact logging**: Clicking email/phone/text/directions or copying email/phone/address on contact card auto-creates a Contact Log entry. | #121 | #120 |

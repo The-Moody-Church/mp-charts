@@ -448,6 +448,8 @@ MP returns dates without timezone info in **US Central Time**. `new Date("2026-0
 
 **Rule**: Parse MP dates as local time using `parseLocalDate()` (in `src/components/contact-lookup-details/contact-lookup-details.tsx`) — extracts year/month/day components to avoid UTC shift. When sending dates to MP, use SQL format (`YYYY-MM-DD HH:MM:SS`) — convert **after** Zod validation, not before.
 
+**Sending dates to MP**: Pass ISO datetime through Zod validation, then convert to Central Time SQL format in the **service layer** using `Intl.DateTimeFormat` with `timeZone: "America/Chicago"`. Do NOT use `getHours()`/`getMinutes()` — those use server-local time, which is UTC in Docker. Reference implementation: `isoToCentralSql()` in `contactLogService.ts`. For date-only values (no meaningful time), use noon UTC (`T12:00:00.000Z`) so the date stays correct after Central conversion regardless of DST.
+
 ## Validation Best Practices
 
 When working with Ministry Platform data:
