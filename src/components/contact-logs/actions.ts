@@ -163,23 +163,12 @@ export async function createAutoContactLog(
     const userName = session.user.name || "User";
     const personalizedNotes = notes.replace("User", userName);
 
-    // Format current time as SQL date in Central Time (MP interprets dates as Central)
-    const now = new Date();
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/Chicago",
-      year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", second: "2-digit",
-      hour12: false,
-    }).formatToParts(now);
-    const get = (type: string) => parts.find(p => p.type === type)!.value;
-    const centralDate = `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}`;
-
     const contactLogService = await ContactLogService.getInstance();
     await contactLogService.createContactLog({
       Contact_ID: contactId,
       Contact_Log_Type_ID: contactLogTypeId,
       Notes: personalizedNotes,
-      Contact_Date: centralDate,
+      Contact_Date: new Date().toISOString(),
       Made_By: userId,
       Planned_Contact_ID: null,
       Contact_Successful: null,

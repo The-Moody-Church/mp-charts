@@ -3,6 +3,19 @@ import { ContactLogTypes } from "@/lib/providers/ministry-platform/models/Contac
 import { ContactLogSchema, ContactLogInput } from "@/lib/providers/ministry-platform/models/ContactLogSchema";
 import { MPHelper } from "@/lib/providers/ministry-platform";
 
+/** Convert an ISO datetime string to SQL format (YYYY-MM-DD HH:MM:SS) in US Central Time */
+function isoToCentralSql(iso: string): string {
+  const date = new Date(iso);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Chicago",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type: string) => parts.find(p => p.type === type)!.value;
+  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}`;
+}
+
 /**
  * ContactLogService - Singleton service for managing contact log operations
  * 
@@ -124,19 +137,12 @@ export class ContactLogService {
     // Validate the input data before date format conversion
     const validatedData = ContactLogSchema.omit({ Contact_Log_ID: true }).parse(contactLogData);
 
-    // Convert ISO date to SQL Server format (YYYY-MM-DD HH:MM:SS)
-    // Ministry Platform expects SQL datetime format, not ISO format
+    // Convert ISO date to SQL format in Central Time (YYYY-MM-DD HH:MM:SS)
+    // Ministry Platform interprets dates as US Central Time
     if (validatedData.Contact_Date) {
-      const date = new Date(validatedData.Contact_Date);
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
-      const seconds = String(date.getSeconds()).padStart(2, '0');
-      (validatedData as Record<string, unknown>).Contact_Date = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+      (validatedData as Record<string, unknown>).Contact_Date = isoToCentralSql(validatedData.Contact_Date);
     }
-    
+
     const result = await this.mp!.createTableRecords(
       "Contact_Log",
       [validatedData]
@@ -163,16 +169,9 @@ export class ContactLogService {
     // Validate before date format conversion (Zod expects ISO datetime, not SQL format)
     const validatedData = ContactLogSchema.omit({ Contact_Log_ID: true }).partial().parse(contactLogData);
 
-    // Convert ISO date to SQL Server format after validation
+    // Convert ISO date to SQL format in Central Time after validation
     if (validatedData.Contact_Date) {
-      const date = new Date(validatedData.Contact_Date);
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
-      const seconds = String(date.getSeconds()).padStart(2, '0');
-      validatedData.Contact_Date = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+      validatedData.Contact_Date = isoToCentralSql(validatedData.Contact_Date);
     }
     
     // Add the ID to the data for the update

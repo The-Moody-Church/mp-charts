@@ -113,7 +113,7 @@ export function ContactLogs({
       
       const contactLogData = {
         Contact_ID: data.contactId,
-        Contact_Date: `${data.contactDate} 00:00:00`,
+        Contact_Date: `${data.contactDate}T12:00:00.000Z`,
         Notes: data.notes,
         Contact_Log_Type_ID: selectedLogType?.Contact_Log_Type_ID || null,
         Planned_Contact_ID: null,
@@ -149,7 +149,7 @@ export function ContactLogs({
       const selectedLogType = logTypes.find(type => type.Contact_Log_Type === data.contactLogType);
       
       const contactLogData = {
-        Contact_Date: `${data.contactDate} 00:00:00`,
+        Contact_Date: `${data.contactDate}T12:00:00.000Z`,
         Notes: data.notes,
         Contact_Log_Type_ID: selectedLogType?.Contact_Log_Type_ID || null,
       };
