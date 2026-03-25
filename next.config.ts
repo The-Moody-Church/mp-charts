@@ -3,6 +3,13 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone", // Required for Docker deployment
   cacheComponents: true, // Enables Cache Components (PPR + 'use cache' directive)
+  cacheHandlers: {
+    // Custom handler that properly supports stale-while-revalidate.
+    // The default in-memory handler ignores cacheLife({ stale }) and expires
+    // entries at revalidate time (6h), causing cold cache misses. This handler
+    // serves stale data instantly while revalidating in the background.
+    default: require.resolve('./cache-handler.js'),
+  },
   async headers() {
     return [
       {
