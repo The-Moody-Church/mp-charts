@@ -149,6 +149,14 @@ When adding, removing, or renaming environment variables, update `.env.example` 
 
 The project uses **Cache Components** (`cacheComponents: true`) with **Partial Prerendering (PPR)**. All authenticated pages render as `◐ (Partial Prerender)` — the static HTML shell loads instantly, then dynamic content streams in via Suspense boundaries.
 
+### Custom Cache Handler
+
+**IMPORTANT**: The default Next.js in-memory cache handler **ignores `cacheLife({ stale })` entirely**. It expires entries at `revalidate` time (6h) and returns `undefined` — a full cache miss — instead of serving stale data. This caused 30+ second cold cache fetches every 6 hours.
+
+A custom handler at `cache-handler.js` (configured via `cacheHandlers.default` in `next.config.ts`) fixes this by using the `expire` field (revalidate + stale = 30h) as the true expiry. Between 6h and 30h, it returns cached data with `revalidate: -1`, which tells the framework to serve stale data instantly while revalidating in the background.
+
+**Note**: The cache is still in-memory (LRU, 50MB). Container restarts wipe the cache — cache warming on startup (`instrumentation.ts`) repopulates it within ~60s. The custom handler ensures stale-while-revalidate works correctly *within* a container's lifetime.
+
 ### `'use cache'` Directive
 
 Data-fetching functions use the `'use cache'` directive with `cacheLife()` and `cacheTag()` from `next/cache`:
