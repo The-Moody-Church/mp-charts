@@ -2,21 +2,18 @@
 
 Quick-reference snapshot of current project state. Read this first at session start. For full details on any item, see the relevant session summary in `docs/sessions/`.
 
-**Last updated**: 2026-03-25
+**Last updated**: 2026-03-26
 
 ## Recently Completed
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
+| 2026-03-26 | **Dependabot security patch**: Merged picomatch 4.0.3→4.0.4 and 2.3.1→2.3.2 (CVE-2026-33671, CVE-2026-33672). Lockfile-only. | — | #135 |
+| 2026-03-26 | **Closed IDOR issue as won't-fix**: Current auth (proxy session validation + requireSession + RBAC) is satisfactory for staff-only app. | #122 | — |
 | 2026-03-25 | **Custom cache handler for stale-while-revalidate**: Default Next.js in-memory handler ignores `stale` param entirely — expires at `revalidate` (6h) instead of `revalidate + stale` (30h). Created `cache-handler.js` with proper SWR support via `cacheHandlers.default` config. | #132, #133 | TBD |
 | 2026-03-23 | **Use nickname on contact logs + timezone fix**: Session name uses MP Contact Nickname; contact log dates now correctly convert to Central Time in the service layer (was using server-local/UTC). Fixed ambiguous `Contact_ID` column in login query. | #129 | #130 |
 | 2026-03-23 | **Fix cache stale-while-revalidate**: Changed `revalidateTag({expire:0})` → `updateTag()` so dashboard and contact cache refreshes serve stale data instantly instead of causing 20-30s cold misses. | #124, #125, #127 | #128 |
 | 2026-03-23 | **Contact card: age/grade badges & household positions**: Violet badges for minor children's age/grade groups; household position labels under each member. | — | #126 |
-| 2026-03-18 | **Auto contact logging**: Clicking email/phone/text/directions or copying email/phone/address on contact card auto-creates a Contact Log entry. | #121 | #120 |
-| 2026-03-18 | **CI: npm audit step** + **Dependabot security alerts** enabled. Added `npm audit --audit-level=high` to Docker build workflow. | — | — |
-| 2026-03-18 | **Dependency updates**: 8 packages updated (tailwindcss 4.2.2, recharts 3.8.0, @vitejs/plugin-react 6.0.1, etc). Fixed recharts Tooltip type. | — | #119 |
-| 2026-03-18 | **Upstream PR #54**: Incorporated dependency updates + security fixes. 10 version pin bumps, 0 audit vulnerabilities, Next.js 16.1.7, better-auth 1.5.5. | — | — |
-| 2026-03-17 | **Contact card close button**: Added "X" button to top-right of contact detail card to return to search. | #116 | — |
 
 ## Open Issues
 
