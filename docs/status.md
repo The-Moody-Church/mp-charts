@@ -15,6 +15,10 @@ Quick-reference snapshot of current project state. Read this first at session st
 | 2026-03-23 | **Fix cache stale-while-revalidate**: Changed `revalidateTag({expire:0})` → `updateTag()` so dashboard and contact cache refreshes serve stale data instantly instead of causing 20-30s cold misses. | #124, #125, #127 | #128 |
 | 2026-03-23 | **Contact card: age/grade badges & household positions**: Violet badges for minor children's age/grade groups; household position labels under each member. | — | #126 |
 
+## Planned
+
+- [**#136** — Upgrade TypeScript 5.9 → 6.0](ideas.md#upgrade-typescript-59-to-60-136) — TS 6.0.2 available (on 5.9.3). Transition release before TS 7.0 (Go rewrite). Main change: add `"types": ["node"]` to tsconfig. Wait until mid-April 2026 for ecosystem stability.
+
 ## Open Issues
 
 - [**#110** — Serving metrics: reconcile adult-only vs all-ages counts](ideas.md#serving-metrics-reconcile-adult-only-vs-all-ages-counts-110)

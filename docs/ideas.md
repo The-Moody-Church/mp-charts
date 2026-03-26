@@ -234,7 +234,7 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 ## Technical Debt
 
 ### Upgrade TypeScript 5.9 to 6.0 ([#136](https://github.com/The-Moody-Church/mp-charts/issues/136))
-Upgrade from TypeScript 5.9.3 to 6.0.x. TS 6.0 is a transition release (last JS-based compiler before TS 7.0 in Go). Required: add types: [node] to tsconfig.json (default changed from [*] to []), simplify lib array, verify noUncheckedSideEffectImports. Optional: remove esModuleInterop, bump target. Wait until mid-April 2026 for ecosystem stability.
+Upgrade from TypeScript 5.9.3 to 6.0.x. TS 6.0 is a transition release (last JS-based compiler before TS 7.0 in Go). Main required change: add `"types": ["node"]` to tsconfig.json (default changed from `["*"]` to `[]`). Also simplify lib array, verify `noUncheckedSideEffectImports`. Wait until mid-April 2026 for ecosystem stability across Next.js 16, Zod v4, Vitest, and typescript-eslint.
 
 ### ~~IDOR Mitigation — Per-Record Authorization ([#57](https://github.com/The-Moody-Church/mp-charts/issues/57))~~ ✅ CLOSED (won't-fix) ([#122](https://github.com/The-Moody-Church/mp-charts/issues/122))
 Closed as not planned. RBAC (feature-level gating by User Group), rate limiting, and staff-only access sufficiently mitigate IDOR risk. All authenticated users are trusted staff with MP accounts — if they have access to a feature, they should have access to all records within it. The same data is accessible directly in Ministry Platform with the same permissions model.
