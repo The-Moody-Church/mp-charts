@@ -1,11 +1,13 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { ContactSearch } from "@/lib/dto";
 import { useRuntimeConfig } from "@/contexts";
 import { statusBadgeColor } from "@/lib/contact-badge-utils";
+
+const PAGE_SIZE = 30;
 
 interface ContactLookupResultsProps {
   results: ContactSearch[];
@@ -22,12 +24,36 @@ export const ContactLookupResults: React.FC<ContactLookupResultsProps> = ({
 }) => {
   const router = useRouter();
   const { mpFileUrl } = useRuntimeConfig();
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // Reset visible count when results change
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [results]);
+
+  // IntersectionObserver to load more results when user scrolls near bottom
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    const container = scrollContainerRef.current;
+    if (!sentinel || !container || visibleCount >= results.length) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount(prev => Math.min(prev + PAGE_SIZE, results.length));
+        }
+      },
+      { root: container, rootMargin: "200px" }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [visibleCount, results.length]);
 
   const handleContactClick = (contact: ContactSearch) => {
-    // Call the optional callback first
     onContactSelect?.(contact);
-
-    // Navigate to the contact detail page
     if (contact.Contact_GUID) {
       router.push(`/contact-lookup/${contact.Contact_GUID}`);
     }
@@ -72,13 +98,15 @@ export const ContactLookupResults: React.FC<ContactLookupResultsProps> = ({
     return `${mpFileUrl}/${imageGuid}?$thumbnail=true`;
   };
 
+  const visibleResults = results.slice(0, visibleCount);
+
   return (
     <div className="border rounded-md bg-white shadow-sm">
       <div className="p-2 bg-gray-50 border-b text-sm font-medium text-gray-700">
         {results.length} contact{results.length !== 1 ? "s" : ""} found
       </div>
-      <div className="max-h-96 overflow-y-auto">
-        {results.map((contact) => (
+      <div ref={scrollContainerRef} className="max-h-96 overflow-y-auto">
+        {visibleResults.map((contact) => (
           <div
             key={contact.Contact_ID}
             className="p-3 border-b last:border-b-0 hover:bg-gray-50 cursor-pointer transition-colors"
@@ -133,6 +161,12 @@ export const ContactLookupResults: React.FC<ContactLookupResultsProps> = ({
             </div>
           </div>
         ))}
+        {/* Sentinel element for infinite scroll */}
+        {visibleCount < results.length && (
+          <div ref={sentinelRef} className="p-2 text-center text-sm text-muted-foreground">
+            Loading more...
+          </div>
+        )}
       </div>
     </div>
   );

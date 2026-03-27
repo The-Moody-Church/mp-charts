@@ -209,7 +209,7 @@ function classifySearchWord(word: string): "phone" | "email" | "name" {
  * words with @ search email, all other words search name fields.
  * All parts must match for a result to be returned.
  */
-function scoreNameMatch(fields: NameFields, query: string): number {
+export function scoreNameMatch(fields: NameFields, query: string): number {
   const q = normalizeApostrophes(query.trim().toLowerCase());
   if (!q) return 0;
 

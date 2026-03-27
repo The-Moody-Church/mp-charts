@@ -22,6 +22,7 @@ export const ContactLookupSearch: React.FC<ContactLookupSearchProps> = ({
   onSearchStart,
 }) => {
   const [searchTerm, setSearchTerm] = useState<string>("");
+  const [activeOnly, setActiveOnly] = useState(true);
   const [isPending, startTransition] = useTransition();
 
   const handleSearch = async (query: string) => {
@@ -34,7 +35,7 @@ export const ContactLookupSearch: React.FC<ContactLookupSearchProps> = ({
 
     startTransition(async () => {
       try {
-        const results = await searchContacts(query);
+        const results = await searchContacts(query, activeOnly);
         onSearchResults?.(results);
       } catch (error) {
         console.error("Search error:", error);
@@ -102,6 +103,15 @@ export const ContactLookupSearch: React.FC<ContactLookupSearchProps> = ({
           {isPending ? "Searching..." : "Search"}
         </Button>
       </div>
+      <label className="inline-flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={activeOnly}
+          onChange={(e) => setActiveOnly(e.target.checked)}
+          className="rounded border-gray-300"
+        />
+        {activeOnly ? "Active contacts only" : "Including all contacts"}
+      </label>
     </div>
   );
 };
