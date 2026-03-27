@@ -7,7 +7,7 @@ import { ContactSearch } from "@/lib/dto";
 import { useRuntimeConfig } from "@/contexts";
 import { statusBadgeColor } from "@/lib/contact-badge-utils";
 
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 15;
 
 interface ContactLookupResultsProps {
   results: ContactSearch[];
