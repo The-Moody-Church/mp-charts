@@ -286,7 +286,7 @@ function scoreNameOnly(
     // Check name fields: exact > starts-with (with proportional bonus) > contains
     for (const name of [first, nick, display, last].filter(Boolean)) {
       if (name === term) score = Math.max(score, 40);
-      else if (name.startsWith(term)) score = Math.max(score, 25 + Math.round(10 * term.length / name.length));
+      else if (name.startsWith(term)) score = Math.max(score, 25 + (term.length >= 3 ? Math.round(10 * term.length / name.length) : 0));
       else if (name.includes(term)) score = Math.max(score, 10);
     }
 
@@ -330,7 +330,7 @@ function scoreNameOnly(
     // Score last name match (prefix matches get a proportional bonus for coverage)
     if (last === lastGuess) { score += 40; lastMatched = true; }
     else if (last.startsWith(lastGuess)) {
-      score += 25 + Math.round(10 * lastGuess.length / last.length);
+      score += 25 + (lastGuess.length >= 3 ? Math.round(10 * lastGuess.length / last.length) : 0);
       lastMatched = true;
     }
     else if (last.includes(lastGuess)) { score += 10; lastMatched = true; }
@@ -341,7 +341,7 @@ function scoreNameOnly(
     for (const name of [first, nick, display].filter(Boolean)) {
       if (name === firstGuess) { firstScore = Math.max(firstScore, 30); }
       else if (name.startsWith(firstGuess)) {
-        firstScore = Math.max(firstScore, 20 + Math.round(5 * firstGuess.length / name.length));
+        firstScore = Math.max(firstScore, 20 + (firstGuess.length >= 3 ? Math.round(5 * firstGuess.length / name.length) : 0));
       }
       else if (name.includes(firstGuess)) { firstScore = Math.max(firstScore, 5); }
     }

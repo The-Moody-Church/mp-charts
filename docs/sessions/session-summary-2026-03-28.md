@@ -2,6 +2,7 @@
 
 ## Objectives
 - Improve contact lookup search with active-only filtering, engagement tie-breaking, and infinite scroll
+- Review and test PR #139; fix scoring bias and UX issues found during testing
 
 ## Work Completed
 
@@ -18,15 +19,28 @@
   6. No engagement record (lowest)
 - Added `Contact_Status_ID` and `Participant_Engagement_ID` to the `ContactSearch` DTO and MP API query
 
+### Fix: Short-prefix scoring bias in name matching ✅ COMPLETED
+- **Problem**: Searching "william b" ranked "William Bond" above "Bill Bertsche" because the proportional prefix bonus (`term.length / name.length`) rewarded shorter last names for 1-2 character prefixes
+- **Fix**: Require prefix length >= 3 before applying proportional bonus; shorter prefixes get flat base score so tie-breaking falls to engagement level
+- **Files modified**: `src/lib/processing-utils.ts` (3 locations)
+
+### Fix: Active contacts checkbox doesn't update results ✅ COMPLETED
+- **Problem**: Toggling "Active contacts only" checkbox required manual re-search
+- **Fix**: Added `useEffect` on `activeOnly` state that re-triggers search when checkbox changes (only if a search has already been performed)
+- **Files modified**: `src/components/contact-lookup/contact-lookup-search.tsx`
+
+### PR #139 test plan verified ✅ COMPLETED
+- All 5 test plan items passed manual testing
+
 ## Files Changed
 - `src/components/contact-lookup/actions.ts` — active filter, engagement sorting, cap removal
-- `src/components/contact-lookup/contact-lookup-search.tsx` — checkbox UI
+- `src/components/contact-lookup/contact-lookup-search.tsx` — checkbox UI, auto re-search on filter toggle
 - `src/components/contact-lookup/contact-lookup-results.tsx` — infinite scroll (15 per page)
 - `src/lib/dto/contacts.ts` — added `Contact_Status_ID`, `Participant_Engagement_ID`
 - `src/services/contactService.ts` — fetch new fields from MP API
-- `src/lib/processing-utils.ts` — exported `scoreNameMatch`
+- `src/lib/processing-utils.ts` — exported `scoreNameMatch`, min 3-char prefix for proportional scoring bonus
 - `docs/status.md` — updated
-- `docs/sessions/session-summary-2026-03-28.md` — created
+- `.claude/settings.local.json` — permission settings sync
 
 ## Decisions
 - Used `IntersectionObserver` with a sentinel element for progressive loading rather than full virtualization — simpler and sufficient for this use case
