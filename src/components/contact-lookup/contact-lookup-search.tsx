@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useTransition } from "react";
+import React, { useEffect, useRef, useState, useTransition } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { searchContacts } from "./actions";
@@ -22,7 +22,17 @@ export const ContactLookupSearch: React.FC<ContactLookupSearchProps> = ({
   onSearchStart,
 }) => {
   const [searchTerm, setSearchTerm] = useState<string>("");
+  const [activeOnly, setActiveOnly] = useState(true);
   const [isPending, startTransition] = useTransition();
+  const hasSearched = useRef(false);
+
+  // Re-run search when activeOnly changes (only if a search has already been performed)
+  useEffect(() => {
+    if (hasSearched.current && searchTerm.trim()) {
+      handleSearch(searchTerm.trim());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeOnly]);
 
   const handleSearch = async (query: string) => {
     if (!query.trim()) {
@@ -31,10 +41,11 @@ export const ContactLookupSearch: React.FC<ContactLookupSearchProps> = ({
     }
 
     onSearchStart?.();
+    hasSearched.current = true;
 
     startTransition(async () => {
       try {
-        const results = await searchContacts(query);
+        const results = await searchContacts(query, activeOnly);
         onSearchResults?.(results);
       } catch (error) {
         console.error("Search error:", error);
@@ -65,6 +76,7 @@ export const ContactLookupSearch: React.FC<ContactLookupSearchProps> = ({
 
   const handleClear = () => {
     setSearchTerm("");
+    hasSearched.current = false;
     onSearchResults?.([]);
   };
 
@@ -102,6 +114,15 @@ export const ContactLookupSearch: React.FC<ContactLookupSearchProps> = ({
           {isPending ? "Searching..." : "Search"}
         </Button>
       </div>
+      <label className="inline-flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={activeOnly}
+          onChange={(e) => setActiveOnly(e.target.checked)}
+          className="rounded border-gray-300"
+        />
+        {activeOnly ? "Active contacts only" : "Including all contacts"}
+      </label>
     </div>
   );
 };

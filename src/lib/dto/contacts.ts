@@ -7,11 +7,15 @@ export interface ContactSearch {
   Email_Address: string;
   Mobile_Phone: string;
   Image_GUID: string;
+  /** Contact_Status_ID — 1 = Active */
+  Contact_Status_ID: number | null;
   /** Participant fields — null for contacts without a participant record */
   Participant_ID: number | null;
   Member_Status_ID: number | null;
   Member_Status: string | null;
   Date_Joined: string | null;
+  /** Participant engagement level — used for tie-breaking in search results */
+  Participant_Engagement_ID: number | null;
 }
 
 export interface ContactLookupDetails {
