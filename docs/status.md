@@ -2,12 +2,13 @@
 
 Quick-reference snapshot of current project state. Read this first at session start. For full details on any item, see the relevant session summary in `docs/sessions/`.
 
-**Last updated**: 2026-03-26
+**Last updated**: 2026-03-28
 
 ## Recently Completed
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
+| 2026-03-28 | **Contact search improvements**: Active-only filter (default on), removed 20-result cap with infinite scroll (15 at a time), engagement level tie-breaking for same-score results. | — | #139 |
 | 2026-03-26 | **Dependabot security patch**: Merged picomatch 4.0.3→4.0.4 and 2.3.1→2.3.2 (CVE-2026-33671, CVE-2026-33672). Lockfile-only. | — | #135 |
 | 2026-03-26 | **Closed IDOR issue as won't-fix**: Current auth (proxy session validation + requireSession + RBAC) is satisfactory for staff-only app. | #122 | — |
 | 2026-03-25 | **Custom cache handler for stale-while-revalidate**: Default Next.js in-memory handler ignores `stale` param entirely — expires at `revalidate` (6h) instead of `revalidate + stale` (30h). Created `cache-handler.js` with proper SWR support via `cacheHandlers.default` config. | #132, #133 | TBD |
