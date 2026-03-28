@@ -31,14 +31,28 @@ const debug = process.env.NEXT_PRIVATE_DEBUG_CACHE
 /** @type {import('next/dist/server/lib/cache-handlers/types').CacheHandler} */
 module.exports = {
   async get(cacheKey) {
-    const pendingPromise = pendingSets.get(cacheKey);
-    if (pendingPromise) {
-      debug?.('get', cacheKey, 'pending');
-      await pendingPromise;
-    }
-
+    // Check memory FIRST — serve stale data even while a background
+    // revalidation (set()) is in progress. The old handler awaited
+    // pendingSets before checking memoryCache, which blocked ALL requests
+    // for 20-40 seconds during background revalidation — completely
+    // defeating stale-while-revalidate.
     const privateEntry = memoryCache.get(cacheKey);
+
     if (!privateEntry) {
+      // No cached data at all — if a set() is pending (e.g. initial
+      // cache warm), wait for it so the caller doesn't get a miss.
+      const pendingPromise = pendingSets.get(cacheKey);
+      if (pendingPromise) {
+        debug?.('get', cacheKey, 'no cache, waiting for pending set');
+        await pendingPromise;
+        const freshEntry = memoryCache.get(cacheKey);
+        if (freshEntry) {
+          const [returnStream, newSaved] = freshEntry.entry.value.tee();
+          freshEntry.entry.value = newSaved;
+          debug?.('get', cacheKey, 'served from pending set');
+          return { ...freshEntry.entry, value: returnStream };
+        }
+      }
       debug?.('get', cacheKey, 'not found');
       return undefined;
     }
@@ -46,8 +60,11 @@ module.exports = {
     const entry = privateEntry.entry;
     const now = performance.timeOrigin + performance.now();
 
-    // Truly expired: past revalidate + stale window — no data to serve
-    if (now > entry.timestamp + entry.expire * 1000) {
+    // Truly expired: past revalidate + stale window — no data to serve.
+    // Defensive: if entry.expire is missing, fall back to 5× revalidate
+    // so entries don't become immortal if the framework omits expire.
+    const expireSeconds = entry.expire ?? (entry.revalidate * 5);
+    if (expireSeconds && now > entry.timestamp + expireSeconds * 1000) {
       debug?.('get', cacheKey, 'expired (past expire window)');
       return undefined;
     }
@@ -79,6 +96,7 @@ module.exports = {
       tags: entry.tags,
       timestamp: entry.timestamp,
       expire: entry.expire,
+      expireSeconds,
       revalidate,
     });
 

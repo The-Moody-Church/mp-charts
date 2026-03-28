@@ -3,6 +3,12 @@
 ## Objectives
 - Improve contact lookup search with active-only filtering, engagement tie-breaking, and infinite scroll
 - Review and test PR #139; fix scoring bias and UX issues found during testing
+- Investigate why users still experience 10-40 second page loads despite cache handler fixes in PRs #128 and #134
+- Fix the root cause(s) so users never wait more than 2-3 seconds
+
+## Issues Addressed
+- **#137** — Dashboard: 10s page render, 40s for all charts at 9:53 PM CT
+- **#138** — Contact lookup: 15s for search results
 
 ## Work Completed
 
@@ -32,6 +38,27 @@
 ### PR #139 test plan verified ✅ COMPLETED
 - All 5 test plan items passed manual testing
 
+### Cache Handler Fix (PR #140) ✅ COMPLETED
+
+#### Root Cause Analysis
+
+Three issues identified, one critical:
+
+**P0: `pendingSets` blocking in `cache-handler.js` (ROOT CAUSE)**
+The `get()` method awaited `pendingSets` BEFORE checking `memoryCache`. When the framework triggers a background revalidation via `set()`, it adds the key to `pendingSets` for the full 20-40 seconds of MP API fetching. During this window, ALL `get()` calls for that key block — even though perfectly good stale data sits in `memoryCache`. This completely defeated stale-while-revalidate.
+
+**Fix**: Restructured `get()` to check `memoryCache` first. Only await `pendingSets` when there's no cached data at all (e.g., initial cache warm with empty cache).
+
+**P1: `revalidatePath('/dashboard')` in `refreshDashboardCache`**
+This hard-purges the page's PPR shell, forcing a full re-render (10+ seconds). The `updateTag()` calls were already sufficient for data invalidation.
+
+**Fix**: Removed `revalidatePath('/dashboard')`.
+
+**P2: `entry.expire` undefined — no defensive fallback**
+If the framework doesn't populate `entry.expire`, the expire check evaluates as `now > NaN` (always false), making entries immortal in the LRU cache.
+
+**Fix**: Added fallback: `entry.expire ?? (entry.revalidate * 5)`.
+
 ## Files Changed
 - `src/components/contact-lookup/actions.ts` — active filter, engagement sorting, cap removal
 - `src/components/contact-lookup/contact-lookup-search.tsx` — checkbox UI, auto re-search on filter toggle
@@ -39,10 +66,24 @@
 - `src/lib/dto/contacts.ts` — added `Contact_Status_ID`, `Participant_Engagement_ID`
 - `src/services/contactService.ts` — fetch new fields from MP API
 - `src/lib/processing-utils.ts` — exported `scoreNameMatch`, min 3-char prefix for proportional scoring bonus
+- `cache-handler.js` — restructured `get()`: check memoryCache before pendingSets; added expire fallback
+- `src/components/dashboard/actions.ts` — removed `revalidatePath('/dashboard')`; removed unused import
+- `CLAUDE.md` — documented pendingSets ordering rule and revalidatePath prohibition
 - `docs/status.md` — updated
 - `.claude/settings.local.json` — permission settings sync
 
 ## Decisions
 - Used `IntersectionObserver` with a sentinel element for progressive loading rather than full virtualization — simpler and sufficient for this use case
 - Engagement sorting done server-side in the action (not in `processing-utils`) to keep the generic search utility engagement-agnostic
-- Directly import and call `scoreNameMatch` instead of using `searchByNameFlat` to enable custom sort with engagement tie-breaking in a single pass
+- **Memory-first in `get()`**: The whole point of SWR is to serve old data while fetching new. Awaiting pending sets only makes sense when there's no cached data at all.
+- **Removed `revalidatePath`**: It's incompatible with the SWR pattern — it purges the page shell, not just the data.
+- **5x revalidate as expire fallback**: Conservative default (30h for 6h revalidate) that prevents immortal entries while giving a long stale window.
+
+## Status
+- [x] P0: Fix pendingSets blocking
+- [x] P1: Remove revalidatePath
+- [x] P2: Defensive expire fallback
+- [x] Updated CLAUDE.md
+- [x] Build succeeds (`npm run build`)
+- [x] Production server tested locally — dashboard and contact search load fast
+- [x] Merged to main (PR #140)

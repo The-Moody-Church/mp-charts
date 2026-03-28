@@ -155,6 +155,8 @@ The project uses **Cache Components** (`cacheComponents: true`) with **Partial P
 
 A custom handler at `cache-handler.js` (configured via `cacheHandlers.default` in `next.config.ts`) fixes this by using the `expire` field (revalidate + stale = 30h) as the true expiry. Between 6h and 30h, it returns cached data with `revalidate: -1`, which tells the framework to serve stale data instantly while revalidating in the background.
 
+**CRITICAL — `get()` must check `memoryCache` before `pendingSets`.** When the framework triggers a background revalidation, it calls `set(key, pendingEntry)` which adds the key to `pendingSets` for the full duration of the data fetch (20-40 seconds). If `get()` awaits `pendingSets` first, ALL requests during revalidation are blocked — completely defeating stale-while-revalidate. The handler checks `memoryCache` first and returns stale data immediately; it only awaits `pendingSets` when there is no cached data at all (e.g., initial cache warm).
+
 **Note**: The cache is still in-memory (LRU, 50MB). Container restarts wipe the cache — cache warming on startup (`instrumentation.ts`) repopulates it within ~60s. The custom handler ensures stale-while-revalidate works correctly *within* a container's lifetime.
 
 ### `'use cache'` Directive
@@ -176,6 +178,7 @@ async function getCachedData(key: string) {
 - `new Date()` and other non-deterministic expressions must stay OUTSIDE the function — pass as serializable parameters
 - Function arguments automatically become the cache key
 - Invalidate with `updateTag('my-tag')` from server actions (serves stale data while revalidating in background; use `revalidateTag('my-tag', { expire: 0 })` only when stale data must NOT be served)
+- **NEVER use `revalidatePath()` alongside `updateTag()`** — `revalidatePath` hard-purges the page's PPR shell, forcing a full re-render (10+ seconds). `updateTag` alone is sufficient for data invalidation.
 
 **Current cached functions:**
 | Function | Revalidate | Stale | Tags | File |
