@@ -1,6 +1,6 @@
 'use server';
 
-import { revalidatePath, updateTag } from 'next/cache';
+import { updateTag } from 'next/cache';
 import { requireFeatureAccess } from '@/lib/authorization';
 import { enforceRateLimit } from '@/lib/rate-limit';
 import { DashboardData } from '@/lib/dto';
@@ -113,7 +113,10 @@ export async function refreshDashboardCache(): Promise<{
     const session = await requireFeatureAccess("dashboard");
     enforceRateLimit(session.user.id, "cacheRefresh");
 
-    revalidatePath('/dashboard');
+    // NOTE: Do NOT use revalidatePath here — it hard-purges the page's PPR
+    // shell, forcing a full re-render (10+ seconds). updateTag is sufficient:
+    // it marks data as stale so the framework serves cached data instantly
+    // while revalidating in the background.
     updateTag('dashboard-data');
     updateTag('group-types');
     return {
