@@ -2,16 +2,16 @@
 
 Quick-reference snapshot of current project state. Read this first at session start. For full details on any item, see the relevant session summary in `docs/sessions/`.
 
-**Last updated**: 2026-03-28
+**Last updated**: 2026-03-29
 
 ## Recently Completed
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
+| 2026-03-29 | **Service-layer cache safety net**: Added `serviceCache` (in-memory Map with SWR) wrapping all `'use cache'` functions. Guarantees sub-second responses even if the framework cache blocks, evicts, or misses. | #142 | TBD |
 | 2026-03-28 | **Fix cache handler blocking during revalidation**: `get()` was awaiting `pendingSets` before checking `memoryCache`, blocking ALL requests for 20-40s during background revalidation. Restructured to serve stale data first. Also removed `revalidatePath('/dashboard')` which hard-purged the PPR shell, and added defensive `expire` fallback. | #137, #138 | #140 |
 | 2026-03-28 | **Contact search improvements**: Active contacts filter (checkbox), removed 20-result cap with infinite scroll, engagement tie-breaking, fixed short-prefix scoring bias, auto-re-search on filter toggle. | — | #139 |
 | 2026-03-26 | **Dependabot security patch**: Merged picomatch 4.0.3→4.0.4 and 2.3.1→2.3.2 (CVE-2026-33671, CVE-2026-33672). Lockfile-only. | — | #135 |
-| 2026-03-26 | **Closed IDOR issue as won't-fix**: Current auth (proxy session validation + requireSession + RBAC) is satisfactory for staff-only app. | #122 | — |
 | 2026-03-25 | **Custom cache handler for stale-while-revalidate**: Default Next.js in-memory handler ignores `stale` param entirely — expires at `revalidate` (6h) instead of `revalidate + stale` (30h). Created `cache-handler.js` with proper SWR support via `cacheHandlers.default` config. | #132, #133 | #134 |
 
 ## Planned

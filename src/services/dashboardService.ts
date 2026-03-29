@@ -1,6 +1,7 @@
 import { cacheLife, cacheTag } from 'next/cache';
 import { MPHelper } from '@/lib/providers/ministry-platform';
 import { sanitizeIds } from '@/lib/providers/ministry-platform/utils/filter-sanitize';
+import { serviceCache, CACHE_TTL } from '@/lib/service-cache';
 import {
   DashboardData,
   PeriodMetrics,
@@ -62,14 +63,16 @@ async function getCachedGroupTypes(ids: string) {
   cacheLife({ revalidate: 86400, stale: 172800 });
   cacheTag('group-types');
 
-  const mp = new MPHelper();
-  return mp.getTableRecords<{
-    Group_Type_ID: number;
-    Group_Type: string;
-  }>({
-    table: 'Group_Types',
-    select: 'Group_Type_ID,Group_Type',
-    filter: `Group_Type_ID IN (${sanitizeIds(ids.split(',').map(Number))})`
+  return serviceCache.getOrFetch(`group-types:${ids}`, CACHE_TTL.LONG, async () => {
+    const mp = new MPHelper();
+    return mp.getTableRecords<{
+      Group_Type_ID: number;
+      Group_Type: string;
+    }>({
+      table: 'Group_Types',
+      select: 'Group_Type_ID,Group_Type',
+      filter: `Group_Type_ID IN (${sanitizeIds(ids.split(',').map(Number))})`
+    });
   });
 }
 
