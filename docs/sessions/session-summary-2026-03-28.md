@@ -79,11 +79,26 @@ If the framework doesn't populate `entry.expire`, the expire check evaluates as 
 - **Removed `revalidatePath`**: It's incompatible with the SWR pattern — it purges the page shell, not just the data.
 - **5x revalidate as expire fallback**: Conservative default (30h for 6h revalidate) that prevents immortal entries while giving a long stale window.
 
+## Service-Layer Cache (follow-up after #142) — PR #143
+
+Despite PR #140 fixes, issue #142 showed 20-second contact lookup delays at 1:03 AM with container running. The `'use cache'` framework has too many silent failure modes (pendingSets blocking, LRU eviction, stream corruption, tag expiry edge cases).
+
+Added `src/lib/service-cache.ts` — a simple in-memory Map with SWR semantics that wraps every `'use cache'` function body. Once data is cached, it is ALWAYS returned instantly (< 1ms). Background refresh happens non-blocking when data exceeds its TTL. Failed refreshes keep old data — data is never lost.
+
+### Files Changed (PR #143)
+| File | Change |
+|------|--------|
+| `src/lib/service-cache.ts` | **New** — in-memory Map cache with SWR, `getOrFetch()` API, `CACHE_TTL` constants |
+| `src/components/dashboard/cached-data.ts` | Wrapped all 4 functions with `serviceCache.getOrFetch()` |
+| `src/components/contact-lookup/cached-contacts.ts` | Wrapped with `serviceCache.getOrFetch()` |
+| `src/services/dashboardService.ts` | Wrapped `getCachedGroupTypes` with `serviceCache.getOrFetch()` |
+| `CLAUDE.md` | Documented service cache pattern + mandatory steps for new cached functions |
+| `docs/status.md` | Updated |
+
 ## Status
-- [x] P0: Fix pendingSets blocking
-- [x] P1: Remove revalidatePath
-- [x] P2: Defensive expire fallback
+- [x] P0: Fix pendingSets blocking (PR #140, merged)
+- [x] P1: Remove revalidatePath (PR #140, merged)
+- [x] P2: Defensive expire fallback (PR #140, merged)
+- [x] Service-layer cache safety net (PR #143)
 - [x] Updated CLAUDE.md
-- [x] Build succeeds (`npm run build`)
-- [x] Production server tested locally — dashboard and contact search load fast
-- [x] Merged to main (PR #140)
+- [ ] Deploy and verify PR #143 — users should never wait > 2-3 seconds

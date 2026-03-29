@@ -159,6 +159,27 @@ A custom handler at `cache-handler.js` (configured via `cacheHandlers.default` i
 
 **Note**: The cache is still in-memory (LRU, 50MB). Container restarts wipe the cache — cache warming on startup (`instrumentation.ts`) repopulates it within ~60s. The custom handler ensures stale-while-revalidate works correctly *within* a container's lifetime.
 
+### Service-Layer Cache (Safety Net)
+
+A simple in-memory `Map`-based cache (`src/lib/service-cache.ts`) sits inside every `'use cache'` function as a safety net. It guarantees sub-second responses regardless of what the `'use cache'` framework does (pendingSets blocking, LRU eviction, stream corruption, tag expiry edge cases).
+
+**How it works**: `serviceCache.getOrFetch(key, ttlMs, fetcher)` returns cached data instantly if available. On first call (cold miss), it awaits the fetcher and stores the result. After `ttlMs`, it returns stale data immediately and refreshes in the background (non-blocking). Failed refreshes keep old data — data is never lost.
+
+**MANDATORY**: Every `'use cache'` function must wrap its data fetch with `serviceCache.getOrFetch()`. The service cache key should match the cache tag or be descriptively unique. Use `CACHE_TTL.STANDARD` (6h) or `CACHE_TTL.LONG` (24h) from the same module.
+
+```typescript
+import { serviceCache, CACHE_TTL } from '@/lib/service-cache';
+
+export async function getCachedData(key: string) {
+  'use cache';
+  cacheLife({ revalidate: 21600 });
+  cacheTag('my-tag');
+  return serviceCache.getOrFetch(`my-tag:${key}`, CACHE_TTL.STANDARD, async () => {
+    // ... slow fetch ...
+  });
+}
+```
+
 ### `'use cache'` Directive
 
 Data-fetching functions use the `'use cache'` directive with `cacheLife()` and `cacheTag()` from `next/cache`:
@@ -214,9 +235,10 @@ Cache warming runs automatically on every server start and daily at 6:00 AM CT �
 
 **Adding a new cached function — MANDATORY steps:**
 1. Create the `'use cache'` function in a non-`'use server'` file (so it can be imported by the warming module)
-2. Register it in `src/lib/cache-warming.ts` → `warmAllCaches()` with the correct parameters
-3. Update the "Current cached functions" table above
-4. Add a comment at the top of the source file pointing to `cache-warming.ts`
+2. Wrap the data fetch with `serviceCache.getOrFetch()` from `@/lib/service-cache` (see "Service-Layer Cache" section above)
+3. Register it in `src/lib/cache-warming.ts` → `warmAllCaches()` with the correct parameters
+4. Update the "Current cached functions" table above
+5. Add a comment at the top of the source file pointing to `cache-warming.ts`
 
 ```typescript
 // Example: registering a new cached function in cache-warming.ts
