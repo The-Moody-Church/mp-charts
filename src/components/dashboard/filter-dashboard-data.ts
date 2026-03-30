@@ -123,15 +123,23 @@ export function filterDashboardData(
 
     if (weeklyFiltered.length > 0) {
       // Convert weekly attendance data to MonthlyAttendanceTrend format
-      // so the chart component can render it without changes to its interface
-      monthlyAttendanceTrends = weeklyFiltered.map(w => ({
-        month: w.eventDate,
-        monthName: w.dateLabel,
-        averageInPersonAttendance: w.eventCount > 0 ? Math.round(w.inPersonAttendance / w.eventCount) : 0,
-        averageOnlineAttendance: w.eventCount > 0 ? Math.round(w.onlineAttendance / w.eventCount) : 0,
-        averageTotalAttendance: w.eventCount > 0 ? Math.round(w.totalAttendance / w.eventCount) : 0,
-        eventCount: w.eventCount
-      }));
+      // so the chart component can render it without changes to its interface.
+      // Use separate event counts for in-person and online so missing data
+      // for one type doesn't create a false 0 in that type's average.
+      monthlyAttendanceTrends = weeklyFiltered.map(w => {
+        const ipCount = w.inPersonEventCount ?? w.eventCount;
+        const olCount = w.onlineEventCount ?? w.eventCount;
+        return {
+          month: w.eventDate,
+          monthName: w.dateLabel,
+          averageInPersonAttendance: ipCount > 0 ? Math.round(w.inPersonAttendance / ipCount) : 0,
+          averageOnlineAttendance: olCount > 0 ? Math.round(w.onlineAttendance / olCount) : 0,
+          averageTotalAttendance: w.eventCount > 0 ? Math.round(w.totalAttendance / w.eventCount) : 0,
+          eventCount: w.eventCount,
+          inPersonEventCount: ipCount,
+          onlineEventCount: olCount,
+        };
+      });
     }
     // else: keep monthlyAttendanceTrends from monthly data (already filtered above)
 
@@ -156,14 +164,20 @@ export function filterDashboardData(
       prevEnd
     );
     if (prevWeeklyFiltered.length > 0) {
-      previousYearMonthlyAttendanceTrends = prevWeeklyFiltered.map(w => ({
-        month: w.eventDate,
-        monthName: w.dateLabel,
-        averageInPersonAttendance: w.eventCount > 0 ? Math.round(w.inPersonAttendance / w.eventCount) : 0,
-        averageOnlineAttendance: w.eventCount > 0 ? Math.round(w.onlineAttendance / w.eventCount) : 0,
-        averageTotalAttendance: w.eventCount > 0 ? Math.round(w.totalAttendance / w.eventCount) : 0,
-        eventCount: w.eventCount
-      }));
+      previousYearMonthlyAttendanceTrends = prevWeeklyFiltered.map(w => {
+        const ipCount = w.inPersonEventCount ?? w.eventCount;
+        const olCount = w.onlineEventCount ?? w.eventCount;
+        return {
+          month: w.eventDate,
+          monthName: w.dateLabel,
+          averageInPersonAttendance: ipCount > 0 ? Math.round(w.inPersonAttendance / ipCount) : 0,
+          averageOnlineAttendance: olCount > 0 ? Math.round(w.onlineAttendance / olCount) : 0,
+          averageTotalAttendance: w.eventCount > 0 ? Math.round(w.totalAttendance / w.eventCount) : 0,
+          eventCount: w.eventCount,
+          inPersonEventCount: ipCount,
+          onlineEventCount: olCount,
+        };
+      });
     }
   }
 
@@ -175,14 +189,20 @@ export function filterDashboardData(
   // Use weekly data for precise date-level filtering when available.
   const prevMetricsWeekly = filterWeeklyTrends(fullData.weeklyAttendanceTrends, prevStart, prevMetricsEnd);
   const prevMetricsMonthly = prevMetricsWeekly.length > 0
-    ? prevMetricsWeekly.map(w => ({
-        month: w.eventDate,
-        monthName: w.dateLabel,
-        averageInPersonAttendance: w.eventCount > 0 ? Math.round(w.inPersonAttendance / w.eventCount) : 0,
-        averageOnlineAttendance: w.eventCount > 0 ? Math.round(w.onlineAttendance / w.eventCount) : 0,
-        averageTotalAttendance: w.eventCount > 0 ? Math.round(w.totalAttendance / w.eventCount) : 0,
-        eventCount: w.eventCount,
-      }))
+    ? prevMetricsWeekly.map(w => {
+        const ipCount = w.inPersonEventCount ?? w.eventCount;
+        const olCount = w.onlineEventCount ?? w.eventCount;
+        return {
+          month: w.eventDate,
+          monthName: w.dateLabel,
+          averageInPersonAttendance: ipCount > 0 ? Math.round(w.inPersonAttendance / ipCount) : 0,
+          averageOnlineAttendance: olCount > 0 ? Math.round(w.onlineAttendance / olCount) : 0,
+          averageTotalAttendance: w.eventCount > 0 ? Math.round(w.totalAttendance / w.eventCount) : 0,
+          eventCount: w.eventCount,
+          inPersonEventCount: ipCount,
+          onlineEventCount: olCount,
+        };
+      })
     : filterMonthlyTrends(fullData.monthlyAttendanceTrends, prevStart, prevMetricsEnd);
   const previousPeriod = computePeriodMetrics(prevMetricsMonthly, prevStart, prevMetricsEnd);
 
@@ -347,12 +367,18 @@ export function computePeriodMetrics(
 
   const totalEvents = monthly.reduce((sum, m) => sum + m.eventCount, 0);
 
-  // Weighted average: sum(monthAvg * monthEventCount) / totalEvents
-  const avgInPerson = totalEvents > 0
-    ? Math.round(monthly.reduce((sum, m) => sum + m.averageInPersonAttendance * m.eventCount, 0) / totalEvents)
+  // Use independent event counts for each metric type so missing data
+  // for one type (e.g. no online on a given week) doesn't add a false 0
+  // to that type's average. Falls back to eventCount for backward compat.
+  const totalInPersonEvents = monthly.reduce((sum, m) => sum + (m.inPersonEventCount ?? m.eventCount), 0);
+  const totalOnlineEvents = monthly.reduce((sum, m) => sum + (m.onlineEventCount ?? m.eventCount), 0);
+
+  // Weighted average: sum(monthAvg * monthEventCount) / totalEventsForThatType
+  const avgInPerson = totalInPersonEvents > 0
+    ? Math.round(monthly.reduce((sum, m) => sum + m.averageInPersonAttendance * (m.inPersonEventCount ?? m.eventCount), 0) / totalInPersonEvents)
     : 0;
-  const avgOnline = totalEvents > 0
-    ? Math.round(monthly.reduce((sum, m) => sum + m.averageOnlineAttendance * m.eventCount, 0) / totalEvents)
+  const avgOnline = totalOnlineEvents > 0
+    ? Math.round(monthly.reduce((sum, m) => sum + m.averageOnlineAttendance * (m.onlineEventCount ?? m.eventCount), 0) / totalOnlineEvents)
     : 0;
   const avgTotal = totalEvents > 0
     ? Math.round(monthly.reduce((sum, m) => sum + m.averageTotalAttendance * m.eventCount, 0) / totalEvents)

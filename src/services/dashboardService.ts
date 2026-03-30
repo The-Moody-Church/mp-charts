@@ -458,10 +458,14 @@ export class DashboardService {
         extraFilter: 'Event_Metrics.Metric_ID IN (2, 3)'
       });
 
-      // Aggregate metrics and track which events have metrics
+      // Aggregate metrics and track which events have each metric type independently.
+      // An event may have in-person data but no online data (or vice versa) — each
+      // average should only count events that actually recorded that metric type.
       let totalInPerson = 0;
       let totalOnline = 0;
       const eventsWithMetrics = new Set<number>();
+      const eventsWithInPerson = new Set<number>();
+      const eventsWithOnline = new Set<number>();
 
       for (const metric of eventMetrics) {
         eventsWithMetrics.add(metric.Event_ID);
@@ -469,9 +473,11 @@ export class DashboardService {
         if (metric.Metric_ID === 2) {
           // In-Person attendance (Metric_ID = 2)
           totalInPerson += metric.Numerical_Value;
+          eventsWithInPerson.add(metric.Event_ID);
         } else if (metric.Metric_ID === 3) {
           // Online attendance (Metric_ID = 3)
           totalOnline += metric.Numerical_Value;
+          eventsWithOnline.add(metric.Event_ID);
         }
       }
 
@@ -486,11 +492,11 @@ export class DashboardService {
         averageAttendance: totalEvents > 0
           ? Math.round(totalAttendance / totalEvents)
           : 0,
-        averageInPersonAttendance: totalEvents > 0
-          ? Math.round(totalInPerson / totalEvents)
+        averageInPersonAttendance: eventsWithInPerson.size > 0
+          ? Math.round(totalInPerson / eventsWithInPerson.size)
           : 0,
-        averageOnlineAttendance: totalEvents > 0
-          ? Math.round(totalOnline / totalEvents)
+        averageOnlineAttendance: eventsWithOnline.size > 0
+          ? Math.round(totalOnline / eventsWithOnline.size)
           : 0,
       };
     } catch (error) {
@@ -827,6 +833,8 @@ export class DashboardService {
       let totalInPerson = 0;
       let totalOnline = 0;
       let eventCount = 0;
+      let inPersonEventCount = 0;
+      let onlineEventCount = 0;
 
       if (events.length > 0) {
         const eventIds = events.map(e => e.Event_ID);
@@ -841,24 +849,32 @@ export class DashboardService {
         });
 
         const eventsWithMetrics = new Set<number>();
+        const eventsWithInPerson = new Set<number>();
+        const eventsWithOnline = new Set<number>();
         for (const metric of eventMetrics) {
           eventsWithMetrics.add(metric.Event_ID);
           if (metric.Metric_ID === 2) {
             totalInPerson += metric.Numerical_Value;
+            eventsWithInPerson.add(metric.Event_ID);
           } else if (metric.Metric_ID === 3) {
             totalOnline += metric.Numerical_Value;
+            eventsWithOnline.add(metric.Event_ID);
           }
         }
         eventCount = eventsWithMetrics.size;
+        inPersonEventCount = eventsWithInPerson.size;
+        onlineEventCount = eventsWithOnline.size;
       }
 
       return {
         month: key,
         monthName: MONTH_NAMES[monthIndex],
-        averageInPersonAttendance: eventCount > 0 ? Math.round(totalInPerson / eventCount) : 0,
-        averageOnlineAttendance: eventCount > 0 ? Math.round(totalOnline / eventCount) : 0,
+        averageInPersonAttendance: inPersonEventCount > 0 ? Math.round(totalInPerson / inPersonEventCount) : 0,
+        averageOnlineAttendance: onlineEventCount > 0 ? Math.round(totalOnline / onlineEventCount) : 0,
         averageTotalAttendance: eventCount > 0 ? Math.round((totalInPerson + totalOnline) / eventCount) : 0,
-        eventCount
+        eventCount,
+        inPersonEventCount,
+        onlineEventCount,
       };
     });
 
@@ -939,11 +955,14 @@ export class DashboardService {
       // Build event-to-date map
       const eventDateMap = new Map(events.map(e => [e.Event_ID, e.Event_Start_Date]));
 
-      // Group metrics by date (YYYY-MM-DD)
+      // Group metrics by date (YYYY-MM-DD), tracking in-person and online
+      // event counts independently so averages aren't diluted by missing data
       const dateGroups = new Map<string, {
         inPerson: number;
         online: number;
         eventIds: Set<number>;
+        inPersonEventIds: Set<number>;
+        onlineEventIds: Set<number>;
       }>();
 
       for (const metric of eventMetrics) {
@@ -953,7 +972,10 @@ export class DashboardService {
         const dateKey = new Date(eventDate).toISOString().slice(0, 10);
 
         if (!dateGroups.has(dateKey)) {
-          dateGroups.set(dateKey, { inPerson: 0, online: 0, eventIds: new Set() });
+          dateGroups.set(dateKey, {
+            inPerson: 0, online: 0,
+            eventIds: new Set(), inPersonEventIds: new Set(), onlineEventIds: new Set()
+          });
         }
 
         const group = dateGroups.get(dateKey)!;
@@ -961,8 +983,10 @@ export class DashboardService {
 
         if (metric.Metric_ID === 2) {
           group.inPerson += metric.Numerical_Value;
+          group.inPersonEventIds.add(metric.Event_ID);
         } else if (metric.Metric_ID === 3) {
           group.online += metric.Numerical_Value;
+          group.onlineEventIds.add(metric.Event_ID);
         }
       }
 
@@ -983,7 +1007,9 @@ export class DashboardService {
             inPersonAttendance: data.inPerson,
             onlineAttendance: data.online,
             totalAttendance: data.inPerson + data.online,
-            eventCount: data.eventIds.size
+            eventCount: data.eventIds.size,
+            inPersonEventCount: data.inPersonEventIds.size,
+            onlineEventCount: data.onlineEventIds.size,
           };
         });
 
