@@ -49,9 +49,9 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
 
 ### Technical Debt
-- ~~[No.cache (#144)](#nocache-144)~~ ✅
 - [Upgrade TypeScript 5.9 to 6.0 (#136)](#upgrade-typescript-59-to-60-136)
 - [~~IDOR Mitigation — Per-Record Authorization ([#57](https://github.com/The-Moody-Church/mp-charts/issues/57))~~ ✅ CLOSED (won't-fix) (#122)](#idor-mitigation-per-record-authorization-57httpsgithubcomthe-moody-churchmp-chartsissues57-closed-wont-fix-122)
+- ~~[No.cache (#144)](#nocache-144)~~ ✅
 - ~~[BUG: Active Communities and Small Groups Chart Needs Work (#52)](#bug-active-communities-and-small-groups-chart-needs-work-52)~~ ✅
 - ~~[Executive Dashboard Avg Attendance Broken (#103)](#executive-dashboard-avg-attendance-broken-103)~~ ✅
 - ~~[Contact Logs should not be editable unless Made_By = the Current Logged In User (#96)](#contact-logs-should-not-be-editable-unless-made_by-the-current-logged-in-user-96)~~ ✅
@@ -234,14 +234,14 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 
 ## Technical Debt
 
-### ~~No.cache ([#144](https://github.com/The-Moody-Church/mp-charts/issues/144))~~ ✅ COMPLETED
-Service-cache singleton was broken by Turbopack chunk splitting — each compiled chunk got its own `ServiceCache` instance. Cache warming populated one instance, but user requests hit a different (empty) one. Fixed by using `globalThis` for the singleton. Also removed verbose MP API logging that was dumping PII to stdout (812K lines/day).
-
 ### Upgrade TypeScript 5.9 to 6.0 ([#136](https://github.com/The-Moody-Church/mp-charts/issues/136))
 Upgrade from TypeScript 5.9.3 to 6.0.x. TS 6.0 is a transition release (last JS-based compiler before TS 7.0 in Go). Main required change: add `"types": ["node"]` to tsconfig.json (default changed from `["*"]` to `[]`). Also simplify lib array, verify `noUncheckedSideEffectImports`. Wait until mid-April 2026 for ecosystem stability across Next.js 16, Zod v4, Vitest, and typescript-eslint.
 
 ### ~~IDOR Mitigation — Per-Record Authorization ([#57](https://github.com/The-Moody-Church/mp-charts/issues/57))~~ ✅ CLOSED (won't-fix) ([#122](https://github.com/The-Moody-Church/mp-charts/issues/122))
 Closed as not planned. RBAC (feature-level gating by User Group), rate limiting, and staff-only access sufficiently mitigate IDOR risk. All authenticated users are trusted staff with MP accounts — if they have access to a feature, they should have access to all records within it. The same data is accessible directly in Ministry Platform with the same permissions model.
+
+### ~~No.cache ([#144](https://github.com/The-Moody-Church/mp-charts/issues/144))~~ ✅ COMPLETED
+Service-cache singleton was broken by Turbopack chunk splitting — each compiled chunk got its own `ServiceCache` instance. Cache warming populated one instance, but user requests hit a different (empty) one. Fixed by using `globalThis` for the singleton. Also removed verbose MP API logging that was dumping PII to stdout (812K lines/day).
 
 ### ~~BUG: Active Communities and Small Groups Chart Needs Work ([#52](https://github.com/The-Moody-Church/mp-charts/issues/52))~~ ✅ COMPLETED
 Renamed to "Communities and Groups Trends". Refactored to show active groups by group type (Small Group, Class, Community — Group_Type_ID 1, 3, 11) as a line chart with YoY comparison. Removed participants/averageAttendance from DTO, added groupCountByType breakdown. Added total line and removed Group Participation pie chart.
