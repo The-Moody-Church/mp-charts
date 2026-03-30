@@ -38,9 +38,20 @@ Investigate and fix persistent slow cache responses (20+ seconds) on first acces
 ### Key Decision
 Used `globalThis` pattern (standard Next.js recommendation for singletons like Prisma) rather than alternatives like process.env or file-based caching. This ensures all Turbopack chunks share one `ServiceCache` instance regardless of bundling.
 
+## Refresh Button Fix (follow-up)
+
+The "Refresh Data" button on the dashboard called `updateTag()` to mark the framework cache as stale, then re-fetched data. But the service-cache still returned old data instantly — so the user saw identical numbers and thought the refresh worked. Fixed by calling `serviceCache.deleteByPrefix('dashboard')` and `serviceCache.deleteByPrefix('group-types')` before `updateTag()`. Now the re-fetch hits a cold service-cache miss and actually queries the MP API. The existing `startRefreshTransition` in `dashboard-shell.tsx` already dims the charts and spins the button during the fetch.
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `src/lib/service-cache.ts` | Added `deleteByPrefix(prefix)` method |
+| `src/components/dashboard/actions.ts` | Purge service-cache in `refreshDashboardCache()` before `updateTag()` |
+
 ## Status
 - [x] Root cause identified: Turbopack chunk splitting creates duplicate singletons
 - [x] Fix implemented: `globalThis` pattern for service-cache
 - [x] Verbose logging removed (PII security fix)
+- [x] Refresh button now purges service-cache so users get truly fresh data
 - [x] Build passes
-- [ ] Deploy and verify — first test after 6+ hours will confirm the fix
+- [ ] Deploy and verify — first test after 6+ hours will confirm the singleton fix

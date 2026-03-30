@@ -3,6 +3,7 @@
 import { updateTag } from 'next/cache';
 import { requireFeatureAccess } from '@/lib/authorization';
 import { enforceRateLimit } from '@/lib/rate-limit';
+import { serviceCache } from '@/lib/service-cache';
 import { DashboardData } from '@/lib/dto';
 import {
   getCachedDashboardData,
@@ -113,10 +114,16 @@ export async function refreshDashboardCache(): Promise<{
     const session = await requireFeatureAccess("dashboard");
     enforceRateLimit(session.user.id, "cacheRefresh");
 
+    // Purge the service-cache entries so the re-fetch in handleRefresh()
+    // actually hits the MP API instead of returning stale cached data.
+    // Without this, the user clicks "Refresh" and sees identical old data.
+    serviceCache.deleteByPrefix('dashboard');
+    serviceCache.deleteByPrefix('group-types');
+
     // NOTE: Do NOT use revalidatePath here — it hard-purges the page's PPR
-    // shell, forcing a full re-render (10+ seconds). updateTag is sufficient:
-    // it marks data as stale so the framework serves cached data instantly
-    // while revalidating in the background.
+    // shell, forcing a full re-render (10+ seconds). updateTag marks the
+    // framework cache as stale so the next 'use cache' call re-executes
+    // the function body (which now hits a cold service-cache miss).
     updateTag('dashboard-data');
     updateTag('group-types');
     return {

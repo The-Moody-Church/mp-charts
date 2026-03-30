@@ -53,6 +53,19 @@ class ServiceCache {
   }
 
   /**
+   * Delete all entries whose key starts with the given prefix.
+   * Used by explicit refresh actions to force a cold fetch.
+   */
+  deleteByPrefix(prefix: string): void {
+    for (const key of this.store.keys()) {
+      if (key.startsWith(prefix)) {
+        this.store.delete(key);
+        this.refreshing.delete(key);
+      }
+    }
+  }
+
+  /**
    * Get cached data or fetch if not available.
    * - Cache hit: returns instantly (triggers background refresh if stale)
    * - Cache miss: awaits fetcher, stores result, returns it
