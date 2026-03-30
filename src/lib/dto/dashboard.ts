@@ -63,6 +63,10 @@ export interface MonthlyAttendanceTrend {
   averageOnlineAttendance: number;
   averageTotalAttendance: number;
   eventCount: number;
+  /** Events that had in-person metrics recorded (for independent averaging) */
+  inPersonEventCount?: number;
+  /** Events that had online metrics recorded (for independent averaging) */
+  onlineEventCount?: number;
 }
 
 /**
@@ -76,6 +80,10 @@ export interface WeeklyAttendanceTrend {
   onlineAttendance: number;
   totalAttendance: number;
   eventCount: number;
+  /** Events that had in-person metrics recorded (for independent averaging) */
+  inPersonEventCount?: number;
+  /** Events that had online metrics recorded (for independent averaging) */
+  onlineEventCount?: number;
 }
 
 /**

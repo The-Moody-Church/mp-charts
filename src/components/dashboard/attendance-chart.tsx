@@ -44,14 +44,17 @@ export function AttendanceChart({ currentYear, previousYear, height = 300 }: Att
     previousTotal?: number;
   }>();
 
-  // Add current year data
+  // Add current year data — use undefined (not 0) when a metric type has
+  // no recorded data so Recharts skips the point instead of drawing to 0.
   currentFiltered.forEach(item => {
+    const hasInPerson = (item.inPersonEventCount ?? item.eventCount) > 0;
+    const hasOnline = (item.onlineEventCount ?? item.eventCount) > 0;
     monthsMap.set(item.monthName, {
       name: formatLabel(item.month, item.monthName),
       mergeKey: item.monthName,
       sortKey: item.month, // YYYY-MM for monthly, YYYY-MM-DD for weekly
-      currentInPerson: item.averageInPersonAttendance,
-      currentOnline: item.averageOnlineAttendance,
+      currentInPerson: hasInPerson ? item.averageInPersonAttendance : undefined,
+      currentOnline: hasOnline ? item.averageOnlineAttendance : undefined,
       currentTotal: item.averageTotalAttendance
     });
   });
@@ -60,10 +63,12 @@ export function AttendanceChart({ currentYear, previousYear, height = 300 }: Att
   if (!isWeekly) {
     // For monthly data, merge by month name (e.g., "February" matches across years)
     previousFiltered.forEach(item => {
+      const hasInPerson = (item.inPersonEventCount ?? item.eventCount) > 0;
+      const hasOnline = (item.onlineEventCount ?? item.eventCount) > 0;
       const existing = monthsMap.get(item.monthName);
       if (existing) {
-        existing.previousInPerson = item.averageInPersonAttendance;
-        existing.previousOnline = item.averageOnlineAttendance;
+        existing.previousInPerson = hasInPerson ? item.averageInPersonAttendance : undefined;
+        existing.previousOnline = hasOnline ? item.averageOnlineAttendance : undefined;
         existing.previousTotal = item.averageTotalAttendance;
       } else {
         monthsMap.set(item.monthName, {
@@ -71,8 +76,8 @@ export function AttendanceChart({ currentYear, previousYear, height = 300 }: Att
           mergeKey: item.monthName,
           sortKey: item.month,
           previousOnly: true,
-          previousInPerson: item.averageInPersonAttendance,
-          previousOnline: item.averageOnlineAttendance,
+          previousInPerson: hasInPerson ? item.averageInPersonAttendance : undefined,
+          previousOnline: hasOnline ? item.averageOnlineAttendance : undefined,
           previousTotal: item.averageTotalAttendance
         });
       }
@@ -80,12 +85,14 @@ export function AttendanceChart({ currentYear, previousYear, height = 300 }: Att
   } else {
     // For weekly data, merge previous year dates by month-day (MM-DD)
     previousFiltered.forEach(item => {
+      const hasInPerson = (item.inPersonEventCount ?? item.eventCount) > 0;
+      const hasOnline = (item.onlineEventCount ?? item.eventCount) > 0;
       const dayKey = item.month.slice(5); // MM-DD
       // Check if a current year entry shares this month-day
       const existingEntry = Array.from(monthsMap.values()).find(e => e.sortKey.slice(5) === dayKey);
       if (existingEntry) {
-        existingEntry.previousInPerson = item.averageInPersonAttendance;
-        existingEntry.previousOnline = item.averageOnlineAttendance;
+        existingEntry.previousInPerson = hasInPerson ? item.averageInPersonAttendance : undefined;
+        existingEntry.previousOnline = hasOnline ? item.averageOnlineAttendance : undefined;
         existingEntry.previousTotal = item.averageTotalAttendance;
       } else {
         const key = `prev-${item.month}`;
@@ -94,8 +101,8 @@ export function AttendanceChart({ currentYear, previousYear, height = 300 }: Att
           mergeKey: key,
           sortKey: item.month,
           previousOnly: true,
-          previousInPerson: item.averageInPersonAttendance,
-          previousOnline: item.averageOnlineAttendance,
+          previousInPerson: hasInPerson ? item.averageInPersonAttendance : undefined,
+          previousOnline: hasOnline ? item.averageOnlineAttendance : undefined,
           previousTotal: item.averageTotalAttendance,
         });
       }
