@@ -60,14 +60,8 @@ export class MinistryPlatformClient {
         // User tokens are managed by auth.ts JWT callback — nothing to do here
         if (this.isUserToken) return;
 
-        console.log("Checking token validity...");
-        console.log("Expires at: ", this.expiresAt);
-        console.log("Current time: ", new Date());
-
         // Check if token is expired or about to expire
         if (this.expiresAt < new Date()) {
-            console.log("Token expired, refreshing...");
-
             try {
                 // Get new access token using client credentials flow
                 const creds = await getClientCredentialsToken();
@@ -75,8 +69,6 @@ export class MinistryPlatformClient {
 
                 // Set expiration time with safety buffer (TOKEN_LIFE before actual expiration)
                 this.expiresAt = new Date(Date.now() + TOKEN_LIFE);
-
-                console.log("Token refreshed. Expires at: ", this.expiresAt);
             } catch (error) {
                 console.error("Failed to refresh token:", error);
                 throw error;

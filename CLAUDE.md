@@ -165,6 +165,8 @@ A simple in-memory `Map`-based cache (`src/lib/service-cache.ts`) sits inside ev
 
 **How it works**: `serviceCache.getOrFetch(key, ttlMs, fetcher)` returns cached data instantly if available. On first call (cold miss), it awaits the fetcher and stores the result. After `ttlMs`, it returns stale data immediately and refreshes in the background (non-blocking). Failed refreshes keep old data — data is never lost.
 
+**CRITICAL — `globalThis` singleton**: The `serviceCache` instance uses `globalThis.__serviceCache` to survive Turbopack chunk splitting. Without this, each compiled chunk gets its own `ServiceCache` instance — cache warming populates one, but user requests hit a different (empty) one. This is the standard Next.js pattern for in-process singletons (same as Prisma). Do NOT change the export to `new ServiceCache()` directly.
+
 **MANDATORY**: Every `'use cache'` function must wrap its data fetch with `serviceCache.getOrFetch()`. The service cache key should match the cache tag or be descriptively unique. Use `CACHE_TTL.STANDARD` (6h) or `CACHE_TTL.LONG` (24h) from the same module.
 
 ```typescript
