@@ -68,8 +68,15 @@ class ServiceCache {
   }
 }
 
-/** Singleton instance shared across all services */
-export const serviceCache = new ServiceCache();
+/**
+ * Singleton instance shared across all services.
+ *
+ * Uses globalThis to survive Turbopack chunk splitting. Without this,
+ * each chunk gets its own ServiceCache instance — cache warming populates
+ * one instance, but user requests hit a different (empty) instance.
+ */
+const globalForCache = globalThis as unknown as { __serviceCache?: ServiceCache };
+export const serviceCache = (globalForCache.__serviceCache ??= new ServiceCache());
 
 /** Common TTL constants (milliseconds) */
 export const CACHE_TTL = {
