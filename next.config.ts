@@ -3,8 +3,10 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone", // Required for Docker deployment
   cacheComponents: true, // Enables Cache Components (PPR + 'use cache' directive)
-  serverActions: {
-    bodySizeLimit: '20mb', // Match the 20 MB file upload limit in processing-utils.ts
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '20mb', // Match the 20 MB file upload limit in processing-utils.ts
+    },
   },
   cacheHandlers: {
     // Custom handler that properly supports stale-while-revalidate.
