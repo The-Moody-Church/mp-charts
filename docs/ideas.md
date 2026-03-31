@@ -51,6 +51,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 ### Technical Debt
 - [Upgrade TypeScript 5.9 to 6.0 (#136)](#upgrade-typescript-59-to-60-136)
 - [~~IDOR Mitigation — Per-Record Authorization ([#57](https://github.com/The-Moody-Church/mp-charts/issues/57))~~ ✅ CLOSED (won't-fix) (#122)](#idor-mitigation-per-record-authorization-57httpsgithubcomthe-moody-churchmp-chartsissues57-closed-wont-fix-122)
+- ~~[Photo upload didn't work (#148)](#photo-upload-didnt-work-148)~~ ✅
 - ~~[No.cache (#144)](#nocache-144)~~ ✅
 - ~~[BUG: Active Communities and Small Groups Chart Needs Work (#52)](#bug-active-communities-and-small-groups-chart-needs-work-52)~~ ✅
 - ~~[Executive Dashboard Avg Attendance Broken (#103)](#executive-dashboard-avg-attendance-broken-103)~~ ✅
@@ -239,6 +240,9 @@ Upgrade from TypeScript 5.9.3 to 6.0.x. TS 6.0 is a transition release (last JS-
 
 ### ~~IDOR Mitigation — Per-Record Authorization ([#57](https://github.com/The-Moody-Church/mp-charts/issues/57))~~ ✅ CLOSED (won't-fix) ([#122](https://github.com/The-Moody-Church/mp-charts/issues/122))
 Closed as not planned. RBAC (feature-level gating by User Group), rate limiting, and staff-only access sufficiently mitigate IDOR risk. All authenticated users are trusted staff with MP accounts — if they have access to a feature, they should have access to all records within it. The same data is accessible directly in Ministry Platform with the same permissions model.
+
+### ~~Photo upload didn't work ([#148](https://github.com/The-Moody-Church/mp-charts/issues/148))~~ ✅ COMPLETED
+Next.js server actions default to a 1 MB body size limit. Photo uploads larger than 1 MB hit a 413 error before the server action code executed, causing intermittent "Failed to upload photo" errors (small photos worked, larger ones didn't). Fixed by adding `serverActions.bodySizeLimit: '20mb'` to `next.config.ts` to match the existing 20 MB limit in `processing-utils.ts`.
 
 ### ~~No.cache ([#144](https://github.com/The-Moody-Church/mp-charts/issues/144))~~ ✅ COMPLETED
 Service-cache singleton was broken by Turbopack chunk splitting — each compiled chunk got its own `ServiceCache` instance. Cache warming populated one instance, but user requests hit a different (empty) one. Fixed by using `globalThis` for the singleton. Also removed verbose MP API logging that was dumping PII to stdout (812K lines/day).

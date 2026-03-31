@@ -2,16 +2,16 @@
 
 Quick-reference snapshot of current project state. Read this first at session start. For full details on any item, see the relevant session summary in `docs/sessions/`.
 
-**Last updated**: 2026-03-30
+**Last updated**: 2026-03-31
 
 ## Recently Completed
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
+| 2026-03-31 | **Fix photo upload 413 error**: Next.js server actions default to 1 MB body size limit. Photos >1 MB hit 413 before server action code runs. Added `serverActions.bodySizeLimit: '20mb'` to `next.config.ts`. | #148 | TBD |
 | 2026-03-30 | **Fix service-cache singleton + remove PII logging**: Turbopack chunk splitting created 5 separate `ServiceCache` instances — warming populated one, user requests hit another (empty). Fixed with `globalThis`. Also removed verbose MP API logging (812K lines/day, exposed PII). | #144 | TBD |
 | 2026-03-29 | **Service-layer cache safety net**: Added `serviceCache` (in-memory Map with SWR) wrapping all `'use cache'` functions. Guarantees sub-second responses even if the framework cache blocks, evicts, or misses. | #142 | #143 |
 | 2026-03-28 | **Fix cache handler blocking during revalidation**: `get()` was awaiting `pendingSets` before checking `memoryCache`, blocking ALL requests for 20-40s during background revalidation. Restructured to serve stale data first. Also removed `revalidatePath('/dashboard')` which hard-purged the PPR shell, and added defensive `expire` fallback. | #137, #138 | #140 |
-| 2026-03-28 | **Contact search improvements**: Active contacts filter (checkbox), removed 20-result cap with infinite scroll, engagement tie-breaking, fixed short-prefix scoring bias, auto-re-search on filter toggle. | — | #139 |
 
 ## Planned
 
