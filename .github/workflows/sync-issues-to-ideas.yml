@@ -352,6 +352,7 @@ jobs:
             echo "No changes to ideas.md"
           else
             git commit -m "docs: link new ideas.md entries to GitHub issues [skip ci]"
+            git pull --rebase
             git push
           fi
 
@@ -754,5 +755,6 @@ jobs:
             echo "No changes to ideas.md"
           else
             git commit -m "docs: sync ideas.md from GitHub issue changes [skip ci]"
+            git pull --rebase
             git push
           fi
