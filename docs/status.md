@@ -2,14 +2,14 @@
 
 Quick-reference snapshot of current project state. Read this first at session start. For full details on any item, see the relevant session summary in `docs/sessions/`.
 
-**Last updated**: 2026-04-04
+**Last updated**: 2026-04-07
 
 ## Recently Completed
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
+| 2026-04-07 | **Fix filter injection: sanitize ID arrays**: 5 instances of unsanitized `.join(",")` in filter parameters replaced with `sanitizeIds()` in journey-tools/actions.ts (4) and contactService.ts (1). Merged Dependabot vite 8.0.0→8.0.5 (path traversal fix). | — | #153 |
 | 2026-04-04 | **Update GitHub Actions to Node.js 24**: All workflow actions updated to latest major versions (checkout v5, buildx v4, login v4, build-push v7, github-script v8). Pinned trivy-action from `@master` to `v0.35.0` (supply chain risk). Fixed npm audit vulnerabilities (defu prototype pollution, brace-expansion ReDoS). Added Dependabot PR skip for Docker builds. | — | #151, #152 |
-| 2026-04-04 | **Migrate mp-charts to TMC1**: Deployed to production server (192.168.5.222). Copied data files (feature-access, journey-tools, compliance-tools, feedback-config) from ironside to TMC1. Updated deploy command. | — | — |
 
 ## Planned
 
