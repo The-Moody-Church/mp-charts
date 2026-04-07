@@ -199,7 +199,7 @@ export class ContactService {
     // Step 1: Get active groups of the specified types
     const groups = await this.mp!.getTableRecords<{ Group_ID: number }>({
       table: "Groups",
-      filter: `Group_Type_ID IN (${groupTypeIds.join(',')}) AND Start_Date <= '${today}' AND (End_Date IS NULL OR End_Date >= '${today}')`,
+      filter: `Group_Type_ID IN (${sanitizeIds(groupTypeIds)}) AND Start_Date <= '${today}' AND (End_Date IS NULL OR End_Date >= '${today}')`,
       select: "Group_ID",
     });
 

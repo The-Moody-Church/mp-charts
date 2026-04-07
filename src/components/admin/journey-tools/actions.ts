@@ -2,7 +2,7 @@
 
 import { requireFeatureAccess, loadFeatureAccess, saveFeatureAccess } from "@/lib/authorization";
 import { MPHelper } from "@/lib/providers/ministry-platform";
-import { sanitizeFilterValue } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
+import { sanitizeFilterValue, sanitizeIds } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
 import { z } from "zod";
 import {
   loadJourneyToolsConfig,
@@ -138,7 +138,7 @@ export async function getProgramsByIds(ids: number[]): Promise<MPProgram[]> {
   return mp.getTableRecords<MPProgram>({
     table: "Programs",
     select: "Program_ID,Program_Name",
-    filter: `Program_ID IN (${ids.join(",")})`,
+    filter: `Program_ID IN (${sanitizeIds(ids)})`,
   });
 }
 
@@ -150,7 +150,7 @@ export async function getGroupsByIds(ids: number[]): Promise<MPGroup[]> {
   return mp.getTableRecords<MPGroup>({
     table: "Groups",
     select: "Group_ID,Group_Name",
-    filter: `Group_ID IN (${ids.join(",")})`,
+    filter: `Group_ID IN (${sanitizeIds(ids)})`,
   });
 }
 
@@ -180,14 +180,14 @@ export async function resolveToolNames(
       ? mp.getTableRecords<{ Program_ID: number; Program_Name: string }>({
           table: "Programs",
           select: "Program_ID,Program_Name",
-          filter: `Program_ID IN (${uniquePrograms.join(",")})`,
+          filter: `Program_ID IN (${sanitizeIds(uniquePrograms)})`,
         })
       : Promise.resolve([]),
     uniqueGroups.length > 0
       ? mp.getTableRecords<{ Group_ID: number; Group_Name: string }>({
           table: "Groups",
           select: "Group_ID,Group_Name",
-          filter: `Group_ID IN (${uniqueGroups.join(",")})`,
+          filter: `Group_ID IN (${sanitizeIds(uniqueGroups)})`,
         })
       : Promise.resolve([]),
   ]);
