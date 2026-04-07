@@ -9,7 +9,34 @@ on:
       - main
 
 jobs:
+  security-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Check for unsanitized .join() in filter parameters
+        run: |
+          # Find .join( on lines containing "filter:" (MP API parameter) in TypeScript
+          # source files, excluding the sanitize utility itself and ignore comments.
+          # The colon distinguishes MP filter: params from JS Array.filter() chains.
+          MATCHES=$(grep -rn 'filter:.*\.join(\|\.join(.*filter:' src/ \
+            --include='*.ts' --include='*.tsx' \
+            | grep -v 'filter-sanitize' \
+            | grep -v 'filter-safety-ignore' \
+            || true)
+          if [ -n "$MATCHES" ]; then
+            echo "::error::Unsanitized .join() found in filter parameters. Use sanitizeIds() from filter-sanitize.ts instead."
+            echo ""
+            echo "$MATCHES"
+            echo ""
+            echo "If this is a false positive, add '// filter-safety-ignore' on the same line."
+            exit 1
+          fi
+          echo "No unsanitized .join() in filter parameters."
+
   build-scan-and-push:
+    needs: security-lint
     if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:

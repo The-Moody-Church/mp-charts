@@ -8,7 +8,8 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
-| 2026-04-07 | **Fix filter injection: sanitize ID arrays**: 5 instances of unsanitized `.join(",")` in filter parameters replaced with `sanitizeIds()` in journey-tools/actions.ts (4) and contactService.ts (1). Merged Dependabot vite 8.0.0→8.0.5 (path traversal fix). | — | #153 |
+| 2026-04-07 | **CLAUDE.md restructure & CI security lint**: Extracted 5 rule files into `.claude/rules/` (723→191 lines). Added `security-lint` CI job that greps for unsanitized `.join()` in filter parameters. Enhanced pre-commit checklist with explicit security check. | — | — |
+| 2026-04-07 | **Fix filter injection: sanitize ID arrays**: 5 instances of unsanitized `.join(",")` in filter parameters replaced with `sanitizeIds()` in journey-tools/actions.ts (4) and contactService.ts (1). Merged Dependabot vite 8.0.0→8.0.5 (path traversal fix). | — | #153, #154 |
 | 2026-04-04 | **Update GitHub Actions to Node.js 24**: All workflow actions updated to latest major versions (checkout v5, buildx v4, login v4, build-push v7, github-script v8). Pinned trivy-action from `@master` to `v0.35.0` (supply chain risk). Fixed npm audit vulnerabilities (defu prototype pollution, brace-expansion ReDoS). Added Dependabot PR skip for Docker builds. | — | #151, #152 |
 
 ## Planned
