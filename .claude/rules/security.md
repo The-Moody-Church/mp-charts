@@ -2,6 +2,23 @@
 
 This project handles **PII** (names, emails, phones, dates of birth, background check data). All code must follow these security practices. These rules apply during development — catch issues at write time, not in review.
 
+## Ministry Platform Data Safety — MANDATORY
+
+**NEVER delete, update, or create records in Ministry Platform without explicit user confirmation first.** No exceptions — not agents, scripts, "cleanup" operations, or "it's just one record."
+
+Ministry Platform is a shared production database containing real church member data — contacts, communications, subscriptions, donations, groups, events. Unauthorized writes can affect thousands of people.
+
+**Before ANY write operation** (`deleteTableRecords`, `updateTableRecords`, `createTableRecords`, stored procedures that mutate state, or any HTTP `POST`/`PUT`/`DELETE` to the MP API):
+
+1. **Stop.** Do not execute the operation.
+2. **Show the user** exactly what will be affected: the table name, the record IDs, the fields that will change, and the old → new values where applicable.
+3. **Wait for the user to explicitly say yes** before proceeding.
+4. If the user says no, do not retry or suggest alternatives unless asked.
+
+**Read-only operations are always fine** — `getTableRecords`, `GET` requests. Only writes require confirmation.
+
+This rule applies to all agents, subagents, scripts, hooks, and scheduled tasks. **There are zero exceptions.**
+
 ## Filter & Query Safety
 
 Ministry Platform's REST API accepts OData-style `$filter` parameters that map to SQL WHERE clauses. **Never interpolate raw strings into filters.**
