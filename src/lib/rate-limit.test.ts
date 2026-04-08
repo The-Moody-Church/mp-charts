@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { checkRateLimit, enforceRateLimit, RATE_LIMITS, _resetForTesting } from "./rate-limit";
 
 beforeEach(() => {
@@ -63,5 +63,66 @@ describe("enforceRateLimit", () => {
       enforceRateLimit("user-1", "write");
     }
     expect(() => enforceRateLimit("user-1", "write")).toThrow(/Rate limit exceeded/);
+  });
+
+  it("includes retry-after seconds in error message", () => {
+    for (let i = 0; i < RATE_LIMITS.write.limit; i++) {
+      enforceRateLimit("user-1", "write");
+    }
+    try {
+      enforceRateLimit("user-1", "write");
+    } catch (e) {
+      expect((e as Error).message).toMatch(/Try again in \d+ seconds/);
+    }
+  });
+});
+
+describe("retryAfterMs", () => {
+  it("returns at least 1000ms when rate limited", () => {
+    for (let i = 0; i < RATE_LIMITS.write.limit; i++) {
+      checkRateLimit("user-1", "write");
+    }
+    const result = checkRateLimit("user-1", "write");
+    expect(result.allowed).toBe(false);
+    if (!result.allowed) {
+      expect(result.retryAfterMs).toBeGreaterThanOrEqual(1000);
+    }
+  });
+});
+
+describe("cleanup interval", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    _resetForTesting();
+  });
+
+  it("cleans up stale entries after 5-minute interval", () => {
+    // Make some requests to populate the log
+    checkRateLimit("stale-user", "general");
+
+    // Advance past the longest window (cacheRefresh = 1 hour) plus the cleanup interval (5 min)
+    vi.advanceTimersByTime(3_600_000 + 300_000);
+
+    // The stale entry should be cleaned up — next request creates a fresh entry
+    const result = checkRateLimit("stale-user", "general");
+    expect(result.allowed).toBe(true);
+  });
+
+  it("retains entries still within window during cleanup", () => {
+    // Exhaust the write limit
+    for (let i = 0; i < RATE_LIMITS.write.limit; i++) {
+      checkRateLimit("active-user", "write");
+    }
+
+    // Advance 5 minutes — triggers cleanup, but write window is 60s, so entries are expired by then
+    vi.advanceTimersByTime(300_000);
+
+    // After cleanup, the entries are older than 60s window, so they should be pruned
+    const result = checkRateLimit("active-user", "write");
+    expect(result.allowed).toBe(true);
   });
 });

@@ -11,6 +11,7 @@ This guide provides essential information for AI assistants (like Claude) workin
 | [`.claude/rules/caching.md`](.claude/rules/caching.md) | Custom cache handler, service-layer cache, `'use cache'` directive, cache warming, Suspense/PPR patterns |
 | [`.claude/rules/context-management.md`](.claude/rules/context-management.md) | Session summaries, status.md, pre-commit checklist, ideas.md sync |
 | [`.claude/rules/ui-standards.md`](.claude/rules/ui-standards.md) | Chart formatting, mobile/responsive, contact action links, admin tool editor patterns |
+| [`.claude/rules/testing.md`](.claude/rules/testing.md) | When to write tests, test file conventions, mocking patterns, coverage expectations |
 
 **Read the relevant rule file before working in that area.** The pre-commit checklist is in `context-management.md` — run it before every commit.
 
@@ -156,7 +157,8 @@ Feature visibility is configured in:
 8. **Validate at API boundaries** - use Zod schemas with the `schema` parameter in `createTableRecords()` and `updateTableRecords()` for runtime validation
 9. **Use service classes in server actions** - call services from `src/services/`, not MPHelper directly from components or actions
 10. **Sanitize all filter parameters** - use `sanitizeIds()`, `sanitizeFilterValue()`, `sanitizeGuid()` from `filter-sanitize.ts` (see [security rules](.claude/rules/security.md))
-11. **Report file changes** - after completing work, always report in chat which files were **created**, **modified**, or **removed**
+11. **Write tests for new testable code** - when adding or modifying functions, services, or utilities that have testable logic, include tests in the same commit (see [testing rules](.claude/rules/testing.md))
+12. **Report file changes** - after completing work, always report in chat which files were **created**, **modified**, or **removed**
 
 ## Timezone Handling — Ministry Platform Dates
 

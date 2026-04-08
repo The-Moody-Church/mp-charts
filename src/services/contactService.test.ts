@@ -8,6 +8,8 @@ const mockUploadFiles = vi.fn();
 vi.mock('@/lib/providers/ministry-platform', () => {
   return {
     MPHelper: class {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      constructor(_opts?: any) {}
       getTableRecords = mockGetTableRecords;
       updateTableRecords = mockUpdateTableRecords;
       uploadFiles = mockUploadFiles;
@@ -178,6 +180,195 @@ describe('ContactService', () => {
         })
       );
       expect(result).toEqual(mockMembers);
+    });
+  });
+
+  describe('getAllContactsForSearch', () => {
+    it('should fetch all contacts without filter', async () => {
+      const allContacts = [
+        { Contact_ID: 1, First_Name: 'John', Last_Name: 'Doe' },
+        { Contact_ID: 2, First_Name: 'Jane', Last_Name: 'Smith' },
+      ];
+      mockGetTableRecords.mockResolvedValueOnce(allContacts);
+
+      const service = await ContactService.getInstance();
+      const result = await service.getAllContactsForSearch();
+
+      expect(mockGetTableRecords).toHaveBeenCalledWith(
+        expect.objectContaining({
+          table: 'Contacts',
+          select: expect.stringContaining('Contact_ID'),
+        })
+      );
+      // Should not have a filter
+      expect(mockGetTableRecords.mock.calls[0][0].filter).toBeUndefined();
+      expect(result).toEqual(allContacts);
+    });
+  });
+
+  describe('uploadContactPhoto', () => {
+    it('should upload photo with correct params', async () => {
+      mockUploadFiles.mockResolvedValueOnce([]);
+      const file = new File(['data'], 'photo.jpg', { type: 'image/jpeg' });
+
+      const service = await ContactService.getInstance();
+      await service.uploadContactPhoto(42, file, 10);
+
+      expect(mockUploadFiles).toHaveBeenCalledWith({
+        table: 'Contacts',
+        recordId: 42,
+        files: [file],
+        uploadParams: {
+          description: 'Contact photo uploaded via Contact Lookup',
+          isDefaultImage: true,
+          userId: 10,
+        },
+      });
+    });
+
+    it('should work without userId', async () => {
+      mockUploadFiles.mockResolvedValueOnce([]);
+      const file = new File(['data'], 'photo.jpg', { type: 'image/jpeg' });
+
+      const service = await ContactService.getInstance();
+      await service.uploadContactPhoto(42, file);
+
+      expect(mockUploadFiles).toHaveBeenCalledWith(
+        expect.objectContaining({
+          uploadParams: expect.objectContaining({
+            userId: undefined,
+          }),
+        })
+      );
+    });
+  });
+
+  describe('getContactBadges', () => {
+    // getContactBadges fires parallel queries via Promise.all, so mock call order
+    // is non-deterministic. Use mockImplementation that dispatches by table name.
+    function setupBadgeMocks(responses: Record<string, unknown[]>) {
+      mockGetTableRecords.mockImplementation((params: { table: string; filter?: string }) => {
+        const table = params.table;
+        if (table === 'Participants') return Promise.resolve(responses.Participants ?? []);
+        if (table === 'Groups') return Promise.resolve(responses.Groups ?? []);
+        if (table === 'Group_Roles') return Promise.resolve(responses.Group_Roles ?? []);
+        if (table === 'Group_Participants') {
+          // Distinguish serving vs group check by filter content
+          if (params.filter?.includes('Group_Role_ID')) {
+            return Promise.resolve(responses.Group_Participants_Serving ?? []);
+          }
+          if (params.filter?.includes('Group_ID IN')) {
+            return Promise.resolve(responses.Group_Participants_Group ?? []);
+          }
+          // Age/grade groups
+          if (params.filter?.includes('Group_Type_ID')) {
+            return Promise.resolve(responses.Group_Participants_AgeGrade ?? []);
+          }
+          return Promise.resolve([]);
+        }
+        if (table === 'Activity_Log') return Promise.resolve(responses.Activity_Log ?? []);
+        if (table === 'Participant_Milestones') return Promise.resolve(responses.Participant_Milestones ?? []);
+        return Promise.resolve([]);
+      });
+    }
+
+    it('returns minimal badges when no participant record exists', async () => {
+      setupBadgeMocks({ Participants: [], Activity_Log: [] });
+
+      const service = await ContactService.getInstance();
+      const badges = await service.getContactBadges(42);
+
+      expect(badges.membershipStatus).toBeNull();
+      expect(badges.inGroup).toBe(false);
+      expect(badges.serving).toBe(false);
+      expect(badges.lastActivity).toBeNull();
+      expect(badges.ageGradeGroups).toEqual([]);
+    });
+
+    it('returns active member badges with group and serving status', async () => {
+      setupBadgeMocks({
+        Participants: [{
+          Participant_ID: 100, Contact_ID: 42,
+          Member_Status_ID: 1, Member_Status: 'Registered Member',
+          Date_Joined: '2020-01-15',
+        }],
+        Groups: [{ Group_ID: 200 }],
+        Group_Participants_Group: [{ Group_Participant_ID: 300 }],
+        Group_Roles: [{ Group_Role_ID: 50 }],
+        Group_Participants_Serving: [{ Group_Participant_ID: 301 }],
+        Activity_Log: [{ Activity_Date: '2026-03-10' }],
+      });
+
+      const service = await ContactService.getInstance();
+      const badges = await service.getContactBadges(42);
+
+      expect(badges.membershipStatus).toBe('Registered Member');
+      expect(badges.membershipStatusId).toBe(1);
+      expect(badges.membershipDate).toBe('2020-01-15');
+      expect(badges.inGroup).toBe(true);
+      expect(badges.serving).toBe(true);
+      expect(badges.lastActivity).toBe('2026-03-10');
+    });
+
+    it('returns dropped member badges with milestone date', async () => {
+      setupBadgeMocks({
+        Participants: [{
+          Participant_ID: 100, Contact_ID: 42,
+          Member_Status_ID: 5, Member_Status: 'Dropped',
+          Date_Joined: null,
+        }],
+        Groups: [],
+        Group_Roles: [],
+        Activity_Log: [],
+        Participant_Milestones: [{ Date_Accomplished: '2025-06-01' }],
+      });
+
+      const service = await ContactService.getInstance();
+      const badges = await service.getContactBadges(42);
+
+      expect(badges.membershipStatusId).toBe(5);
+      expect(badges.membershipDate).toBe('2025-06-01');
+      expect(badges.inGroup).toBe(false);
+      expect(badges.serving).toBe(false);
+    });
+
+    it('returns age/grade groups for minor child', async () => {
+      setupBadgeMocks({
+        Participants: [{
+          Participant_ID: 100, Contact_ID: 42,
+          Member_Status_ID: null, Member_Status: null,
+          Date_Joined: null,
+        }],
+        Groups: [],
+        Group_Roles: [],
+        Activity_Log: [],
+        Group_Participants_AgeGrade: [{ Group_Name: '3rd Grade' }, { Group_Name: '8-9 Year Olds' }],
+      });
+
+      const service = await ContactService.getInstance();
+      const badges = await service.getContactBadges(42, 2); // 2 = Minor Child
+
+      expect(badges.ageGradeGroups).toEqual(['3rd Grade', '8-9 Year Olds']);
+    });
+
+    it('handles no serving roles found', async () => {
+      setupBadgeMocks({
+        Participants: [{
+          Participant_ID: 100, Contact_ID: 42,
+          Member_Status_ID: 1, Member_Status: 'Registered Member',
+          Date_Joined: '2020-01-15',
+        }],
+        Groups: [{ Group_ID: 200 }],
+        Group_Participants_Group: [{ Group_Participant_ID: 300 }],
+        Group_Roles: [],
+        Activity_Log: [],
+      });
+
+      const service = await ContactService.getInstance();
+      const badges = await service.getContactBadges(42);
+
+      expect(badges.inGroup).toBe(true);
+      expect(badges.serving).toBe(false);
     });
   });
 });

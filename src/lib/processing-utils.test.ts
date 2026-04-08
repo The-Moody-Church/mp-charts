@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { searchByName, searchByNameFlat, soundex, soundexMatch, levenshtein, normalizeApostrophes } from "./processing-utils";
+import {
+  searchByName, searchByNameFlat, filterByName,
+  soundex, soundexMatch, levenshtein, normalizeApostrophes,
+  getDisplayName, getInitials, getImageUrl, formatDate, nowCentral,
+  scoreNameMatch,
+  ALLOWED_IMAGE_TYPES, ALLOWED_DOCUMENT_TYPES, MAX_FILE_SIZE,
+} from "./processing-utils";
 
 /** Helper to create a wrapped name record for searchByName. */
 function person(first: string, last: string, nickname: string | null = null) {
@@ -396,5 +402,138 @@ describe("searchByNameFlat — phone matching", () => {
     const results = searchByNameFlat(items, "(312) 555-1234");
     expect(results).toHaveLength(1);
     expect(results[0].First_Name).toBe("Jon");
+  });
+});
+
+describe("searchByNameFlat — mixed query (name + phone)", () => {
+  it("matches when both name and phone parts match", () => {
+    const items = [
+      flatPerson("Jon", "Huff", null, null, "312-555-1234"),
+      flatPerson("Jane", "Doe", null, null, "312-555-5678"),
+    ];
+    const results = searchByNameFlat(items, "Jon 3125551234");
+    expect(results).toHaveLength(1);
+    expect(results[0].First_Name).toBe("Jon");
+  });
+
+  it("excludes when phone part does not match", () => {
+    const items = [
+      flatPerson("Jon", "Huff", null, null, "312-555-1234"),
+    ];
+    const results = searchByNameFlat(items, "Jon 9999999999");
+    expect(results).toHaveLength(0);
+  });
+});
+
+describe("searchByNameFlat — mixed query (name + email)", () => {
+  it("matches when both name and email parts match", () => {
+    const items = [
+      flatPerson("Jon", "Huff", null, "jon@church.org", null),
+      flatPerson("Jane", "Doe", null, "jane@church.org", null),
+    ];
+    const results = searchByNameFlat(items, "Jon jon@church.org");
+    expect(results).toHaveLength(1);
+    expect(results[0].First_Name).toBe("Jon");
+  });
+
+  it("excludes when email part does not match", () => {
+    const items = [
+      flatPerson("Jon", "Huff", null, "jon@church.org", null),
+    ];
+    const results = searchByNameFlat(items, "Jon bad@example.com");
+    expect(results).toHaveLength(0);
+  });
+});
+
+describe("filterByName (deprecated alias)", () => {
+  it("delegates to searchByName", () => {
+    const items = [
+      person("Jon", "Huff"),
+      person("Jane", "Doe"),
+    ];
+    const results = filterByName(items, "Jon");
+    expect(results.length).toBeGreaterThanOrEqual(1);
+    expect(results[0].info.First_Name).toBe("Jon");
+  });
+});
+
+describe("getDisplayName", () => {
+  it("returns nickname when present", () => {
+    expect(getDisplayName("Jonathan", "Jon")).toBe("Jon");
+  });
+
+  it("returns first name when nickname is null", () => {
+    expect(getDisplayName("Jonathan", null)).toBe("Jonathan");
+  });
+
+  it("returns first name when nickname is empty/whitespace", () => {
+    expect(getDisplayName("Jonathan", "  ")).toBe("Jonathan");
+  });
+});
+
+describe("getInitials", () => {
+  it("returns two-letter initials from display name and last name", () => {
+    expect(getInitials("Jonathan", "Jon", "Huff")).toBe("JH");
+  });
+
+  it("uses first name when no nickname", () => {
+    expect(getInitials("Alice", null, "Smith")).toBe("AS");
+  });
+
+  it("handles empty strings gracefully", () => {
+    expect(getInitials("", null, "")).toBe("");
+  });
+});
+
+describe("getImageUrl", () => {
+  it("constructs thumbnail URL", () => {
+    expect(getImageUrl("https://mp.example.com/files", "abc-123")).toBe(
+      "https://mp.example.com/files/abc-123?$thumbnail=true"
+    );
+  });
+});
+
+describe("formatDate", () => {
+  it("formats date string as 'Mon D, YYYY'", () => {
+    // Use noon UTC to avoid timezone-shift day boundary issues
+    const result = formatDate("2026-03-15T12:00:00Z");
+    expect(result).toMatch(/Mar\s+15,\s+2026/);
+  });
+
+  it("returns em-dash for null", () => {
+    expect(formatDate(null)).toBe("\u2014");
+  });
+});
+
+describe("nowCentral", () => {
+  it("returns ISO-like string in YYYY-MM-DDTHH:MM:SS format", () => {
+    const result = nowCentral();
+    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
+  });
+});
+
+describe("scoreNameMatch edge cases", () => {
+  it("returns 0 for empty query", () => {
+    expect(scoreNameMatch({ First_Name: "Jon", Nickname: null, Last_Name: "Huff" }, "")).toBe(0);
+  });
+
+  it("returns 0 for whitespace-only query", () => {
+    expect(scoreNameMatch({ First_Name: "Jon", Nickname: null, Last_Name: "Huff" }, "   ")).toBe(0);
+  });
+});
+
+describe("constants", () => {
+  it("ALLOWED_IMAGE_TYPES includes standard image formats", () => {
+    expect(ALLOWED_IMAGE_TYPES).toContain("image/jpeg");
+    expect(ALLOWED_IMAGE_TYPES).toContain("image/png");
+  });
+
+  it("ALLOWED_DOCUMENT_TYPES extends image types with documents", () => {
+    expect(ALLOWED_DOCUMENT_TYPES).toContain("application/pdf");
+    expect(ALLOWED_DOCUMENT_TYPES).toContain("text/csv");
+  });
+
+  it("MAX_FILE_SIZE is 20 MB", () => {
+    expect(MAX_FILE_SIZE).toBe(20 * 1024 * 1024);
   });
 });

@@ -7,6 +7,7 @@ import {
   saveFeatureAccess,
   hasFeatureAccess,
   getAccessibleFeatures,
+  requireFeatureAccess,
 } from "@/lib/authorization";
 import type { Feature } from "@/lib/authorization";
 
@@ -30,7 +31,37 @@ vi.mock(import("@/lib/journey-tools-config"), async (importOriginal) => {
   };
 });
 
+vi.mock(import("@/lib/compliance-tools-config"), async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    getEnabledComplianceTools: vi.fn().mockReturnValue([]),
+  };
+});
+
+vi.mock(import("@/lib/auth-helpers"), async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    requireSession: vi.fn(),
+    getUserGuid: vi.fn(),
+  };
+});
+
+vi.mock(import("@/services/userService"), async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    UserService: {
+      getInstance: vi.fn(),
+    },
+  };
+});
+
 const { getEnabledJourneyTools } = await import("@/lib/journey-tools-config");
+const { getEnabledComplianceTools } = await import("@/lib/compliance-tools-config");
+const { requireSession: mockRequireSession, getUserGuid: mockGetUserGuid } = await import("@/lib/auth-helpers");
+const { UserService: MockUserService } = await import("@/services/userService");
 
 const mockConfig = {
   dashboard: {
@@ -286,6 +317,120 @@ describe("authorization", () => {
 
       expect(hasFeatureAccess([77], "journey:baptism-new")).toBe(true);
       expect(hasFeatureAccess([88], "journey:baptism-new")).toBe(false);
+    });
+  });
+
+  describe("dynamic compliance features", () => {
+    const complianceTool = {
+      slug: "safety-check",
+      toolName: "Safety Check",
+      description: "Annual safety compliance",
+      enabled: true,
+      groupRoleIds: [1],
+      journeyId: null,
+      journeyMilestones: [],
+      requirements: [],
+      programId: null,
+      trackingGroupId: null,
+      defaultGroupRoleId: null,
+      supportsPause: false,
+      pausedGroupId: null,
+      pauseMilestoneId: null,
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+    };
+
+    it("should inject compliance features into loadFeatureAccess", () => {
+      vi.mocked(existsSync).mockReturnValue(false);
+      vi.mocked(getEnabledComplianceTools).mockReturnValue([complianceTool]);
+
+      const config = loadFeatureAccess();
+      expect(config["compliance:safety-check"]).toBeDefined();
+      expect(config["compliance:safety-check"].label).toBe("Safety Check");
+    });
+
+    it("should include compliance features in getAccessibleFeatures for super-admins", () => {
+      process.env.ADMIN_USER_GROUP_IDS = "99";
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFileSync).mockReturnValue(JSON.stringify(mockConfig));
+      vi.mocked(getEnabledComplianceTools).mockReturnValue([complianceTool]);
+
+      const features = getAccessibleFeatures([99]);
+      expect(features).toContain("compliance:safety-check" as Feature);
+    });
+  });
+
+  describe("loadFeatureAccess — stale key pruning", () => {
+    it("should not include saved keys that no longer correspond to valid features", () => {
+      const staleConfig = {
+        ...mockConfig,
+        "journey:deleted-tool": {
+          label: "Old Tool",
+          description: "No longer enabled",
+          allowedGroupIds: [10],
+        },
+      };
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFileSync).mockReturnValue(JSON.stringify(staleConfig));
+      vi.mocked(getEnabledJourneyTools).mockReturnValue([]);
+
+      const config = loadFeatureAccess();
+      expect(config["journey:deleted-tool"]).toBeUndefined();
+    });
+  });
+
+  describe("requireFeatureAccess", () => {
+    beforeEach(() => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFileSync).mockReturnValue(JSON.stringify(mockConfig));
+    });
+
+    it("returns session when user has access", async () => {
+      process.env.ADMIN_USER_GROUP_IDS = "99";
+      const session = { user: { id: "u1", userGuid: "abc-123" } };
+      vi.mocked(mockRequireSession).mockResolvedValue(session as never);
+      vi.mocked(mockGetUserGuid).mockReturnValue("abc-123");
+      vi.mocked(MockUserService.getInstance).mockResolvedValue({
+        getUserProfile: vi.fn().mockResolvedValue({
+          userGroupIds: [99], // super-admin
+        }),
+      } as never);
+
+      const result = await requireFeatureAccess("dashboard");
+      expect(result).toEqual(session);
+    });
+
+    it("throws Unauthorized when no user GUID", async () => {
+      const session = { user: { id: "u1" } };
+      vi.mocked(mockRequireSession).mockResolvedValue(session as never);
+      vi.mocked(mockGetUserGuid).mockReturnValue(undefined);
+
+      await expect(requireFeatureAccess("dashboard")).rejects.toThrow("Unauthorized");
+    });
+
+    it("throws Forbidden when user lacks access", async () => {
+      process.env.ADMIN_USER_GROUP_IDS = "99";
+      const session = { user: { id: "u1", userGuid: "abc-123" } };
+      vi.mocked(mockRequireSession).mockResolvedValue(session as never);
+      vi.mocked(mockGetUserGuid).mockReturnValue("abc-123");
+      vi.mocked(MockUserService.getInstance).mockResolvedValue({
+        getUserProfile: vi.fn().mockResolvedValue({
+          userGroupIds: [888], // no access
+        }),
+      } as never);
+
+      await expect(requireFeatureAccess("dashboard")).rejects.toThrow("Forbidden: insufficient permissions");
+    });
+
+    it("throws Forbidden when profile is null", async () => {
+      const session = { user: { id: "u1", userGuid: "abc-123" } };
+      vi.mocked(mockRequireSession).mockResolvedValue(session as never);
+      vi.mocked(mockGetUserGuid).mockReturnValue("abc-123");
+      vi.mocked(MockUserService.getInstance).mockResolvedValue({
+        getUserProfile: vi.fn().mockResolvedValue(null),
+      } as never);
+
+      await expect(requireFeatureAccess("dashboard")).rejects.toThrow("Forbidden: insufficient permissions");
     });
   });
 });
