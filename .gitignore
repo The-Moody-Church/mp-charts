@@ -430,4 +430,3 @@ data/feedback-config.json
 
 # Deploy command contains infrastructure details (IPs, SSH users, paths)
 .claude/commands/deploy.md
-.claude/skills/deploy/
