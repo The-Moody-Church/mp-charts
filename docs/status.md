@@ -2,15 +2,16 @@
 
 Quick-reference snapshot of current project state. Read this first at session start. For full details on any item, see the relevant session summary in `docs/sessions/`.
 
-**Last updated**: 2026-04-07
+**Last updated**: 2026-04-08
 
 ## Recently Completed
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
-| 2026-04-07 | **CLAUDE.md restructure & CI security lint**: Extracted 5 rule files into `.claude/rules/` (723→191 lines). Added `security-lint` CI job that greps for unsanitized `.join()` in filter parameters. Enhanced pre-commit checklist with explicit security check. | — | — |
-| 2026-04-07 | **Fix filter injection: sanitize ID arrays**: 5 instances of unsanitized `.join(",")` in filter parameters replaced with `sanitizeIds()` in journey-tools/actions.ts (4) and contactService.ts (1). Merged Dependabot vite 8.0.0→8.0.5 (path traversal fix). | — | #153, #154 |
-| 2026-04-04 | **Update GitHub Actions to Node.js 24**: All workflow actions updated to latest major versions (checkout v5, buildx v4, login v4, build-push v7, github-script v8). Pinned trivy-action from `@master` to `v0.35.0` (supply chain risk). Fixed npm audit vulnerabilities (defu prototype pollution, brace-expansion ReDoS). Added Dependabot PR skip for Docker builds. | — | #151, #152 |
+| 2026-04-08 | **Test coverage: 88 new tests across 8 files** (236→324 total). Adapted upstream PR #45 for our fork's auth/security patterns. Covers: user-context, session-context, user-menu sign-out, contact-lookup scoring/sorting, contact-logs CRUD actions, contactService with sanitization, contactLogService with Central Time date conversion, MinistryPlatformProvider delegation. | — | #156 |
+| 2026-04-08 | **Upstream sync through PR #55**: Incorporated MP data safety write-confirmation rule into `.claude/rules/security.md`. Updated sync log. | — | — |
+| 2026-04-07 | **CLAUDE.md restructure & CI security lint**: Extracted 5 rule files into `.claude/rules/` (723→191 lines). Added `security-lint` CI job that greps for unsanitized `.join()` in filter parameters. | — | — |
+| 2026-04-07 | **Fix filter injection: sanitize ID arrays**: 5 instances of unsanitized `.join(",")` in filter parameters replaced with `sanitizeIds()`. Merged Dependabot vite 8.0.0→8.0.5 (path traversal fix). | — | #153, #154 |
 
 ## Planned
 
@@ -24,7 +25,7 @@ Quick-reference snapshot of current project state. Read this first at session st
 ## Key Architecture Notes
 
 - Next.js 16 with PPR/Cache Components, Better Auth, Zod v4
-- Upstream sync current through PR #54 / release v2026.03.18.1156 (reviewed 2026-03-18)
+- Upstream sync current through PR #55 (reviewed 2026-04-08)
 - Docker CI/CD via GitHub Actions → GitLab Container Registry
 - All processing features (volunteer, baptism, membership) use shared components in `src/components/processing/`
 - RBAC: Admin-managed feature-to-User-Group mapping via `data/feature-access.json` + `ADMIN_USER_GROUP_IDS` env var; server actions enforce via `requireFeatureAccess()`; admin page at `/admin`
