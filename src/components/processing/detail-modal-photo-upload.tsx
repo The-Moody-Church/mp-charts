@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Image from "next/image";
 import { getDisplayName, getInitials, getImageUrl } from "@/lib/processing-utils";
 
@@ -27,6 +27,7 @@ export function DetailModalPhotoUpload({
   photoInputRef,
   className,
 }: DetailModalPhotoUploadProps) {
+  const [imgError, setImgError] = useState(false);
   const displayName = getDisplayName(firstName, nickname);
 
   return (
@@ -35,7 +36,7 @@ export function DetailModalPhotoUpload({
       onClick={() => photoInputRef.current?.click()}
       title={uploading ? "Uploading..." : "Upload photo"}
     >
-      {imageGuid && mpFileUrl ? (
+      {imageGuid && mpFileUrl && !imgError ? (
         <>
           <Image
             src={getImageUrl(mpFileUrl, imageGuid)}
@@ -43,6 +44,7 @@ export function DetailModalPhotoUpload({
             fill
             className="object-cover"
             unoptimized
+            onError={() => setImgError(true)}
           />
           {uploading ? (
             <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center">
