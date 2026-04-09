@@ -10,7 +10,7 @@ interface ProcessingSortSelectProps {
 
 export function ProcessingSortSelect({ value, onChange }: ProcessingSortSelectProps) {
   return (
-    <div className="relative w-full sm:w-auto">
+    <div className="relative w-full sm:w-fit">
       <svg
         className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
         fill="none"
@@ -27,7 +27,7 @@ export function ProcessingSortSelect({ value, onChange }: ProcessingSortSelectPr
       <select
         value={value}
         onChange={(e) => onChange(e.target.value as ProcessingSortOption)}
-        className="flex h-9 w-full sm:w-auto rounded-md border border-input bg-transparent pl-8 pr-8 py-1 text-base sm:text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring appearance-none cursor-pointer"
+        className="flex h-9 w-full sm:w-fit rounded-md border border-input bg-transparent pl-8 pr-3 py-1 text-base sm:text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
       >
         {SORT_OPTIONS.map((opt) => (
           <option key={opt.value} value={opt.value}>
@@ -35,15 +35,6 @@ export function ProcessingSortSelect({ value, onChange }: ProcessingSortSelectPr
           </option>
         ))}
       </select>
-      <svg
-        className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={2}
-      >
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-      </svg>
     </div>
   );
 }

@@ -155,7 +155,7 @@ export function JourneyProcessing({ slug, config, initialApplicantId }: JourneyP
           <p className="text-muted-foreground">{config.description}</p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col sm:flex-row sm:justify-end gap-3">
           <ProcessingSearchBar value={searchQuery} onChange={setSearchQuery} />
           <ProcessingSortSelect value={sortOption} onChange={setSortOption} />
         </div>
@@ -228,7 +228,7 @@ export function JourneyProcessing({ slug, config, initialApplicantId }: JourneyP
               </>
             )}
           </TabsList>
-          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-fit">
             <ProcessingSearchBar value={searchQuery} onChange={setSearchQuery} />
             <ProcessingSortSelect value={sortOption} onChange={setSortOption} />
           </div>

@@ -112,7 +112,7 @@ export function ComplianceProcessing({ slug, config, initialApplicantId }: Compl
           <p className="text-muted-foreground">{config.description}</p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col sm:flex-row sm:justify-end gap-3">
           <ProcessingSearchBar value={searchQuery} onChange={setSearchQuery} />
           <ProcessingSortSelect value={sortOption} onChange={setSortOption} />
         </div>
@@ -171,7 +171,7 @@ export function ComplianceProcessing({ slug, config, initialApplicantId }: Compl
               )}
             </TabsTrigger>
           </TabsList>
-          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-fit">
             <ProcessingSearchBar value={searchQuery} onChange={setSearchQuery} />
             <ProcessingSortSelect value={sortOption} onChange={setSortOption} />
           </div>
