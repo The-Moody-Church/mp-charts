@@ -3,11 +3,11 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ComplianceCard as ComplianceCardData } from "@/lib/dto";
-import { ProcessingGrid, ProcessingSearchBar } from "@/components/processing";
+import { ProcessingGrid, ProcessingSearchBar, ProcessingSortSelect } from "@/components/processing";
 import { ComplianceCard } from "./compliance-card";
 import { ComplianceDetailModal } from "./compliance-detail-modal";
 import { getComplianceParticipants, getPausedComplianceParticipants } from "./actions";
-import { searchByName } from "@/lib/processing-utils";
+import { searchByName, sortCards, type ProcessingSortOption } from "@/lib/processing-utils";
 import type { ComplianceToolConfig } from "@/lib/compliance-tools-config-types";
 
 interface ComplianceProcessingProps {
@@ -22,6 +22,7 @@ export function ComplianceProcessing({ slug, config, initialApplicantId }: Compl
   const [currentParticipants, setCurrentParticipants] = useState<ComplianceCardData[]>([]);
   const [pausedParticipants, setPausedParticipants] = useState<ComplianceCardData[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortOption, setSortOption] = useState<ProcessingSortOption>("name");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedParticipant, setSelectedParticipant] = useState<ComplianceCardData | null>(null);
@@ -93,13 +94,13 @@ export function ComplianceProcessing({ slug, config, initialApplicantId }: Compl
   };
 
   const filteredCurrent = useMemo(
-    () => searchByName(currentParticipants, searchQuery),
-    [currentParticipants, searchQuery]
+    () => sortCards(searchByName(currentParticipants, searchQuery), sortOption),
+    [currentParticipants, searchQuery, sortOption]
   );
 
   const filteredPaused = useMemo(
-    () => searchByName(pausedParticipants, searchQuery),
-    [pausedParticipants, searchQuery]
+    () => sortCards(searchByName(pausedParticipants, searchQuery), sortOption),
+    [pausedParticipants, searchQuery, sortOption]
   );
 
   // When pause is not supported, render a single grid (no tabs)
@@ -111,7 +112,10 @@ export function ComplianceProcessing({ slug, config, initialApplicantId }: Compl
           <p className="text-muted-foreground">{config.description}</p>
         </div>
 
-        <ProcessingSearchBar value={searchQuery} onChange={setSearchQuery} />
+        <div className="flex flex-col sm:flex-row gap-3">
+          <ProcessingSearchBar value={searchQuery} onChange={setSearchQuery} />
+          <ProcessingSortSelect value={sortOption} onChange={setSortOption} />
+        </div>
 
         <ProcessingGrid
           items={filteredCurrent}
@@ -167,7 +171,10 @@ export function ComplianceProcessing({ slug, config, initialApplicantId }: Compl
               )}
             </TabsTrigger>
           </TabsList>
-          <ProcessingSearchBar value={searchQuery} onChange={setSearchQuery} />
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <ProcessingSearchBar value={searchQuery} onChange={setSearchQuery} />
+            <ProcessingSortSelect value={sortOption} onChange={setSortOption} />
+          </div>
         </div>
 
         <TabsContent value="current">

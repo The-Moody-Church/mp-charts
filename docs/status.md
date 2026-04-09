@@ -2,16 +2,15 @@
 
 Quick-reference snapshot of current project state. Read this first at session start. For full details on any item, see the relevant session summary in `docs/sessions/`.
 
-**Last updated**: 2026-04-08
+**Last updated**: 2026-04-09
 
 ## Recently Completed
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
+| 2026-04-09 | **Sort options for journey & compliance tools**: Added sort dropdown (Last Name, Most Completed, Least Completed) to all processing pages. Shared `sortCards()` utility + `ProcessingSortSelect` component. 6 new tests. | — | — |
 | 2026-04-08 | **Test coverage: 88 new tests across 8 files** (236→324 total). Adapted upstream PR #45 for our fork's auth/security patterns. Covers: user-context, session-context, user-menu sign-out, contact-lookup scoring/sorting, contact-logs CRUD actions, contactService with sanitization, contactLogService with Central Time date conversion, MinistryPlatformProvider delegation. | — | #156 |
 | 2026-04-08 | **Upstream sync through PR #55**: Incorporated MP data safety write-confirmation rule into `.claude/rules/security.md`. Updated sync log. | — | — |
-| 2026-04-07 | **CLAUDE.md restructure & CI security lint**: Extracted 5 rule files into `.claude/rules/` (723→191 lines). Added `security-lint` CI job that greps for unsanitized `.join()` in filter parameters. | — | — |
-| 2026-04-07 | **Fix filter injection: sanitize ID arrays**: 5 instances of unsanitized `.join(",")` in filter parameters replaced with `sanitizeIds()`. Merged Dependabot vite 8.0.0→8.0.5 (path traversal fix). | — | #153, #154 |
 
 ## Planned
 

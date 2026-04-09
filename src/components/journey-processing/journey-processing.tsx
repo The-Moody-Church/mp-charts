@@ -3,11 +3,11 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { JourneyCard as JourneyCardData } from "@/lib/dto";
-import { ProcessingGrid, ProcessingSearchBar } from "@/components/processing";
+import { ProcessingGrid, ProcessingSearchBar, ProcessingSortSelect } from "@/components/processing";
 import { JourneyCard } from "./journey-card";
 import { JourneyDetailModal } from "./journey-detail-modal";
 import { getJourneyParticipants, getCompletedJourneyParticipants, getPausedJourneyParticipants } from "./actions";
-import { searchByName } from "@/lib/processing-utils";
+import { searchByName, sortCards, type ProcessingSortOption } from "@/lib/processing-utils";
 import type { JourneyToolConfig } from "@/lib/journey-tools-config-types";
 
 interface JourneyProcessingProps {
@@ -26,6 +26,7 @@ export function JourneyProcessing({ slug, config, initialApplicantId }: JourneyP
   const [completedParticipants, setCompletedParticipants] = useState<JourneyCardData[]>([]);
   const [pausedParticipants, setPausedParticipants] = useState<JourneyCardData[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortOption, setSortOption] = useState<ProcessingSortOption>("name");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedParticipant, setSelectedParticipant] = useState<JourneyCardData | null>(null);
@@ -116,18 +117,18 @@ export function JourneyProcessing({ slug, config, initialApplicantId }: JourneyP
   };
 
   const filteredCurrent = useMemo(
-    () => searchByName(currentParticipants, searchQuery),
-    [currentParticipants, searchQuery]
+    () => sortCards(searchByName(currentParticipants, searchQuery), sortOption),
+    [currentParticipants, searchQuery, sortOption]
   );
 
   const filteredCompleted = useMemo(
-    () => searchByName(completedParticipants, searchQuery),
-    [completedParticipants, searchQuery]
+    () => sortCards(searchByName(completedParticipants, searchQuery), sortOption),
+    [completedParticipants, searchQuery, sortOption]
   );
 
   const filteredPaused = useMemo(
-    () => searchByName(pausedParticipants, searchQuery),
-    [pausedParticipants, searchQuery]
+    () => sortCards(searchByName(pausedParticipants, searchQuery), sortOption),
+    [pausedParticipants, searchQuery, sortOption]
   );
 
   const keyExtractor = (a: JourneyCardData) => a.info.Group_Participant_ID ?? a.info.Participant_ID;
@@ -154,7 +155,10 @@ export function JourneyProcessing({ slug, config, initialApplicantId }: JourneyP
           <p className="text-muted-foreground">{config.description}</p>
         </div>
 
-        <ProcessingSearchBar value={searchQuery} onChange={setSearchQuery} />
+        <div className="flex flex-col sm:flex-row gap-3">
+          <ProcessingSearchBar value={searchQuery} onChange={setSearchQuery} />
+          <ProcessingSortSelect value={sortOption} onChange={setSortOption} />
+        </div>
 
         <ProcessingGrid
           items={filteredCurrent}
@@ -224,7 +228,10 @@ export function JourneyProcessing({ slug, config, initialApplicantId }: JourneyP
               </>
             )}
           </TabsList>
-          <ProcessingSearchBar value={searchQuery} onChange={setSearchQuery} />
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <ProcessingSearchBar value={searchQuery} onChange={setSearchQuery} />
+            <ProcessingSortSelect value={sortOption} onChange={setSortOption} />
+          </div>
         </div>
 
         {isMilestoneMode ? (
