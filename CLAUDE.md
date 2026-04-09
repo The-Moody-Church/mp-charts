@@ -120,6 +120,11 @@ The MP API (`moody.ministryplatform.com`) has limited connection capacity. **Nev
 
 Without concurrency control, bursts of 50+ simultaneous connections cause `ConnectTimeoutError` (TCP timeout), which can cascade into token refresh failures and silent data loss. This was the root cause of intermittent 0-attendance on the dashboard (fixed 2026-03-15).
 
+### Ministry Platform REST API Notes
+
+- **POST-based reads for long queries**: MP supports `POST tables/{table}/get` with a JSON body (`{ "Select": "...", "Filter": "...", "OrderBy": "...", "Top": N, ... }`). This avoids URL length limits when filters or select clauses are very long. We don't currently use this — our `$filter` strings fit in query parameters — but it's available if needed.
+- **Audit log joins**: You can join audit creation/update data in any `$Select` via `dp_Created.*` (who created, when) and `dp_Updated.*` (who last updated, when). Useful for "created by" or "last modified" info without a separate query.
+
 ## Feature Visibility & Access Control
 
 Feature visibility in the home page and sidebar is controlled by RBAC (feature-to-User-Group mappings), not environment variables. Users only see features their User Groups grant access to. Admin users (in `ADMIN_USER_GROUP_IDS` groups) see all features plus the admin settings page.
