@@ -117,6 +117,7 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [badges, setBadges] = useState<ContactBadges | null>(null);
   const [familyMembers, setFamilyMembers] = useState<HouseholdMember[]>([]);
+  const [imgErrors, setImgErrors] = useState<Set<string>>(new Set());
   const [familyOpen, setFamilyOpen] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -612,13 +613,14 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
                       className="flex flex-col items-center gap-2 rounded-lg border p-3 hover:bg-gray-50 transition-colors"
                     >
                       <div className="h-12 w-12 rounded-full overflow-hidden relative flex-shrink-0">
-                        {member.Image_GUID && mpFileUrl ? (
+                        {member.Image_GUID && mpFileUrl && !imgErrors.has(member.Image_GUID) ? (
                           <Image
                             src={getImageUrl(member.Image_GUID)}
                             alt={`${memberDisplayName} ${member.Last_Name}`}
                             fill
                             className="object-cover"
                             unoptimized
+                            onError={() => setImgErrors(prev => new Set(prev).add(member.Image_GUID!))}
                           />
                         ) : (
                           <div className="w-full h-full bg-gray-300 rounded-full flex items-center justify-center text-gray-600 text-sm font-medium">

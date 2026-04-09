@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import { getDisplayName, getInitials, getImageUrl, formatDate } from "@/lib/processing-utils";
@@ -13,6 +14,7 @@ interface MemberCardProps {
 }
 
 export function MemberCardComponent({ member, mpFileUrl, onClick }: MemberCardProps) {
+  const [imgError, setImgError] = useState(false);
   const displayName = getDisplayName(member.firstName, member.nickname);
   const fullName = `${displayName} ${member.lastName}`;
   const showNickname = member.nickname && member.nickname !== member.firstName;
@@ -25,13 +27,14 @@ export function MemberCardComponent({ member, mpFileUrl, onClick }: MemberCardPr
       <CardContent className="flex flex-col items-center gap-2 p-4 flex-1">
         {/* Avatar */}
         <div className="w-16 h-16 rounded-full overflow-hidden relative flex-shrink-0">
-          {member.fileUniqueId && mpFileUrl ? (
+          {member.fileUniqueId && mpFileUrl && !imgError ? (
             <Image
               src={getImageUrl(mpFileUrl, member.fileUniqueId)}
               alt={fullName}
               fill
               className="object-cover"
               unoptimized
+              onError={() => setImgError(true)}
             />
           ) : (
             <div className="w-full h-full bg-gray-300 rounded-full flex items-center justify-center font-medium text-gray-600">

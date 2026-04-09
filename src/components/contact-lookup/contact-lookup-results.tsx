@@ -25,6 +25,7 @@ export const ContactLookupResults: React.FC<ContactLookupResultsProps> = ({
   const router = useRouter();
   const { mpFileUrl } = useRuntimeConfig();
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [imgErrors, setImgErrors] = useState<Set<string>>(new Set());
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -114,7 +115,7 @@ export const ContactLookupResults: React.FC<ContactLookupResultsProps> = ({
           >
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 rounded-full flex-shrink-0 overflow-hidden relative">
-                {contact.Image_GUID && mpFileUrl ? (
+                {contact.Image_GUID && mpFileUrl && !imgErrors.has(contact.Image_GUID) ? (
                   <Image
                     src={getImageUrl(contact.Image_GUID)}
                     alt={`${getDisplayName(
@@ -124,6 +125,7 @@ export const ContactLookupResults: React.FC<ContactLookupResultsProps> = ({
                     fill
                     className="object-cover"
                     unoptimized
+                    onError={() => setImgErrors(prev => new Set(prev).add(contact.Image_GUID!))}
                   />
                 ) : (
                   <div className="w-full h-full bg-gray-300 rounded-full flex items-center justify-center text-gray-600 text-sm font-medium">

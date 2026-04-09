@@ -10,6 +10,7 @@ import { useAppSession, useUser, useRuntimeConfig } from "@/contexts";
 
 export function Header() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const { userProfile, isLoading } = useUser();
   const session = useAppSession();
   const { mpFileUrl, appName } = useRuntimeConfig();
@@ -47,7 +48,7 @@ export function Header() {
                         "User menu"
                   }
                 >
-                  {userProfile?.Image_GUID && mpFileUrl ? (
+                  {userProfile?.Image_GUID && mpFileUrl && !imgError ? (
                     <Image
                       src={`${mpFileUrl}/${userProfile.Image_GUID}?$thumbnail=true`}
                       alt={
@@ -59,6 +60,7 @@ export function Header() {
                       height={32}
                       className="rounded-full object-cover border-2 border-white"
                       unoptimized
+                      onError={() => setImgError(true)}
                     />
                   ) : (
                     <UserCircleIcon className="h-8 w-8 text-white" />
