@@ -3,6 +3,48 @@
  * (volunteer, baptism, membership).
  */
 
+import type { BaseCardData, BasePersonInfo } from '@/lib/dto/processing-shared';
+
+/** Available sort options for processing card grids. */
+export type ProcessingSortOption = "name" | "most-completed" | "least-completed";
+
+/** Label/value pairs for sort option dropdowns. */
+export const SORT_OPTIONS: { value: ProcessingSortOption; label: string }[] = [
+  { value: "name", label: "Last Name (A\u2013Z)" },
+  { value: "most-completed", label: "Most Completed" },
+  { value: "least-completed", label: "Least Completed" },
+];
+
+/** Sort processing cards by the selected sort option. Returns a new sorted array. */
+export function sortCards<T extends BaseCardData<BasePersonInfo>>(
+  items: T[],
+  sort: ProcessingSortOption,
+): T[] {
+  const sorted = [...items];
+  switch (sort) {
+    case "name":
+      sorted.sort((a, b) => {
+        const lastCmp = a.info.Last_Name.localeCompare(b.info.Last_Name);
+        if (lastCmp !== 0) return lastCmp;
+        return a.info.First_Name.localeCompare(b.info.First_Name);
+      });
+      break;
+    case "most-completed":
+      sorted.sort((a, b) => {
+        if (b.completedCount !== a.completedCount) return b.completedCount - a.completedCount;
+        return a.info.Last_Name.localeCompare(b.info.Last_Name);
+      });
+      break;
+    case "least-completed":
+      sorted.sort((a, b) => {
+        if (a.completedCount !== b.completedCount) return a.completedCount - b.completedCount;
+        return a.info.Last_Name.localeCompare(b.info.Last_Name);
+      });
+      break;
+  }
+  return sorted;
+}
+
 /** Display name: prefer nickname if present, else first name. */
 export function getDisplayName(firstName: string, nickname: string | null): string {
   return nickname && nickname.trim() ? nickname : firstName;

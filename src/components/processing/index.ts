@@ -7,3 +7,4 @@ export { MilestoneExpandedView } from './milestone-expanded-view';
 export { MilestoneEditForm } from './milestone-edit-form';
 export { QuickActionsPanel, QuickActionButton } from './quick-actions-panel';
 export { ProcessingSearchBar } from './processing-search-bar';
+export { ProcessingSortSelect } from './processing-sort-select';
