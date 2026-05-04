@@ -428,5 +428,7 @@ data/feedback-config.json
 .github\instructions\snyk_rules.instructions.md
 .claude/plans/test-plan-journey-compliance-admin.md
 
-# Deploy command contains infrastructure details (IPs, SSH users, paths)
+# Deploy commands contain infrastructure details (compose paths, container names, SSH host aliases)
 .claude/commands/deploy.md
+.claude/commands/deploy-dev.md
+.claude/commands/deploy-main.md
