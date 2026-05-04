@@ -77,4 +77,40 @@ describe('validateComplianceToolConfig', () => {
     };
     expect(validateComplianceToolConfig(config).requirements[0].requirementId).toBe(0);
   });
+
+  it('throws when journey is attached but programId is null', () => {
+    const config = {
+      ...validConfig,
+      journeyId: 3,
+      journeyMilestones: [
+        { milestoneId: 6, label: 'Reference', sortOrder: 1, visible: true },
+      ],
+      programId: null,
+    };
+    expect(() => validateComplianceToolConfig(config)).toThrow(/Program is required/);
+  });
+
+  it('throws when journey milestones exist but programId is null', () => {
+    const config = {
+      ...validConfig,
+      journeyId: null,
+      journeyMilestones: [
+        { milestoneId: 6, label: 'Reference', sortOrder: 1, visible: true },
+      ],
+      programId: null,
+    };
+    expect(() => validateComplianceToolConfig(config)).toThrow(/Program is required/);
+  });
+
+  it('accepts journey + journey milestones when programId is set', () => {
+    const config = {
+      ...validConfig,
+      journeyId: 3,
+      journeyMilestones: [
+        { milestoneId: 6, label: 'Reference', sortOrder: 1, visible: true },
+      ],
+      programId: 305,
+    };
+    expect(validateComplianceToolConfig(config).programId).toBe(305);
+  });
 });

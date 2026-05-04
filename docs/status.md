@@ -2,12 +2,13 @@
 
 Quick-reference snapshot of current project state. Read this first at session start. For full details on any item, see the relevant session summary in `docs/sessions/`.
 
-**Last updated**: 2026-04-09
+**Last updated**: 2026-05-04
 
 ## Recently Completed
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
+| 2026-05-04 | **Fix: require Program when journey is attached to compliance tool**: Stillson tool was saved with `journeyId` + `journeyMilestones` but `programId: null`, which left the Mark Complete button disabled for journey milestones. Added Zod `.refine()` + editor-side validation so the misconfig can't slip through again. | — | (pending) |
 | 2026-04-09 | **Fix thumbnail image fallback**: Added `onError` handlers to all 6 image-rendering locations so broken MP thumbnails gracefully fall back to initials instead of broken image icons. | — | #157 |
 | 2026-04-09 | **Sort options for journey & compliance tools**: Added sort dropdown (Last Name, Most Completed, Least Completed) to all processing pages. Shared `sortCards()` utility + `ProcessingSortSelect` component. 6 new tests. | — | #158 |
 | 2026-04-08 | **Test coverage: 88 new tests across 8 files** (236→324 total). Adapted upstream PR #45 for our fork's auth/security patterns. Covers: user-context, session-context, user-menu sign-out, contact-lookup scoring/sorting, contact-logs CRUD actions, contactService with sanitization, contactLogService with Central Time date conversion, MinistryPlatformProvider delegation. | — | #156 |
