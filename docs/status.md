@@ -8,6 +8,8 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
+| 2026-05-04 | **CI: bump trivy-action v0.35.0 → v0.36.0**: clears Node.js 20 deprecation warning (v0.36.0 uses `actions/cache@v5.0.5` on Node 24). | — | (pending) |
+| 2026-05-04 | **Security: bump postcss 8.5.8 → 8.5.10** (dependabot): fixes GHSA-qx2v-qp2m-jg93 / CVE-2026-41305 (XSS via unescaped `</style>`, medium). Transitive dev dep. | — | #166 |
 | 2026-05-04 | **Fix: require Program when journey is attached to compliance tool**: Stillson tool was saved with `journeyId` + `journeyMilestones` but `programId: null`, which left the Mark Complete button disabled for journey milestones. Added Zod `.refine()` + editor-side validation so the misconfig can't slip through again. | — | (pending) |
 | 2026-04-09 | **Fix thumbnail image fallback**: Added `onError` handlers to all 6 image-rendering locations so broken MP thumbnails gracefully fall back to initials instead of broken image icons. | — | #157 |
 | 2026-04-09 | **Sort options for journey & compliance tools**: Added sort dropdown (Last Name, Most Completed, Least Completed) to all processing pages. Shared `sortCards()` utility + `ProcessingSortSelect` component. 6 new tests. | — | #158 |
