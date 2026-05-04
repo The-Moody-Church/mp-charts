@@ -29,3 +29,11 @@ The journey-tool editor already enforced `programId` always-required (`journey-t
 
 - Pre-existing tsc errors in `authorization.test.ts` and `helper.test.ts` confirmed unrelated to this change (reproduced on `main`).
 - `ComplianceToolConfigSchema` is now `ZodEffects` rather than `ZodObject`; only `.parse()` and `z.array()` consumers exist, so no callsites break.
+
+## Dependency bumps — COMPLETED
+
+- **postcss 8.5.8 → 8.5.10** (PR #166): dependabot fix for GHSA-qx2v-qp2m-jg93 / CVE-2026-41305 (XSS via unescaped `</style>` in stringify output, medium / CVSS 6.1). Transitive dev dep — practical risk low for our build chain, but the bump is trivial. Merged and rolled out to TMC1.
+- **aquasecurity/trivy-action v0.35.0 → v0.36.0** (this PR): clears the Node.js 20 deprecation warning surfaced during the postcss build. v0.36.0 internally pins `actions/cache@v5.0.5`, which runs on Node 24. No behavior change for our scan step.
+
+**Files modified:**
+- `.github/workflows/docker-build-push.yml`
