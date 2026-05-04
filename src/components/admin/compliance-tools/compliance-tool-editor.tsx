@@ -270,6 +270,9 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
     if (requirements.filter(r => r.visible).length === 0 && journeyMilestones.filter(m => m.visible).length === 0) {
       errors.push("At least one requirement or milestone must be visible."); fields.add("requirements");
     }
+    if ((journeyId || journeyMilestones.length > 0) && !programId) {
+      errors.push("Program is required when a journey is attached."); fields.add("programId");
+    }
 
     if (errors.length > 0) {
       setError(errors.join(" "));
@@ -537,8 +540,8 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
             <select
               id="program-select"
               value={programId ?? ""}
-              onChange={(e) => setProgramId(e.target.value ? Number(e.target.value) : null)}
-              className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
+              onChange={(e) => { setProgramId(e.target.value ? Number(e.target.value) : null); clearFieldError("programId"); }}
+              className={`flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm ${fieldErrorClass("programId")}`}
             >
               <option value="">None</option>
               {programs.map((p) => (
