@@ -3,10 +3,7 @@ name: Build, Scan, and Push Docker Image
 on:
   push:
     branches:
-      - main
-  pull_request:
-    branches:
-      - main
+      - '**'
 
 jobs:
   security-lint:
@@ -78,8 +75,16 @@ jobs:
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
 
-      - name: Push `latest` tag
-        # Only push the 'latest' tag when the workflow is triggered by a push to the main branch
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      - name: Push `dev` tag
+        # Every successful build (any branch) becomes the testing image. Pull
+        # `:dev` on the docker host to test branch builds before merging the PR.
         run: |
-          docker buildx imagetools create registry.gitlab.com/moodychurch/mp-charts:${{ github.sha }} --tag registry.gitlab.com/moodychurch/mp-charts:latest
+          docker buildx imagetools create registry.gitlab.com/moodychurch/mp-charts:${{ github.sha }} --tag registry.gitlab.com/moodychurch/mp-charts:dev
+
+      - name: Push `latest` and `main` tags
+        # Stable tags — only updated by main pushes (i.e. merged PRs).
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker buildx imagetools create registry.gitlab.com/moodychurch/mp-charts:${{ github.sha }} \
+            --tag registry.gitlab.com/moodychurch/mp-charts:latest \
+            --tag registry.gitlab.com/moodychurch/mp-charts:main
