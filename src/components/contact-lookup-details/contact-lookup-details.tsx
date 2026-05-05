@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { getContactDetails, getContactLogsByContactId, getHouseholdMembers, getContactBadges, uploadContactLookupPhoto } from "./actions";
-import { ContactLookupDetails as ContactLookupDetailsType, ContactLogDisplay, HouseholdMember, ContactBadges } from "@/lib/dto";
+import { getContactDetails, getContactLogsByContactId, getHouseholdMembers, getContactBadges, getContactGroups, uploadContactLookupPhoto } from "./actions";
+import { ContactLookupDetails as ContactLookupDetailsType, ContactLogDisplay, HouseholdMember, ContactBadges, ContactGroupMembership } from "@/lib/dto";
 import { ContactLogs } from "@/components/contact-logs";
 import { getCurrentUserMpUserId, createAutoContactLog } from "@/components/contact-logs/actions";
 import { ContactLinks, DetailModalPhotoUpload } from "@/components/processing";
@@ -119,6 +119,9 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
   const [familyMembers, setFamilyMembers] = useState<HouseholdMember[]>([]);
   const [imgErrors, setImgErrors] = useState<Set<string>>(new Set());
   const [familyOpen, setFamilyOpen] = useState(true);
+  const [groups, setGroups] = useState<ContactGroupMembership[] | null>(null);
+  const [groupsOpen, setGroupsOpen] = useState(false);
+  const [groupsLoading, setGroupsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -136,6 +139,8 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
     try {
       setLoading(true);
       setError(null);
+      setGroups(null);
+      setGroupsOpen(false);
 
       const contactDetails = await getContactDetails(guid);
       setContact(contactDetails);
@@ -223,6 +228,20 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2000);
     });
+  };
+
+  const handleToggleGroups = async () => {
+    const next = !groupsOpen;
+    setGroupsOpen(next);
+    if (next && groups === null && contact?.Contact_ID && !groupsLoading) {
+      setGroupsLoading(true);
+      try {
+        const result = await getContactGroups(contact.Contact_ID);
+        setGroups(result);
+      } finally {
+        setGroupsLoading(false);
+      }
+    }
   };
 
   const refreshLogs = async () => {
@@ -376,14 +395,28 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
                     </span>
                   )}
                   {badges.inGroup && (
-                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800">
+                    <button
+                      type="button"
+                      onClick={handleToggleGroups}
+                      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800 hover:bg-emerald-200 transition-colors cursor-pointer"
+                      aria-expanded={groupsOpen}
+                      aria-controls="contact-groups-section"
+                      title="Click to see all current group memberships"
+                    >
                       In a Group
-                    </span>
+                    </button>
                   )}
                   {badges.serving && (
-                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800">
+                    <button
+                      type="button"
+                      onClick={handleToggleGroups}
+                      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800 hover:bg-emerald-200 transition-colors cursor-pointer"
+                      aria-expanded={groupsOpen}
+                      aria-controls="contact-groups-section"
+                      title="Click to see all current group memberships"
+                    >
                       Serving
-                    </span>
+                    </button>
                   )}
                   {badges.lastActivity && (
                     <span
@@ -579,6 +612,59 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Groups Section */}
+      {(badges?.inGroup || badges?.serving) && (
+        <div id="contact-groups-section" className="bg-white shadow rounded-lg">
+          <div className="px-4 py-5 sm:p-6">
+            <button
+              onClick={handleToggleGroups}
+              className="flex items-center gap-2 w-full text-left"
+              aria-expanded={groupsOpen}
+            >
+              <svg
+                className={`h-4 w-4 text-gray-500 transition-transform ${groupsOpen ? "rotate-90" : ""}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+              </svg>
+              <h2 className="text-lg font-semibold text-gray-900">
+                Groups{groups ? ` (${groups.length})` : ""}
+              </h2>
+            </button>
+
+            {groupsOpen && (
+              <div className="mt-4">
+                {groupsLoading && (
+                  <div className="text-sm text-gray-500">Loading groups…</div>
+                )}
+                {!groupsLoading && groups && groups.length === 0 && (
+                  <div className="text-sm text-gray-500">No current group memberships.</div>
+                )}
+                {!groupsLoading && groups && groups.length > 0 && (
+                  <ul className="divide-y divide-gray-100 border border-gray-100 rounded-md overflow-hidden">
+                    {groups.map((g) => (
+                      <li key={g.Group_Participant_ID} className="px-3 py-2">
+                        <div className="text-sm font-medium text-gray-900 truncate">{g.Group_Name}</div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-gray-500">
+                          {g.Group_Type && <span>{g.Group_Type}</span>}
+                          {g.Role && <span>&middot; {g.Role}</span>}
+                          {g.Start_Date && (
+                            <span>&middot; Joined {parseLocalDate(g.Start_Date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Family Section */}
       {familyMembers.length > 0 && (

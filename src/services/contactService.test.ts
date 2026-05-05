@@ -371,4 +371,57 @@ describe('ContactService', () => {
       expect(badges.serving).toBe(false);
     });
   });
+
+  describe('getContactGroupMemberships', () => {
+    it('returns empty array when contact has no participant record', async () => {
+      mockGetTableRecords.mockImplementation((params: { table: string }) => {
+        if (params.table === 'Participants') return Promise.resolve([]);
+        return Promise.resolve([]);
+      });
+
+      const service = await ContactService.getInstance();
+      const result = await service.getContactGroupMemberships(42);
+
+      expect(result).toEqual([]);
+      // Should not query Group_Participants when there's no Participant
+      const calls = mockGetTableRecords.mock.calls.map(c => c[0].table);
+      expect(calls).toEqual(['Participants']);
+    });
+
+    it('queries Group_Participants for active memberships and returns the records', async () => {
+      const memberships = [
+        {
+          Group_Participant_ID: 1, Group_ID: 100, Group_Name: 'Tuesday Small Group',
+          Group_Type_ID: 1, Group_Type: 'Small Group',
+          Group_Role_ID: 2, Role: 'Member',
+          Start_Date: '2025-01-01', End_Date: null,
+        },
+        {
+          Group_Participant_ID: 2, Group_ID: 200, Group_Name: 'Worship Team',
+          Group_Type_ID: 2, Group_Type: 'Ministry',
+          Group_Role_ID: 16, Role: 'Servant',
+          Start_Date: '2024-09-01', End_Date: null,
+        },
+      ];
+
+      mockGetTableRecords.mockImplementation((params: { table: string }) => {
+        if (params.table === 'Participants') return Promise.resolve([{ Participant_ID: 999 }]);
+        if (params.table === 'Group_Participants') return Promise.resolve(memberships);
+        return Promise.resolve([]);
+      });
+
+      const service = await ContactService.getInstance();
+      const result = await service.getContactGroupMemberships(42);
+
+      expect(result).toEqual(memberships);
+
+      // Verify the Group_Participants query filters by participant + active dates on both
+      // Group_Participants and the parent Group.
+      const gpCall = mockGetTableRecords.mock.calls.find(c => c[0].table === 'Group_Participants');
+      expect(gpCall).toBeDefined();
+      expect(gpCall![0].filter).toContain('Participant_ID IN (999)');
+      expect(gpCall![0].filter).toContain('Group_Participants.[Start_Date]');
+      expect(gpCall![0].filter).toContain('Group_ID_Table.[Start_Date]');
+    });
+  });
 });

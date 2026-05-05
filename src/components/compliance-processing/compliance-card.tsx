@@ -55,6 +55,23 @@ export function ComplianceCard({ participant, onClick }: ComplianceCardProps) {
   const hasExpiring = checklist.some(c => c.status === "expiring_soon");
   const hasMissing = !isFullyCompliant && !isDiscontinued && checklist.some(c => c.status === "not_started");
 
+  const requirementItems = checklist.filter(item => item.type !== "journey_milestone");
+  const milestoneItems = checklist.filter(item => item.type === "journey_milestone");
+
+  const renderChecklistItem = (item: ComplianceChecklistItem) => (
+    <div key={item.key} className="flex items-center gap-1.5">
+      <StatusIcon item={item} />
+      <span className={`text-xs truncate ${
+        item.status === "complete" ? "text-gray-700" :
+        item.status === "expired" ? "text-red-500 line-through" :
+        item.status === "expiring_soon" ? "text-orange-600" :
+        "text-gray-400"
+      }`}>
+        {item.label}
+      </span>
+    </div>
+  );
+
   return (
     <Card
       className="cursor-pointer hover:shadow-md transition-shadow py-4 gap-3 relative"
@@ -124,21 +141,26 @@ export function ComplianceCard({ participant, onClick }: ComplianceCardProps) {
           {completedCount}/{totalCount} complete
         </div>
 
-        {/* Checklist */}
-        <div className="w-full space-y-1">
-          {checklist.map((item) => (
-            <div key={item.key} className="flex items-center gap-1.5">
-              <StatusIcon item={item} />
-              <span className={`text-xs truncate ${
-                item.status === "complete" ? "text-gray-700" :
-                item.status === "expired" ? "text-red-500 line-through" :
-                item.status === "expiring_soon" ? "text-orange-600" :
-                "text-gray-400"
-              }`}>
-                {item.label}
-              </span>
+        {/* Checklist — split into Requirements and Milestones when both are present */}
+        <div className="w-full space-y-2">
+          {requirementItems.length > 0 && (
+            <div className="space-y-1">
+              {milestoneItems.length > 0 && (
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                  Requirements
+                </div>
+              )}
+              {requirementItems.map(renderChecklistItem)}
             </div>
-          ))}
+          )}
+          {milestoneItems.length > 0 && (
+            <div className="space-y-1">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                Milestones
+              </div>
+              {milestoneItems.map(renderChecklistItem)}
+            </div>
+          )}
         </div>
 
         {/* Group name badges */}
