@@ -59,3 +59,15 @@ export interface ContactBadges {
   lastActivity: string | null;
   ageGradeGroups: string[];
 }
+
+export interface ContactGroupMembership {
+  Group_Participant_ID: number;
+  Group_ID: number;
+  Group_Name: string;
+  Group_Type: string | null;
+  Group_Type_ID: number | null;
+  Role: string | null;
+  Group_Role_ID: number | null;
+  Start_Date: string | null;
+  End_Date: string | null;
+}

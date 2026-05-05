@@ -2,19 +2,16 @@
 
 Quick-reference snapshot of current project state. Read this first at session start. For full details on any item, see the relevant session summary in `docs/sessions/`.
 
-**Last updated**: 2026-05-04
+**Last updated**: 2026-05-05
 
 ## Recently Completed
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
+| 2026-05-05 | **Contact lookup: Groups section + sectioned compliance cards**: Added a "Groups" section to the contact lookup detail page that lists every active Group_Participant for the contact (clickable via the In a Group / Serving badges, lazy-loaded). Compliance cards now split the checklist into Requirements vs Milestones sections. | #162, #163 | (pending) |
 | 2026-05-04 | **CI: bump trivy-action v0.35.0 → v0.36.0**: clears Node.js 20 deprecation warning (v0.36.0 uses `actions/cache@v5.0.5` on Node 24). | — | (pending) |
 | 2026-05-04 | **Security: bump postcss 8.5.8 → 8.5.10** (dependabot): fixes GHSA-qx2v-qp2m-jg93 / CVE-2026-41305 (XSS via unescaped `</style>`, medium). Transitive dev dep. | — | #166 |
 | 2026-05-04 | **Fix: require Program when journey is attached to compliance tool**: Stillson tool was saved with `journeyId` + `journeyMilestones` but `programId: null`, which left the Mark Complete button disabled for journey milestones. Added Zod `.refine()` + editor-side validation so the misconfig can't slip through again. | — | (pending) |
-| 2026-04-09 | **Fix thumbnail image fallback**: Added `onError` handlers to all 6 image-rendering locations so broken MP thumbnails gracefully fall back to initials instead of broken image icons. | — | #157 |
-| 2026-04-09 | **Sort options for journey & compliance tools**: Added sort dropdown (Last Name, Most Completed, Least Completed) to all processing pages. Shared `sortCards()` utility + `ProcessingSortSelect` component. 6 new tests. | — | #158 |
-| 2026-04-08 | **Test coverage: 88 new tests across 8 files** (236→324 total). Adapted upstream PR #45 for our fork's auth/security patterns. Covers: user-context, session-context, user-menu sign-out, contact-lookup scoring/sorting, contact-logs CRUD actions, contactService with sanitization, contactLogService with Central Time date conversion, MinistryPlatformProvider delegation. | — | #156 |
-| 2026-04-08 | **Upstream sync through PR #55**: Incorporated MP data safety write-confirmation rule into `.claude/rules/security.md`. Updated sync log. | — | — |
 
 ## Planned
 
@@ -24,6 +21,7 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 - [**#110** — Serving metrics: reconcile adult-only vs all-ages counts](ideas.md#serving-metrics-reconcile-adult-only-vs-all-ages-counts-110)
 - [**#72** — Dashboard subpages per journey step](ideas.md#and-more-specific-dashboard-subpages-72)
+- [**#161** — student leaders](https://github.com/The-Moody-Church/mp-charts/issues/161)
 
 ## Key Architecture Notes
 

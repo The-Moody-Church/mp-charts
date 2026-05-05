@@ -26,6 +26,8 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 
 ### Improvements
 - [Serving metrics: reconcile adult-only vs all-ages counts (#110)](#serving-metrics-reconcile-adult-only-vs-all-ages-counts-110)
+- ~~[Card Summaries should have sections (#163)](#card-summaries-should-have-sections-163)~~ ✅
+- ~~[see all groups (#162)](#see-all-groups-162)~~ ✅
 - ~~[Use Nickname Last name on contact logs (#129)](#use-nickname-last-name-on-contact-logs-129)~~ ✅
 - ~~[Auto contact log on action link clicks (#121)](#auto-contact-log-on-action-link-clicks-121)~~ ✅
 - ~~[Add "X" to the top right of the contact card (#116)](#add-x-to-the-top-right-of-the-contact-card-116)~~ ✅
@@ -158,6 +160,12 @@ Extracted `statusBadgeColor` to shared utility (`src/lib/contact-badge-utils.ts`
 
 ### Serving metrics: reconcile adult-only vs all-ages counts ([#110](https://github.com/The-Moody-Church/mp-charts/issues/110))
 The Engagement Overview Venn diagram filters serving/leading to **adults only** (18+ or unknown birthdate), showing ~830. The Grow in Love section's "Serving by Role Type" counts **all ages**, showing ~1,022. The ~192-person gap is minors with active serving/leading roles (e.g., student volunteers). Need to decide: should the Grow in Love charts also filter to adults, or should the Venn diagram include all ages? Or add an "(all ages)" note to the Grow in Love description to make the difference explicit?
+
+### ~~Card Summaries should have sections ([#163](https://github.com/The-Moody-Church/mp-charts/issues/163))~~ ✅ COMPLETED
+Compliance cards now split the checklist into "Requirements" and "Milestones" sections with small uppercase headers, mirroring the section structure already in the detail modal. Tools without journey milestones (e.g., active-teachers-and-volunteers) keep the original single-list layout. Filed from the `/compliance/stillson-residents` page.
+
+### ~~see all groups ([#162](https://github.com/The-Moody-Church/mp-charts/issues/162))~~ ✅ COMPLETED
+Added a "Groups" section to the contact lookup detail page that lists every active Group_Participant for the contact (Group Name, Type, Role, Joined date). The "In a Group" and "Serving" badges are now buttons that toggle the section open and lazy-load the data. Wired through `ContactService.getContactGroupMemberships`, the `getContactGroups` server action, and a new `ContactGroupMembership` DTO.
 
 ### ~~Use Nickname Last name on contact logs ([#129](https://github.com/The-Moody-Church/mp-charts/issues/129))~~ ✅ COMPLETED
 Auto-created contact logs now use the user's MP Contact Nickname (e.g., "Jonny Huff") instead of the formal OIDC given_name (e.g., "Jonathon Huff"). The nickname is fetched from the Contact record during login and stored in the session. Also fixed contact log dates to convert to Central Time in the service layer (was using server-local UTC in Docker).

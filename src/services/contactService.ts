@@ -1,4 +1,4 @@
-import { ContactSearch, ContactLookupDetails, HouseholdMember, ContactBadges } from "@/lib/dto";
+import { ContactSearch, ContactLookupDetails, HouseholdMember, ContactBadges, ContactGroupMembership } from "@/lib/dto";
 import { MPHelper } from "@/lib/providers/ministry-platform";
 import { sanitizeFilterValue, sanitizeGuid, sanitizeIds } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
 
@@ -273,6 +273,33 @@ export class ContactService {
       top: 1,
     });
     return milestones.length > 0 ? milestones[0].Date_Accomplished ?? null : null;
+  }
+
+  /**
+   * Returns all currently-active group memberships for a contact, keyed off the contact's
+   * Participant_Record. "Active" means today is between Group_Participants.Start_Date and End_Date,
+   * AND the parent Group itself is active over the same window.
+   */
+  public async getContactGroupMemberships(contactId: number): Promise<ContactGroupMembership[]> {
+    const safeContactId = sanitizeIds([contactId]);
+
+    const participants = await this.mp!.getTableRecords<{ Participant_ID: number }>({
+      table: "Participants",
+      filter: `Contact_ID IN (${safeContactId})`,
+      select: "Participant_ID",
+    });
+
+    if (participants.length === 0) return [];
+
+    const safeParticipantIds = sanitizeIds(participants.map(p => p.Participant_ID));
+    const today = new Date().toISOString().split('T')[0];
+
+    return this.mp!.getTableRecords<ContactGroupMembership>({
+      table: "Group_Participants",
+      filter: `Participant_ID IN (${safeParticipantIds}) AND Group_Participants.[Start_Date] <= '${today}' AND (Group_Participants.[End_Date] IS NULL OR Group_Participants.[End_Date] >= '${today}') AND Group_ID_Table.[Start_Date] <= '${today}' AND (Group_ID_Table.[End_Date] IS NULL OR Group_ID_Table.[End_Date] >= '${today}')`,
+      select: "Group_Participant_ID, Group_Participants.[Group_ID], Group_ID_Table.[Group_Name], Group_ID_Table.[Group_Type_ID], Group_ID_Table_Group_Type_ID_Table.[Group_Type], Group_Participants.[Group_Role_ID], Group_Role_ID_Table.[Role_Title] AS Role, Group_Participants.[Start_Date], Group_Participants.[End_Date]",
+      orderBy: "Group_ID_Table_Group_Type_ID_Table.[Group_Type], Group_ID_Table.[Group_Name]",
+    });
   }
 
   public async uploadContactPhoto(

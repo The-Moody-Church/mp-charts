@@ -1,7 +1,7 @@
 'use server';
 
 import { requireFeatureAccess } from '@/lib/authorization';
-import { ContactLookupDetails, ContactLogDisplay, ContactLogMadeBy, HouseholdMember, ContactBadges } from '@/lib/dto';
+import { ContactLookupDetails, ContactLogDisplay, ContactLogMadeBy, HouseholdMember, ContactBadges, ContactGroupMembership } from '@/lib/dto';
 import { ContactService } from '@/services/contactService';
 import { ContactLogService } from '@/services/contactLogService';
 import { MPHelper } from '@/lib/providers/ministry-platform';
@@ -134,6 +134,22 @@ export async function getContactBadges(contactId: number, householdPositionId?: 
   } catch (error) {
     console.error('Error fetching contact badges:', error);
     return { membershipStatus: null, membershipStatusId: null, membershipDate: null, inGroup: false, serving: false, lastActivity: null, ageGradeGroups: [] };
+  }
+}
+
+export async function getContactGroups(contactId: number): Promise<ContactGroupMembership[]> {
+  try {
+    await requireFeatureAccess("contact-lookup");
+
+    if (!contactId || contactId <= 0) {
+      throw new Error('Valid contact ID is required');
+    }
+
+    const contactService = await ContactService.getInstance();
+    return contactService.getContactGroupMemberships(contactId);
+  } catch (error) {
+    console.error('Error fetching contact groups:', error);
+    return [];
   }
 }
 
