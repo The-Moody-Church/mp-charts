@@ -230,10 +230,12 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
     });
   };
 
-  const handleToggleGroups = async () => {
+  const handleToggleGroups = async (scroll = false) => {
     const next = !groupsOpen;
     setGroupsOpen(next);
-    if (next && groups === null && contact?.Contact_ID && !groupsLoading) {
+    if (!next) return;
+
+    if (groups === null && contact?.Contact_ID && !groupsLoading) {
       setGroupsLoading(true);
       try {
         const result = await getContactGroups(contact.Contact_ID);
@@ -241,6 +243,19 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
       } finally {
         setGroupsLoading(false);
       }
+    }
+
+    if (scroll) {
+      // Wait two frames so the React commit + paint with the loaded list
+      // has happened before we measure scroll position.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          document.getElementById("contact-groups-section")?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        });
+      });
     }
   };
 
@@ -397,7 +412,7 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
                   {badges.inGroup && (
                     <button
                       type="button"
-                      onClick={handleToggleGroups}
+                      onClick={() => handleToggleGroups(true)}
                       className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800 hover:bg-emerald-200 transition-colors cursor-pointer"
                       aria-expanded={groupsOpen}
                       aria-controls="contact-groups-section"
@@ -409,7 +424,7 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
                   {badges.serving && (
                     <button
                       type="button"
-                      onClick={handleToggleGroups}
+                      onClick={() => handleToggleGroups(true)}
                       className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800 hover:bg-emerald-200 transition-colors cursor-pointer"
                       aria-expanded={groupsOpen}
                       aria-controls="contact-groups-section"
@@ -613,59 +628,6 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
         </div>
       </div>
 
-      {/* Groups Section */}
-      {(badges?.inGroup || badges?.serving) && (
-        <div id="contact-groups-section" className="bg-white shadow rounded-lg">
-          <div className="px-4 py-5 sm:p-6">
-            <button
-              onClick={handleToggleGroups}
-              className="flex items-center gap-2 w-full text-left"
-              aria-expanded={groupsOpen}
-            >
-              <svg
-                className={`h-4 w-4 text-gray-500 transition-transform ${groupsOpen ? "rotate-90" : ""}`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-              </svg>
-              <h2 className="text-lg font-semibold text-gray-900">
-                Groups{groups ? ` (${groups.length})` : ""}
-              </h2>
-            </button>
-
-            {groupsOpen && (
-              <div className="mt-4">
-                {groupsLoading && (
-                  <div className="text-sm text-gray-500">Loading groups…</div>
-                )}
-                {!groupsLoading && groups && groups.length === 0 && (
-                  <div className="text-sm text-gray-500">No current group memberships.</div>
-                )}
-                {!groupsLoading && groups && groups.length > 0 && (
-                  <ul className="divide-y divide-gray-100 border border-gray-100 rounded-md overflow-hidden">
-                    {groups.map((g) => (
-                      <li key={g.Group_Participant_ID} className="px-3 py-2">
-                        <div className="text-sm font-medium text-gray-900 truncate">{g.Group_Name}</div>
-                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-gray-500">
-                          {g.Group_Type && <span>{g.Group_Type}</span>}
-                          {g.Role && <span>&middot; {g.Role}</span>}
-                          {g.Start_Date && (
-                            <span>&middot; Joined {parseLocalDate(g.Start_Date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
-                          )}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Family Section */}
       {familyMembers.length > 0 && (
         <div className="bg-white shadow rounded-lg">
@@ -725,6 +687,59 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
                     </Link>
                   );
                 })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Groups Section */}
+      {(badges?.inGroup || badges?.serving) && (
+        <div id="contact-groups-section" className="bg-white shadow rounded-lg scroll-mt-6">
+          <div className="px-4 py-5 sm:p-6">
+            <button
+              onClick={() => handleToggleGroups(false)}
+              className="flex items-center gap-2 w-full text-left"
+              aria-expanded={groupsOpen}
+            >
+              <svg
+                className={`h-4 w-4 text-gray-500 transition-transform ${groupsOpen ? "rotate-90" : ""}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+              </svg>
+              <h2 className="text-lg font-semibold text-gray-900">
+                Groups{groups ? ` (${groups.length})` : ""}
+              </h2>
+            </button>
+
+            {groupsOpen && (
+              <div className="mt-4">
+                {groupsLoading && (
+                  <div className="text-sm text-gray-500">Loading groups…</div>
+                )}
+                {!groupsLoading && groups && groups.length === 0 && (
+                  <div className="text-sm text-gray-500">No current group memberships.</div>
+                )}
+                {!groupsLoading && groups && groups.length > 0 && (
+                  <ul className="divide-y divide-gray-100 border border-gray-100 rounded-md overflow-hidden">
+                    {groups.map((g) => (
+                      <li key={g.Group_Participant_ID} className="px-3 py-2">
+                        <div className="text-sm font-medium text-gray-900 truncate">{g.Group_Name}</div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-gray-500">
+                          {g.Group_Type && <span>{g.Group_Type}</span>}
+                          {g.Role && <span>&middot; {g.Role}</span>}
+                          {g.Start_Date && (
+                            <span>&middot; Joined {parseLocalDate(g.Start_Date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             )}
           </div>

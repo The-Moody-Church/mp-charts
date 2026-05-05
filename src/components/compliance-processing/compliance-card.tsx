@@ -53,7 +53,21 @@ export function ComplianceCard({ participant, onClick }: ComplianceCardProps) {
 
   const hasExpired = checklist.some(c => c.status === "expired");
   const hasExpiring = checklist.some(c => c.status === "expiring_soon");
-  const hasMissing = !isFullyCompliant && !isDiscontinued && checklist.some(c => c.status === "not_started");
+  const hasMissing = checklist.some(c => c.status === "not_started");
+
+  // Single status badge by priority: Missing > Expired > Expiring > Compliant.
+  // Discontinued suppresses the status badge entirely.
+  const statusBadge: { label: string; className: string } | null = isDiscontinued
+    ? null
+    : hasMissing
+      ? { label: "Missing", className: "bg-gray-100 text-gray-600" }
+      : hasExpired
+        ? { label: "Expired", className: "bg-red-100 text-red-700" }
+        : hasExpiring
+          ? { label: "Expiring", className: "bg-orange-100 text-orange-700" }
+          : isFullyCompliant
+            ? { label: "Compliant", className: "bg-green-100 text-green-700" }
+            : null;
 
   const requirementItems = checklist.filter(item => item.type !== "journey_milestone");
   const milestoneItems = checklist.filter(item => item.type === "journey_milestone");
@@ -85,24 +99,9 @@ export function ComplianceCard({ participant, onClick }: ComplianceCardProps) {
               Discontinued
             </span>
           )}
-          {isFullyCompliant && !isDiscontinued && (
-            <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700">
-              Compliant
-            </span>
-          )}
-          {hasExpired && !isDiscontinued && (
-            <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700">
-              Expired
-            </span>
-          )}
-          {hasExpiring && !hasExpired && !isDiscontinued && (
-            <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-700">
-              Expiring
-            </span>
-          )}
-          {hasMissing && !hasExpired && !hasExpiring && (
-            <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
-              Missing
+          {statusBadge && (
+            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadge.className}`}>
+              {statusBadge.label}
             </span>
           )}
           {isPaused && (
