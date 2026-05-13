@@ -10,6 +10,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 
 ### Features
 - [and more specific dashboard subpages (#72)](#and-more-specific-dashboard-subpages-72)
+- ~~[Summer Blast Volunteers](#summer-blast-volunteers)~~ ✅
 - ~~[Change feedback to create GitHub issues (#104)](#change-feedback-to-create-github-issues-104)~~ ✅
 - ~~[Pastoral Interface for Contact Logs (#19)](#pastoral-interface-for-contact-logs-19)~~ ✅
 - ~~[Processing Search Bar (#49)](#processing-search-bar-49)~~ ✅
@@ -78,15 +79,15 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 
 ## Features
 
-### ~~Summer Blast Volunteers~~ ✅ COMPLETED
-New bespoke route at `/summer-blast-volunteers` for managing the annual Summer Blast event. Two tabs: **Signups** (open Opportunity 85 Responses) and **Volunteers** (active Group 1031 Group_Participants). Cards show CPP / Mandated Reporter / Background Check status with a custom "Will Expire" badge for requirements that are currently valid but expire before 2026-07-31 (the day after the event ends). Click a signup card to add CPP / MR quickly and then "Added to SB Spreadsheet" — which creates a Group_Participant in Group 1031 (using the chosen Group_Role_ID 42-52, or Temp role 1 if none selected) and closes the Response. Tab 2 cards show role-specific requirements (configured per role in `data/summer-blast-config.json`; Temp falls back to BG+CPP+MR) and a "Remove from group" button that end-dates the participant without reopening the Response. Cache-warmed alongside dashboard and contact-search caches.
-
 ### and more specific dashboard subpages ([#72](https://github.com/The-Moody-Church/mp-charts/issues/72))
 For each step in the journey of a lifetime, add sub pages with more detailed charts.
 - Know God
 - feed your soul
 - grow in love
 
+
+### ~~Summer Blast Volunteers~~ ✅ COMPLETED
+New bespoke route at `/summer-blast-volunteers` for managing the annual Summer Blast event. Two tabs: **Signups** (open Opportunity 85 Responses) and **Volunteers** (active Group 1031 Group_Participants). Cards show CPP / Mandated Reporter / Background Check status with a custom "Will Expire" badge for requirements that are currently valid but expire before 2026-07-31 (the day after the event ends). Click a signup card to add CPP / MR quickly and then "Added to SB Spreadsheet" — which creates a Group_Participant in Group 1031 (using the chosen Group_Role_ID 42-52, or Temp role 1 if none selected) and closes the Response. Tab 2 cards show role-specific requirements (configured per role in `data/summer-blast-config.json`; Temp falls back to BG+CPP+MR) and a "Remove from group" button that end-dates the participant without reopening the Response. Cache-warmed alongside dashboard and contact-search caches.
 
 ### ~~Change feedback to create GitHub issues ([#104](https://github.com/The-Moody-Church/mp-charts/issues/104))~~ ✅ COMPLETED
 Adjust feedback button to create GitHub issues.
