@@ -1,0 +1,235 @@
+{
+  "eventName": "Summer Blast",
+  "eventEndDate": "2026-07-31",
+  "intakeOpportunityId": 85,
+  "trackingGroupId": 1031,
+  "tempGroupRoleId": 1,
+  "cppFormId": 83,
+  "mandatedReporterCertId": 10,
+  "intakeRequirements": [
+    {
+      "requirementId": 0,
+      "label": "Background Check",
+      "type": "background_check",
+      "sortOrder": 1
+    },
+    {
+      "requirementId": 83,
+      "label": "Child Protection Policy Agreement",
+      "type": "form",
+      "sortOrder": 2
+    },
+    {
+      "requirementId": 10,
+      "label": "Mandated Reporter",
+      "type": "certification",
+      "sortOrder": 3
+    }
+  ],
+  "roleConfigs": [
+    {
+      "groupRoleId": 42,
+      "label": "Summer Blast Volunteer - Chow",
+      "requirements": [
+        {
+          "requirementId": 83,
+          "label": "Child Protection Policy Agreement",
+          "type": "form",
+          "sortOrder": 1
+        }
+      ]
+    },
+    {
+      "groupRoleId": 43,
+      "label": "Summer Blast Volunteer - Parking",
+      "requirements": [
+        {
+          "requirementId": 83,
+          "label": "Child Protection Policy Agreement",
+          "type": "form",
+          "sortOrder": 1
+        }
+      ]
+    },
+    {
+      "groupRoleId": 44,
+      "label": "Summer Blast Volunteer - Group Leader",
+      "requirements": [
+        {
+          "requirementId": 0,
+          "label": "Background Check",
+          "type": "background_check",
+          "sortOrder": 1
+        },
+        {
+          "requirementId": 83,
+          "label": "Child Protection Policy Agreement",
+          "type": "form",
+          "sortOrder": 2
+        },
+        {
+          "requirementId": 10,
+          "label": "Mandated Reporter",
+          "type": "certification",
+          "sortOrder": 3
+        }
+      ]
+    },
+    {
+      "groupRoleId": 45,
+      "label": "Summer Blast Lead Team",
+      "requirements": [
+        {
+          "requirementId": 0,
+          "label": "Background Check",
+          "type": "background_check",
+          "sortOrder": 1
+        },
+        {
+          "requirementId": 83,
+          "label": "Child Protection Policy Agreement",
+          "type": "form",
+          "sortOrder": 2
+        },
+        {
+          "requirementId": 10,
+          "label": "Mandated Reporter",
+          "type": "certification",
+          "sortOrder": 3
+        }
+      ]
+    },
+    {
+      "groupRoleId": 46,
+      "label": "Summer Blast Station Leader",
+      "requirements": [
+        {
+          "requirementId": 0,
+          "label": "Background Check",
+          "type": "background_check",
+          "sortOrder": 1
+        },
+        {
+          "requirementId": 83,
+          "label": "Child Protection Policy Agreement",
+          "type": "form",
+          "sortOrder": 2
+        },
+        {
+          "requirementId": 10,
+          "label": "Mandated Reporter",
+          "type": "certification",
+          "sortOrder": 3
+        }
+      ]
+    },
+    {
+      "groupRoleId": 47,
+      "label": "Summer Blast Volunteer - Crew Leader",
+      "requirements": [
+        {
+          "requirementId": 0,
+          "label": "Background Check",
+          "type": "background_check",
+          "sortOrder": 1
+        },
+        {
+          "requirementId": 83,
+          "label": "Child Protection Policy Agreement",
+          "type": "form",
+          "sortOrder": 2
+        },
+        {
+          "requirementId": 10,
+          "label": "Mandated Reporter",
+          "type": "certification",
+          "sortOrder": 3
+        }
+      ]
+    },
+    {
+      "groupRoleId": 48,
+      "label": "Summer Blast Volunteer - Nursery",
+      "requirements": [
+        {
+          "requirementId": 0,
+          "label": "Background Check",
+          "type": "background_check",
+          "sortOrder": 1
+        },
+        {
+          "requirementId": 83,
+          "label": "Child Protection Policy Agreement",
+          "type": "form",
+          "sortOrder": 2
+        },
+        {
+          "requirementId": 10,
+          "label": "Mandated Reporter",
+          "type": "certification",
+          "sortOrder": 3
+        }
+      ]
+    },
+    {
+      "groupRoleId": 49,
+      "label": "Summer Blast Volunteer - Registration",
+      "requirements": [
+        {
+          "requirementId": 83,
+          "label": "Child Protection Policy Agreement",
+          "type": "form",
+          "sortOrder": 1
+        }
+      ]
+    },
+    {
+      "groupRoleId": 50,
+      "label": "Summer Blast Volunteer - Prayer Team",
+      "requirements": [
+        {
+          "requirementId": 83,
+          "label": "Child Protection Policy Agreement",
+          "type": "form",
+          "sortOrder": 1
+        }
+      ]
+    },
+    {
+      "groupRoleId": 51,
+      "label": "Summer Blast Youth Assistant",
+      "requirements": [
+        {
+          "requirementId": 0,
+          "label": "Background Check",
+          "type": "background_check",
+          "sortOrder": 1
+        },
+        {
+          "requirementId": 83,
+          "label": "Child Protection Policy Agreement",
+          "type": "form",
+          "sortOrder": 2
+        },
+        {
+          "requirementId": 10,
+          "label": "Mandated Reporter",
+          "type": "certification",
+          "sortOrder": 3
+        }
+      ]
+    },
+    {
+      "groupRoleId": 52,
+      "label": "Summer Blast - Volunteer Room",
+      "requirements": [
+        {
+          "requirementId": 83,
+          "label": "Child Protection Policy Agreement",
+          "type": "form",
+          "sortOrder": 1
+        }
+      ]
+    }
+  ]
+}

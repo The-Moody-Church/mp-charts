@@ -5,3 +5,4 @@ export * from './dashboard';
 export * from './journey-processing';
 export * from './members';
 export * from './processing-shared';
+export * from './summer-blast';

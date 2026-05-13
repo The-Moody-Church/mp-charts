@@ -40,6 +40,13 @@ const featureCards: FeatureCard[] = [
     feature: "manage-members",
   },
   {
+    title: "Summer Blast Volunteers",
+    description: "Track signups, volunteer compliance, and group assignments for the Summer Blast event",
+    href: "/summer-blast-volunteers",
+    buttonText: "Manage Volunteers",
+    feature: "summer-blast-volunteers",
+  },
+  {
     title: "Setup",
     description: "Manage which User Groups can access each feature",
     href: "/admin",
