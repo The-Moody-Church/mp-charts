@@ -12,6 +12,7 @@ export type StaticFeature =
   | "dashboard"
   | "contact-lookup"
   | "manage-members"
+  | "summer-blast-volunteers"
   | "admin";
 
 /** Dynamic features follow the pattern "journey:{slug}" or "compliance:{slug}" */
@@ -41,6 +42,11 @@ const DEFAULT_CONFIG: FeatureAccessConfig = {
   "manage-members": {
     label: "Manage Members",
     description: "View and manage church membership statuses",
+    allowedGroupIds: [],
+  },
+  "summer-blast-volunteers": {
+    label: "Summer Blast Volunteers",
+    description: "Manage signups and volunteers for the Summer Blast event",
     allowedGroupIds: [],
   },
 };
@@ -155,6 +161,7 @@ export function getAccessibleFeatures(userGroupIds: number[]): Feature[] {
     "dashboard",
     "contact-lookup",
     "manage-members",
+    "summer-blast-volunteers",
     "admin",
   ];
 

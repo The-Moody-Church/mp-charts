@@ -1,0 +1,686 @@
+import { MPHelper } from "@/lib/providers/ministry-platform";
+import { sanitizeIds } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
+import { nowCentral } from "@/lib/processing-utils";
+import {
+  getSummerBlastConfig,
+  getRequirementsForRole,
+  getRoleLabel,
+  type SummerBlastConfig,
+  type SummerBlastRequirementConfig,
+} from "@/lib/summer-blast-config";
+import type {
+  SummerBlastIntakeCard,
+  SummerBlastVolunteerCard,
+  SummerBlastChecklistItem,
+  SummerBlastItemStatus,
+  SummerBlastPersonInfo,
+  BackgroundCheckDetail,
+} from "@/lib/dto";
+
+const BATCH_SIZE = 100;
+
+// ---------------------------------------------------------------------------
+// Status helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Status for an item given an event-end cutoff (e.g. 2026-07-31).
+ *
+ * - `null` expires (never expires) → `complete`
+ * - already past → `expired`
+ * - expires before cutoff → `will_expire`
+ * - expires on/after cutoff → `complete`
+ *
+ * Exported for unit testing.
+ */
+export function getEventExpirationStatus(
+  expiresDateStr: string | null,
+  cutoffDate: Date,
+  now: Date = new Date(),
+): "complete" | "expired" | "will_expire" {
+  if (!expiresDateStr) return "complete";
+  const expires = new Date(expiresDateStr);
+  if (expires < now) return "expired";
+  if (expires < cutoffDate) return "will_expire";
+  return "complete";
+}
+
+// ---------------------------------------------------------------------------
+// Raw record types
+// ---------------------------------------------------------------------------
+
+interface ResponseRecord {
+  Response_ID: number;
+  Response_Date: string;
+  Opportunity_ID: number;
+  Participant_ID: number;
+  Closed: boolean;
+}
+
+interface GroupParticipantRecord {
+  Group_Participant_ID: number;
+  Participant_ID: number;
+  Group_ID: number;
+  Group_Role_ID: number;
+  Start_Date: string;
+  End_Date: string | null;
+}
+
+interface ParticipantRecord {
+  Participant_ID: number;
+  Contact_ID: number;
+}
+
+interface ContactRecord {
+  Contact_ID: number;
+  First_Name: string;
+  Nickname: string | null;
+  Last_Name: string;
+  Image_GUID: string | null;
+  Email_Address: string | null;
+  Mobile_Phone: string | null;
+}
+
+interface BackgroundCheckRecord {
+  Background_Check_ID: number;
+  Contact_ID: number;
+  Background_Check_Status_ID: number | null;
+  Background_Check_Started: string;
+  Background_Check_Submitted: string | null;
+  Background_Check_Returned: string | null;
+  All_Clear: boolean | null;
+  Background_Check_Expires: string | null;
+  Report_Url: string | null;
+  Background_Check_Type_ID: number | null;
+}
+
+interface CertificationRecord {
+  Participant_Certification_ID: number;
+  Participant_ID: number;
+  Certification_Type_ID: number;
+  Certification_Completed: string | null;
+  Certification_Expires: string | null;
+  Passed: boolean | null;
+}
+
+interface FormResponseRecord {
+  Form_Response_ID: number;
+  Form_ID: number;
+  Contact_ID: number;
+  Response_Date: string;
+  Expires: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Service
+// ---------------------------------------------------------------------------
+
+export class SummerBlastService {
+  private static instance: SummerBlastService | null = null;
+  private mp: MPHelper;
+  private config: SummerBlastConfig;
+
+  private constructor(mp?: MPHelper) {
+    this.mp = mp ?? new MPHelper();
+    this.config = getSummerBlastConfig();
+  }
+
+  public static getInstance(): SummerBlastService {
+    if (!this.instance) this.instance = new SummerBlastService();
+    return this.instance;
+  }
+
+  /** Test-only constructor that accepts an injected MP helper. */
+  public static _createForTest(mp: MPHelper): SummerBlastService {
+    return new SummerBlastService(mp);
+  }
+
+  public getConfig(): SummerBlastConfig {
+    return this.config;
+  }
+
+  private getCutoffDate(): Date {
+    // eventEndDate is "YYYY-MM-DD" in Central time. Parse as local-noon so DST
+    // shifts don't move it across the date boundary.
+    const [y, m, d] = this.config.eventEndDate.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  // -------------------------------------------------------------------------
+  // Tab 1: Intake (Opportunity Responses)
+  // -------------------------------------------------------------------------
+
+  public async getIntakeCards(): Promise<SummerBlastIntakeCard[]> {
+    const responses = await this.mp.getTableRecords<ResponseRecord>({
+      table: "Responses",
+      select: "Response_ID,Response_Date,Opportunity_ID,Participant_ID,Closed",
+      filter: `Opportunity_ID = ${this.config.intakeOpportunityId} AND Closed = 0`,
+      orderBy: "Response_Date DESC",
+    });
+
+    if (responses.length === 0) return [];
+
+    // Deduplicate by Participant_ID — keep the most recent open response per person.
+    const byParticipant = new Map<number, ResponseRecord>();
+    for (const r of responses) {
+      const existing = byParticipant.get(r.Participant_ID);
+      if (!existing || new Date(r.Response_Date) > new Date(existing.Response_Date)) {
+        byParticipant.set(r.Participant_ID, r);
+      }
+    }
+    const dedupedResponses = [...byParticipant.values()];
+    const participantIds = dedupedResponses.map((r) => r.Participant_ID);
+
+    const contacts = await this.getContactsForParticipants(participantIds);
+
+    const peopleByParticipant = new Map<number, SummerBlastPersonInfo>();
+    for (const r of dedupedResponses) {
+      const c = contacts.get(r.Participant_ID);
+      if (!c) continue;
+      peopleByParticipant.set(r.Participant_ID, {
+        Contact_ID: c.Contact_ID,
+        Participant_ID: r.Participant_ID,
+        First_Name: c.First_Name,
+        Nickname: c.Nickname,
+        Last_Name: c.Last_Name,
+        Image_GUID: c.Image_GUID,
+        Group_Participant_ID: null,
+        Start_Date: null,
+        Email_Address: c.Email_Address,
+        Mobile_Phone: c.Mobile_Phone,
+      });
+    }
+
+    if (peopleByParticipant.size === 0) return [];
+
+    const contactIds = [...peopleByParticipant.values()].map((p) => p.Contact_ID);
+    const allParticipantIds = [...peopleByParticipant.keys()];
+
+    const [bgChecks, certifications, formResponses] = await Promise.all([
+      this.fetchBackgroundChecks(contactIds),
+      this.fetchCertifications(allParticipantIds),
+      this.fetchFormResponses(contactIds),
+    ]);
+    const bgTypeNames = await this.fetchBgCheckTypeNames(bgChecks);
+    const cutoff = this.getCutoffDate();
+
+    const cards: SummerBlastIntakeCard[] = [];
+    for (const r of dedupedResponses) {
+      const info = peopleByParticipant.get(r.Participant_ID);
+      if (!info) continue;
+
+      const checklist = this.buildChecklist(
+        info.Contact_ID,
+        info.Participant_ID,
+        this.config.intakeRequirements,
+        bgChecks,
+        certifications,
+        formResponses,
+        bgTypeNames,
+        cutoff,
+      );
+
+      cards.push({
+        info,
+        checklist,
+        completedCount: checklist.filter((c) => c.status === "complete").length,
+        totalCount: checklist.length,
+        isFullyCompliant: checklist.every((c) => c.status === "complete"),
+        hasWillExpire: checklist.some((c) => c.status === "will_expire"),
+        responseId: r.Response_ID,
+        responseDate: r.Response_Date,
+      });
+    }
+
+    cards.sort((a, b) =>
+      a.info.Last_Name.localeCompare(b.info.Last_Name) ||
+      a.info.First_Name.localeCompare(b.info.First_Name),
+    );
+    return cards;
+  }
+
+  // -------------------------------------------------------------------------
+  // Tab 2: Volunteers (Group_Participants in tracking group)
+  // -------------------------------------------------------------------------
+
+  public async getVolunteerCards(): Promise<SummerBlastVolunteerCard[]> {
+    const now = nowCentral();
+    const gps = await this.mp.getTableRecords<GroupParticipantRecord>({
+      table: "Group_Participants",
+      select:
+        "Group_Participant_ID,Participant_ID,Group_ID,Group_Role_ID,Start_Date,End_Date",
+      filter: `Group_ID = ${this.config.trackingGroupId} AND (End_Date IS NULL OR End_Date >= '${now}')`,
+    });
+    if (gps.length === 0) return [];
+
+    // Deduplicate by Participant_ID — prefer record with null End_Date.
+    const byParticipant = new Map<number, GroupParticipantRecord>();
+    for (const gp of gps) {
+      const existing = byParticipant.get(gp.Participant_ID);
+      if (!existing || (gp.End_Date === null && existing.End_Date !== null)) {
+        byParticipant.set(gp.Participant_ID, gp);
+      }
+    }
+    const deduped = [...byParticipant.values()];
+    const participantIds = deduped.map((g) => g.Participant_ID);
+
+    const contacts = await this.getContactsForParticipants(participantIds);
+    if (contacts.size === 0) return [];
+
+    const contactIds = [...contacts.values()].map((c) => c.Contact_ID);
+
+    const [bgChecks, certifications, formResponses] = await Promise.all([
+      this.fetchBackgroundChecks(contactIds),
+      this.fetchCertifications(participantIds),
+      this.fetchFormResponses(contactIds),
+    ]);
+    const bgTypeNames = await this.fetchBgCheckTypeNames(bgChecks);
+    const cutoff = this.getCutoffDate();
+
+    const cards: SummerBlastVolunteerCard[] = [];
+    for (const gp of deduped) {
+      const c = contacts.get(gp.Participant_ID);
+      if (!c) continue;
+
+      const info: SummerBlastPersonInfo = {
+        Contact_ID: c.Contact_ID,
+        Participant_ID: gp.Participant_ID,
+        First_Name: c.First_Name,
+        Nickname: c.Nickname,
+        Last_Name: c.Last_Name,
+        Image_GUID: c.Image_GUID,
+        Group_Participant_ID: gp.Group_Participant_ID,
+        Start_Date: gp.Start_Date,
+        Email_Address: c.Email_Address,
+        Mobile_Phone: c.Mobile_Phone,
+      };
+
+      const requirements = getRequirementsForRole(this.config, gp.Group_Role_ID);
+      const checklist = this.buildChecklist(
+        info.Contact_ID,
+        info.Participant_ID,
+        requirements,
+        bgChecks,
+        certifications,
+        formResponses,
+        bgTypeNames,
+        cutoff,
+      );
+
+      cards.push({
+        info,
+        checklist,
+        completedCount: checklist.filter((i) => i.status === "complete").length,
+        totalCount: checklist.length,
+        isFullyCompliant: checklist.every((i) => i.status === "complete"),
+        hasWillExpire: checklist.some((i) => i.status === "will_expire"),
+        groupParticipantId: gp.Group_Participant_ID,
+        groupRoleId: gp.Group_Role_ID,
+        groupRoleLabel:
+          getRoleLabel(this.config, gp.Group_Role_ID) ?? `Group Role ${gp.Group_Role_ID}`,
+        startDate: gp.Start_Date,
+      });
+    }
+
+    cards.sort((a, b) =>
+      a.info.Last_Name.localeCompare(b.info.Last_Name) ||
+      a.info.First_Name.localeCompare(b.info.First_Name),
+    );
+    return cards;
+  }
+
+  // -------------------------------------------------------------------------
+  // Write actions
+  // -------------------------------------------------------------------------
+
+  /**
+   * Add a person to the Summer Blast tracking group AND mark their intake Response Closed.
+   * Both writes succeed or the second is attempted independently — we don't roll back the
+   * first since MP doesn't expose transactions. Order: create the participant first, then
+   * close the response, so a failure mid-way leaves a participant + an open response
+   * (a re-try just re-runs both, and the de-duplicating client will hide the duplicate
+   * once the participant exists for this person).
+   */
+  public async addToSummerBlast(params: {
+    contactId: number;
+    responseId: number;
+    groupRoleId: number | null;
+    userId?: number;
+  }): Promise<{ groupParticipantId: number }> {
+    const { contactId, responseId, groupRoleId, userId } = params;
+
+    // Resolve Contact_ID → Participant_ID.
+    const participants = await this.mp.getTableRecords<ParticipantRecord>({
+      table: "Participants",
+      select: "Participant_ID,Contact_ID",
+      filter: `Contact_ID = ${contactId}`,
+      top: 1,
+    });
+    if (participants.length === 0) {
+      throw new Error(`No Participant record for Contact_ID ${contactId}`);
+    }
+    const participantId = participants[0].Participant_ID;
+
+    const now = nowCentral();
+    const roleId = groupRoleId ?? this.config.tempGroupRoleId;
+
+    const created = (await this.mp.createTableRecords(
+      "Group_Participants",
+      [
+        {
+          Group_ID: this.config.trackingGroupId,
+          Participant_ID: participantId,
+          Group_Role_ID: roleId,
+          Start_Date: now,
+        },
+      ],
+      { $userId: userId },
+    )) as unknown as { Group_Participant_ID: number }[];
+
+    const groupParticipantId = created[0].Group_Participant_ID;
+
+    // Close the response so it disappears from the intake tab.
+    await this.mp.updateTableRecords(
+      "Responses",
+      [{ Response_ID: responseId, Closed: true }],
+      { $userId: userId },
+    );
+
+    return { groupParticipantId };
+  }
+
+  /** End-date a Group_Participants row (does not touch Responses). */
+  public async removeFromSummerBlast(params: {
+    groupParticipantId: number;
+    userId?: number;
+  }): Promise<void> {
+    const { groupParticipantId, userId } = params;
+    const now = nowCentral();
+    await this.mp.updateTableRecords(
+      "Group_Participants",
+      [{ Group_Participant_ID: groupParticipantId, End_Date: now }],
+      { $userId: userId },
+    );
+  }
+
+  /** Create a CPP form response for a contact. */
+  public async createCpp(params: {
+    contactId: number;
+    responseDate: string;
+    userId?: number;
+  }): Promise<number> {
+    const { contactId, responseDate, userId } = params;
+    const created = (await this.mp.createTableRecords(
+      "Form_Responses",
+      [
+        {
+          Form_ID: this.config.cppFormId,
+          Contact_ID: contactId,
+          Response_Date: responseDate,
+        },
+      ],
+      { $userId: userId },
+    )) as unknown as { Form_Response_ID: number }[];
+    return created[0].Form_Response_ID;
+  }
+
+  /** Create a Mandated Reporter certification for a participant. */
+  public async createMandatedReporter(params: {
+    participantId: number;
+    completedDate: string;
+    userId?: number;
+  }): Promise<number> {
+    const { participantId, completedDate, userId } = params;
+    const created = (await this.mp.createTableRecords(
+      "Participant_Certifications",
+      [
+        {
+          Participant_ID: participantId,
+          Certification_Type_ID: this.config.mandatedReporterCertId,
+          Certification_Submitted: nowCentral(),
+          Certification_Completed: completedDate,
+        },
+      ],
+      { $userId: userId },
+    )) as unknown as { Participant_Certification_ID: number }[];
+    return created[0].Participant_Certification_ID;
+  }
+
+  // -------------------------------------------------------------------------
+  // Private helpers
+  // -------------------------------------------------------------------------
+
+  private buildChecklist(
+    contactId: number,
+    participantId: number,
+    requirements: SummerBlastRequirementConfig[],
+    bgChecks: BackgroundCheckRecord[],
+    certifications: CertificationRecord[],
+    formResponses: FormResponseRecord[],
+    bgTypeNames: Map<number, string>,
+    cutoff: Date,
+  ): SummerBlastChecklistItem[] {
+    const items: SummerBlastChecklistItem[] = [];
+
+    for (const req of [...requirements].sort((a, b) => a.sortOrder - b.sortOrder)) {
+      switch (req.type) {
+        case "background_check": {
+          const latest = bgChecks.find((bc) => bc.Contact_ID === contactId);
+          const passed = latest?.All_Clear === true;
+          const expires = latest?.Background_Check_Expires ?? null;
+          const status: SummerBlastItemStatus = !passed
+            ? "not_started"
+            : getEventExpirationStatus(expires, cutoff);
+
+          let bgDetail: BackgroundCheckDetail | null = null;
+          if (latest) {
+            let bgStatus = "Pending";
+            if (latest.All_Clear === true && latest.Background_Check_Returned) bgStatus = "Completed";
+            else if (latest.Background_Check_Returned) bgStatus = "Returned";
+            else if (latest.Background_Check_Submitted) bgStatus = "Submitted";
+            else bgStatus = "Started";
+            bgDetail = {
+              typeName: latest.Background_Check_Type_ID
+                ? bgTypeNames.get(latest.Background_Check_Type_ID) ?? null
+                : null,
+              status: bgStatus,
+              started: latest.Background_Check_Started,
+              submitted: latest.Background_Check_Submitted,
+              returned: latest.Background_Check_Returned,
+              allClear: latest.All_Clear,
+              expires: latest.Background_Check_Expires,
+              reportUrl: latest.Report_Url,
+            };
+          }
+
+          items.push({
+            key: `req-${req.requirementId}-bg`,
+            label: req.label,
+            type: "background_check",
+            completed: status === "complete",
+            date:
+              latest?.Background_Check_Returned ??
+              latest?.Background_Check_Started ??
+              null,
+            expires,
+            status,
+            detail: latest ? (latest.All_Clear ? "All Clear" : "Pending") : null,
+            order: req.sortOrder,
+            recordId: latest?.Background_Check_ID ?? null,
+            bgCheckDetail: bgDetail,
+          });
+          break;
+        }
+        case "certification": {
+          const latest = certifications.find(
+            (c) =>
+              c.Participant_ID === participantId &&
+              c.Certification_Type_ID === req.requirementId,
+          );
+          const passed = !!latest?.Certification_Completed && latest.Passed !== false;
+          const expires = latest?.Certification_Expires ?? null;
+          const status: SummerBlastItemStatus = passed
+            ? getEventExpirationStatus(expires, cutoff)
+            : latest
+              ? "in_progress"
+              : "not_started";
+          items.push({
+            key: `req-${req.requirementId}-cert`,
+            label: req.label,
+            type: "certification",
+            completed: status === "complete",
+            date: latest?.Certification_Completed ?? null,
+            expires,
+            status,
+            detail: latest?.Passed === false ? "Failed" : null,
+            order: req.sortOrder,
+            recordId: latest?.Participant_Certification_ID ?? null,
+            bgCheckDetail: null,
+          });
+          break;
+        }
+        case "form": {
+          const latest = formResponses.find(
+            (f) => f.Contact_ID === contactId && f.Form_ID === req.requirementId,
+          );
+          const submitted = !!latest;
+          const expires = latest?.Expires ?? null;
+          const status: SummerBlastItemStatus = submitted
+            ? getEventExpirationStatus(expires, cutoff)
+            : "not_started";
+          items.push({
+            key: `req-${req.requirementId}-form`,
+            label: req.label,
+            type: "form",
+            completed: status === "complete",
+            date: latest?.Response_Date ?? null,
+            expires,
+            status,
+            detail: null,
+            order: req.sortOrder,
+            recordId: latest?.Form_Response_ID ?? null,
+            bgCheckDetail: null,
+          });
+          break;
+        }
+      }
+    }
+    return items.sort((a, b) => a.order - b.order);
+  }
+
+  private async getContactsForParticipants(
+    participantIds: number[],
+  ): Promise<Map<number, ContactRecord & { Participant_ID: number }>> {
+    if (participantIds.length === 0) return new Map();
+
+    const allParticipants: ParticipantRecord[] = [];
+    for (let i = 0; i < participantIds.length; i += BATCH_SIZE) {
+      const batchIds = participantIds.slice(i, i + BATCH_SIZE);
+      const batch = await this.mp.getTableRecords<ParticipantRecord>({
+        table: "Participants",
+        select: "Participant_ID,Contact_ID",
+        filter: `Participant_ID IN (${sanitizeIds(batchIds)})`,
+      });
+      allParticipants.push(...batch);
+    }
+
+    const contactIds = [...new Set(allParticipants.map((p) => p.Contact_ID))];
+    if (contactIds.length === 0) return new Map();
+
+    const allContacts: ContactRecord[] = [];
+    for (let i = 0; i < contactIds.length; i += BATCH_SIZE) {
+      const batchIds = contactIds.slice(i, i + BATCH_SIZE);
+      const batch = await this.mp.getTableRecords<ContactRecord>({
+        table: "Contacts",
+        select:
+          "Contact_ID,First_Name,Nickname,Last_Name,dp_fileUniqueId AS Image_GUID,Email_Address,Mobile_Phone",
+        filter: `Contact_ID IN (${sanitizeIds(batchIds)})`,
+      });
+      allContacts.push(...batch);
+    }
+
+    const contactMap = new Map(allContacts.map((c) => [c.Contact_ID, c]));
+    const result = new Map<number, ContactRecord & { Participant_ID: number }>();
+    for (const p of allParticipants) {
+      const c = contactMap.get(p.Contact_ID);
+      if (c) result.set(p.Participant_ID, { ...c, Participant_ID: p.Participant_ID });
+    }
+    return result;
+  }
+
+  private async fetchBackgroundChecks(contactIds: number[]): Promise<BackgroundCheckRecord[]> {
+    if (contactIds.length === 0) return [];
+    const all: BackgroundCheckRecord[] = [];
+    for (let i = 0; i < contactIds.length; i += BATCH_SIZE) {
+      const batchIds = contactIds.slice(i, i + BATCH_SIZE);
+      const batch = await this.mp.getTableRecords<BackgroundCheckRecord>({
+        table: "Background_Checks",
+        select:
+          "Background_Check_ID,Contact_ID,Background_Check_Status_ID,Background_Check_Started,Background_Check_Submitted,Background_Check_Returned,All_Clear,Background_Check_Expires,Report_Url,Background_Check_Type_ID",
+        filter: `Contact_ID IN (${sanitizeIds(batchIds)})`,
+        orderBy: "Background_Check_Started DESC",
+      });
+      all.push(...batch);
+    }
+    return all;
+  }
+
+  private async fetchBgCheckTypeNames(
+    bgChecks: BackgroundCheckRecord[],
+  ): Promise<Map<number, string>> {
+    const typeIds = [
+      ...new Set(
+        bgChecks
+          .map((b) => b.Background_Check_Type_ID)
+          .filter((id): id is number => id !== null),
+      ),
+    ];
+    if (typeIds.length === 0) return new Map();
+    const types = await this.mp.getTableRecords<{
+      Background_Check_Type_ID: number;
+      Background_Check_Type: string;
+    }>({
+      table: "Background_Check_Types",
+      select: "Background_Check_Type_ID,Background_Check_Type",
+      filter: `Background_Check_Type_ID IN (${sanitizeIds(typeIds)})`,
+    });
+    return new Map(types.map((t) => [t.Background_Check_Type_ID, t.Background_Check_Type]));
+  }
+
+  private async fetchCertifications(
+    participantIds: number[],
+  ): Promise<CertificationRecord[]> {
+    if (participantIds.length === 0) return [];
+    const all: CertificationRecord[] = [];
+    for (let i = 0; i < participantIds.length; i += BATCH_SIZE) {
+      const batchIds = participantIds.slice(i, i + BATCH_SIZE);
+      const batch = await this.mp.getTableRecords<CertificationRecord>({
+        table: "Participant_Certifications",
+        select:
+          "Participant_Certification_ID,Participant_ID,Certification_Type_ID,Certification_Completed,Certification_Expires,Passed",
+        filter: `Participant_ID IN (${sanitizeIds(batchIds)})`,
+        orderBy: "Certification_Completed DESC",
+      });
+      all.push(...batch);
+    }
+    return all;
+  }
+
+  private async fetchFormResponses(
+    contactIds: number[],
+  ): Promise<FormResponseRecord[]> {
+    if (contactIds.length === 0) return [];
+    const all: FormResponseRecord[] = [];
+    for (let i = 0; i < contactIds.length; i += BATCH_SIZE) {
+      const batchIds = contactIds.slice(i, i + BATCH_SIZE);
+      const batch = await this.mp.getTableRecords<FormResponseRecord>({
+        table: "Form_Responses",
+        select: "Form_Response_ID,Form_ID,Contact_ID,Response_Date,Expires",
+        filter: `Contact_ID IN (${sanitizeIds(batchIds)})`,
+        orderBy: "Response_Date DESC",
+      });
+      all.push(...batch);
+    }
+    return all;
+  }
+}

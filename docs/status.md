@@ -2,16 +2,14 @@
 
 Quick-reference snapshot of current project state. Read this first at session start. For full details on any item, see the relevant session summary in `docs/sessions/`.
 
-**Last updated**: 2026-05-05
+**Last updated**: 2026-05-13
 
 ## Recently Completed
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
+| 2026-05-13 | **Summer Blast Volunteers tool**: New bespoke route at `/summer-blast-volunteers` with two tabs (open Opportunity 85 signups, active Group 1031 volunteers), event-cutoff "Will Expire" badge (anything expiring before 2026-07-31), CPP/Mandated Reporter quick-add, "Added to SB Spreadsheet" enrollment that creates a Group_Participant and closes the Response, role-specific requirements config (per Group_Role_ID 42-52, with Temp role 1 falling back to BG+CPP+MR). Service + 17 unit tests, cache warming registered. | — | (pending) |
 | 2026-05-05 | **Contact lookup: Groups section + sectioned compliance cards**: Added a "Groups" section to the contact lookup detail page that lists every active Group_Participant for the contact (clickable via the In a Group / Serving badges, lazy-loaded). Compliance cards now split the checklist into Requirements vs Milestones sections. | #162, #163 | (pending) |
-| 2026-05-04 | **CI: bump trivy-action v0.35.0 → v0.36.0**: clears Node.js 20 deprecation warning (v0.36.0 uses `actions/cache@v5.0.5` on Node 24). | — | (pending) |
-| 2026-05-04 | **Security: bump postcss 8.5.8 → 8.5.10** (dependabot): fixes GHSA-qx2v-qp2m-jg93 / CVE-2026-41305 (XSS via unescaped `</style>`, medium). Transitive dev dep. | — | #166 |
-| 2026-05-04 | **Fix: require Program when journey is attached to compliance tool**: Stillson tool was saved with `journeyId` + `journeyMilestones` but `programId: null`, which left the Mark Complete button disabled for journey milestones. Added Zod `.refine()` + editor-side validation so the misconfig can't slip through again. | — | (pending) |
 
 ## Planned
 
