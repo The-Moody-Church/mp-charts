@@ -4,6 +4,7 @@ import { updateTag } from "next/cache";
 import { getMpUserId } from "@/lib/auth-helpers";
 import { requireFeatureAccess } from "@/lib/authorization";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { serviceCache } from "@/lib/service-cache";
 import { SummerBlastService } from "@/services/summerBlastService";
 import {
   getCachedSummerBlastIntake,
@@ -19,8 +20,13 @@ import type {
 const FEATURE = "summer-blast-volunteers" as const;
 
 function invalidateAll() {
+  // updateTag invalidates the Next.js 'use cache' framework cache; serviceCache
+  // is our in-memory safety net inside each cached function and must be cleared
+  // separately or it will keep returning the pre-write snapshot.
   updateTag(SUMMER_BLAST_INTAKE_TAG);
   updateTag(SUMMER_BLAST_VOLUNTEERS_TAG);
+  serviceCache.deleteByPrefix(SUMMER_BLAST_INTAKE_TAG);
+  serviceCache.deleteByPrefix(SUMMER_BLAST_VOLUNTEERS_TAG);
 }
 
 export async function getSummerBlastIntake(): Promise<SummerBlastIntakeCard[]> {
