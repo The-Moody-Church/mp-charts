@@ -59,9 +59,10 @@ export function MilestoneEditForm({
         )}
       </div>
       <div>
-        <Label className="text-xs">Add File</Label>
+        <Label className="text-xs">Add Files (multiple allowed)</Label>
         <Input
           type="file"
+          multiple
           ref={editFileInputRef}
           accept=".pdf,.txt,.csv,.jpg,.jpeg,.png,.gif,.bmp,.webp"
           className="text-xs h-8"

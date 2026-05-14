@@ -147,6 +147,36 @@ export function JourneyToolEditor({ existingTool, existingSlugs, usedJourneyIds,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedJourneyId]);
 
+  // Manual refresh — re-fetch milestones from MP and merge with current in-memory edits.
+  // Preserves all user changes (labels, visibility, sort order, discontinue config) and
+  // appends any milestones newly added in MP since the last load.
+  const handleRefreshMilestones = async () => {
+    if (!selectedJourneyId) return;
+    setLoadingMilestones(true);
+    try {
+      const mpMilestones = await getJourneyMilestones(selectedJourneyId);
+      const currentByIds = new Map(milestones.map((m) => [m.milestoneId, m]));
+      const maxSortOrder = milestones.reduce((max, m) => Math.max(max, m.sortOrder), 0);
+      let nextSortOrder = maxSortOrder;
+      const merged: JourneyMilestoneConfig[] = mpMilestones.map((m) => {
+        const existing = currentByIds.get(m.Milestone_ID);
+        if (existing) return existing;
+        nextSortOrder += 1;
+        return {
+          milestoneId: m.Milestone_ID,
+          label: m.Milestone_Title,
+          sortOrder: nextSortOrder,
+          visible: true,
+        };
+      });
+      setMilestones(merged);
+    } catch (err) {
+      console.error("Failed to refresh milestones:", err);
+    } finally {
+      setLoadingMilestones(false);
+    }
+  };
+
   // Auto-generate slug and name from journey selection
   const handleJourneySelect = (journeyId: number) => {
     setSelectedJourneyId(journeyId);
@@ -499,9 +529,25 @@ export function JourneyToolEditor({ existingTool, existingSlugs, usedJourneyIds,
         {selectedJourneyId && (
           <fieldset className={`space-y-4 rounded-lg border p-4 ${fieldErrorClass("milestones")}`}>
             <legend className="px-2 text-sm font-semibold">Milestones</legend>
-            <p className="text-xs text-muted-foreground">
-              Toggle visibility, edit labels, reorder, and configure journey discontinuation per milestone.
-            </p>
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-xs text-muted-foreground">
+                Toggle visibility, edit labels, reorder, and configure journey discontinuation per milestone.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleRefreshMilestones}
+                disabled={loadingMilestones}
+                className="gap-1.5 flex-shrink-0"
+                title="Re-fetch milestones from Ministry Platform (preserves your edits)"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Refresh from MP
+              </Button>
+            </div>
             {loadingMilestones ? (
               <div className="text-sm text-muted-foreground">Loading milestones...</div>
             ) : (

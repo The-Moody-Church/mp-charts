@@ -2,14 +2,14 @@
 
 Quick-reference snapshot of current project state. Read this first at session start. For full details on any item, see the relevant session summary in `docs/sessions/`.
 
-**Last updated**: 2026-05-13
+**Last updated**: 2026-05-14
 
 ## Recently Completed
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
+| 2026-05-14 | **Multi-file uploads + Refresh from MP**: Quick-Action and Edit forms in compliance/journey processing now accept multiple file attachments per milestone (validated per-file against 20 MB limit). Admin Journey and Compliance Tool editors have "Refresh from MP" buttons that re-fetch milestones/requirements and merge with current in-memory edits without losing label, visibility, or sort-order changes. | #170, #171 | (pending) |
 | 2026-05-13 | **Summer Blast Volunteers tool**: New bespoke route at `/summer-blast-volunteers` with two tabs (open Opportunity 85 signups, active Group 1031 volunteers), event-cutoff "Will Expire" badge (anything expiring before 2026-07-31), CPP/Mandated Reporter quick-add, "Added to SB Spreadsheet" enrollment that creates a Group_Participant and closes the Response, role-specific requirements config (per Group_Role_ID 42-52, with Temp role 1 falling back to BG+CPP+MR). Service + 17 unit tests, cache warming registered. | — | (pending) |
-| 2026-05-05 | **Contact lookup: Groups section + sectioned compliance cards**: Added a "Groups" section to the contact lookup detail page that lists every active Group_Participant for the contact (clickable via the In a Group / Serving badges, lazy-loaded). Compliance cards now split the checklist into Requirements vs Milestones sections. | #162, #163 | (pending) |
 
 ## Planned
 
@@ -20,6 +20,7 @@ Quick-reference snapshot of current project state. Read this first at session st
 - [**#110** — Serving metrics: reconcile adult-only vs all-ages counts](ideas.md#serving-metrics-reconcile-adult-only-vs-all-ages-counts-110)
 - [**#72** — Dashboard subpages per journey step](ideas.md#and-more-specific-dashboard-subpages-72)
 - [**#161** — student leaders](https://github.com/The-Moody-Church/mp-charts/issues/161)
+- [**#136** — Upgrade TypeScript 5.9 → 6.0](ideas.md#upgrade-typescript-59-to-60-136)
 
 ## Key Architecture Notes
 
