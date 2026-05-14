@@ -27,6 +27,10 @@ export interface SummerBlastConfig {
   tempGroupRoleId: number;
   cppFormId: number;
   mandatedReporterCertId: number;
+  /** Group_ID for "Youth Assistant" — active membership = youth assistant form complete. */
+  youthGroupId: number;
+  /** Label used on the single checklist item shown to under-18 volunteers. */
+  youthRequirementLabel: string;
   intakeRequirements: SummerBlastRequirementConfig[];
   roleConfigs: SummerBlastRoleConfig[];
 }
@@ -56,6 +60,8 @@ const SummerBlastConfigSchema = z.object({
   tempGroupRoleId: z.number().int().positive(),
   cppFormId: z.number().int().positive(),
   mandatedReporterCertId: z.number().int().positive(),
+  youthGroupId: z.number().int().positive(),
+  youthRequirementLabel: z.string().min(1).max(200),
   intakeRequirements: z.array(RequirementSchema),
   roleConfigs: z.array(RoleConfigSchema),
 });

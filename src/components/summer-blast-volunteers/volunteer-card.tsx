@@ -36,6 +36,15 @@ export function VolunteerCard({ card, onClick, cutoffDateLabel }: Props) {
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center px-3">
+        {/* Youth pill (top-left) — only for under-18 volunteers */}
+        {card.age !== null && card.age < 18 && (
+          <div className="absolute top-2 left-2 z-10">
+            <span className="inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700 ring-1 ring-inset ring-indigo-300">
+              Youth
+            </span>
+          </div>
+        )}
+
         <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
           {badge && (
             <span
@@ -60,6 +69,10 @@ export function VolunteerCard({ card, onClick, cutoffDateLabel }: Props) {
         <div className="text-sm font-medium text-center truncate w-full">
           {displayName} {card.info.Last_Name}
         </div>
+
+        {card.age !== null && (
+          <div className="text-[11px] text-muted-foreground">Age {card.age}</div>
+        )}
 
         <div className="text-xs text-muted-foreground mb-2">
           {card.completedCount}/{card.totalCount} complete

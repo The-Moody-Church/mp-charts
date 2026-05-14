@@ -102,6 +102,30 @@ export function nowCentral(): string {
   return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:${get('second')}`;
 }
 
+/**
+ * Compute integer age in years from a Date_of_Birth string.
+ * Accepts "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM:SS" (MP's naive-Central format).
+ * The date portion is parsed as a LOCAL date so we never lose a day to the
+ * UTC-midnight gotcha in negative-offset zones.
+ * Returns null when the input is null/blank/invalid or in the future.
+ */
+export function getAge(dobStr: string | null): number | null {
+  if (!dobStr) return null;
+  const parts = dobStr.slice(0, 10).split("-").map(Number);
+  if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return null;
+  const [y, m, d] = parts;
+  const dob = new Date(y, m - 1, d);
+  if (Number.isNaN(dob.getTime())) return null;
+  const now = new Date();
+  if (dob > now) return null;
+  let age = now.getFullYear() - dob.getFullYear();
+  const hadBirthdayThisYear =
+    now.getMonth() > dob.getMonth() ||
+    (now.getMonth() === dob.getMonth() && now.getDate() >= dob.getDate());
+  if (!hadBirthdayThisYear) age -= 1;
+  return age;
+}
+
 /** Normalize apostrophe variants (curly quotes, modifier letter) to ASCII and strip them for comparison. */
 export function normalizeApostrophes(s: string): string {
   return s.replace(/[\u2018\u2019\u02BC']/g, "");

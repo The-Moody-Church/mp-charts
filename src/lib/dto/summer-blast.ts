@@ -16,7 +16,7 @@ export type SummerBlastItemStatus =
 export interface SummerBlastChecklistItem {
   key: string;
   label: string;
-  type: "background_check" | "certification" | "form";
+  type: "background_check" | "certification" | "form" | "group_membership";
   /** True when the requirement is satisfied AND won't expire before eventEndDate. */
   completed: boolean;
   /** Submission/completion date. */
@@ -42,6 +42,8 @@ interface SummerBlastBaseCard {
   isFullyCompliant: boolean;
   /** Any item is currently valid but will expire before event end. */
   hasWillExpire: boolean;
+  /** Volunteer's age in years (computed from Date_of_Birth). Null when DOB is unknown. */
+  age: number | null;
 }
 
 export interface SummerBlastIntakeCard extends SummerBlastBaseCard {

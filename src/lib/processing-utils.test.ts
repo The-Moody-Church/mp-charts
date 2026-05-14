@@ -1,9 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   searchByName, searchByNameFlat, filterByName,
   soundex, soundexMatch, levenshtein, normalizeApostrophes,
   getDisplayName, getInitials, getImageUrl, formatDate, nowCentral,
-  scoreNameMatch,
+  scoreNameMatch, getAge,
   ALLOWED_IMAGE_TYPES, ALLOWED_DOCUMENT_TYPES, MAX_FILE_SIZE,
 } from "./processing-utils";
 
@@ -535,5 +535,67 @@ describe("constants", () => {
 
   it("MAX_FILE_SIZE is 20 MB", () => {
     expect(MAX_FILE_SIZE).toBe(20 * 1024 * 1024);
+  });
+});
+
+describe("getAge", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function setNow(iso: string) {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(iso));
+  }
+
+  it("returns null for null", () => {
+    expect(getAge(null)).toBeNull();
+  });
+
+  it("returns null for empty string", () => {
+    expect(getAge("")).toBeNull();
+  });
+
+  it("returns null for invalid date string", () => {
+    expect(getAge("not-a-date")).toBeNull();
+  });
+
+  it("returns null when DOB is in the future", () => {
+    setNow("2026-05-13T12:00:00Z");
+    expect(getAge("2030-01-01")).toBeNull();
+  });
+
+  it("returns integer age when birthday has already passed this year", () => {
+    setNow("2026-05-13T12:00:00Z");
+    // Born March 1, 2010 — birthday already passed → 16
+    expect(getAge("2010-03-01")).toBe(16);
+  });
+
+  it("returns one less when birthday has NOT happened yet this year", () => {
+    setNow("2026-05-13T12:00:00Z");
+    // Born November 30, 2010 — birthday not yet this year → 15
+    expect(getAge("2010-11-30")).toBe(15);
+  });
+
+  it("returns exact age on the birthday itself", () => {
+    setNow("2026-05-13T12:00:00Z");
+    // Born May 13, 2008 — turning 18 today
+    expect(getAge("2008-05-13")).toBe(18);
+  });
+
+  it("returns one less the day before birthday", () => {
+    setNow("2026-05-13T12:00:00Z");
+    // Born May 14, 2008 — birthday is tomorrow → still 17
+    expect(getAge("2008-05-14")).toBe(17);
+  });
+
+  it("handles older adults", () => {
+    setNow("2026-05-13T12:00:00Z");
+    expect(getAge("1930-01-01")).toBe(96);
+  });
+
+  it("handles infants (age 0)", () => {
+    setNow("2026-05-13T12:00:00Z");
+    expect(getAge("2026-01-15")).toBe(0);
   });
 });

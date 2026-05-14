@@ -20,6 +20,8 @@ vi.mock("@/lib/summer-blast-config", async () => {
       tempGroupRoleId: 1,
       cppFormId: 83,
       mandatedReporterCertId: 10,
+      youthGroupId: 964,
+      youthRequirementLabel: "Youth Assistant Form (Group 964)",
       intakeRequirements: [
         { requirementId: 0, label: "Background Check", type: "background_check" as const, sortOrder: 1 },
         { requirementId: 83, label: "CPP", type: "form" as const, sortOrder: 2 },
@@ -129,6 +131,7 @@ describe("SummerBlastService.getIntakeCards", () => {
             Image_GUID: null,
             Email_Address: null,
             Mobile_Phone: null,
+            Date_of_Birth: null,
           },
         ]);
       }
@@ -182,6 +185,7 @@ describe("SummerBlastService.getIntakeCards", () => {
             Image_GUID: null,
             Email_Address: null,
             Mobile_Phone: null,
+            Date_of_Birth: null,
           },
         ]);
       }
@@ -247,6 +251,7 @@ describe("SummerBlastService.getIntakeCards", () => {
             Image_GUID: null,
             Email_Address: null,
             Mobile_Phone: null,
+            Date_of_Birth: null,
           },
         ]);
       return Promise.resolve([]);
@@ -287,6 +292,7 @@ describe("SummerBlastService.getVolunteerCards", () => {
             Image_GUID: null,
             Email_Address: null,
             Mobile_Phone: null,
+            Date_of_Birth: null,
           },
         ]);
       return Promise.resolve([]);
@@ -327,6 +333,7 @@ describe("SummerBlastService.getVolunteerCards", () => {
             Image_GUID: null,
             Email_Address: null,
             Mobile_Phone: null,
+            Date_of_Birth: null,
           },
         ]);
       return Promise.resolve([]);
@@ -353,6 +360,200 @@ describe("SummerBlastService.getVolunteerCards", () => {
     const service = SummerBlastService.getInstance();
     const cards = await service.getVolunteerCards();
     expect(cards).toEqual([]);
+  });
+
+  it("under-18 with active Group 964 membership shows single complete youth item", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-13T12:00:00Z"));
+    mockGetTableRecords.mockImplementation((params: { table: string; filter?: string }) => {
+      if (params.table === "Group_Participants" && params.filter?.includes("Group_ID = 1031")) {
+        return Promise.resolve([
+          {
+            Group_Participant_ID: 700,
+            Participant_ID: 300,
+            Group_ID: 1031,
+            Group_Role_ID: 51,
+            Start_Date: "2026-05-01T00:00:00",
+            End_Date: null,
+            Notes: null,
+          },
+        ]);
+      }
+      if (params.table === "Group_Participants" && params.filter?.includes("Group_ID = 964")) {
+        // Youth IS a member of Group 964
+        return Promise.resolve([{ Participant_ID: 300 }]);
+      }
+      if (params.table === "Participants")
+        return Promise.resolve([{ Participant_ID: 300, Contact_ID: 400 }]);
+      if (params.table === "Contacts")
+        return Promise.resolve([
+          {
+            Contact_ID: 400,
+            First_Name: "Young",
+            Nickname: null,
+            Last_Name: "Volunteer",
+            Image_GUID: null,
+            Email_Address: null,
+            Mobile_Phone: null,
+            Date_of_Birth: "2010-01-15T00:00:00", // age 16 at 2026-05-13
+          },
+        ]);
+      return Promise.resolve([]);
+    });
+
+    try {
+      const service = SummerBlastService.getInstance();
+      const cards = await service.getVolunteerCards();
+      expect(cards).toHaveLength(1);
+      expect(cards[0].age).toBe(16);
+      expect(cards[0].checklist).toHaveLength(1);
+      expect(cards[0].checklist[0].type).toBe("group_membership");
+      expect(cards[0].checklist[0].status).toBe("complete");
+      expect(cards[0].isFullyCompliant).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("under-18 without Group 964 membership shows single not_started youth item", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-13T12:00:00Z"));
+    mockGetTableRecords.mockImplementation((params: { table: string; filter?: string }) => {
+      if (params.table === "Group_Participants" && params.filter?.includes("Group_ID = 1031")) {
+        return Promise.resolve([
+          {
+            Group_Participant_ID: 701,
+            Participant_ID: 301,
+            Group_ID: 1031,
+            Group_Role_ID: 51,
+            Start_Date: "2026-05-01T00:00:00",
+            End_Date: null,
+            Notes: null,
+          },
+        ]);
+      }
+      if (params.table === "Group_Participants" && params.filter?.includes("Group_ID = 964")) {
+        // Youth is NOT a member
+        return Promise.resolve([]);
+      }
+      if (params.table === "Participants")
+        return Promise.resolve([{ Participant_ID: 301, Contact_ID: 401 }]);
+      if (params.table === "Contacts")
+        return Promise.resolve([
+          {
+            Contact_ID: 401,
+            First_Name: "Pending",
+            Nickname: null,
+            Last_Name: "Youth",
+            Image_GUID: null,
+            Email_Address: null,
+            Mobile_Phone: null,
+            Date_of_Birth: "2010-01-15T00:00:00",
+          },
+        ]);
+      return Promise.resolve([]);
+    });
+
+    try {
+      const service = SummerBlastService.getInstance();
+      const cards = await service.getVolunteerCards();
+      expect(cards).toHaveLength(1);
+      expect(cards[0].checklist).toHaveLength(1);
+      expect(cards[0].checklist[0].status).toBe("not_started");
+      expect(cards[0].isFullyCompliant).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("18+ adult uses role-based requirements, not youth path", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-13T12:00:00Z"));
+    mockGetTableRecords.mockImplementation((params: { table: string; filter?: string }) => {
+      if (params.table === "Group_Participants" && params.filter?.includes("Group_ID = 1031")) {
+        return Promise.resolve([
+          {
+            Group_Participant_ID: 702,
+            Participant_ID: 302,
+            Group_ID: 1031,
+            Group_Role_ID: 42, // Chow → CPP only
+            Start_Date: "2026-05-01T00:00:00",
+            End_Date: null,
+            Notes: null,
+          },
+        ]);
+      }
+      if (params.table === "Participants")
+        return Promise.resolve([{ Participant_ID: 302, Contact_ID: 402 }]);
+      if (params.table === "Contacts")
+        return Promise.resolve([
+          {
+            Contact_ID: 402,
+            First_Name: "Adult",
+            Nickname: null,
+            Last_Name: "Volunteer",
+            Image_GUID: null,
+            Email_Address: null,
+            Mobile_Phone: null,
+            Date_of_Birth: "1990-01-15T00:00:00", // 36
+          },
+        ]);
+      return Promise.resolve([]);
+    });
+
+    try {
+      const service = SummerBlastService.getInstance();
+      const cards = await service.getVolunteerCards();
+      expect(cards).toHaveLength(1);
+      expect(cards[0].age).toBe(36);
+      // Chow role config has only CPP (1 item), not the group_membership item
+      expect(cards[0].checklist).toHaveLength(1);
+      expect(cards[0].checklist[0].type).toBe("form");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("null DOB takes adult path", async () => {
+    mockGetTableRecords.mockImplementation((params: { table: string; filter?: string }) => {
+      if (params.table === "Group_Participants" && params.filter?.includes("Group_ID = 1031")) {
+        return Promise.resolve([
+          {
+            Group_Participant_ID: 703,
+            Participant_ID: 303,
+            Group_ID: 1031,
+            Group_Role_ID: 1,
+            Start_Date: "2026-05-01T00:00:00",
+            End_Date: null,
+            Notes: null,
+          },
+        ]);
+      }
+      if (params.table === "Participants")
+        return Promise.resolve([{ Participant_ID: 303, Contact_ID: 403 }]);
+      if (params.table === "Contacts")
+        return Promise.resolve([
+          {
+            Contact_ID: 403,
+            First_Name: "No",
+            Nickname: null,
+            Last_Name: "Birthday",
+            Image_GUID: null,
+            Email_Address: null,
+            Mobile_Phone: null,
+            Date_of_Birth: null,
+          },
+        ]);
+      return Promise.resolve([]);
+    });
+
+    const service = SummerBlastService.getInstance();
+    const cards = await service.getVolunteerCards();
+    expect(cards).toHaveLength(1);
+    expect(cards[0].age).toBeNull();
+    // Temp role 1 falls back to intake requirements (3 items)
+    expect(cards[0].checklist).toHaveLength(3);
+    expect(cards[0].checklist.every((c) => c.type !== "group_membership")).toBe(true);
   });
 });
 
