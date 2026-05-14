@@ -23,6 +23,31 @@ const BATCH_SIZE = 100;
 // Status helpers
 // ---------------------------------------------------------------------------
 
+/** Group_Participants.Notes is capped at 500 chars. */
+const NOTES_MAX = 500;
+
+function formatSignupDate(dateStr: string): string {
+  // Render YYYY-MM-DD from "YYYY-MM-DDTHH:MM:SS" without TZ conversion.
+  // MP dates are naive Central; keeping only the date part avoids day-shift bugs.
+  return dateStr.slice(0, 10);
+}
+
+/**
+ * Build the Notes string we write onto Group_Participants when enrolling someone
+ * from an intake Response. Exported for unit testing.
+ */
+export function buildEnrollmentNotes(
+  response: { Response_Date: string; Comments: string | null } | null,
+): string | null {
+  if (!response) return null;
+  const date = formatSignupDate(response.Response_Date);
+  const head = `Signed up ${date}`;
+  const comments = response.Comments?.trim();
+  if (!comments) return head.slice(0, NOTES_MAX);
+  const out = `${head} — ${comments}`;
+  return out.length <= NOTES_MAX ? out : out.slice(0, NOTES_MAX - 1) + "…";
+}
+
 /**
  * Status for an item given an event-end cutoff (e.g. 2026-07-31).
  *
@@ -55,6 +80,7 @@ interface ResponseRecord {
   Opportunity_ID: number;
   Participant_ID: number;
   Closed: boolean;
+  Comments: string | null;
 }
 
 interface GroupParticipantRecord {
@@ -64,6 +90,7 @@ interface GroupParticipantRecord {
   Group_Role_ID: number;
   Start_Date: string;
   End_Date: string | null;
+  Notes: string | null;
 }
 
 interface ParticipantRecord {
@@ -153,7 +180,7 @@ export class SummerBlastService {
   public async getIntakeCards(): Promise<SummerBlastIntakeCard[]> {
     const responses = await this.mp.getTableRecords<ResponseRecord>({
       table: "Responses",
-      select: "Response_ID,Response_Date,Opportunity_ID,Participant_ID,Closed",
+      select: "Response_ID,Response_Date,Opportunity_ID,Participant_ID,Closed,Comments",
       filter: `Opportunity_ID = ${this.config.intakeOpportunityId} AND Closed = 0`,
       orderBy: "Response_Date DESC",
     });
@@ -229,6 +256,7 @@ export class SummerBlastService {
         hasWillExpire: checklist.some((c) => c.status === "will_expire"),
         responseId: r.Response_ID,
         responseDate: r.Response_Date,
+        comments: r.Comments,
       });
     }
 
@@ -248,7 +276,7 @@ export class SummerBlastService {
     const gps = await this.mp.getTableRecords<GroupParticipantRecord>({
       table: "Group_Participants",
       select:
-        "Group_Participant_ID,Participant_ID,Group_ID,Group_Role_ID,Start_Date,End_Date",
+        "Group_Participant_ID,Participant_ID,Group_ID,Group_Role_ID,Start_Date,End_Date,Notes",
       filter: `Group_ID = ${this.config.trackingGroupId} AND (End_Date IS NULL OR End_Date >= '${now}')`,
     });
     if (gps.length === 0) return [];
@@ -319,6 +347,7 @@ export class SummerBlastService {
         groupRoleLabel:
           getRoleLabel(this.config, gp.Group_Role_ID) ?? `Group Role ${gp.Group_Role_ID}`,
         startDate: gp.Start_Date,
+        notes: gp.Notes,
       });
     }
 
@@ -349,20 +378,32 @@ export class SummerBlastService {
   }): Promise<{ groupParticipantId: number }> {
     const { contactId, responseId, groupRoleId, userId } = params;
 
-    // Resolve Contact_ID → Participant_ID.
-    const participants = await this.mp.getTableRecords<ParticipantRecord>({
-      table: "Participants",
-      select: "Participant_ID,Contact_ID",
-      filter: `Contact_ID = ${contactId}`,
-      top: 1,
-    });
+    // Fetch the response so we can carry its Comments + signup date into the
+    // Group_Participants.Notes field. Done in parallel with the Participants lookup.
+    const [responses, participants] = await Promise.all([
+      this.mp.getTableRecords<ResponseRecord>({
+        table: "Responses",
+        select: "Response_ID,Response_Date,Opportunity_ID,Participant_ID,Closed,Comments",
+        filter: `Response_ID = ${responseId}`,
+        top: 1,
+      }),
+      this.mp.getTableRecords<ParticipantRecord>({
+        table: "Participants",
+        select: "Participant_ID,Contact_ID",
+        filter: `Contact_ID = ${contactId}`,
+        top: 1,
+      }),
+    ]);
+
     if (participants.length === 0) {
       throw new Error(`No Participant record for Contact_ID ${contactId}`);
     }
     const participantId = participants[0].Participant_ID;
+    const response = responses[0] ?? null;
 
     const now = nowCentral();
     const roleId = groupRoleId ?? this.config.tempGroupRoleId;
+    const notes = buildEnrollmentNotes(response);
 
     const created = (await this.mp.createTableRecords(
       "Group_Participants",
@@ -372,6 +413,7 @@ export class SummerBlastService {
           Participant_ID: participantId,
           Group_Role_ID: roleId,
           Start_Date: now,
+          ...(notes ? { Notes: notes } : {}),
         },
       ],
       { $userId: userId },
@@ -401,49 +443,6 @@ export class SummerBlastService {
       [{ Group_Participant_ID: groupParticipantId, End_Date: now }],
       { $userId: userId },
     );
-  }
-
-  /** Create a CPP form response for a contact. */
-  public async createCpp(params: {
-    contactId: number;
-    responseDate: string;
-    userId?: number;
-  }): Promise<number> {
-    const { contactId, responseDate, userId } = params;
-    const created = (await this.mp.createTableRecords(
-      "Form_Responses",
-      [
-        {
-          Form_ID: this.config.cppFormId,
-          Contact_ID: contactId,
-          Response_Date: responseDate,
-        },
-      ],
-      { $userId: userId },
-    )) as unknown as { Form_Response_ID: number }[];
-    return created[0].Form_Response_ID;
-  }
-
-  /** Create a Mandated Reporter certification for a participant. */
-  public async createMandatedReporter(params: {
-    participantId: number;
-    completedDate: string;
-    userId?: number;
-  }): Promise<number> {
-    const { participantId, completedDate, userId } = params;
-    const created = (await this.mp.createTableRecords(
-      "Participant_Certifications",
-      [
-        {
-          Participant_ID: participantId,
-          Certification_Type_ID: this.config.mandatedReporterCertId,
-          Certification_Submitted: nowCentral(),
-          Certification_Completed: completedDate,
-        },
-      ],
-      { $userId: userId },
-    )) as unknown as { Participant_Certification_ID: number }[];
-    return created[0].Participant_Certification_ID;
   }
 
   // -------------------------------------------------------------------------

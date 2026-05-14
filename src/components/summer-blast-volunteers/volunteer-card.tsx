@@ -71,6 +71,17 @@ export function VolunteerCard({ card, onClick, cutoffDateLabel }: Props) {
           ))}
         </div>
 
+        {/* Notes from intake */}
+        {card.notes && card.notes.trim() && (
+          <div
+            className="w-full mt-2 pt-2 border-t text-[11px] text-gray-700 whitespace-pre-wrap break-words line-clamp-4"
+            title={card.notes}
+          >
+            <span className="font-semibold text-gray-500">Notes: </span>
+            {card.notes}
+          </div>
+        )}
+
         {/* Role badge */}
         <div className="flex flex-wrap gap-0.5 w-full mt-2 pt-2 border-t">
           <span className="inline-flex items-center rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">

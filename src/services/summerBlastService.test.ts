@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { SummerBlastService, getEventExpirationStatus } from "@/services/summerBlastService";
+import {
+  SummerBlastService,
+  getEventExpirationStatus,
+  buildEnrollmentNotes,
+} from "@/services/summerBlastService";
 
 // Mock the config loader so tests don't depend on the JSON file.
 vi.mock("@/lib/summer-blast-config", async () => {
@@ -108,6 +112,7 @@ describe("SummerBlastService.getIntakeCards", () => {
             Opportunity_ID: 85,
             Participant_ID: 1111,
             Closed: false,
+            Comments: null,
           },
         ]);
       }
@@ -160,6 +165,7 @@ describe("SummerBlastService.getIntakeCards", () => {
             Opportunity_ID: 85,
             Participant_ID: 2000,
             Closed: false,
+            Comments: null,
           },
         ]);
       }
@@ -217,6 +223,7 @@ describe("SummerBlastService.getIntakeCards", () => {
             Opportunity_ID: 85,
             Participant_ID: 7,
             Closed: false,
+            Comments: null,
           },
           {
             Response_ID: 11,
@@ -224,6 +231,7 @@ describe("SummerBlastService.getIntakeCards", () => {
             Opportunity_ID: 85,
             Participant_ID: 7,
             Closed: false,
+            Comments: null,
           },
         ]);
       }
@@ -349,10 +357,22 @@ describe("SummerBlastService.getVolunteerCards", () => {
 });
 
 describe("SummerBlastService.addToSummerBlast", () => {
-  it("creates Group_Participants and closes the Response", async () => {
+  it("creates Group_Participants with notes copied from Response, then closes Response", async () => {
     mockGetTableRecords.mockImplementation((params: { table: string }) => {
       if (params.table === "Participants") {
         return Promise.resolve([{ Participant_ID: 50, Contact_ID: 99 }]);
+      }
+      if (params.table === "Responses") {
+        return Promise.resolve([
+          {
+            Response_ID: 444,
+            Response_Date: "2026-04-10T10:00:00",
+            Opportunity_ID: 85,
+            Participant_ID: 50,
+            Closed: false,
+            Comments: "Available Thursday only",
+          },
+        ]);
       }
       return Promise.resolve([]);
     });
@@ -374,6 +394,7 @@ describe("SummerBlastService.addToSummerBlast", () => {
           Group_ID: 1031,
           Participant_ID: 50,
           Group_Role_ID: 48,
+          Notes: "Signed up 2026-04-10 — Available Thursday only",
         }),
       ],
       expect.any(Object),
@@ -385,10 +406,44 @@ describe("SummerBlastService.addToSummerBlast", () => {
     );
   });
 
+  it("omits Notes when the Response has no comments and no record is found", async () => {
+    mockGetTableRecords.mockImplementation((params: { table: string }) => {
+      if (params.table === "Participants") {
+        return Promise.resolve([{ Participant_ID: 51, Contact_ID: 101 }]);
+      }
+      // Response not found
+      return Promise.resolve([]);
+    });
+    mockCreateTableRecords.mockResolvedValueOnce([{ Group_Participant_ID: 1235 }]);
+    mockUpdateTableRecords.mockResolvedValueOnce(undefined);
+
+    const service = SummerBlastService.getInstance();
+    await service.addToSummerBlast({
+      contactId: 101,
+      responseId: 445,
+      groupRoleId: 48,
+    });
+
+    const created = mockCreateTableRecords.mock.calls[0][1][0];
+    expect(created).not.toHaveProperty("Notes");
+  });
+
   it("falls back to tempGroupRoleId when no role provided", async () => {
     mockGetTableRecords.mockImplementation((params: { table: string }) => {
       if (params.table === "Participants") {
         return Promise.resolve([{ Participant_ID: 60, Contact_ID: 100 }]);
+      }
+      if (params.table === "Responses") {
+        return Promise.resolve([
+          {
+            Response_ID: 555,
+            Response_Date: "2026-04-10T10:00:00",
+            Opportunity_ID: 85,
+            Participant_ID: 60,
+            Closed: false,
+            Comments: null,
+          },
+        ]);
       }
       return Promise.resolve([]);
     });
@@ -409,11 +464,38 @@ describe("SummerBlastService.addToSummerBlast", () => {
   });
 
   it("throws if Contact has no Participant", async () => {
-    mockGetTableRecords.mockResolvedValueOnce([]);
+    mockGetTableRecords.mockImplementation(() => Promise.resolve([]));
     const service = SummerBlastService.getInstance();
     await expect(
       service.addToSummerBlast({ contactId: 999, responseId: 1, groupRoleId: 42 }),
     ).rejects.toThrow(/No Participant record/);
+  });
+});
+
+describe("buildEnrollmentNotes", () => {
+  it("returns null when no response", () => {
+    expect(buildEnrollmentNotes(null)).toBeNull();
+  });
+  it("returns just the date when no comments", () => {
+    expect(
+      buildEnrollmentNotes({ Response_Date: "2026-04-10T10:00:00", Comments: null }),
+    ).toBe("Signed up 2026-04-10");
+  });
+  it("returns just the date when comments are whitespace", () => {
+    expect(
+      buildEnrollmentNotes({ Response_Date: "2026-04-10T10:00:00", Comments: "   " }),
+    ).toBe("Signed up 2026-04-10");
+  });
+  it("appends comments after an em-dash", () => {
+    expect(
+      buildEnrollmentNotes({ Response_Date: "2026-04-10T10:00:00", Comments: "Hi" }),
+    ).toBe("Signed up 2026-04-10 — Hi");
+  });
+  it("truncates to 500 chars with an ellipsis", () => {
+    const long = "x".repeat(1000);
+    const out = buildEnrollmentNotes({ Response_Date: "2026-04-10T10:00:00", Comments: long });
+    expect(out!.length).toBe(500);
+    expect(out!.endsWith("…")).toBe(true);
   });
 });
 
@@ -437,47 +519,3 @@ describe("SummerBlastService.removeFromSummerBlast", () => {
   });
 });
 
-describe("SummerBlastService.createCpp / createMandatedReporter", () => {
-  it("creates a Form_Response with the configured CPP form id", async () => {
-    mockCreateTableRecords.mockResolvedValueOnce([{ Form_Response_ID: 17 }]);
-    const service = SummerBlastService.getInstance();
-    const id = await service.createCpp({
-      contactId: 5,
-      responseDate: "2026-05-13T12:00:00",
-    });
-    expect(id).toBe(17);
-    expect(mockCreateTableRecords).toHaveBeenCalledWith(
-      "Form_Responses",
-      [
-        expect.objectContaining({
-          Form_ID: 83,
-          Contact_ID: 5,
-          Response_Date: "2026-05-13T12:00:00",
-        }),
-      ],
-      expect.any(Object),
-    );
-  });
-
-  it("creates a Participant_Certification with the configured MR cert id", async () => {
-    mockCreateTableRecords.mockResolvedValueOnce([
-      { Participant_Certification_ID: 21 },
-    ]);
-    const service = SummerBlastService.getInstance();
-    const id = await service.createMandatedReporter({
-      participantId: 6,
-      completedDate: "2026-05-13T12:00:00",
-    });
-    expect(id).toBe(21);
-    expect(mockCreateTableRecords).toHaveBeenCalledWith(
-      "Participant_Certifications",
-      [
-        expect.objectContaining({
-          Participant_ID: 6,
-          Certification_Type_ID: 10,
-        }),
-      ],
-      expect.any(Object),
-    );
-  });
-});
