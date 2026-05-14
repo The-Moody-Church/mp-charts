@@ -47,8 +47,10 @@ interface SummerBlastBaseCard {
 export interface SummerBlastIntakeCard extends SummerBlastBaseCard {
   /** Underlying Responses record ID — needed when marking the response Closed. */
   responseId: number;
-  /** Display date of the original signup. */
+  /** Date the person signed up (Responses.Response_Date). */
   responseDate: string;
+  /** Free-text comments the person left when signing up (Responses.Comments). */
+  comments: string | null;
 }
 
 export interface SummerBlastVolunteerCard extends SummerBlastBaseCard {
@@ -56,4 +58,6 @@ export interface SummerBlastVolunteerCard extends SummerBlastBaseCard {
   groupRoleId: number;
   groupRoleLabel: string;
   startDate: string;
+  /** Notes on the Group_Participant — populated from the intake Response when enrolled. */
+  notes: string | null;
 }

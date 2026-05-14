@@ -9,17 +9,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { PersonAvatar, ContactLinks } from "@/components/processing";
 import { useRuntimeConfig } from "@/contexts";
 import { getDisplayName, formatDate } from "@/lib/processing-utils";
 import { ChecklistStatusIcon } from "./checklist-icon";
 import { WillExpireInlineBadge } from "./will-expire-badge";
-import {
-  createSummerBlastCpp,
-  createSummerBlastMandatedReporter,
-  removeFromSummerBlast,
-} from "./actions";
+import { removeFromSummerBlast } from "./actions";
 import type {
   SummerBlastVolunteerCard,
   SummerBlastChecklistItem,
@@ -44,16 +39,12 @@ export function VolunteerDetailModal({
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
-  const [cppDate, setCppDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [mrDate, setMrDate] = useState(() => new Date().toISOString().split("T")[0]);
 
   React.useEffect(() => {
     if (open) {
       setError(null);
       setActionLoading(null);
       setShowRemoveConfirm(false);
-      setCppDate(new Date().toISOString().split("T")[0]);
-      setMrDate(new Date().toISOString().split("T")[0]);
     }
   }, [open]);
 
@@ -61,40 +52,6 @@ export function VolunteerDetailModal({
 
   const { info } = card;
   const displayName = getDisplayName(info.First_Name, info.Nickname);
-  const hasCppRequirement = card.checklist.some((c) => c.type === "form");
-  const hasMrRequirement = card.checklist.some((c) => c.type === "certification");
-  const cppItem = card.checklist.find((c) => c.type === "form");
-  const mrItem = card.checklist.find((c) => c.type === "certification");
-
-  const handleAddCpp = async () => {
-    setActionLoading("cpp");
-    setError(null);
-    try {
-      const fd = new FormData();
-      fd.set("Contact_ID", String(info.Contact_ID));
-      fd.set("Response_Date", `${cppDate}T12:00:00`);
-      const result = await createSummerBlastCpp(fd);
-      if (!result.success) setError(result.error || "Failed");
-      else onUpdate();
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleAddMr = async () => {
-    setActionLoading("mr");
-    setError(null);
-    try {
-      const fd = new FormData();
-      fd.set("Participant_ID", String(info.Participant_ID));
-      fd.set("Certification_Completed", `${mrDate}T12:00:00`);
-      const result = await createSummerBlastMandatedReporter(fd);
-      if (!result.success) setError(result.error || "Failed");
-      else onUpdate();
-    } finally {
-      setActionLoading(null);
-    }
-  };
 
   const handleRemove = async () => {
     setActionLoading("remove");
@@ -144,87 +101,32 @@ export function VolunteerDetailModal({
           contactId={info.Contact_ID}
         />
 
+        {card.notes && card.notes.trim() && (
+          <div className="rounded-md border bg-gray-50 p-3 space-y-1">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Notes
+            </h4>
+            <p className="text-sm whitespace-pre-wrap break-words">{card.notes}</p>
+          </div>
+        )}
+
         {error && (
           <div className="text-sm text-red-600 bg-red-50 rounded-md p-2">{error}</div>
         )}
 
-        {/* Requirements */}
+        {/* Requirements — display only */}
         <div className="space-y-2">
           <h3 className="text-sm font-semibold">Requirements for {card.groupRoleLabel}</h3>
+          <p className="text-[11px] text-muted-foreground">
+            CPP and Mandated Reporter records are entered in their own MP forms — this view
+            is read-only.
+          </p>
           <div className="space-y-1">
             {card.checklist.map((item) => (
               <ChecklistRow key={item.key} item={item} />
             ))}
           </div>
         </div>
-
-        {/* Add CPP */}
-        {hasCppRequirement && (
-          <div className="rounded-md border bg-gray-50 p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-semibold">Add CPP (Child Protection Policy)</h4>
-              {cppItem?.status === "complete" && (
-                <span className="text-xs text-green-700">Current</span>
-              )}
-            </div>
-            <div className="flex flex-wrap items-end gap-2">
-              <div className="flex-1 min-w-[160px]">
-                <Label htmlFor="vol-cpp-date" className="text-xs">
-                  Response Date
-                </Label>
-                <input
-                  id="vol-cpp-date"
-                  type="date"
-                  value={cppDate}
-                  onChange={(e) => setCppDate(e.target.value)}
-                  className="mt-1 w-full rounded-md border bg-white px-2 py-1.5 text-sm"
-                />
-              </div>
-              <Button
-                size="sm"
-                onClick={handleAddCpp}
-                disabled={actionLoading !== null}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {actionLoading === "cpp" ? "Saving..." : "Add CPP"}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Add Mandated Reporter */}
-        {hasMrRequirement && (
-          <div className="rounded-md border bg-gray-50 p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-semibold">Add Mandated Reporter Certification</h4>
-              {mrItem?.status === "complete" && (
-                <span className="text-xs text-green-700">Current</span>
-              )}
-            </div>
-            <div className="flex flex-wrap items-end gap-2">
-              <div className="flex-1 min-w-[160px]">
-                <Label htmlFor="vol-mr-date" className="text-xs">
-                  Completion Date
-                </Label>
-                <input
-                  id="vol-mr-date"
-                  type="date"
-                  value={mrDate}
-                  onChange={(e) => setMrDate(e.target.value)}
-                  className="mt-1 w-full rounded-md border bg-white px-2 py-1.5 text-sm"
-                />
-              </div>
-              <Button
-                size="sm"
-                onClick={handleAddMr}
-                disabled={actionLoading !== null}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {actionLoading === "mr" ? "Saving..." : "Add Mandated Reporter"}
-              </Button>
-            </div>
-          </div>
-        )}
 
         {/* Remove from group */}
         <div className="rounded-md border border-red-200 bg-red-50 p-3 space-y-2">

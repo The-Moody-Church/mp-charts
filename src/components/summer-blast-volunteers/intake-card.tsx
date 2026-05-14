@@ -4,7 +4,7 @@ import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { PersonAvatar } from "@/components/processing";
 import { useRuntimeConfig } from "@/contexts";
-import { getDisplayName } from "@/lib/processing-utils";
+import { getDisplayName, formatDate } from "@/lib/processing-utils";
 import { ChecklistStatusIcon } from "./checklist-icon";
 import { WillExpireBadge, WillExpireInlineBadge } from "./will-expire-badge";
 import type { SummerBlastIntakeCard, SummerBlastChecklistItem } from "@/lib/dto";
@@ -64,6 +64,11 @@ export function IntakeCard({ card, onClick, cutoffDateLabel }: Props) {
           {displayName} {card.info.Last_Name}
         </div>
 
+        {/* Signed-up date */}
+        <div className="text-[11px] text-muted-foreground">
+          Signed up {formatDate(card.responseDate)}
+        </div>
+
         {/* Progress */}
         <div className="text-xs text-muted-foreground mb-2">
           {card.completedCount}/{card.totalCount} complete
@@ -75,6 +80,17 @@ export function IntakeCard({ card, onClick, cutoffDateLabel }: Props) {
             <ChecklistRow key={item.key} item={item} />
           ))}
         </div>
+
+        {/* Comments from the signup */}
+        {card.comments && card.comments.trim() && (
+          <div
+            className="w-full mt-2 pt-2 border-t text-[11px] text-gray-700 whitespace-pre-wrap break-words line-clamp-4"
+            title={card.comments}
+          >
+            <span className="font-semibold text-gray-500">Comments: </span>
+            {card.comments}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

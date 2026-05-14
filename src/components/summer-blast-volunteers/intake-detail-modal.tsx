@@ -15,11 +15,7 @@ import { useRuntimeConfig } from "@/contexts";
 import { getDisplayName, formatDate } from "@/lib/processing-utils";
 import { ChecklistStatusIcon } from "./checklist-icon";
 import { WillExpireInlineBadge } from "./will-expire-badge";
-import {
-  addToSummerBlast,
-  createSummerBlastCpp,
-  createSummerBlastMandatedReporter,
-} from "./actions";
+import { addToSummerBlast } from "./actions";
 import type {
   SummerBlastIntakeCard,
   SummerBlastChecklistItem,
@@ -48,17 +44,12 @@ export function IntakeDetailModal({
   const [selectedRoleId, setSelectedRoleId] = useState<string>("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [cppDate, setCppDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [mrDate, setMrDate] = useState(() => new Date().toISOString().split("T")[0]);
 
-  // Reset state on open
   React.useEffect(() => {
     if (open) {
       setSelectedRoleId("");
       setError(null);
       setActionLoading(null);
-      setCppDate(new Date().toISOString().split("T")[0]);
-      setMrDate(new Date().toISOString().split("T")[0]);
     }
   }, [open]);
 
@@ -66,47 +57,6 @@ export function IntakeDetailModal({
 
   const { info } = card;
   const displayName = getDisplayName(info.First_Name, info.Nickname);
-
-  const cppItem = card.checklist.find((c) => c.type === "form");
-  const mrItem = card.checklist.find((c) => c.type === "certification");
-
-  const handleAddCpp = async () => {
-    if (!card) return;
-    setActionLoading("cpp");
-    setError(null);
-    try {
-      const fd = new FormData();
-      fd.set("Contact_ID", String(card.info.Contact_ID));
-      fd.set("Response_Date", `${cppDate}T12:00:00`);
-      const result = await createSummerBlastCpp(fd);
-      if (!result.success) {
-        setError(result.error || "Failed to add CPP");
-      } else {
-        onUpdate();
-      }
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleAddMr = async () => {
-    if (!card) return;
-    setActionLoading("mr");
-    setError(null);
-    try {
-      const fd = new FormData();
-      fd.set("Participant_ID", String(card.info.Participant_ID));
-      fd.set("Certification_Completed", `${mrDate}T12:00:00`);
-      const result = await createSummerBlastMandatedReporter(fd);
-      if (!result.success) {
-        setError(result.error || "Failed to add Mandated Reporter");
-      } else {
-        onUpdate();
-      }
-    } finally {
-      setActionLoading(null);
-    }
-  };
 
   const handleAddToSb = async () => {
     if (!card) return;
@@ -158,13 +108,26 @@ export function IntakeDetailModal({
           contactId={info.Contact_ID}
         />
 
+        {card.comments && card.comments.trim() && (
+          <div className="rounded-md border bg-gray-50 p-3 space-y-1">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Signup Comments
+            </h4>
+            <p className="text-sm whitespace-pre-wrap break-words">{card.comments}</p>
+          </div>
+        )}
+
         {error && (
           <div className="text-sm text-red-600 bg-red-50 rounded-md p-2">{error}</div>
         )}
 
-        {/* Requirements snapshot */}
+        {/* Requirements snapshot — display only */}
         <div className="space-y-2">
           <h3 className="text-sm font-semibold">Requirements</h3>
+          <p className="text-[11px] text-muted-foreground">
+            CPP and Mandated Reporter records are entered in their own MP forms — this view
+            is read-only.
+          </p>
           <div className="space-y-1">
             {card.checklist.map((item) => (
               <ChecklistRow key={item.key} item={item} />
@@ -172,76 +135,13 @@ export function IntakeDetailModal({
           </div>
         </div>
 
-        {/* Add CPP */}
-        <div className="rounded-md border bg-gray-50 p-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold">Add CPP (Child Protection Policy)</h4>
-            {cppItem?.status === "complete" && (
-              <span className="text-xs text-green-700">Current</span>
-            )}
-          </div>
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="flex-1 min-w-[160px]">
-              <Label htmlFor="cpp-date" className="text-xs">
-                Response Date
-              </Label>
-              <input
-                id="cpp-date"
-                type="date"
-                value={cppDate}
-                onChange={(e) => setCppDate(e.target.value)}
-                className="mt-1 w-full rounded-md border bg-white px-2 py-1.5 text-sm"
-              />
-            </div>
-            <Button
-              size="sm"
-              onClick={handleAddCpp}
-              disabled={actionLoading !== null}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              {actionLoading === "cpp" ? "Saving..." : "Add CPP"}
-            </Button>
-          </div>
-        </div>
-
-        {/* Add Mandated Reporter */}
-        <div className="rounded-md border bg-gray-50 p-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold">Add Mandated Reporter Certification</h4>
-            {mrItem?.status === "complete" && (
-              <span className="text-xs text-green-700">Current</span>
-            )}
-          </div>
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="flex-1 min-w-[160px]">
-              <Label htmlFor="mr-date" className="text-xs">
-                Completion Date
-              </Label>
-              <input
-                id="mr-date"
-                type="date"
-                value={mrDate}
-                onChange={(e) => setMrDate(e.target.value)}
-                className="mt-1 w-full rounded-md border bg-white px-2 py-1.5 text-sm"
-              />
-            </div>
-            <Button
-              size="sm"
-              onClick={handleAddMr}
-              disabled={actionLoading !== null}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              {actionLoading === "mr" ? "Saving..." : "Add Mandated Reporter"}
-            </Button>
-          </div>
-        </div>
-
         {/* Add to SB */}
         <div className="rounded-md border border-blue-200 bg-blue-50 p-3 space-y-2">
           <h4 className="text-sm font-semibold">Add to SB Spreadsheet</h4>
           <p className="text-xs text-blue-900">
-            Creates a Group Participant in the Summer Blast Volunteers group and closes
-            this Opportunity Response.
+            Creates a Group Participant in the Summer Blast Volunteers group, closes this
+            Opportunity Response, and copies the signup comments into the participant&apos;s
+            notes.
           </p>
           <div className="flex flex-wrap items-end gap-2">
             <div className="flex-1 min-w-[200px]">
