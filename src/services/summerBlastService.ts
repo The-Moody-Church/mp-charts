@@ -1,6 +1,6 @@
 import { MPHelper } from "@/lib/providers/ministry-platform";
 import { sanitizeIds } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
-import { nowCentral } from "@/lib/processing-utils";
+import { nowCentral, getAge } from "@/lib/processing-utils";
 import {
   getSummerBlastConfig,
   getRequirementsForRole,
@@ -106,6 +106,7 @@ interface ContactRecord {
   Image_GUID: string | null;
   Email_Address: string | null;
   Mobile_Phone: string | null;
+  Date_of_Birth: string | null;
 }
 
 interface BackgroundCheckRecord {
@@ -223,10 +224,22 @@ export class SummerBlastService {
     const contactIds = [...peopleByParticipant.values()].map((p) => p.Contact_ID);
     const allParticipantIds = [...peopleByParticipant.keys()];
 
-    const [bgChecks, certifications, formResponses] = await Promise.all([
+    // Compute ages and split adults from youths.
+    const ageByParticipant = new Map<number, number | null>();
+    const youthParticipantIds: number[] = [];
+    for (const r of dedupedResponses) {
+      const c = contacts.get(r.Participant_ID);
+      if (!c) continue;
+      const age = getAge(c.Date_of_Birth);
+      ageByParticipant.set(r.Participant_ID, age);
+      if (age !== null && age < 18) youthParticipantIds.push(r.Participant_ID);
+    }
+
+    const [bgChecks, certifications, formResponses, youthMembers] = await Promise.all([
       this.fetchBackgroundChecks(contactIds),
       this.fetchCertifications(allParticipantIds),
       this.fetchFormResponses(contactIds),
+      this.fetchYouthGroupMembers(youthParticipantIds),
     ]);
     const bgTypeNames = await this.fetchBgCheckTypeNames(bgChecks);
     const cutoff = this.getCutoffDate();
@@ -235,17 +248,21 @@ export class SummerBlastService {
     for (const r of dedupedResponses) {
       const info = peopleByParticipant.get(r.Participant_ID);
       if (!info) continue;
+      const age = ageByParticipant.get(r.Participant_ID) ?? null;
+      const isYouth = age !== null && age < 18;
 
-      const checklist = this.buildChecklist(
-        info.Contact_ID,
-        info.Participant_ID,
-        this.config.intakeRequirements,
-        bgChecks,
-        certifications,
-        formResponses,
-        bgTypeNames,
-        cutoff,
-      );
+      const checklist = isYouth
+        ? this.buildYouthChecklist(youthMembers.has(r.Participant_ID))
+        : this.buildChecklist(
+            info.Contact_ID,
+            info.Participant_ID,
+            this.config.intakeRequirements,
+            bgChecks,
+            certifications,
+            formResponses,
+            bgTypeNames,
+            cutoff,
+          );
 
       cards.push({
         info,
@@ -254,6 +271,7 @@ export class SummerBlastService {
         totalCount: checklist.length,
         isFullyCompliant: checklist.every((c) => c.status === "complete"),
         hasWillExpire: checklist.some((c) => c.status === "will_expire"),
+        age,
         responseId: r.Response_ID,
         responseDate: r.Response_Date,
         comments: r.Comments,
@@ -297,10 +315,22 @@ export class SummerBlastService {
 
     const contactIds = [...contacts.values()].map((c) => c.Contact_ID);
 
-    const [bgChecks, certifications, formResponses] = await Promise.all([
+    // Compute ages and split adults from youths.
+    const ageByParticipant = new Map<number, number | null>();
+    const youthParticipantIds: number[] = [];
+    for (const gp of deduped) {
+      const c = contacts.get(gp.Participant_ID);
+      if (!c) continue;
+      const age = getAge(c.Date_of_Birth);
+      ageByParticipant.set(gp.Participant_ID, age);
+      if (age !== null && age < 18) youthParticipantIds.push(gp.Participant_ID);
+    }
+
+    const [bgChecks, certifications, formResponses, youthMembers] = await Promise.all([
       this.fetchBackgroundChecks(contactIds),
       this.fetchCertifications(participantIds),
       this.fetchFormResponses(contactIds),
+      this.fetchYouthGroupMembers(youthParticipantIds),
     ]);
     const bgTypeNames = await this.fetchBgCheckTypeNames(bgChecks);
     const cutoff = this.getCutoffDate();
@@ -323,17 +353,21 @@ export class SummerBlastService {
         Mobile_Phone: c.Mobile_Phone,
       };
 
-      const requirements = getRequirementsForRole(this.config, gp.Group_Role_ID);
-      const checklist = this.buildChecklist(
-        info.Contact_ID,
-        info.Participant_ID,
-        requirements,
-        bgChecks,
-        certifications,
-        formResponses,
-        bgTypeNames,
-        cutoff,
-      );
+      const age = ageByParticipant.get(gp.Participant_ID) ?? null;
+      const isYouth = age !== null && age < 18;
+
+      const checklist = isYouth
+        ? this.buildYouthChecklist(youthMembers.has(gp.Participant_ID))
+        : this.buildChecklist(
+            info.Contact_ID,
+            info.Participant_ID,
+            getRequirementsForRole(this.config, gp.Group_Role_ID),
+            bgChecks,
+            certifications,
+            formResponses,
+            bgTypeNames,
+            cutoff,
+          );
 
       cards.push({
         info,
@@ -342,6 +376,7 @@ export class SummerBlastService {
         totalCount: checklist.length,
         isFullyCompliant: checklist.every((i) => i.status === "complete"),
         hasWillExpire: checklist.some((i) => i.status === "will_expire"),
+        age,
         groupParticipantId: gp.Group_Participant_ID,
         groupRoleId: gp.Group_Role_ID,
         groupRoleLabel:
@@ -448,6 +483,44 @@ export class SummerBlastService {
   // -------------------------------------------------------------------------
   // Private helpers
   // -------------------------------------------------------------------------
+
+  /** Fetch the set of participant IDs that are active members of the youth group. */
+  private async fetchYouthGroupMembers(
+    youthParticipantIds: number[],
+  ): Promise<Set<number>> {
+    if (youthParticipantIds.length === 0) return new Set();
+    const now = nowCentral();
+    const all: { Participant_ID: number }[] = [];
+    for (let i = 0; i < youthParticipantIds.length; i += BATCH_SIZE) {
+      const batchIds = youthParticipantIds.slice(i, i + BATCH_SIZE);
+      const batch = await this.mp.getTableRecords<{ Participant_ID: number }>({
+        table: "Group_Participants",
+        select: "Participant_ID",
+        filter: `Group_ID = ${this.config.youthGroupId} AND (End_Date IS NULL OR End_Date >= '${now}') AND Participant_ID IN (${sanitizeIds(batchIds)})`,
+      });
+      all.push(...batch);
+    }
+    return new Set(all.map((r) => r.Participant_ID));
+  }
+
+  /** Single-item checklist for an under-18 volunteer: are they in Group 964? */
+  private buildYouthChecklist(isMember: boolean): SummerBlastChecklistItem[] {
+    return [
+      {
+        key: `youth-${this.config.youthGroupId}`,
+        label: this.config.youthRequirementLabel,
+        type: "group_membership",
+        completed: isMember,
+        date: null,
+        expires: null,
+        status: isMember ? "complete" : "not_started",
+        detail: null,
+        order: 1,
+        recordId: null,
+        bgCheckDetail: null,
+      },
+    ];
+  }
 
   private buildChecklist(
     contactId: number,
@@ -592,7 +665,7 @@ export class SummerBlastService {
       const batch = await this.mp.getTableRecords<ContactRecord>({
         table: "Contacts",
         select:
-          "Contact_ID,First_Name,Nickname,Last_Name,dp_fileUniqueId AS Image_GUID,Email_Address,Mobile_Phone",
+          "Contact_ID,First_Name,Nickname,Last_Name,dp_fileUniqueId AS Image_GUID,Email_Address,Mobile_Phone,Date_of_Birth",
         filter: `Contact_ID IN (${sanitizeIds(batchIds)})`,
       });
       allContacts.push(...batch);

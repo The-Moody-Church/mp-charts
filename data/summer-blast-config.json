@@ -6,6 +6,8 @@
   "tempGroupRoleId": 1,
   "cppFormId": 83,
   "mandatedReporterCertId": 10,
+  "youthGroupId": 964,
+  "youthRequirementLabel": "Youth Assistant Form (Group 964)",
   "intakeRequirements": [
     {
       "requirementId": 0,
