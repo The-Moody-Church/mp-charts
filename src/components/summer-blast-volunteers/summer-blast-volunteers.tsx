@@ -14,9 +14,10 @@ import {
   type ProcessingSortOption,
 } from "@/lib/processing-utils";
 
-// Signups tab has an extra "Signup Date (Newest)" option that's the default.
+// Signups tab has two extra "Signup Date" options; newest-first is the default.
 const INTAKE_SORT_OPTIONS: { value: ProcessingSortOption; label: string }[] = [
   { value: "signup-date-desc", label: "Signup Date (Newest)" },
+  { value: "signup-date-asc", label: "Signup Date (Oldest)" },
   ...SORT_OPTIONS,
 ];
 import { Button } from "@/components/ui/button";
