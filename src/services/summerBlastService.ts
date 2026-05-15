@@ -534,34 +534,61 @@ export class SummerBlastService {
   ): SummerBlastChecklistItem[] {
     const items: SummerBlastChecklistItem[] = [];
 
+    const now = new Date();
+
     for (const req of [...requirements].sort((a, b) => a.sortOrder - b.sortOrder)) {
       switch (req.type) {
         case "background_check": {
-          const latest = bgChecks.find((bc) => bc.Contact_ID === contactId);
-          const passed = latest?.All_Clear === true;
-          const expires = latest?.Background_Check_Expires ?? null;
-          const status: SummerBlastItemStatus = !passed
-            ? "not_started"
-            : getEventExpirationStatus(expires, cutoff);
+          // All BG checks for this contact, ordered newest-first by the fetch.
+          const all = bgChecks.filter((bc) => bc.Contact_ID === contactId);
+
+          // A BG check with Expires set was completed/approved by MP at some
+          // point. Trust that as the canonical "previously valid" signal —
+          // All_Clear may not always be set on older records.
+          const activeValid = all.find(
+            (bc) => bc.Background_Check_Expires && new Date(bc.Background_Check_Expires) >= now,
+          );
+          const expiredCompleted = all.find(
+            (bc) => bc.Background_Check_Expires && new Date(bc.Background_Check_Expires) < now,
+          );
+          const pendingNewer = all.find((bc) => !bc.Background_Check_Expires);
+
+          let status: SummerBlastItemStatus;
+          let previouslyExpired = false;
+          let displayRecord: BackgroundCheckRecord | null = null;
+
+          if (activeValid) {
+            status = getEventExpirationStatus(activeValid.Background_Check_Expires, cutoff);
+            displayRecord = activeValid;
+          } else if (pendingNewer) {
+            status = "in_progress";
+            previouslyExpired = !!expiredCompleted;
+            displayRecord = pendingNewer;
+          } else if (expiredCompleted) {
+            status = "expired";
+            displayRecord = expiredCompleted;
+          } else {
+            status = "not_started";
+          }
 
           let bgDetail: BackgroundCheckDetail | null = null;
-          if (latest) {
+          if (displayRecord) {
             let bgStatus = "Pending";
-            if (latest.All_Clear === true && latest.Background_Check_Returned) bgStatus = "Completed";
-            else if (latest.Background_Check_Returned) bgStatus = "Returned";
-            else if (latest.Background_Check_Submitted) bgStatus = "Submitted";
+            if (displayRecord.All_Clear === true && displayRecord.Background_Check_Returned) bgStatus = "Completed";
+            else if (displayRecord.Background_Check_Returned) bgStatus = "Returned";
+            else if (displayRecord.Background_Check_Submitted) bgStatus = "Submitted";
             else bgStatus = "Started";
             bgDetail = {
-              typeName: latest.Background_Check_Type_ID
-                ? bgTypeNames.get(latest.Background_Check_Type_ID) ?? null
+              typeName: displayRecord.Background_Check_Type_ID
+                ? bgTypeNames.get(displayRecord.Background_Check_Type_ID) ?? null
                 : null,
               status: bgStatus,
-              started: latest.Background_Check_Started,
-              submitted: latest.Background_Check_Submitted,
-              returned: latest.Background_Check_Returned,
-              allClear: latest.All_Clear,
-              expires: latest.Background_Check_Expires,
-              reportUrl: latest.Report_Url,
+              started: displayRecord.Background_Check_Started,
+              submitted: displayRecord.Background_Check_Submitted,
+              returned: displayRecord.Background_Check_Returned,
+              allClear: displayRecord.All_Clear,
+              expires: displayRecord.Background_Check_Expires,
+              reportUrl: displayRecord.Report_Url,
             };
           }
 
@@ -571,66 +598,115 @@ export class SummerBlastService {
             type: "background_check",
             completed: status === "complete",
             date:
-              latest?.Background_Check_Returned ??
-              latest?.Background_Check_Started ??
+              displayRecord?.Background_Check_Returned ??
+              displayRecord?.Background_Check_Started ??
               null,
-            expires,
+            expires: displayRecord?.Background_Check_Expires ?? null,
             status,
-            detail: latest ? (latest.All_Clear ? "All Clear" : "Pending") : null,
+            detail: displayRecord ? (displayRecord.All_Clear ? "All Clear" : "Pending") : null,
             order: req.sortOrder,
-            recordId: latest?.Background_Check_ID ?? null,
+            recordId: displayRecord?.Background_Check_ID ?? null,
             bgCheckDetail: bgDetail,
+            previouslyExpired,
           });
           break;
         }
         case "certification": {
-          const latest = certifications.find(
+          const matching = certifications.filter(
             (c) =>
               c.Participant_ID === participantId &&
               c.Certification_Type_ID === req.requirementId,
           );
-          const passed = !!latest?.Certification_Completed && latest.Passed !== false;
-          const expires = latest?.Certification_Expires ?? null;
-          const status: SummerBlastItemStatus = passed
-            ? getEventExpirationStatus(expires, cutoff)
-            : latest
-              ? "in_progress"
-              : "not_started";
+
+          // A passed cert with an Expires date is the canonical "completed"
+          // signal; missing Certification_Expires means no expiry tracked.
+          const activeValid = matching.find(
+            (c) =>
+              c.Certification_Completed &&
+              c.Passed !== false &&
+              (!c.Certification_Expires || new Date(c.Certification_Expires) >= now),
+          );
+          const expiredCompleted = matching.find(
+            (c) =>
+              c.Certification_Completed &&
+              c.Passed !== false &&
+              c.Certification_Expires &&
+              new Date(c.Certification_Expires) < now,
+          );
+          const pendingOrFailed = matching.find(
+            (c) => !c.Certification_Completed || c.Passed === false,
+          );
+
+          let status: SummerBlastItemStatus;
+          let previouslyExpired = false;
+          let displayRecord: CertificationRecord | null = null;
+
+          if (activeValid) {
+            status = getEventExpirationStatus(activeValid.Certification_Expires, cutoff);
+            displayRecord = activeValid;
+          } else if (pendingOrFailed) {
+            status = "in_progress";
+            previouslyExpired = !!expiredCompleted;
+            displayRecord = pendingOrFailed;
+          } else if (expiredCompleted) {
+            status = "expired";
+            displayRecord = expiredCompleted;
+          } else {
+            status = "not_started";
+          }
+
           items.push({
             key: `req-${req.requirementId}-cert`,
             label: req.label,
             type: "certification",
             completed: status === "complete",
-            date: latest?.Certification_Completed ?? null,
-            expires,
+            date: displayRecord?.Certification_Completed ?? null,
+            expires: displayRecord?.Certification_Expires ?? null,
             status,
-            detail: latest?.Passed === false ? "Failed" : null,
+            detail: displayRecord?.Passed === false ? "Failed" : null,
             order: req.sortOrder,
-            recordId: latest?.Participant_Certification_ID ?? null,
+            recordId: displayRecord?.Participant_Certification_ID ?? null,
             bgCheckDetail: null,
+            previouslyExpired,
           });
           break;
         }
         case "form": {
-          const latest = formResponses.find(
+          const matching = formResponses.filter(
             (f) => f.Contact_ID === contactId && f.Form_ID === req.requirementId,
           );
-          const submitted = !!latest;
-          const expires = latest?.Expires ?? null;
-          const status: SummerBlastItemStatus = submitted
-            ? getEventExpirationStatus(expires, cutoff)
-            : "not_started";
+
+          const activeValid = matching.find(
+            (f) => !f.Expires || new Date(f.Expires) >= now,
+          );
+          const expiredResponse = matching.find(
+            (f) => f.Expires && new Date(f.Expires) < now,
+          );
+
+          let status: SummerBlastItemStatus;
+          let displayRecord: FormResponseRecord | null = null;
+
+          if (activeValid) {
+            status = getEventExpirationStatus(activeValid.Expires, cutoff);
+            displayRecord = activeValid;
+          } else if (expiredResponse) {
+            status = "expired";
+            displayRecord = expiredResponse;
+          } else {
+            status = "not_started";
+          }
+
           items.push({
             key: `req-${req.requirementId}-form`,
             label: req.label,
             type: "form",
             completed: status === "complete",
-            date: latest?.Response_Date ?? null,
-            expires,
+            date: displayRecord?.Response_Date ?? null,
+            expires: displayRecord?.Expires ?? null,
             status,
             detail: null,
             order: req.sortOrder,
-            recordId: latest?.Form_Response_ID ?? null,
+            recordId: displayRecord?.Form_Response_ID ?? null,
             bgCheckDetail: null,
           });
           break;

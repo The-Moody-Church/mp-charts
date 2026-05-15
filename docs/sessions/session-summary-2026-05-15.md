@@ -25,6 +25,33 @@ Two user-requested changes to the Summer Blast Volunteers feature:
 - **One MP write per item, not a batch.** `addToSummerBlast` already does two writes (create `Group_Participants`, update `Responses.Closed`). MP doesn't expose a true bulk operation here, so the bulk action iterates one signup at a time. Each failure is isolated.
 - **Caching removal is total, not configurable.** No `revalidate: 0` workaround or env flag — the user said "i don't wnat to cache results at all" so the cached-data.ts file is deleted and the warming entries removed entirely. If caching is wanted later it can be reintroduced.
 
+## Follow-up: Expired-status bug + signup-date sort
+
+After the no-cache + bulk-add PR (#176) merged and deployed to `:latest`, the user reported that some signup cards were showing all requirements as gray "not_started" even though the person had an expired BG check and CPP in MP.
+
+**Root cause (BG check + certification):** `buildChecklist` did `bgChecks.find((bc) => bc.Contact_ID === contactId)` — when a person had an expired completed record AND a new pending one, `.find()` returned the pending one. The pending record has `All_Clear !== true` (or `Certification_Completed === null`), so status fell through to `not_started`. The expired record was silently dropped.
+
+**Fix:** Partition matching records into three buckets — `activeValid` (Expires in future), `expiredCompleted` (Expires in past), `pendingNewer` (no Expires set / not completed). Pick status from buckets in priority order:
+1. activeValid → use `getEventExpirationStatus` (complete / will_expire)
+2. pendingNewer → `in_progress` + `previouslyExpired = true` if expiredCompleted also exists
+3. expiredCompleted → `expired`
+4. None → `not_started`
+
+Added `previouslyExpired?: boolean` to `SummerBlastChecklistItem`. New `PreviouslyExpiredInlineBadge` component renders a small red "expired" pill next to `in_progress` rows on intake card, volunteer card, and both detail modals.
+
+**Sort:** Extended `ProcessingSortOption` with `"signup-date-desc"`; `sortCards` duck-types `responseDate` on the card so the option falls back to name sort on tabs without a signup date. `ProcessingSortSelect` accepts an optional `options` prop so the new option only appears on the Signups tab. Defaults: Signups tab → Signup Date (Newest); Volunteers tab → Last Name A–Z.
+
+**Files**:
+- `src/lib/dto/summer-blast.ts` — added `previouslyExpired?: boolean`
+- `src/services/summerBlastService.ts` — refactored `buildChecklist` BG / cert / form branches
+- `src/components/summer-blast-volunteers/will-expire-badge.tsx` — added `PreviouslyExpiredInlineBadge`
+- `intake-card.tsx`, `volunteer-card.tsx`, `intake-detail-modal.tsx`, `volunteer-detail-modal.tsx` — render the new badge next to `in_progress` rows when `previouslyExpired`
+- `src/lib/processing-utils.ts` — added `signup-date-desc` option + sort case
+- `src/components/processing/processing-sort-select.tsx` — accept optional `options` prop
+- `src/components/summer-blast-volunteers/summer-blast-volunteers.tsx` — split sort state per tab, default Signups to signup-date-desc
+- `src/services/summerBlastService.test.ts` — 4 new status tests
+- `src/lib/processing-utils-sort.test.ts` — 2 new sort tests
+
 ## Pre-PR Checklist
 
 - [x] Lint: no new issues (same 11 pre-existing as on main)

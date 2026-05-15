@@ -10,8 +10,16 @@ import {
 import {
   searchByName,
   sortCards,
+  SORT_OPTIONS,
   type ProcessingSortOption,
 } from "@/lib/processing-utils";
+
+// Signups tab has two extra "Signup Date" options; newest-first is the default.
+const INTAKE_SORT_OPTIONS: { value: ProcessingSortOption; label: string }[] = [
+  { value: "signup-date-desc", label: "Signup Date (Newest)" },
+  { value: "signup-date-asc", label: "Signup Date (Oldest)" },
+  ...SORT_OPTIONS,
+];
 import { Button } from "@/components/ui/button";
 import { IntakeCard } from "./intake-card";
 import { VolunteerCard } from "./volunteer-card";
@@ -56,7 +64,8 @@ export function SummerBlastVolunteers({
   const [intake, setIntake] = useState<SummerBlastIntakeCard[]>([]);
   const [volunteers, setVolunteers] = useState<SummerBlastVolunteerCard[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortOption, setSortOption] = useState<ProcessingSortOption>("name");
+  const [intakeSortOption, setIntakeSortOption] = useState<ProcessingSortOption>("signup-date-desc");
+  const [volunteersSortOption, setVolunteersSortOption] = useState<ProcessingSortOption>("name");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -146,12 +155,12 @@ export function SummerBlastVolunteers({
   };
 
   const filteredIntake = useMemo(
-    () => sortCards(searchByName(intake, searchQuery), sortOption),
-    [intake, searchQuery, sortOption],
+    () => sortCards(searchByName(intake, searchQuery), intakeSortOption),
+    [intake, searchQuery, intakeSortOption],
   );
   const filteredVolunteers = useMemo(
-    () => sortCards(searchByName(volunteers, searchQuery), sortOption),
-    [volunteers, searchQuery, sortOption],
+    () => sortCards(searchByName(volunteers, searchQuery), volunteersSortOption),
+    [volunteers, searchQuery, volunteersSortOption],
   );
 
   return (
@@ -192,7 +201,18 @@ export function SummerBlastVolunteers({
           </TabsList>
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-fit">
             <ProcessingSearchBar value={searchQuery} onChange={setSearchQuery} />
-            <ProcessingSortSelect value={sortOption} onChange={setSortOption} />
+            {activeTab === "intake" ? (
+              <ProcessingSortSelect
+                value={intakeSortOption}
+                onChange={setIntakeSortOption}
+                options={INTAKE_SORT_OPTIONS}
+              />
+            ) : (
+              <ProcessingSortSelect
+                value={volunteersSortOption}
+                onChange={setVolunteersSortOption}
+              />
+            )}
           </div>
         </div>
 

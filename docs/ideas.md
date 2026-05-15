@@ -27,6 +27,8 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 
 ### Improvements
 - [Serving metrics: reconcile adult-only vs all-ages counts (#110)](#serving-metrics-reconcile-adult-only-vs-all-ages-counts-110)
+- ~~[Summer Blast: surface expired BG/cert when a renewal is in progress](#summer-blast-surface-expired-bgcert-when-a-renewal-is-in-progress)~~ ✅
+- ~~[Summer Blast: sort signups by Response_Date (newest first)](#summer-blast-sort-signups-by-response_date-newest-first)~~ ✅
 - ~~[Summer Blast: bulk-add signups to spreadsheet](#summer-blast-bulk-add-signups-to-spreadsheet)~~ ✅
 - ~~[Summer Blast: pull fresh from MP on every load (remove caching)](#summer-blast-pull-fresh-from-mp-on-every-load-remove-caching)~~ ✅
 - ~~[Need to be able to pull in fresh milestones (#171)](#need-to-be-able-to-pull-in-fresh-milestones-171)~~ ✅
@@ -168,6 +170,12 @@ Extracted `statusBadgeColor` to shared utility (`src/lib/contact-badge-utils.ts`
 
 ### Serving metrics: reconcile adult-only vs all-ages counts ([#110](https://github.com/The-Moody-Church/mp-charts/issues/110))
 The Engagement Overview Venn diagram filters serving/leading to **adults only** (18+ or unknown birthdate), showing ~830. The Grow in Love section's "Serving by Role Type" counts **all ages**, showing ~1,022. The ~192-person gap is minors with active serving/leading roles (e.g., student volunteers). Need to decide: should the Grow in Love charts also filter to adults, or should the Venn diagram include all ages? Or add an "(all ages)" note to the Grow in Love description to make the difference explicit?
+
+### ~~Summer Blast: surface expired BG/cert when a renewal is in progress~~ ✅ COMPLETED
+`buildChecklist` now partitions records into active-valid / expired-completed / pending-or-failed and picks status accordingly. Previously, when someone had an expired BG check AND a newer pending one started after it, `.find()` returned the pending one → status fell through to "not_started". Now the same case shows "in_progress" with an inline red "expired" badge (new `previouslyExpired` flag on the DTO). When only an expired record exists with no replacement, status is "expired". CPP form responses also benefit: expired form responses no longer get masked by missing `All_Clear`-style flags.
+
+### ~~Summer Blast: sort signups by Response_Date (newest first)~~ ✅ COMPLETED
+Added a "Signup Date (Newest)" sort option, made it the default on the Signups tab. Shared `ProcessingSortOption` extended with `signup-date-desc`; `ProcessingSortSelect` accepts a custom `options` prop so other processing tabs aren't polluted with the new option. The Volunteers tab keeps its existing default sort (Last Name A–Z).
 
 ### ~~Summer Blast: bulk-add signups to spreadsheet~~ ✅ COMPLETED
 Added per-card checkboxes on the Signups tab and a sticky bulk-action bar that appears when 1+ are selected. "Confirm SB Spreadsheet Addition (Temp role) — N" creates Group_Participants in Group 1031 with Temp role for each selected signup and closes their Opportunity Responses. Partial failures are surfaced inline and the failed cards remain selected for retry; successful ones disappear with the refreshed intake list. Backed by a new `bulkAddToSummerBlast` server action that loops `SummerBlastService.addToSummerBlast` per item so one failure doesn't abort the batch.

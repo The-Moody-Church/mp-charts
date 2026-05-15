@@ -28,3 +28,19 @@ export function WillExpireInlineBadge() {
     </span>
   );
 }
+
+/**
+ * Per-item indicator: shown next to an in_progress row when the person had a
+ * previous record that's now expired (e.g. an old BG check that expired and a
+ * new one is being processed).
+ */
+export function PreviouslyExpiredInlineBadge() {
+  return (
+    <span
+      className="inline-flex items-center rounded-sm bg-red-50 px-1 py-0 text-[9px] font-medium text-red-700"
+      title="Previously completed and now expired; a new one is in progress"
+    >
+      expired
+    </span>
+  );
+}

@@ -8,7 +8,8 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
-| 2026-05-15 | **Summer Blast: no cache + bulk-add**: Removed Summer Blast caching entirely — `/summer-blast-volunteers` now pulls fresh from MP on every page load (deleted `cached-data.ts`, unregistered from `cache-warming.ts`). Added per-card checkboxes on the Signups tab and a sticky bulk-action bar that confirms multi-signup enrollment as Temp role in one click (new `bulkAddToSummerBlast` action with per-item failure tracking). | — | (pending) |
+| 2026-05-15 | **Summer Blast: expired status fix + signup-date sort**: Fixed checklist status when a person had an expired BG check or certification AND a new pending one — now shows `in_progress` with an inline "expired" badge (was: incorrectly showed as `not_started`). Added "Signup Date (Newest)" sort, default on Signups tab. | — | (pending) |
+| 2026-05-15 | **Summer Blast: no cache + bulk-add**: Removed Summer Blast caching entirely — `/summer-blast-volunteers` now pulls fresh from MP on every page load (deleted `cached-data.ts`, unregistered from `cache-warming.ts`). Added per-card checkboxes on the Signups tab and a sticky bulk-action bar that confirms multi-signup enrollment as Temp role in one click (new `bulkAddToSummerBlast` action with per-item failure tracking). | — | #176 |
 | 2026-05-14 | **Multi-file uploads + Refresh from MP**: Quick-Action and Edit forms in compliance/journey processing now accept multiple file attachments per milestone (validated per-file against 20 MB limit). Admin Journey and Compliance Tool editors have "Refresh from MP" buttons that re-fetch milestones/requirements and merge with current in-memory edits without losing label, visibility, or sort-order changes. | #170, #171 | #175 |
 
 ## Planned

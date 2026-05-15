@@ -7,7 +7,11 @@ import { PersonAvatar } from "@/components/processing";
 import { useRuntimeConfig } from "@/contexts";
 import { getDisplayName, formatDate } from "@/lib/processing-utils";
 import { ChecklistStatusIcon } from "./checklist-icon";
-import { WillExpireBadge, WillExpireInlineBadge } from "./will-expire-badge";
+import {
+  PreviouslyExpiredInlineBadge,
+  WillExpireBadge,
+  WillExpireInlineBadge,
+} from "./will-expire-badge";
 import type { SummerBlastIntakeCard, SummerBlastChecklistItem } from "@/lib/dto";
 
 interface Props {
@@ -138,6 +142,7 @@ function ChecklistRow({ item }: { item: SummerBlastChecklistItem }) {
       <ChecklistStatusIcon status={item.status} />
       <span className={`text-xs truncate ${textClass}`}>{item.label}</span>
       {item.status === "will_expire" && <WillExpireInlineBadge />}
+      {item.status === "in_progress" && item.previouslyExpired && <PreviouslyExpiredInlineBadge />}
     </div>
   );
 }
