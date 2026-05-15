@@ -166,6 +166,9 @@ Extracted `statusBadgeColor` to shared utility (`src/lib/contact-badge-utils.ts`
 
 ## Improvements
 
+### Serving metrics: reconcile adult-only vs all-ages counts ([#110](https://github.com/The-Moody-Church/mp-charts/issues/110))
+The Engagement Overview Venn diagram filters serving/leading to **adults only** (18+ or unknown birthdate), showing ~830. The Grow in Love section's "Serving by Role Type" counts **all ages**, showing ~1,022. The ~192-person gap is minors with active serving/leading roles (e.g., student volunteers). Need to decide: should the Grow in Love charts also filter to adults, or should the Venn diagram include all ages? Or add an "(all ages)" note to the Grow in Love description to make the difference explicit?
+
 ### ~~Summer Blast: bulk-add signups to spreadsheet~~ ✅ COMPLETED
 Added per-card checkboxes on the Signups tab and a sticky bulk-action bar that appears when 1+ are selected. "Confirm SB Spreadsheet Addition (Temp role) — N" creates Group_Participants in Group 1031 with Temp role for each selected signup and closes their Opportunity Responses. Partial failures are surfaced inline and the failed cards remain selected for retry; successful ones disappear with the refreshed intake list. Backed by a new `bulkAddToSummerBlast` server action that loops `SummerBlastService.addToSummerBlast` per item so one failure doesn't abort the batch.
 
@@ -177,9 +180,6 @@ Added "Refresh from MP" buttons to the admin Journey Tool editor (Milestones sec
 
 ### ~~Add two files at once to a milestone ([#170](https://github.com/The-Moody-Church/mp-charts/issues/170))~~ ✅ COMPLETED
 The shared `QuickActionsPanel` (used by compliance + journey processing to complete a milestone) and `MilestoneEditForm` (used to edit an already-completed milestone) now accept multiple file attachments. Adds the HTML `multiple` attribute and validates each selected file against the 20 MB-per-file limit. Adding additional paperwork to a completed milestone is covered by the existing Edit button on completed records, which now also supports multi-file upload.
-
-### Serving metrics: reconcile adult-only vs all-ages counts ([#110](https://github.com/The-Moody-Church/mp-charts/issues/110))
-The Engagement Overview Venn diagram filters serving/leading to **adults only** (18+ or unknown birthdate), showing ~830. The Grow in Love section's "Serving by Role Type" counts **all ages**, showing ~1,022. The ~192-person gap is minors with active serving/leading roles (e.g., student volunteers). Need to decide: should the Grow in Love charts also filter to adults, or should the Venn diagram include all ages? Or add an "(all ages)" note to the Grow in Love description to make the difference explicit?
 
 ### ~~Card Summaries should have sections ([#163](https://github.com/The-Moody-Church/mp-charts/issues/163))~~ ✅ COMPLETED
 Compliance cards now split the checklist into "Requirements" and "Milestones" sections with small uppercase headers, mirroring the section structure already in the detail modal. Tools without journey milestones (e.g., active-teachers-and-volunteers) keep the original single-list layout. Filed from the `/compliance/stillson-residents` page.
