@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { PersonAvatar } from "@/components/processing";
 import { useRuntimeConfig } from "@/contexts";
 import { getDisplayName, formatDate } from "@/lib/processing-utils";
@@ -13,6 +14,8 @@ interface Props {
   card: SummerBlastIntakeCard;
   onClick: () => void;
   cutoffDateLabel?: string;
+  selected: boolean;
+  onSelectChange: (selected: boolean) => void;
 }
 
 function statusBadge(card: SummerBlastIntakeCard): { label: string; className: string } | null {
@@ -25,20 +28,32 @@ function statusBadge(card: SummerBlastIntakeCard): { label: string; className: s
   return null;
 }
 
-export function IntakeCard({ card, onClick, cutoffDateLabel }: Props) {
+export function IntakeCard({ card, onClick, cutoffDateLabel, selected, onSelectChange }: Props) {
   const { mpFileUrl } = useRuntimeConfig();
   const displayName = getDisplayName(card.info.First_Name, card.info.Nickname);
   const badge = statusBadge(card);
 
   return (
     <Card
-      className="cursor-pointer hover:shadow-md transition-shadow py-4 gap-3 relative"
+      className={`cursor-pointer hover:shadow-md transition-shadow py-4 gap-3 relative ${selected ? "ring-2 ring-emerald-500" : ""}`}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center px-3">
-        {/* Youth pill (top-left) — only for under-18 signups */}
+        {/* Selection checkbox (top-left) — separate hit target from card click */}
+        <div
+          className="absolute top-2 left-2 z-20 flex items-center justify-center rounded-md bg-white/80 p-1 backdrop-blur-sm"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Checkbox
+            checked={selected}
+            onCheckedChange={(c) => onSelectChange(c === true)}
+            aria-label={`Select ${displayName} ${card.info.Last_Name}`}
+          />
+        </div>
+
+        {/* Youth pill — shift right when checkbox is shown */}
         {card.age !== null && card.age < 18 && (
-          <div className="absolute top-2 left-2 z-10">
+          <div className="absolute top-2 left-10 z-10">
             <span className="inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700 ring-1 ring-inset ring-indigo-300">
               Youth
             </span>

@@ -20,11 +20,12 @@
  * | getCachedEngagementData     | src/components/dashboard/cached-data.ts           | 6h         | 24h   |
  * | getCachedGroupTypes         | src/services/dashboardService.ts                 | 24h        | 48h   |
  * | getCachedAllContacts        | src/components/contact-lookup/cached-contacts.ts  | 6h         | 24h   |
- * | getCachedSummerBlastIntake  | src/components/summer-blast-volunteers/cached-data.ts | 6h     | 24h   |
- * | getCachedSummerBlastVolunteers | src/components/summer-blast-volunteers/cached-data.ts | 6h | 24h |
  *
  * Note: getCachedGroupTypes is warmed indirectly — it's called internally
  * by DashboardService during getCachedDashboardData/getCachedFullRangeData.
+ *
+ * Note: Summer Blast Volunteers (intake + volunteers) is intentionally NOT cached —
+ * staff need fresh data on every page load.
  */
 
 import {
@@ -34,10 +35,6 @@ import {
   getCachedEngagementData,
 } from '@/components/dashboard/cached-data';
 import { getCachedAllContacts } from '@/components/contact-lookup/cached-contacts';
-import {
-  getCachedSummerBlastIntake,
-  getCachedSummerBlastVolunteers,
-} from '@/components/summer-blast-volunteers/cached-data';
 
 interface WarmingResult {
   name: string;
@@ -122,13 +119,6 @@ export async function warmAllCaches(): Promise<WarmingResult[]> {
     // Contact search: all contacts dataset
     warmOne('getCachedAllContacts', () =>
       getCachedAllContacts()
-    ),
-    // Summer Blast: signups (Opportunity Responses) and volunteers (Group 1031)
-    warmOne('getCachedSummerBlastIntake', () =>
-      getCachedSummerBlastIntake()
-    ),
-    warmOne('getCachedSummerBlastVolunteers', () =>
-      getCachedSummerBlastVolunteers()
     ),
   ]);
 

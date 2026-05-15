@@ -1,17 +1,9 @@
 "use server";
 
-import { updateTag } from "next/cache";
 import { getMpUserId } from "@/lib/auth-helpers";
 import { requireFeatureAccess } from "@/lib/authorization";
 import { enforceRateLimit } from "@/lib/rate-limit";
-import { serviceCache } from "@/lib/service-cache";
 import { SummerBlastService } from "@/services/summerBlastService";
-import {
-  getCachedSummerBlastIntake,
-  getCachedSummerBlastVolunteers,
-  SUMMER_BLAST_INTAKE_TAG,
-  SUMMER_BLAST_VOLUNTEERS_TAG,
-} from "./cached-data";
 import type {
   SummerBlastIntakeCard,
   SummerBlastVolunteerCard,
@@ -19,20 +11,10 @@ import type {
 
 const FEATURE = "summer-blast-volunteers" as const;
 
-function invalidateAll() {
-  // updateTag invalidates the Next.js 'use cache' framework cache; serviceCache
-  // is our in-memory safety net inside each cached function and must be cleared
-  // separately or it will keep returning the pre-write snapshot.
-  updateTag(SUMMER_BLAST_INTAKE_TAG);
-  updateTag(SUMMER_BLAST_VOLUNTEERS_TAG);
-  serviceCache.deleteByPrefix(SUMMER_BLAST_INTAKE_TAG);
-  serviceCache.deleteByPrefix(SUMMER_BLAST_VOLUNTEERS_TAG);
-}
-
 export async function getSummerBlastIntake(): Promise<SummerBlastIntakeCard[]> {
   await requireFeatureAccess(FEATURE);
   try {
-    return await getCachedSummerBlastIntake();
+    return await SummerBlastService.getInstance().getIntakeCards();
   } catch (error) {
     console.error("Error fetching Summer Blast intake:", error);
     throw new Error("Failed to load Summer Blast intake");
@@ -42,7 +24,7 @@ export async function getSummerBlastIntake(): Promise<SummerBlastIntakeCard[]> {
 export async function getSummerBlastVolunteers(): Promise<SummerBlastVolunteerCard[]> {
   await requireFeatureAccess(FEATURE);
   try {
-    return await getCachedSummerBlastVolunteers();
+    return await SummerBlastService.getInstance().getVolunteerCards();
   } catch (error) {
     console.error("Error fetching Summer Blast volunteers:", error);
     throw new Error("Failed to load Summer Blast volunteers");
@@ -74,12 +56,63 @@ export async function addToSummerBlast(formData: FormData): Promise<{
       userId: getMpUserId(session),
     });
 
-    invalidateAll();
     return { success: true };
   } catch (error) {
     console.error("Error adding to Summer Blast:", error);
     return { success: false, error: "Failed to add to Summer Blast" };
   }
+}
+
+export interface BulkAddResult {
+  success: boolean;
+  succeededCount: number;
+  failures: { responseId: number; error: string }[];
+}
+
+/**
+ * Bulk-add multiple signups to Summer Blast as Temp role. Each signup is processed
+ * individually so a single failure doesn't abort the batch.
+ */
+export async function bulkAddToSummerBlast(
+  items: { contactId: number; responseId: number }[],
+): Promise<BulkAddResult> {
+  const session = await requireFeatureAccess(FEATURE);
+  enforceRateLimit(session.user.id, "write");
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return { success: false, succeededCount: 0, failures: [] };
+  }
+
+  const service = SummerBlastService.getInstance();
+  const userId = getMpUserId(session);
+  const failures: { responseId: number; error: string }[] = [];
+  let succeededCount = 0;
+
+  for (const item of items) {
+    const contactId = Number(item.contactId);
+    const responseId = Number(item.responseId);
+    if (!contactId || !responseId) {
+      failures.push({ responseId: responseId || 0, error: "Missing required fields" });
+      continue;
+    }
+    try {
+      await service.addToSummerBlast({
+        contactId,
+        responseId,
+        groupRoleId: null,
+        userId,
+      });
+      succeededCount += 1;
+    } catch (error) {
+      console.error("Error adding to Summer Blast (bulk):", error);
+      failures.push({
+        responseId,
+        error: error instanceof Error ? error.message : "Failed to add",
+      });
+    }
+  }
+
+  return { success: failures.length === 0, succeededCount, failures };
 }
 
 export async function removeFromSummerBlast(formData: FormData): Promise<{
@@ -101,7 +134,6 @@ export async function removeFromSummerBlast(formData: FormData): Promise<{
       userId: getMpUserId(session),
     });
 
-    invalidateAll();
     return { success: true };
   } catch (error) {
     console.error("Error removing from Summer Blast:", error);
