@@ -13,7 +13,7 @@ import { PersonAvatar, ContactLinks } from "@/components/processing";
 import { useRuntimeConfig } from "@/contexts";
 import { getDisplayName, formatDate } from "@/lib/processing-utils";
 import { ChecklistStatusIcon } from "./checklist-icon";
-import { WillExpireInlineBadge } from "./will-expire-badge";
+import { PreviouslyExpiredInlineBadge, WillExpireInlineBadge } from "./will-expire-badge";
 import { removeFromSummerBlast } from "./actions";
 import type {
   SummerBlastVolunteerCard,
@@ -194,6 +194,7 @@ function ChecklistRow({ item }: { item: SummerBlastChecklistItem }) {
       <ChecklistStatusIcon status={item.status} />
       <span className={textClass}>{item.label}</span>
       {item.status === "will_expire" && <WillExpireInlineBadge />}
+      {item.status === "in_progress" && item.previouslyExpired && <PreviouslyExpiredInlineBadge />}
       {item.expires && (
         <span className="ml-auto text-[11px] text-muted-foreground">
           Expires {formatDate(item.expires)}

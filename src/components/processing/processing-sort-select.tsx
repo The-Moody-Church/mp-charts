@@ -6,9 +6,12 @@ import { SORT_OPTIONS, type ProcessingSortOption } from "@/lib/processing-utils"
 interface ProcessingSortSelectProps {
   value: ProcessingSortOption;
   onChange: (value: ProcessingSortOption) => void;
+  /** Override the default sort options list (e.g. to add tab-specific options). */
+  options?: { value: ProcessingSortOption; label: string }[];
 }
 
-export function ProcessingSortSelect({ value, onChange }: ProcessingSortSelectProps) {
+export function ProcessingSortSelect({ value, onChange, options }: ProcessingSortSelectProps) {
+  const opts = options ?? SORT_OPTIONS;
   return (
     <div className="relative w-full sm:w-fit">
       <svg
@@ -29,7 +32,7 @@ export function ProcessingSortSelect({ value, onChange }: ProcessingSortSelectPr
         onChange={(e) => onChange(e.target.value as ProcessingSortOption)}
         className="flex h-9 w-full sm:w-fit rounded-md border border-input bg-transparent pl-8 pr-3 py-1 text-base sm:text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
       >
-        {SORT_OPTIONS.map((opt) => (
+        {opts.map((opt) => (
           <option key={opt.value} value={opt.value}>
             {opt.label}
           </option>

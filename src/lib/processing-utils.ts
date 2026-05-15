@@ -5,8 +5,18 @@
 
 import type { BaseCardData, BasePersonInfo } from '@/lib/dto/processing-shared';
 
-/** Available sort options for processing card grids. */
-export type ProcessingSortOption = "name" | "most-completed" | "least-completed";
+/**
+ * Available sort options for processing card grids.
+ *
+ * `signup-date-desc` only applies to cards that expose a `responseDate` field
+ * (currently just Summer Blast intake cards). On cards without a responseDate
+ * it falls back to a name sort.
+ */
+export type ProcessingSortOption =
+  | "name"
+  | "most-completed"
+  | "least-completed"
+  | "signup-date-desc";
 
 /** Label/value pairs for sort option dropdowns. */
 export const SORT_OPTIONS: { value: ProcessingSortOption; label: string }[] = [
@@ -38,6 +48,17 @@ export function sortCards<T extends BaseCardData<BasePersonInfo>>(
     case "least-completed":
       sorted.sort((a, b) => {
         if (a.completedCount !== b.completedCount) return a.completedCount - b.completedCount;
+        return a.info.Last_Name.localeCompare(b.info.Last_Name);
+      });
+      break;
+    case "signup-date-desc":
+      sorted.sort((a, b) => {
+        const aDate = (a as { responseDate?: string }).responseDate;
+        const bDate = (b as { responseDate?: string }).responseDate;
+        if (aDate && bDate) {
+          return new Date(bDate).getTime() - new Date(aDate).getTime();
+        }
+        // Fall back to name sort when cards don't expose a responseDate.
         return a.info.Last_Name.localeCompare(b.info.Last_Name);
       });
       break;

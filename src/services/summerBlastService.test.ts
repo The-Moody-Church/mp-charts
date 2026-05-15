@@ -262,6 +262,271 @@ describe("SummerBlastService.getIntakeCards", () => {
     expect(cards).toHaveLength(1);
     expect(cards[0].responseId).toBe(11);
   });
+
+  // Multi-record status: someone had a BG check that expired and started a new
+  // pending one. The card should show in_progress + previouslyExpired (not the
+  // old "not_started" bug where pending overwrote the expired record).
+  it("flags previouslyExpired when an expired BG check is followed by a new pending one", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-15T12:00:00Z"));
+
+    mockGetTableRecords.mockImplementation((params: { table: string }) => {
+      if (params.table === "Responses") {
+        return Promise.resolve([
+          {
+            Response_ID: 8800,
+            Response_Date: "2026-05-11T10:00:00",
+            Opportunity_ID: 85,
+            Participant_ID: 4000,
+            Closed: false,
+            Comments: null,
+          },
+        ]);
+      }
+      if (params.table === "Participants") {
+        return Promise.resolve([{ Participant_ID: 4000, Contact_ID: 5000 }]);
+      }
+      if (params.table === "Contacts") {
+        return Promise.resolve([
+          {
+            Contact_ID: 5000,
+            First_Name: "Faith",
+            Nickname: null,
+            Last_Name: "Ridge",
+            Image_GUID: null,
+            Email_Address: null,
+            Mobile_Phone: null,
+            Date_of_Birth: null,
+          },
+        ]);
+      }
+      if (params.table === "Background_Checks") {
+        return Promise.resolve([
+          // Newest first (orderBy Background_Check_Started DESC): a new pending one
+          {
+            Background_Check_ID: 200,
+            Contact_ID: 5000,
+            Background_Check_Status_ID: 1,
+            Background_Check_Started: "2026-05-10T00:00:00",
+            Background_Check_Submitted: null,
+            Background_Check_Returned: null,
+            All_Clear: null,
+            Background_Check_Expires: null,
+            Report_Url: null,
+            Background_Check_Type_ID: 1,
+          },
+          // Older: a completed one that's now expired
+          {
+            Background_Check_ID: 100,
+            Contact_ID: 5000,
+            Background_Check_Status_ID: 1,
+            Background_Check_Started: "2024-01-01T00:00:00",
+            Background_Check_Submitted: "2024-01-05T00:00:00",
+            Background_Check_Returned: "2024-01-10T00:00:00",
+            All_Clear: true,
+            Background_Check_Expires: "2025-01-10T00:00:00",
+            Report_Url: null,
+            Background_Check_Type_ID: 1,
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    try {
+      const service = SummerBlastService.getInstance();
+      const cards = await service.getIntakeCards();
+      const bg = cards[0].checklist.find((c) => c.type === "background_check");
+      expect(bg).toBeDefined();
+      expect(bg!.status).toBe("in_progress");
+      expect(bg!.previouslyExpired).toBe(true);
+      // Display record should be the newer pending one
+      expect(bg!.recordId).toBe(200);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows expired when only an expired BG check exists (no new pending)", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-15T12:00:00Z"));
+
+    mockGetTableRecords.mockImplementation((params: { table: string }) => {
+      if (params.table === "Responses")
+        return Promise.resolve([
+          {
+            Response_ID: 8801,
+            Response_Date: "2026-05-11T10:00:00",
+            Opportunity_ID: 85,
+            Participant_ID: 4100,
+            Closed: false,
+            Comments: null,
+          },
+        ]);
+      if (params.table === "Participants")
+        return Promise.resolve([{ Participant_ID: 4100, Contact_ID: 5100 }]);
+      if (params.table === "Contacts")
+        return Promise.resolve([
+          {
+            Contact_ID: 5100,
+            First_Name: "Solo",
+            Nickname: null,
+            Last_Name: "Expired",
+            Image_GUID: null,
+            Email_Address: null,
+            Mobile_Phone: null,
+            Date_of_Birth: null,
+          },
+        ]);
+      if (params.table === "Background_Checks") {
+        return Promise.resolve([
+          {
+            Background_Check_ID: 110,
+            Contact_ID: 5100,
+            Background_Check_Status_ID: 1,
+            Background_Check_Started: "2024-01-01T00:00:00",
+            Background_Check_Submitted: "2024-01-05T00:00:00",
+            Background_Check_Returned: "2024-01-10T00:00:00",
+            All_Clear: true,
+            Background_Check_Expires: "2025-01-10T00:00:00",
+            Report_Url: null,
+            Background_Check_Type_ID: 1,
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    try {
+      const service = SummerBlastService.getInstance();
+      const cards = await service.getIntakeCards();
+      const bg = cards[0].checklist.find((c) => c.type === "background_check");
+      expect(bg!.status).toBe("expired");
+      expect(bg!.previouslyExpired).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows expired when only an expired CPP form response exists", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-15T12:00:00Z"));
+
+    mockGetTableRecords.mockImplementation((params: { table: string }) => {
+      if (params.table === "Responses")
+        return Promise.resolve([
+          {
+            Response_ID: 8802,
+            Response_Date: "2026-05-11T10:00:00",
+            Opportunity_ID: 85,
+            Participant_ID: 4200,
+            Closed: false,
+            Comments: null,
+          },
+        ]);
+      if (params.table === "Participants")
+        return Promise.resolve([{ Participant_ID: 4200, Contact_ID: 5200 }]);
+      if (params.table === "Contacts")
+        return Promise.resolve([
+          {
+            Contact_ID: 5200,
+            First_Name: "Expired",
+            Nickname: null,
+            Last_Name: "CPP",
+            Image_GUID: null,
+            Email_Address: null,
+            Mobile_Phone: null,
+            Date_of_Birth: null,
+          },
+        ]);
+      if (params.table === "Form_Responses")
+        return Promise.resolve([
+          {
+            Form_Response_ID: 999,
+            Form_ID: 83,
+            Contact_ID: 5200,
+            Response_Date: "2024-06-01T00:00:00",
+            Expires: "2025-06-01T00:00:00",
+          },
+        ]);
+      return Promise.resolve([]);
+    });
+
+    try {
+      const service = SummerBlastService.getInstance();
+      const cards = await service.getIntakeCards();
+      const cpp = cards[0].checklist.find((c) => c.type === "form");
+      expect(cpp!.status).toBe("expired");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("flags previouslyExpired on certification when expired-completed precedes a failed/pending one", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-15T12:00:00Z"));
+
+    mockGetTableRecords.mockImplementation((params: { table: string }) => {
+      if (params.table === "Responses")
+        return Promise.resolve([
+          {
+            Response_ID: 8803,
+            Response_Date: "2026-05-11T10:00:00",
+            Opportunity_ID: 85,
+            Participant_ID: 4300,
+            Closed: false,
+            Comments: null,
+          },
+        ]);
+      if (params.table === "Participants")
+        return Promise.resolve([{ Participant_ID: 4300, Contact_ID: 5300 }]);
+      if (params.table === "Contacts")
+        return Promise.resolve([
+          {
+            Contact_ID: 5300,
+            First_Name: "Cert",
+            Nickname: null,
+            Last_Name: "Renewer",
+            Image_GUID: null,
+            Email_Address: null,
+            Mobile_Phone: null,
+            Date_of_Birth: null,
+          },
+        ]);
+      if (params.table === "Participant_Certifications")
+        return Promise.resolve([
+          // Newest first: a new pending cert (no Certification_Completed yet)
+          {
+            Participant_Certification_ID: 88,
+            Participant_ID: 4300,
+            Certification_Type_ID: 10,
+            Certification_Completed: null,
+            Certification_Expires: null,
+            Passed: null,
+          },
+          // Older: completed but expired
+          {
+            Participant_Certification_ID: 77,
+            Participant_ID: 4300,
+            Certification_Type_ID: 10,
+            Certification_Completed: "2024-01-01T00:00:00",
+            Certification_Expires: "2025-01-01T00:00:00",
+            Passed: true,
+          },
+        ]);
+      return Promise.resolve([]);
+    });
+
+    try {
+      const service = SummerBlastService.getInstance();
+      const cards = await service.getIntakeCards();
+      const mr = cards[0].checklist.find((c) => c.type === "certification");
+      expect(mr!.status).toBe("in_progress");
+      expect(mr!.previouslyExpired).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("SummerBlastService.getVolunteerCards", () => {

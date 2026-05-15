@@ -7,7 +7,8 @@ function makeCard(
   firstName: string,
   completedCount: number,
   totalCount: number,
-): BaseCardData<BasePersonInfo> {
+  responseDate?: string,
+): BaseCardData<BasePersonInfo> & { responseDate?: string } {
   return {
     info: {
       Contact_ID: 1,
@@ -22,6 +23,7 @@ function makeCard(
     checklist: [],
     completedCount,
     totalCount,
+    ...(responseDate ? { responseDate } : {}),
   };
 }
 
@@ -78,5 +80,21 @@ describe("sortCards", () => {
 
   it("returns empty array for empty input", () => {
     expect(sortCards([], "name")).toEqual([]);
+  });
+
+  it("sorts by signup-date-desc when cards have a responseDate (newest first)", () => {
+    const dated = [
+      makeCard("A", "old", 0, 1, "2026-04-01T10:00:00"),
+      makeCard("B", "new", 0, 1, "2026-05-12T10:00:00"),
+      makeCard("C", "mid", 0, 1, "2026-04-20T10:00:00"),
+    ];
+    const result = sortCards(dated, "signup-date-desc");
+    expect(result.map((c) => c.info.First_Name)).toEqual(["new", "mid", "old"]);
+  });
+
+  it("falls back to last-name sort when cards lack a responseDate", () => {
+    // No responseDate on these cards
+    const result = sortCards(cards, "signup-date-desc");
+    expect(result.map((c) => c.info.Last_Name)).toEqual(["Adams", "Adams", "Baker", "Smith"]);
   });
 });

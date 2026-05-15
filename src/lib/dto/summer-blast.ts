@@ -31,6 +31,13 @@ export interface SummerBlastChecklistItem {
   recordId: number | null;
   /** Structured detail for background check items. */
   bgCheckDetail: BackgroundCheckDetail | null;
+  /**
+   * True when status is "in_progress" but the person previously had a completed
+   * record that's now expired (e.g. an old BG check that expired and a new one
+   * is currently being processed). Cards render an inline "Expired" badge in
+   * addition to the in_progress icon.
+   */
+  previouslyExpired?: boolean;
 }
 
 interface SummerBlastBaseCard {
