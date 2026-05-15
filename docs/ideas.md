@@ -27,6 +27,8 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 
 ### Improvements
 - [Serving metrics: reconcile adult-only vs all-ages counts (#110)](#serving-metrics-reconcile-adult-only-vs-all-ages-counts-110)
+- ~~[Summer Blast: bulk-add signups to spreadsheet](#summer-blast-bulk-add-signups-to-spreadsheet)~~ ✅
+- ~~[Summer Blast: pull fresh from MP on every load (remove caching)](#summer-blast-pull-fresh-from-mp-on-every-load-remove-caching)~~ ✅
 - ~~[Need to be able to pull in fresh milestones (#171)](#need-to-be-able-to-pull-in-fresh-milestones-171)~~ ✅
 - ~~[Add two files at once to a milestone (#170)](#add-two-files-at-once-to-a-milestone-170)~~ ✅
 - ~~[Card Summaries should have sections (#163)](#card-summaries-should-have-sections-163)~~ ✅
@@ -166,6 +168,12 @@ Extracted `statusBadgeColor` to shared utility (`src/lib/contact-badge-utils.ts`
 
 ### Serving metrics: reconcile adult-only vs all-ages counts ([#110](https://github.com/The-Moody-Church/mp-charts/issues/110))
 The Engagement Overview Venn diagram filters serving/leading to **adults only** (18+ or unknown birthdate), showing ~830. The Grow in Love section's "Serving by Role Type" counts **all ages**, showing ~1,022. The ~192-person gap is minors with active serving/leading roles (e.g., student volunteers). Need to decide: should the Grow in Love charts also filter to adults, or should the Venn diagram include all ages? Or add an "(all ages)" note to the Grow in Love description to make the difference explicit?
+
+### ~~Summer Blast: bulk-add signups to spreadsheet~~ ✅ COMPLETED
+Added per-card checkboxes on the Signups tab and a sticky bulk-action bar that appears when 1+ are selected. "Confirm SB Spreadsheet Addition (Temp role) — N" creates Group_Participants in Group 1031 with Temp role for each selected signup and closes their Opportunity Responses. Partial failures are surfaced inline and the failed cards remain selected for retry; successful ones disappear with the refreshed intake list. Backed by a new `bulkAddToSummerBlast` server action that loops `SummerBlastService.addToSummerBlast` per item so one failure doesn't abort the batch.
+
+### ~~Summer Blast: pull fresh from MP on every load (remove caching)~~ ✅ COMPLETED
+Removed the `'use cache'` layer for Summer Blast intake and volunteers — staff need to see real-time signups and current group state without waiting for cache revalidation. `actions.ts` now calls `SummerBlastService` directly; deleted `src/components/summer-blast-volunteers/cached-data.ts`; removed both entries from `cache-warming.ts`.
 
 ### ~~Need to be able to pull in fresh milestones ([#171](https://github.com/The-Moody-Church/mp-charts/issues/171))~~ ✅ COMPLETED
 Added "Refresh from MP" buttons to the admin Journey Tool editor (Milestones section) and admin Compliance Tool editor (Requirements section and Journey Milestones section). Each button re-fetches the relevant data from Ministry Platform and merges with current in-memory edits — label, visibility, sort order, and other configuration are preserved for milestones/requirements that already existed; newly-added items in MP are appended at the end with default settings.
