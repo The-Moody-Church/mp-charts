@@ -141,33 +141,29 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // When group role selection changes, fetch requirements
-  const handleGroupRoleToggle = async (roleId: number, checked: boolean) => {
-    const newIds = checked
-      ? [...selectedGroupRoleIds, roleId]
-      : selectedGroupRoleIds.filter(id => id !== roleId);
-    setSelectedGroupRoleIds(newIds);
-    clearFieldError("groupRoleIds");
-
-    if (newIds.length === 0) {
+  // Fetch requirements from MP for the given role IDs, merging with current state to
+  // preserve user edits (labels, visibility, sort order). New items get appended.
+  const fetchAndMergeRequirements = async (roleIds: number[]) => {
+    if (roleIds.length === 0) {
       setRequirements([]);
       return;
     }
-
     setLoadingRequirements(true);
     try {
-      const resolved = await getDeduplicatedRequirements(newIds);
-      // Merge with existing requirements (preserve user edits like labels, visibility, order)
+      const resolved = await getDeduplicatedRequirements(roleIds);
       const existingMap = new Map(requirements.map(r => [`${r.type}:${r.requirementId}`, r]));
-      const merged: ComplianceRequirementConfig[] = resolved.map((r, idx) => {
+      const maxSortOrder = requirements.reduce((max, r) => Math.max(max, r.sortOrder), 0);
+      let nextSortOrder = maxSortOrder;
+      const merged: ComplianceRequirementConfig[] = resolved.map((r) => {
         const key = `${r.type}:${r.requirementId}`;
         const existing = existingMap.get(key);
         if (existing) return existing;
+        nextSortOrder += 1;
         return {
           requirementId: r.requirementId,
           label: r.label,
           type: r.type,
-          sortOrder: idx + 1,
+          sortOrder: nextSortOrder,
           visible: true,
         };
       });
@@ -178,6 +174,19 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
       setLoadingRequirements(false);
     }
   };
+
+  // When group role selection changes, fetch requirements
+  const handleGroupRoleToggle = async (roleId: number, checked: boolean) => {
+    const newIds = checked
+      ? [...selectedGroupRoleIds, roleId]
+      : selectedGroupRoleIds.filter(id => id !== roleId);
+    setSelectedGroupRoleIds(newIds);
+    clearFieldError("groupRoleIds");
+    await fetchAndMergeRequirements(newIds);
+  };
+
+  // Manual refresh — re-fetch requirements from MP and merge with current edits.
+  const handleRefreshRequirements = () => fetchAndMergeRequirements(selectedGroupRoleIds);
 
   // Load requirements on initial edit
   useEffect(() => {
@@ -216,6 +225,34 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
       .finally(() => setLoadingMilestones(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [journeyId]);
+
+  // Manual refresh — re-fetch journey milestones from MP and merge with current edits.
+  const handleRefreshMilestones = async () => {
+    if (!journeyId) return;
+    setLoadingMilestones(true);
+    try {
+      const mpMilestones = await getJourneyMilestones(journeyId);
+      const currentByIds = new Map(journeyMilestones.map((m) => [m.milestoneId, m]));
+      const maxSortOrder = journeyMilestones.reduce((max, m) => Math.max(max, m.sortOrder), 0);
+      let nextSortOrder = maxSortOrder;
+      const merged: ComplianceMilestoneConfig[] = mpMilestones.map((m) => {
+        const existing = currentByIds.get(m.Milestone_ID);
+        if (existing) return existing;
+        nextSortOrder += 1;
+        return {
+          milestoneId: m.Milestone_ID,
+          label: m.Milestone_Title,
+          sortOrder: nextSortOrder,
+          visible: true,
+        };
+      });
+      setJourneyMilestones(merged);
+    } catch (err) {
+      console.error("Failed to refresh milestones:", err);
+    } finally {
+      setLoadingMilestones(false);
+    }
+  };
 
   // Auto-generate slug from tool name
   const handleToolNameChange = (name: string) => {
@@ -478,7 +515,25 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
 
           {/* Requirements */}
           <div className="space-y-2">
-            <Label>Requirements (toggle visibility, edit labels, reorder)</Label>
+            <div className="flex items-center justify-between gap-3">
+              <Label>Requirements (toggle visibility, edit labels, reorder)</Label>
+              {selectedGroupRoleIds.length > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefreshRequirements}
+                  disabled={loadingRequirements}
+                  className="gap-1.5 flex-shrink-0"
+                  title="Re-fetch requirements from Ministry Platform (preserves your edits)"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh from MP
+                </Button>
+              )}
+            </div>
             {loadingRequirements ? (
               <div className="text-sm text-muted-foreground">Loading requirements...</div>
             ) : (
@@ -513,7 +568,23 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
           {/* Journey Milestones */}
           {journeyId && (
             <div className="space-y-2">
-              <Label>Journey Milestones (toggle visibility, edit labels, reorder)</Label>
+              <div className="flex items-center justify-between gap-3">
+                <Label>Journey Milestones (toggle visibility, edit labels, reorder)</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefreshMilestones}
+                  disabled={loadingMilestones}
+                  className="gap-1.5 flex-shrink-0"
+                  title="Re-fetch milestones from Ministry Platform (preserves your edits)"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh from MP
+                </Button>
+              </div>
               {loadingMilestones ? (
                 <div className="text-sm text-muted-foreground">Loading milestones...</div>
               ) : (

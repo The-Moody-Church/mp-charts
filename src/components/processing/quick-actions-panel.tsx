@@ -155,17 +155,18 @@ export function QuickActionsPanel({
             </div>
           </div>
           <div>
-            <Label htmlFor="file-upload" className="text-xs">Attachment (optional)</Label>
+            <Label htmlFor="file-upload" className="text-xs">Attachments (optional, multiple allowed)</Label>
             <Input
               id="file-upload"
               type="file"
+              multiple
               ref={fileInputRef}
               accept=".pdf,.txt,.csv,.jpg,.jpeg,.png,.gif,.bmp,.webp"
               className="text-xs"
               onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file && file.size > MAX_FILE_SIZE) {
-                  onFileError(`File is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum size is 20 MB.`);
+                const tooBig = Array.from(e.target.files ?? []).find((f) => f.size > MAX_FILE_SIZE);
+                if (tooBig) {
+                  onFileError(`"${tooBig.name}" is too large (${(tooBig.size / 1024 / 1024).toFixed(1)} MB). Maximum size is 20 MB per file.`);
                 } else {
                   onFileError(null);
                 }
