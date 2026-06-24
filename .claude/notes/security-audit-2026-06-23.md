@@ -68,7 +68,7 @@ All MP API calls run as a **single shared client-credentials service account wit
 
 **Fix (this PR):** Added `sanitizeId(value: unknown): number` to `filter-sanitize.ts` (accepts only a positive integer or digits-only string; throws on floats, 0, negatives, NaN/Infinity, and any non-digit string). Routed every sink above through it at the service layer (the chokepoint, so it holds regardless of caller). Added a `top: 500` cap to `getContactLogsByContactId`. The per-record **authorization** dimension is tracked under F2.
 
-**Follow-up:** extend the CI `security-lint` job to flag `= ${` inside filter template literals, not just `.join(`.
+**Follow-up (evaluated, not adopted):** extending the CI `security-lint` to flag `= ${...}` / `IN (${...})` filter interpolation was tried and reverted — the codebase sanitizes by variable assignment and parameter reassignment and interpolates server-controlled config/constants/dates, none of which a line-oriented grep can tell apart from raw client input (it false-positives on safe code). These sinks are guarded at the service boundary via `sanitizeId`/`sanitizeIds` plus code review instead.
 
 ### F2 — Cross-participant writes accept arbitrary IDs (journey/compliance)
 
