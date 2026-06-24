@@ -1,5 +1,11 @@
 import { QueryParams, RequestBody } from "../types/provider.types";
 
+/**
+ * Abort outbound MP requests that hang. Without an upper bound, a slow or stuck
+ * upstream can pin the shared service-account request path indefinitely (F13).
+ */
+const REQUEST_TIMEOUT_MS = 30_000;
+
 export class HttpClient {
     private baseUrl: string;
     private getToken: () => string;
@@ -17,18 +23,25 @@ export class HttpClient {
             headers: {
                 'Authorization': `Bearer ${this.getToken()}`,
                 'Accept': 'application/json'
-            }
+            },
+            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
         });
 
         if (!response.ok) {
-            let errorDetails = '';
-            try {
-                const errorBody = await response.text();
-                errorDetails = errorBody ? ` - ${errorBody}` : '';
-            } catch {
-                // If we can't read the error body, just continue without it
+            // SECURITY (F6): never put the response body in the thrown error. MP echoes
+            // the request (including $filter values such as searched emails/phones/
+            // GUIDs/DOB) in error bodies, and this message propagates to ~40
+            // console.error sites — it would leak PII to production logs. In
+            // development only, surface the body to aid debugging.
+            if (process.env.NODE_ENV === 'development') {
+                try {
+                    const errorBody = await response.text();
+                    if (errorBody) console.warn(`[MP GET ${endpoint}] error body:`, errorBody);
+                } catch {
+                    // ignore — body is best-effort in dev
+                }
             }
-            throw new Error(`GET ${endpoint} failed: ${response.status} ${response.statusText}${errorDetails}`);
+            throw new Error(`GET ${endpoint} failed: ${response.status} ${response.statusText}`);
         }
 
         return await response.json() as T;
@@ -44,7 +57,8 @@ export class HttpClient {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
             },
-            body: body ? JSON.stringify(body) : undefined
+            body: body ? JSON.stringify(body) : undefined,
+            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
         });
 
         if (!response.ok) {
@@ -64,7 +78,8 @@ export class HttpClient {
                 'Accept': 'application/json'
                 // Don't set Content-Type for FormData
             },
-            body: formData
+            body: formData,
+            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
         });
 
         if (!response.ok) {
@@ -84,7 +99,8 @@ export class HttpClient {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
             },
-            body: JSON.stringify(body)
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
         });
 
         if (!response.ok) {
@@ -104,7 +120,8 @@ export class HttpClient {
                 'Accept': 'application/json'
                 // Don't set Content-Type for FormData
             },
-            body: formData
+            body: formData,
+            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
         });
 
         if (!response.ok) {
@@ -122,7 +139,8 @@ export class HttpClient {
             headers: {
                 'Authorization': `Bearer ${this.getToken()}`,
                 'Accept': 'application/json'
-            }
+            },
+            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
         });
 
         if (!response.ok) {

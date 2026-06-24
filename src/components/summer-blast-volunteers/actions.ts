@@ -70,6 +70,14 @@ export interface BulkAddResult {
 }
 
 /**
+ * Maximum signups accepted in a single bulk-add call. The write rate-limit tier is
+ * charged once per call, and each item performs 2 MP writes, so without this cap a
+ * single request could trigger an unbounded burst of writes (F8). 100 comfortably
+ * covers real batch sizes while bounding the per-call blast radius.
+ */
+const MAX_BULK_ITEMS = 100;
+
+/**
  * Bulk-add multiple signups to Summer Blast as Temp role. Each signup is processed
  * individually so a single failure doesn't abort the batch.
  */
@@ -83,6 +91,15 @@ export async function bulkAddToSummerBlast(
     return { success: false, succeededCount: 0, failures: [] };
   }
 
+  // F8: bound the batch size so one call can't drive an unbounded number of writes.
+  if (items.length > MAX_BULK_ITEMS) {
+    return {
+      success: false,
+      succeededCount: 0,
+      failures: [{ responseId: 0, error: `Too many items in one request (max ${MAX_BULK_ITEMS})` }],
+    };
+  }
+
   const service = SummerBlastService.getInstance();
   const userId = getMpUserId(session);
   const failures: { responseId: number; error: string }[] = [];
@@ -91,8 +108,9 @@ export async function bulkAddToSummerBlast(
   for (const item of items) {
     const contactId = Number(item.contactId);
     const responseId = Number(item.responseId);
-    if (!contactId || !responseId) {
-      failures.push({ responseId: responseId || 0, error: "Missing required fields" });
+    // Require positive integers (service also re-validates via sanitizeId before any filter use).
+    if (!Number.isInteger(contactId) || contactId <= 0 || !Number.isInteger(responseId) || responseId <= 0) {
+      failures.push({ responseId: Number.isInteger(responseId) && responseId > 0 ? responseId : 0, error: "Invalid or missing IDs" });
       continue;
     }
     try {

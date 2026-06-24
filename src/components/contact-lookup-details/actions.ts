@@ -1,6 +1,7 @@
 'use server';
 
 import { requireFeatureAccess } from '@/lib/authorization';
+import { enforceRateLimit } from '@/lib/rate-limit';
 import { ContactLookupDetails, ContactLogDisplay, ContactLogMadeBy, HouseholdMember, ContactBadges, ContactGroupMembership } from '@/lib/dto';
 import { ContactService } from '@/services/contactService';
 import { ContactLogService } from '@/services/contactLogService';
@@ -10,7 +11,8 @@ import { uploadContactPhoto } from '@/components/shared-actions/processing';
 
 export async function getContactDetails(guid: string): Promise<ContactLookupDetails> {
   try {
-    await requireFeatureAccess("contact-lookup");
+    const session = await requireFeatureAccess("contact-lookup");
+    enforceRateLimit(session.user.id, "search"); // F9: PII reads use the stricter search tier
 
     if (!guid || guid.trim().length === 0) {
       throw new Error('GUID is required');
@@ -32,7 +34,8 @@ export async function getContactDetails(guid: string): Promise<ContactLookupDeta
 
 export async function getContactLogsByContactId(contactId: number): Promise<ContactLogDisplay[]> {
   try {
-    await requireFeatureAccess("contact-lookup");
+    const session = await requireFeatureAccess("contact-lookup");
+    enforceRateLimit(session.user.id, "search"); // F9: PII reads use the stricter search tier
 
     if (!contactId || contactId <= 0) {
       throw new Error('Valid contact ID is required');
@@ -107,7 +110,8 @@ export async function getContactLogsByContactId(contactId: number): Promise<Cont
 
 export async function getHouseholdMembers(householdId: number): Promise<HouseholdMember[]> {
   try {
-    await requireFeatureAccess("contact-lookup");
+    const session = await requireFeatureAccess("contact-lookup");
+    enforceRateLimit(session.user.id, "search"); // F9: PII reads use the stricter search tier
 
     if (!householdId || householdId <= 0) {
       throw new Error('Valid household ID is required');
@@ -123,7 +127,8 @@ export async function getHouseholdMembers(householdId: number): Promise<Househol
 
 export async function getContactBadges(contactId: number, householdPositionId?: number | null): Promise<ContactBadges> {
   try {
-    await requireFeatureAccess("contact-lookup");
+    const session = await requireFeatureAccess("contact-lookup");
+    enforceRateLimit(session.user.id, "search"); // F9: PII reads use the stricter search tier
 
     if (!contactId || contactId <= 0) {
       throw new Error('Valid contact ID is required');
@@ -139,7 +144,8 @@ export async function getContactBadges(contactId: number, householdPositionId?: 
 
 export async function getContactGroups(contactId: number): Promise<ContactGroupMembership[]> {
   try {
-    await requireFeatureAccess("contact-lookup");
+    const session = await requireFeatureAccess("contact-lookup");
+    enforceRateLimit(session.user.id, "search"); // F9: PII reads use the stricter search tier
 
     if (!contactId || contactId <= 0) {
       throw new Error('Valid contact ID is required');

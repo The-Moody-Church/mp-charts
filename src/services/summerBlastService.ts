@@ -1,5 +1,5 @@
 import { MPHelper } from "@/lib/providers/ministry-platform";
-import { sanitizeIds } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
+import { sanitizeIds, sanitizeId } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
 import { nowCentral, getAge } from "@/lib/processing-utils";
 import {
   getSummerBlastConfig,
@@ -411,7 +411,11 @@ export class SummerBlastService {
     groupRoleId: number | null;
     userId?: number;
   }): Promise<{ groupParticipantId: number }> {
-    const { contactId, responseId, groupRoleId, userId } = params;
+    const { groupRoleId, userId } = params;
+    // SECURITY: coerce client-supplied IDs to positive integers before they reach
+    // the Response_ID / Contact_ID filter interpolations below (filter-injection guard).
+    const contactId = sanitizeId(params.contactId);
+    const responseId = sanitizeId(params.responseId);
 
     // Fetch the response so we can carry its Comments + signup date into the
     // Group_Participants.Notes field. Done in parallel with the Participants lookup.
