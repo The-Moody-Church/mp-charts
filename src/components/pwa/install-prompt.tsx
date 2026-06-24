@@ -21,13 +21,18 @@ export function InstallPrompt() {
     const isAndroid = /Android/.test(ua);
 
     // Only show on iOS Safari or Android Chrome (no native prompt)
+    let detected: "ios" | "android" | null = null;
     if (isIos) {
       // Only in Safari — other iOS browsers can't install PWAs
       const isSafari = !/(CriOS|FxiOS|OPiOS|EdgiOS)/.test(ua);
-      if (isSafari) setPlatform("ios");
+      if (isSafari) detected = "ios";
     } else if (isAndroid) {
-      setPlatform("android");
+      detected = "android";
     }
+    // Client-only detection: navigator/window are unavailable during SSR, so
+    // this must run in an effect rather than at render or via a lazy initializer.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (detected) setPlatform(detected);
   }, []);
 
   useEffect(() => {
