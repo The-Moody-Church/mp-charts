@@ -2,12 +2,13 @@
 
 Quick-reference snapshot of current project state. Read this first at session start. For full details on any item, see the relevant session summary in `docs/sessions/`.
 
-**Last updated**: 2026-05-15
+**Last updated**: 2026-06-23
 
 ## Recently Completed
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
+| 2026-06-23 | **Dependabot security cleanup**: Cleared all open security alerts. Bumped undici 7.24.4→7.28.0 + vite 8.0.5→8.1.0 (3 HIGH: SOCKS5 cross-origin routing, TLS-bypass, `server.fs.deny` Windows bypass), esbuild 0.27.3→0.28.1 (low), js-yaml 4.1.1→4.2.0 (MEDIUM YAML-merge DoS), and added a `postcss: "$postcss"` override to dedupe Next 16's exact-pinned 8.4.31 nested copy to the patched 8.5.15 (MEDIUM CSS-stringify XSS). 0 high / 0 critical remaining; `next build` + 509 tests pass. | — | #181, #180, #183 |
 | 2026-05-15 | **Summer Blast: expired status fix + signup-date sort**: Fixed checklist status when a person had an expired BG check or certification AND a new pending one — now shows `in_progress` with an inline "expired" badge (was: incorrectly showed as `not_started`). Added "Signup Date (Newest)" sort, default on Signups tab. | — | (pending) |
 | 2026-05-15 | **Summer Blast: no cache + bulk-add**: Removed Summer Blast caching entirely — `/summer-blast-volunteers` now pulls fresh from MP on every page load (deleted `cached-data.ts`, unregistered from `cache-warming.ts`). Added per-card checkboxes on the Signups tab and a sticky bulk-action bar that confirms multi-signup enrollment as Temp role in one click (new `bulkAddToSummerBlast` action with per-item failure tracking). | — | #176 |
 | 2026-05-14 | **Multi-file uploads + Refresh from MP**: Quick-Action and Edit forms in compliance/journey processing now accept multiple file attachments per milestone (validated per-file against 20 MB limit). Admin Journey and Compliance Tool editors have "Refresh from MP" buttons that re-fetch milestones/requirements and merge with current in-memory edits without losing label, visibility, or sort-order changes. | #170, #171 | #175 |
