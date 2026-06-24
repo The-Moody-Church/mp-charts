@@ -86,6 +86,8 @@ export async function createJourneyMilestone(slug: string, formData: FormData): 
     const files = await extractValidatedFiles(formData);
 
     if (files.length > 0) {
+      // F7: file uploads are bounded by the dedicated, stricter 'upload' tier
+      enforceRateLimit(session.user.id, "upload");
       await service.uploadDocument('Participant_Milestones', newMilestoneId, files, userId);
     }
   } catch (error) {
@@ -117,6 +119,8 @@ export async function updateJourneyMilestone(slug: string, formData: FormData): 
     if ("error" in result) return { success: false, error: result.error };
 
     if (result.files.length > 0) {
+      // F7: file uploads are bounded by the dedicated, stricter 'upload' tier
+      enforceRateLimit(session.user.id, "upload");
       await service.uploadDocument('Participant_Milestones', milestoneRecordId, result.files, userId);
     }
 
