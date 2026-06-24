@@ -20,6 +20,13 @@ interface CacheEntry<T = unknown> {
 class ServiceCache {
   private store = new Map<string, CacheEntry>();
   private refreshing = new Set<string>();
+  /**
+   * Upper bound on distinct cache entries. The app's known cached functions use a
+   * small, fixed set of keys, so this only ever trips if keys are derived from
+   * unvalidated input — it bounds memory growth from that (F10). Eviction is FIFO
+   * by insertion order (re-inserting on each set keeps recently-written keys last).
+   */
+  private static readonly MAX_ENTRIES = 500;
 
   /**
    * Get cached data if available. Returns undefined if key has never been set.
@@ -49,7 +56,21 @@ class ServiceCache {
    * Store data with current timestamp.
    */
   set<T>(key: string, data: T): void {
+    // Re-insert so the just-written key moves to the end (most-recent) — keeps the
+    // FIFO eviction below from immediately dropping a freshly-set existing key.
+    this.store.delete(key);
     this.store.set(key, { data, timestamp: Date.now() });
+
+    // F10: bound total entries; evict the oldest (front of insertion order).
+    if (this.store.size > ServiceCache.MAX_ENTRIES) {
+      let toRemove = this.store.size - ServiceCache.MAX_ENTRIES;
+      for (const k of this.store.keys()) {
+        if (toRemove <= 0) break;
+        this.store.delete(k);
+        this.refreshing.delete(k);
+        toRemove--;
+      }
+    }
   }
 
   /**

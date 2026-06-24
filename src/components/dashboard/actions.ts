@@ -24,8 +24,10 @@ export async function getDashboardMetrics(
   year?: number
 ): Promise<DashboardData> {
   await requireFeatureAccess("dashboard");
-  const currentYear = year || getCurrentMinistryYear();
-  return getCachedDashboardData(currentYear);
+  // F10: clamp the client-supplied year to a sane integer range before it becomes a
+  // cache key, so it can't generate unbounded distinct cache entries / MP load.
+  const safeYear = sanitizeMinistryYear(year);
+  return getCachedDashboardData(safeYear);
 }
 
 /**
@@ -96,6 +98,20 @@ function getCurrentMinistryYear(): number {
   return currentMonth >= 8
     ? today.getFullYear()
     : today.getFullYear() - 1;
+}
+
+/**
+ * Clamps a client-supplied ministry year to a valid integer within a sane window
+ * (currentYear-10 .. currentYear+1). Anything non-integer or out of range falls
+ * back to the current ministry year. Server-action args arrive as untrusted wire
+ * data, so a value typed `number` can actually be a string or fractional value —
+ * this prevents unbounded cache-key / MP-load growth (F10).
+ */
+function sanitizeMinistryYear(year: number | undefined): number {
+  const current = getCurrentMinistryYear();
+  if (typeof year !== "number" || !Number.isInteger(year)) return current;
+  if (year < current - 10 || year > current + 1) return current;
+  return year;
 }
 
 /**
