@@ -2,7 +2,7 @@
 
 import { requireSession, getMpUserId } from "@/lib/auth-helpers";
 import { enforceRateLimit } from "@/lib/rate-limit";
-import { ALLOWED_IMAGE_TYPES, ALLOWED_DOCUMENT_TYPES, MAX_FILE_SIZE } from "@/lib/processing-utils";
+import { ALLOWED_IMAGE_TYPES, ALLOWED_DOCUMENT_TYPES, MAX_FILE_SIZE, fileMagicMatchesType } from "@/lib/processing-utils";
 
 /**
  * Extract and validate files from FormData.
@@ -21,6 +21,9 @@ export async function extractValidatedFiles(
       }
       if (value.size > MAX_FILE_SIZE) {
         throw new Error(`File too large: ${(value.size / 1024 / 1024).toFixed(1)} MB. Maximum ${MAX_FILE_SIZE / 1024 / 1024} MB.`);
+      }
+      if (!(await fileMagicMatchesType(value))) {
+        throw new Error(`File content does not match its declared type (${value.type}).`);
       }
       files.push(value);
     }
@@ -45,6 +48,9 @@ export async function extractValidatedFilesResult(
       }
       if (value.size > MAX_FILE_SIZE) {
         return { error: `File too large: ${(value.size / 1024 / 1024).toFixed(1)} MB. Maximum ${MAX_FILE_SIZE / 1024 / 1024} MB.` };
+      }
+      if (!(await fileMagicMatchesType(value))) {
+        return { error: `File content does not match its declared type (${value.type}).` };
       }
       files.push(value);
     }
@@ -85,6 +91,10 @@ export async function uploadContactPhoto(
 
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
       return { success: false, error: "Invalid file type. Allowed: JPEG, PNG, GIF, WebP" };
+    }
+
+    if (!(await fileMagicMatchesType(file))) {
+      return { success: false, error: "File content does not match its image type." };
     }
 
     const userId = getMpUserId(session);

@@ -363,8 +363,15 @@ export class JourneyProcessingService {
     const milestoneConfig = this.config.milestones.find(m => m.milestoneId === data.Milestone_ID);
     const discontinueJourney = milestoneConfig?.discontinuesJourney === true;
 
+    // F2: validate the numeric write fields as positive integers. (The generated
+    // ParticipantMilestonesSchema can't be applied here — its Date_Accomplished is
+    // z.string().datetime() but we write SQL-format dates — so it would reject valid
+    // records; sanitizeId is the project's consistent ID validator.)
     const record: Record<string, unknown> = {
       ...data,
+      Participant_ID: sanitizeId(data.Participant_ID),
+      Milestone_ID: sanitizeId(data.Milestone_ID),
+      Program_ID: sanitizeId(data.Program_ID),
       Date_Accomplished: data.Date_Accomplished || nowCentral(),
     };
     if (discontinueJourney) {

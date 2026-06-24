@@ -13,14 +13,19 @@ interface CachedProfile {
  * This service provides methods to interact with user data from Ministry Platform,
  * including retrieving user profiles and related contact information.
  *
- * Profile data is cached in-memory (15-min TTL) to avoid redundant MP API calls
+ * Profile data is cached in-memory (2-min TTL) to avoid redundant MP API calls
  * during authorization checks. The cache can be flushed via flushProfileCache().
+ *
+ * F12: the TTL is intentionally short (2 min) because this profile drives
+ * requireFeatureAccess — a longer cache means out-of-band MP group revocations
+ * take that long to take effect. 2 min still collapses the bursts of auth checks
+ * within a single request/navigation while keeping revocation lag small.
  */
 export class UserService {
   private static instance: UserService;
   private mp: MPHelper | null = null;
   private static profileCache = new Map<string, CachedProfile>();
-  private static CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+  private static CACHE_TTL = 2 * 60 * 1000; // 2 minutes (see F12 note above)
 
   private constructor() {}
 
@@ -46,7 +51,7 @@ export class UserService {
 
   /**
    * Retrieves a user profile by User GUID from Ministry Platform.
-   * Results are cached for 15 minutes to reduce API calls during authorization checks.
+   * Results are cached for 2 minutes to reduce API calls during authorization checks.
    *
    * Fetches user information including:
    * - User ID, GUID, Contact ID

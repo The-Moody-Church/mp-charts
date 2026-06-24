@@ -44,7 +44,7 @@ All MP API calls run as a **single shared client-credentials service account wit
 | F9 | PII-read actions use `general` tier, not `search` | **LOW** | Abuse | ✅ Fixed (follow-up PR) |
 | F10 | Unvalidated `year` arg → uncapped cache map growth | **LOW** | DoS | Open |
 | F11 | `/admin` page renders shell without server-side role gate | **LOW** | Authorization (defense-in-depth) | Open |
-| F12 | Authz profile cached 15 min → revocation lag | **LOW** | Authorization | Open |
+| F12 | Authz profile cached 15 min → revocation lag | **LOW** | Authorization | ✅ Fixed (follow-up PR) — TTL lowered to 2 min |
 | F13 | No timeout/`AbortSignal` on outbound fetch | **LOW** | Availability | ✅ Fixed (follow-up PR) |
 | F14 | Missing COOP / CORP headers | **LOW** | Configuration | ✅ Fixed (follow-up PR) |
 | F15 | `sanitizeFilterValue` does not escape LIKE wildcards | **LOW** | Injection (low) | ✅ Fixed (follow-up PR) — `sanitizeLikeValue` |
@@ -171,10 +171,10 @@ All MP API calls run as a **single shared client-credentials service account wit
 These were investigated and **refuted as exploitable today**, but are fragile and cheap to harden:
 
 - **Background-check `Report_Url` rendered as `href={reportUrl}`** with no scheme allowlist (`compliance-detail-modal.tsx`). Safe today *only* because `target="_blank" rel="noopener noreferrer"` makes browsers refuse to execute a `javascript:` URL in a new browsing context, and writing the field needs MP edit rights. It is **one removed `target="_blank"` away from live stored XSS.** Add an `http`/`https`/`mailto`/`tel` allowlist via `new URL()` and render non-conforming values as text.
-- **Upload MIME validated by client-controlled `file.type` only** (no magic bytes). Currently only consumed via `<img src>` (a non-scripting sandbox), so it is a defense-in-depth gap rather than a reachable XSS.
+- ~~**Upload MIME validated by client-controlled `file.type` only** (no magic bytes).~~ ✅ **Fixed (follow-up PR)** — `fileMagicMatchesType()` now verifies the leading bytes match the claimed type across all upload validators (photo + document); text/csv are allowed without a content check (no reliable signature).
 
 ## Notes / Hygiene
 
 - `data/summer-blast-config.json` is git-tracked while its sibling runtime config files are gitignored — review whether it should be ignored.
 - A stray `.env copy.local` duplicates live local secrets — safe (gitignored) but worth removing.
-- An unused `openai` dependency ships in the production bundle; `brace-expansion` ReDoS advisory is dev-toolchain only.
+- ~~An unused `openai` dependency ships in the production bundle~~ ✅ removed (follow-up PR). `brace-expansion` ReDoS advisory is dev-toolchain only (under `@typescript-eslint`, not in the prod image, below `high`) — left to clear on the next eslint-toolchain bump. `data/summer-blast-config.json` is intentionally git-tracked (the feature throws if it's missing — it must ship in the image), unlike the runtime-generated sibling configs.

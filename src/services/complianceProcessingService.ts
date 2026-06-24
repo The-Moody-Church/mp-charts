@@ -378,8 +378,13 @@ export class ComplianceProcessingService {
     const milestoneConfig = this.config.journeyMilestones.find(m => m.milestoneId === data.Milestone_ID);
     const discontinueJourney = milestoneConfig?.discontinuesJourney === true;
 
+    // F2: validate numeric write fields as positive integers (generated schema can't
+    // be applied directly — its Date_Accomplished is ISO but we write SQL dates).
     const record: Record<string, unknown> = {
       ...data,
+      Participant_ID: sanitizeId(data.Participant_ID),
+      Milestone_ID: sanitizeId(data.Milestone_ID),
+      Program_ID: sanitizeId(data.Program_ID),
       Date_Accomplished: data.Date_Accomplished || nowCentral(),
     };
     if (discontinueJourney) {
@@ -418,8 +423,8 @@ export class ComplianceProcessingService {
     // SECURITY (F2): only write certifications for participants this tool manages.
     await this.assertParticipantInScope(data.Participant_ID);
     const record: Record<string, unknown> = {
-      Participant_ID: data.Participant_ID,
-      Certification_Type_ID: data.Certification_Type_ID,
+      Participant_ID: sanitizeId(data.Participant_ID),
+      Certification_Type_ID: sanitizeId(data.Certification_Type_ID),
       Certification_Submitted: nowCentral(),
       Certification_Completed: data.Certification_Completed,
     };
@@ -440,8 +445,8 @@ export class ComplianceProcessingService {
     // SECURITY (F2): the contact must map to a participant this tool manages.
     await this.assertContactInScope(data.Contact_ID);
     const record: Record<string, unknown> = {
-      Form_ID: data.Form_ID,
-      Contact_ID: data.Contact_ID,
+      Form_ID: sanitizeId(data.Form_ID),
+      Contact_ID: sanitizeId(data.Contact_ID),
       Response_Date: data.Response_Date || nowCentral(),
     };
 
