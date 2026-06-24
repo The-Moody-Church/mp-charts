@@ -15,6 +15,24 @@ export function sanitizeFilterValue(value: string): string {
 }
 
 /**
+ * Escapes a string for safe use inside a T-SQL LIKE pattern. In addition to the
+ * single-quote escaping done by sanitizeFilterValue, it neutralizes the LIKE
+ * wildcards % and _ and the character-class opener [ by wrapping each in a
+ * character class ([%], [_], [[]), so user input is matched literally and cannot
+ * widen the match or error the query. Use this for `LIKE '%...%'` clauses.
+ *
+ * Escape order matters: '[' is escaped before '%'/'_' so the brackets they add
+ * are not re-escaped.
+ */
+export function sanitizeLikeValue(value: string): string {
+  return value
+    .replace(/'/g, "''")
+    .replace(/\[/g, '[[]')
+    .replace(/%/g, '[%]')
+    .replace(/_/g, '[_]');
+}
+
+/**
  * Validates and joins an array of numeric IDs for use in an IN () clause.
  * Filters out non-finite numbers and values <= 0, then joins with commas.
  * Throws if no valid IDs remain (prevents generating an empty IN () clause).

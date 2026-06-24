@@ -38,16 +38,16 @@ All MP API calls run as a **single shared client-credentials service account wit
 | F3 | `deleteContactLog` has no ownership check | **HIGH** | Broken Access Control | ✅ Fixed (PR) |
 | F4 | User-profile actions accept an arbitrary GUID | **HIGH** | Broken Access Control | ✅ Fixed (PR) |
 | F5 | Open redirect via backslash bypass of `getSafeCallbackUrl` | **MEDIUM** | Redirect | ✅ Fixed (PR) |
-| F6 | MP error-response body (incl. PII) logged unredacted (~40 sites) | **MEDIUM** | Data Exposure | Open |
-| F7 | Document uploads skip size check + use wrong rate-limit tier | **LOW** | Input Validation / Abuse | Open |
-| F8 | `bulkAddToSummerBlast` accepts an unbounded array | **MEDIUM** | DoS / Abuse | Open |
-| F9 | PII-read actions use `general` tier, not `search` | **LOW** | Abuse | Open |
+| F6 | MP error-response body (incl. PII) logged unredacted (~40 sites) | **MEDIUM** | Data Exposure | ✅ Fixed (follow-up PR) |
+| F7 | Document uploads skip size check + use wrong rate-limit tier | **LOW** | Input Validation / Abuse | ⚠️ Size check fixed (follow-up PR); `upload` tier reassignment deferred |
+| F8 | `bulkAddToSummerBlast` accepts an unbounded array | **MEDIUM** | DoS / Abuse | ✅ Fixed (follow-up PR) |
+| F9 | PII-read actions use `general` tier, not `search` | **LOW** | Abuse | ✅ Fixed (follow-up PR) |
 | F10 | Unvalidated `year` arg → uncapped cache map growth | **LOW** | DoS | Open |
 | F11 | `/admin` page renders shell without server-side role gate | **LOW** | Authorization (defense-in-depth) | Open |
 | F12 | Authz profile cached 15 min → revocation lag | **LOW** | Authorization | Open |
-| F13 | No timeout/`AbortSignal` on outbound fetch | **LOW** | Availability | Open |
-| F14 | Missing COOP / CORP headers | **LOW** | Configuration | Open |
-| F15 | `sanitizeFilterValue` does not escape LIKE wildcards | **LOW** | Injection (low) | Open |
+| F13 | No timeout/`AbortSignal` on outbound fetch | **LOW** | Availability | ✅ Fixed (follow-up PR) |
+| F14 | Missing COOP / CORP headers | **LOW** | Configuration | ✅ Fixed (follow-up PR) |
+| F15 | `sanitizeFilterValue` does not escape LIKE wildcards | **LOW** | Injection (low) | ✅ Fixed (follow-up PR) — `sanitizeLikeValue` |
 | F16 | Rate-limit tiers are independent buckets | **LOW** | Abuse | Open |
 
 ---

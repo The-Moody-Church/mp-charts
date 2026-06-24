@@ -1,6 +1,6 @@
 import { ContactSearch, ContactLookupDetails, HouseholdMember, ContactBadges, ContactGroupMembership } from "@/lib/dto";
 import { MPHelper } from "@/lib/providers/ministry-platform";
-import { sanitizeFilterValue, sanitizeGuid, sanitizeIds } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
+import { sanitizeLikeValue, sanitizeGuid, sanitizeIds } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
 
 /**
  * ContactService - Singleton service for managing contact-related operations
@@ -43,7 +43,7 @@ export class ContactService {
    * @returns Promise<ContactSearch[]> - Array of matching contacts (limited to 20 results)
    */
   public async contactSearch(search: string): Promise<ContactSearch[]> {
-    const safe = sanitizeFilterValue(search);
+    const safe = sanitizeLikeValue(search);
     const records = await this.mp!.getTableRecords<ContactSearch>({
       table: "Contacts",
       filter: `First_Name LIKE '%${safe}%' OR Last_Name LIKE '%${safe}%' OR Nickname LIKE '%${safe}%' OR Email_Address LIKE '%${safe}%' OR Mobile_Phone LIKE '%${safe}%'`,

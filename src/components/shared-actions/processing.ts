@@ -19,6 +19,9 @@ export async function extractValidatedFiles(
       if (!allowedTypes.includes(value.type)) {
         throw new Error(`Invalid file type: ${value.type}. Allowed: JPEG, PNG, GIF, WebP, PDF`);
       }
+      if (value.size > MAX_FILE_SIZE) {
+        throw new Error(`File too large: ${(value.size / 1024 / 1024).toFixed(1)} MB. Maximum ${MAX_FILE_SIZE / 1024 / 1024} MB.`);
+      }
       files.push(value);
     }
   }
@@ -39,6 +42,9 @@ export async function extractValidatedFilesResult(
     if (key === fieldName && value instanceof File && value.size > 0) {
       if (!allowedTypes.includes(value.type)) {
         return { error: `Invalid file type: ${value.type}. Allowed: JPEG, PNG, GIF, WebP, PDF` };
+      }
+      if (value.size > MAX_FILE_SIZE) {
+        return { error: `File too large: ${(value.size / 1024 / 1024).toFixed(1)} MB. Maximum ${MAX_FILE_SIZE / 1024 / 1024} MB.` };
       }
       files.push(value);
     }

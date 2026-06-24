@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeFilterValue, sanitizeIds, sanitizeIdsOptional, sanitizeId, sanitizeGuid } from './filter-sanitize';
+import { sanitizeFilterValue, sanitizeLikeValue, sanitizeIds, sanitizeIdsOptional, sanitizeId, sanitizeGuid } from './filter-sanitize';
 
 describe('sanitizeFilterValue', () => {
   it('returns plain strings unchanged', () => {
@@ -16,6 +16,27 @@ describe('sanitizeFilterValue', () => {
 
   it('handles empty string', () => {
     expect(sanitizeFilterValue('')).toBe('');
+  });
+});
+
+describe('sanitizeLikeValue', () => {
+  it('leaves a plain string unchanged', () => {
+    expect(sanitizeLikeValue('Smith')).toBe('Smith');
+  });
+
+  it('doubles single quotes', () => {
+    expect(sanitizeLikeValue("O'Brien")).toBe("O''Brien");
+  });
+
+  it('escapes LIKE wildcards % and _', () => {
+    expect(sanitizeLikeValue('50%')).toBe('50[%]');
+    expect(sanitizeLikeValue('a_b')).toBe('a[_]b');
+  });
+
+  it('escapes the character-class opener [ before adding its own brackets', () => {
+    expect(sanitizeLikeValue('[abc]')).toBe('[[]abc]');
+    // a value with all metacharacters
+    expect(sanitizeLikeValue('%_[')).toBe('[%][_][[]');
   });
 });
 
