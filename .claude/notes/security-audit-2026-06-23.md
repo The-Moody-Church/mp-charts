@@ -34,7 +34,7 @@ All MP API calls run as a **single shared client-credentials service account wit
 | # | Finding | Severity | Category | Status |
 |---|---------|----------|----------|--------|
 | F1 | Filter injection + IDOR via unvalidated numeric IDs | **HIGH** | Injection / Broken Access Control | ✅ Injection fixed (PR); IDOR scope → F2 |
-| F2 | Cross-participant writes (journey/compliance) accept arbitrary IDs | **HIGH** | Broken Access Control | ⚠️ Partial (PR) — scope check deferred (TODO) |
+| F2 | Cross-participant reads/writes (journey/compliance) accept arbitrary IDs | **HIGH** | Broken Access Control | ✅ Fixed (follow-up PR) — per-record scope enforcement w/ enforce\|report toggle; Zod-on-writes still open |
 | F3 | `deleteContactLog` has no ownership check | **HIGH** | Broken Access Control | ✅ Fixed (PR) |
 | F4 | User-profile actions accept an arbitrary GUID | **HIGH** | Broken Access Control | ✅ Fixed (PR) |
 | F5 | Open redirect via backslash bypass of `getSafeCallbackUrl` | **MEDIUM** | Redirect | ✅ Fixed (PR) |
