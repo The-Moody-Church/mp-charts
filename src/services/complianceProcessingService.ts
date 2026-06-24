@@ -1,5 +1,5 @@
 import { MPHelper } from '@/lib/providers/ministry-platform';
-import { sanitizeIds } from '@/lib/providers/ministry-platform/utils/filter-sanitize';
+import { sanitizeIds, sanitizeId } from '@/lib/providers/ministry-platform/utils/filter-sanitize';
 import {
   ComplianceParticipantInfo,
   ComplianceCard,
@@ -181,6 +181,18 @@ export class ComplianceProcessingService {
     participantId: number,
     groupParticipantId: number
   ): Promise<ComplianceDetail | null> {
+    // SECURITY: coerce every client-supplied ID to a positive integer before it
+    // reaches a filter interpolation, defending the Contact_ID / Group_Participant_ID
+    // sinks below against OData/SQL filter injection.
+    contactId = sanitizeId(contactId);
+    participantId = sanitizeId(participantId);
+    groupParticipantId = sanitizeId(groupParticipantId);
+    // SECURITY TODO(F2): per-record authorization. requireFeatureAccess only verifies
+    // the user may use this compliance feature, not that this specific participant is
+    // in scope for it. A user with access to one compliance tool could read another
+    // participant's detail (incl. background-check/compliance data) by passing a
+    // different (valid) ID. Verify participantId/contactId belongs to this tool's
+    // tracking group / group-roles before returning PII. Tracked follow-up.
     const contacts = await this.mp.getTableRecords<ContactRecord>({
       table: 'Contacts',
       select: 'Contact_ID,First_Name,Nickname,Last_Name,dp_fileUniqueId AS Image_GUID,Email_Address,Mobile_Phone',

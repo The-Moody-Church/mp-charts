@@ -6,11 +6,20 @@ import { useSearchParams } from "next/navigation";
 
 function getSafeCallbackUrl(url: string | null): string {
   if (!url) return "/";
-  // Only allow relative URLs — block protocol-relative (//evil.com) and absolute URLs
-  if (url.startsWith("/") && !url.startsWith("//") && !url.includes("://")) {
-    return url;
+  // Reject backslashes and control characters first. Browsers normalize "\" to "/",
+  // so a value like "/\evil.com" would slip past naive relative-URL checks and then
+  // navigate off-site (open redirect / phishing). The previous string-prefix checks
+  // (startsWith("//"), includes("://")) did not catch this.
+  if (/[\\\x00-\x1f]/.test(url)) return "/";
+  try {
+    // Resolve against our own origin and require the result to stay same-origin.
+    // This also rejects absolute URLs, protocol-relative URLs, and javascript: URIs.
+    const resolved = new URL(url, window.location.origin);
+    if (resolved.origin !== window.location.origin) return "/";
+    return resolved.pathname + resolved.search + resolved.hash;
+  } catch {
+    return "/";
   }
-  return "/";
 }
 
 function SignInContent() {

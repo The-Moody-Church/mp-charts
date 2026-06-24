@@ -2,6 +2,7 @@ import { ContactLog } from "@/lib/providers/ministry-platform/models/ContactLog"
 import { ContactLogTypes } from "@/lib/providers/ministry-platform/models/ContactLogTypes";
 import { ContactLogSchema, ContactLogInput } from "@/lib/providers/ministry-platform/models/ContactLogSchema";
 import { MPHelper } from "@/lib/providers/ministry-platform";
+import { sanitizeId } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
 
 /** Convert an ISO datetime string to SQL format (YYYY-MM-DD HH:MM:SS) in US Central Time */
 function isoToCentralSql(iso: string): string {
@@ -76,7 +77,7 @@ export class ContactLogService {
     let filter = "";
     
     if (contactId) {
-      filter = `Contact_ID = ${contactId}`;
+      filter = `Contact_ID = ${sanitizeId(contactId)}`;
     }
 
     const records = await this.mp!.getTableRecords<ContactLog>({
@@ -99,7 +100,7 @@ export class ContactLogService {
   public async getContactLogById(contactLogId: number): Promise<ContactLog | null> {
     const records = await this.mp!.getTableRecords<ContactLog>({
       table: "Contact_Log",
-      filter: `Contact_Log_ID = ${contactLogId}`,
+      filter: `Contact_Log_ID = ${sanitizeId(contactLogId)}`,
       select: "Contact_Log_ID,Contact_ID,Contact_Date,Made_By,Notes,Contact_Log_Type_ID,Planned_Contact_ID,Contact_Successful,Original_Contact_Log_Entry,Feedback_Entry_ID",
       top: 1
     });
@@ -116,8 +117,9 @@ export class ContactLogService {
   public async getContactLogsByContactId(contactId: number): Promise<ContactLog[]> {
     const records = await this.mp!.getTableRecords<ContactLog>({
       table: "Contact_Log",
-      filter: `Contact_ID = ${contactId}`,
+      filter: `Contact_ID = ${sanitizeId(contactId)}`,
       select: "Contact_Log_ID,Contact_ID,Contact_Date,Made_By,Notes,Contact_Log_Type_ID,Planned_Contact_ID,Contact_Successful,Original_Contact_Log_Entry,Feedback_Entry_ID",
+      top: 500,
       orderBy: "Contact_Date DESC"
     });
     
