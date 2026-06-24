@@ -67,7 +67,7 @@ export async function fetchMembersAndCounts(
 
   // Filter by status tab
   const statusSet = new Set(statusIds);
-  let tabMembers = allMembers.filter((c) => statusSet.has(c.Member_Status_ID!));
+  const tabMembers = allMembers.filter((c) => statusSet.has(c.Member_Status_ID!));
 
   // Sort by last name, first name (unless search already ranked them)
   if (!search || !search.trim()) {

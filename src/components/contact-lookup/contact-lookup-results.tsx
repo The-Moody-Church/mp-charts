@@ -29,10 +29,13 @@ export const ContactLookupResults: React.FC<ContactLookupResultsProps> = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
-  // Reset visible count when results change
-  useEffect(() => {
+  // Reset visible count when results change — adjust state during render
+  // rather than in an effect (https://react.dev/learn/you-might-not-need-an-effect).
+  const [prevResults, setPrevResults] = useState(results);
+  if (prevResults !== results) {
+    setPrevResults(results);
     setVisibleCount(PAGE_SIZE);
-  }, [results]);
+  }
 
   // IntersectionObserver to load more results when user scrolls near bottom
   useEffect(() => {

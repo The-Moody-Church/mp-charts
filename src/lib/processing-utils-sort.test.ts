@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { sortCards, type ProcessingSortOption } from "@/lib/processing-utils";
+import { sortCards } from "@/lib/processing-utils";
 import type { BaseCardData, BasePersonInfo } from "@/lib/dto/processing-shared";
 
 function makeCard(
