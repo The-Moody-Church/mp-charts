@@ -101,9 +101,26 @@ function getMpPageId(type: ComplianceChecklistItem["type"]): number | null {
   return pageIds[type];
 }
 
+/**
+ * Returns the URL only if it is a well-formed http(s) URL, else null. The
+ * Background_Checks Report_Url is free-text sourced from a third-party integration;
+ * without a scheme allowlist a value like `javascript:...` would be rendered into an
+ * href. (target=_blank currently blocks execution, but this removes the latent
+ * foot-gun if that attribute is ever dropped or a same-tab nav is added.)
+ */
+function toSafeHttpUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    return u.protocol === "http:" || u.protocol === "https:" ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+
 function BackgroundCheckDetailView({ item }: { item: ComplianceChecklistItem }) {
   const bg = item.bgCheckDetail;
   if (!bg) return null;
+  const reportHref = bg.reportUrl ? toSafeHttpUrl(bg.reportUrl) : null;
 
   const rows: { label: string; value: React.ReactNode }[] = [
     { label: "Type", value: bg.typeName || "—" },
@@ -135,9 +152,9 @@ function BackgroundCheckDetailView({ item }: { item: ComplianceChecklistItem }) 
           </React.Fragment>
         ))}
       </div>
-      {bg.reportUrl && (
+      {reportHref && (
         <a
-          href={bg.reportUrl}
+          href={reportHref}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:underline mt-1"

@@ -1,5 +1,5 @@
 import { MPHelper } from '@/lib/providers/ministry-platform';
-import { sanitizeIds } from '@/lib/providers/ministry-platform/utils/filter-sanitize';
+import { sanitizeIds, sanitizeId } from '@/lib/providers/ministry-platform/utils/filter-sanitize';
 import {
   ComplianceParticipantInfo,
   ComplianceCard,
@@ -12,6 +12,7 @@ import {
 } from '@/lib/dto';
 import { getComplianceToolBySlug, type ComplianceToolConfig } from '@/lib/compliance-tools-config';
 import { nowCentral } from '@/lib/processing-utils';
+import { enforceScope } from '@/lib/scope-enforcement';
 
 const BATCH_SIZE = 100;
 const EXPIRING_SOON_DAYS = 30;
@@ -124,6 +125,91 @@ export class ComplianceProcessingService {
   }
 
   // ---------------------------------------------------------------
+  // Per-record scope authorization (F2)
+  // ---------------------------------------------------------------
+
+  /**
+   * Resolves the set of Participant_IDs this compliance tool legitimately manages
+   * — the same population getParticipants()/getPausedParticipants() surface. Used
+   * to gate per-record access so a user of one tool cannot read or write another
+   * tool's participants by passing a different (valid) ID. Mirrors the discovery
+   * filters in getParticipantsForGroup / getParticipantsByGroupRole.
+   */
+  private async getScopedParticipantIds(): Promise<Set<number>> {
+    const ids = new Set<number>();
+    const now = nowCentral();
+    const { trackingGroupId, pausedGroupId, supportsPause, groupRoleIds } = this.config;
+
+    if (trackingGroupId) {
+      const groupIds = [trackingGroupId];
+      if (supportsPause && pausedGroupId) groupIds.push(pausedGroupId);
+      const rows = await this.mp.getTableRecords<{ Participant_ID: number }>({
+        table: 'Group_Participants',
+        select: 'Participant_ID',
+        filter: `Group_ID IN (${sanitizeIds(groupIds)}) AND (End_Date IS NULL OR End_Date >= '${now}')`,
+      });
+      for (const r of rows) ids.add(r.Participant_ID);
+      return ids;
+    }
+
+    // Group-role mode: members holding any of the configured group roles (mirrors
+    // getParticipantsByGroupRole).
+    if (groupRoleIds.length > 0) {
+      for (let i = 0; i < groupRoleIds.length; i += BATCH_SIZE) {
+        const batch = groupRoleIds.slice(i, i + BATCH_SIZE);
+        const rows = await this.mp.getTableRecords<{ Participant_ID: number }>({
+          table: 'Group_Participants',
+          select: 'Participant_ID',
+          filter: `Group_Role_ID IN (${sanitizeIds(batch)}) AND Start_Date <= '${now}' AND (End_Date IS NULL OR End_Date >= '${now}')`,
+        });
+        for (const r of rows) ids.add(r.Participant_ID);
+      }
+    }
+    return ids;
+  }
+
+  /** Throw/report (per F2_SCOPE_ENFORCEMENT) if the participant is not in tool scope. */
+  private async assertParticipantInScope(participantId: number): Promise<void> {
+    const scoped = await this.getScopedParticipantIds();
+    enforceScope(scoped.has(participantId), `participant ${participantId} outside this compliance tool`);
+  }
+
+  /** Assert scope for a contact by resolving its participant record(s). */
+  private async assertContactInScope(contactId: number): Promise<void> {
+    const parts = await this.mp.getTableRecords<{ Participant_ID: number }>({
+      table: 'Participants',
+      select: 'Participant_ID',
+      filter: `Contact_ID = ${sanitizeId(contactId)}`,
+    });
+    const scoped = await this.getScopedParticipantIds();
+    enforceScope(parts.some(p => scoped.has(p.Participant_ID)), `contact ${contactId} outside this compliance tool`);
+  }
+
+  /** Resolve a Group_Participant record to its Participant_ID, then assert scope. */
+  private async assertGroupParticipantInScope(groupParticipantId: number): Promise<void> {
+    const rows = await this.mp.getTableRecords<{ Participant_ID: number }>({
+      table: 'Group_Participants',
+      select: 'Participant_ID',
+      filter: `Group_Participant_ID = ${sanitizeId(groupParticipantId)}`,
+      top: 1,
+    });
+    if (!rows[0]) { enforceScope(false, `group-participant ${groupParticipantId} not found`); return; }
+    await this.assertParticipantInScope(rows[0].Participant_ID);
+  }
+
+  /** Resolve a Participant_Milestone record to its Participant_ID, then assert scope. */
+  private async assertMilestoneRecordInScope(participantMilestoneId: number): Promise<void> {
+    const rows = await this.mp.getTableRecords<{ Participant_ID: number }>({
+      table: 'Participant_Milestones',
+      select: 'Participant_ID',
+      filter: `Participant_Milestone_ID = ${sanitizeId(participantMilestoneId)}`,
+      top: 1,
+    });
+    if (!rows[0]) { enforceScope(false, `milestone ${participantMilestoneId} not found`); return; }
+    await this.assertParticipantInScope(rows[0].Participant_ID);
+  }
+
+  // ---------------------------------------------------------------
   // Discontinue / Complete badge logic
   // ---------------------------------------------------------------
 
@@ -181,6 +267,16 @@ export class ComplianceProcessingService {
     participantId: number,
     groupParticipantId: number
   ): Promise<ComplianceDetail | null> {
+    // SECURITY: coerce every client-supplied ID to a positive integer before it
+    // reaches a filter interpolation, defending the Contact_ID / Group_Participant_ID
+    // sinks below against OData/SQL filter injection.
+    contactId = sanitizeId(contactId);
+    participantId = sanitizeId(participantId);
+    groupParticipantId = sanitizeId(groupParticipantId);
+    // SECURITY (F2): per-record authorization. requireFeatureAccess only proves the
+    // user may use this compliance tool, not that this participant belongs to it —
+    // verify scope before returning any PII (incl. background-check/compliance data).
+    await this.assertParticipantInScope(participantId);
     const contacts = await this.mp.getTableRecords<ContactRecord>({
       table: 'Contacts',
       select: 'Contact_ID,First_Name,Nickname,Last_Name,dp_fileUniqueId AS Image_GUID,Email_Address,Mobile_Phone',
@@ -276,12 +372,19 @@ export class ComplianceProcessingService {
     Date_Accomplished?: string;
     Notes?: string;
   }, userId?: number): Promise<number> {
+    // SECURITY (F2): only write milestones for participants this tool manages.
+    await this.assertParticipantInScope(data.Participant_ID);
     // Check if this milestone is configured to discontinue the journey
     const milestoneConfig = this.config.journeyMilestones.find(m => m.milestoneId === data.Milestone_ID);
     const discontinueJourney = milestoneConfig?.discontinuesJourney === true;
 
+    // F2: validate numeric write fields as positive integers (generated schema can't
+    // be applied directly — its Date_Accomplished is ISO but we write SQL dates).
     const record: Record<string, unknown> = {
       ...data,
+      Participant_ID: sanitizeId(data.Participant_ID),
+      Milestone_ID: sanitizeId(data.Milestone_ID),
+      Program_ID: sanitizeId(data.Program_ID),
       Date_Accomplished: data.Date_Accomplished || nowCentral(),
     };
     if (discontinueJourney) {
@@ -300,6 +403,8 @@ export class ComplianceProcessingService {
     Date_Accomplished?: string;
     Notes?: string;
   }, userId?: number): Promise<void> {
+    // SECURITY (F2): the milestone record must belong to a participant in this tool.
+    await this.assertMilestoneRecordInScope(data.Participant_Milestone_ID);
     const record: Record<string, unknown> = {
       Participant_Milestone_ID: data.Participant_Milestone_ID,
     };
@@ -315,9 +420,11 @@ export class ComplianceProcessingService {
     Certification_Completed: string;
     Notes?: string;
   }, userId?: number): Promise<number> {
+    // SECURITY (F2): only write certifications for participants this tool manages.
+    await this.assertParticipantInScope(data.Participant_ID);
     const record: Record<string, unknown> = {
-      Participant_ID: data.Participant_ID,
-      Certification_Type_ID: data.Certification_Type_ID,
+      Participant_ID: sanitizeId(data.Participant_ID),
+      Certification_Type_ID: sanitizeId(data.Certification_Type_ID),
       Certification_Submitted: nowCentral(),
       Certification_Completed: data.Certification_Completed,
     };
@@ -335,9 +442,11 @@ export class ComplianceProcessingService {
     Contact_ID: number;
     Response_Date: string;
   }, userId?: number): Promise<number> {
+    // SECURITY (F2): the contact must map to a participant this tool manages.
+    await this.assertContactInScope(data.Contact_ID);
     const record: Record<string, unknown> = {
-      Form_ID: data.Form_ID,
-      Contact_ID: data.Contact_ID,
+      Form_ID: sanitizeId(data.Form_ID),
+      Contact_ID: sanitizeId(data.Contact_ID),
       Response_Date: data.Response_Date || nowCentral(),
     };
 
@@ -362,6 +471,9 @@ export class ComplianceProcessingService {
       throw new Error('Complete requires a tracking group');
     }
 
+    // SECURITY (F2): the group-participant record must belong to this tool.
+    await this.assertGroupParticipantInScope(currentGroupParticipantId);
+
     const now = nowCentral();
     await this.mp.updateTableRecords(
       'Group_Participants',
@@ -385,6 +497,8 @@ export class ComplianceProcessingService {
     }
 
     const { participantId, currentGroupParticipantId, notes, userId } = params;
+    // SECURITY (F2): only pause participants this tool manages.
+    await this.assertParticipantInScope(participantId);
     const { pausedGroupId, pauseMilestoneId, programId, defaultGroupRoleId } = this.config;
 
     if (!pausedGroupId || !pauseMilestoneId || !programId || !defaultGroupRoleId) {
@@ -427,6 +541,8 @@ export class ComplianceProcessingService {
     }
 
     const { participantId, currentGroupParticipantId, userId } = params;
+    // SECURITY (F2): only resume participants this tool manages.
+    await this.assertParticipantInScope(participantId);
     const { trackingGroupId, defaultGroupRoleId } = this.config;
 
     if (!trackingGroupId || !defaultGroupRoleId) {

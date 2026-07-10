@@ -135,7 +135,7 @@ describe("summer-blast-volunteers actions", () => {
       expect(mockAddToSummerBlast).not.toHaveBeenCalled();
       expect(result.succeededCount).toBe(0);
       expect(result.failures).toHaveLength(2);
-      expect(result.failures[0].error).toBe("Missing required fields");
+      expect(result.failures[0].error).toBe("Invalid or missing IDs");
     });
   });
 });

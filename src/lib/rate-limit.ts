@@ -17,7 +17,18 @@ interface RateLimitConfig {
   windowMs: number;
 }
 
-/** Rate limit tiers — applied per authenticated user */
+/**
+ * Rate limit tiers — applied per authenticated user.
+ *
+ * NOTE (F16): the `general` tier is enforced on EVERY server action via
+ * requireSession() (which requireFeatureAccess() also calls), so it acts as the
+ * universal per-user throughput gate — total server-action calls per user are
+ * bounded by `general` (120/min). The `write`/`upload`/`search` tiers are stricter
+ * *sub-caps* on those operation classes; they are NOT additional budget stacked on
+ * top of `general` (a write action consumes one `general` unit AND one `write`
+ * unit). Any future endpoint that bypasses requireSession (e.g. a new
+ * unauthenticated route) must add its own limiter, ideally IP-keyed.
+ */
 export const RATE_LIMITS = {
   /** General server action calls (reads, navigation) — 120 per minute */
   general: { limit: 120, windowMs: 60_000 },

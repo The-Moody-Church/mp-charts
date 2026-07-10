@@ -113,6 +113,7 @@ describe('HttpClient', () => {
             'Authorization': 'Bearer test-access-token-123',
             'Accept': 'application/json',
           },
+          signal: expect.any(AbortSignal),
         }
       );
       expect(result).toEqual([{ Contact_ID: 1, Display_Name: 'John Doe' }]);
@@ -193,6 +194,7 @@ describe('HttpClient', () => {
             'Accept': 'application/json',
           },
           body: JSON.stringify(newRecord),
+          signal: expect.any(AbortSignal),
         }
       );
       expect(result).toEqual([{ Contact_ID: 1, ...newRecord }]);
@@ -216,6 +218,7 @@ describe('HttpClient', () => {
             'Accept': 'application/json',
           },
           body: undefined,
+          signal: expect.any(AbortSignal),
         }
       );
     });
@@ -269,6 +272,7 @@ describe('HttpClient', () => {
             // No Content-Type for FormData
           },
           body: formData,
+          signal: expect.any(AbortSignal),
         }
       );
       expect(result).toEqual({ FileId: 1 });
@@ -308,6 +312,7 @@ describe('HttpClient', () => {
             'Accept': 'application/json',
           },
           body: JSON.stringify(updatedRecord),
+          signal: expect.any(AbortSignal),
         }
       );
       expect(result).toEqual([updatedRecord]);
@@ -348,6 +353,7 @@ describe('HttpClient', () => {
             'Accept': 'application/json',
           },
           body: formData,
+          signal: expect.any(AbortSignal),
         }
       );
       expect(result).toEqual({ FileId: 1, FileName: 'updated.txt' });
@@ -371,6 +377,7 @@ describe('HttpClient', () => {
             'Authorization': 'Bearer test-access-token-123',
             'Accept': 'application/json',
           },
+          signal: expect.any(AbortSignal),
         }
       );
       expect(result).toEqual([{ Contact_ID: 1 }]);

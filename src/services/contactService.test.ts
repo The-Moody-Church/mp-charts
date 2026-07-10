@@ -19,6 +19,9 @@ vi.mock('@/lib/providers/ministry-platform', () => {
 
 vi.mock('@/lib/providers/ministry-platform/utils/filter-sanitize', () => ({
   sanitizeFilterValue: vi.fn((v: string) => v.replace(/'/g, "''")),
+  sanitizeLikeValue: vi.fn((v: string) =>
+    v.replace(/'/g, "''").replace(/\[/g, '[[]').replace(/%/g, '[%]').replace(/_/g, '[_]')
+  ),
   sanitizeGuid: vi.fn((v: string) => {
     if (!/^[0-9a-f-]{36}$/i.test(v)) throw new Error('Invalid GUID format');
     return v;

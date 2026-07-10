@@ -2,7 +2,7 @@
 
 import { requireFeatureAccess, loadFeatureAccess, saveFeatureAccess } from "@/lib/authorization";
 import { MPHelper } from "@/lib/providers/ministry-platform";
-import { sanitizeFilterValue, sanitizeIds } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
+import { sanitizeLikeValue, sanitizeIds } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
 import { z } from "zod";
 import {
   loadJourneyToolsConfig,
@@ -66,7 +66,7 @@ export async function getAvailablePrograms(search?: string): Promise<MPProgram[]
   const mp = new MPHelper();
   let filter = "End_Date IS NULL";
   if (search && search.trim()) {
-    filter += ` AND Program_Name LIKE '%${sanitizeFilterValue(search)}%'`;
+    filter += ` AND Program_Name LIKE '%${sanitizeLikeValue(search)}%'`;
   }
   return mp.getTableRecords<MPProgram>({
     table: "Programs",
@@ -87,7 +87,7 @@ export async function getAvailableGroups(search?: string): Promise<MPGroup[]> {
   const mp = new MPHelper();
   let filter = "End_Date IS NULL";
   if (search && search.trim()) {
-    filter += ` AND Group_Name LIKE '%${sanitizeFilterValue(search)}%'`;
+    filter += ` AND Group_Name LIKE '%${sanitizeLikeValue(search)}%'`;
   }
   return mp.getTableRecords<MPGroup>({
     table: "Groups",

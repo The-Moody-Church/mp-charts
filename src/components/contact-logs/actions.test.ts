@@ -183,6 +183,7 @@ describe('contact-logs actions', () => {
 
   describe('deleteContactLog', () => {
     it('should enforce write rate limit', async () => {
+      mockGetContactLogById.mockResolvedValueOnce({ Contact_Log_ID: 1, Made_By: 99 });
       mockDeleteContactLog.mockResolvedValueOnce(undefined);
       await deleteContactLog(1);
       expect(mockEnforceRateLimit).toHaveBeenCalledWith('user-1', 'write');
@@ -192,10 +193,26 @@ describe('contact-logs actions', () => {
       await expect(deleteContactLog(0)).rejects.toThrow('Failed to delete contact log');
     });
 
-    it('should delete when valid', async () => {
+    it('should verify ownership before deleting', async () => {
+      mockGetContactLogById.mockResolvedValueOnce({ Contact_Log_ID: 42, Made_By: 99 });
       mockDeleteContactLog.mockResolvedValueOnce(undefined);
       await deleteContactLog(42);
+      expect(mockGetContactLogById).toHaveBeenCalledWith(42);
       expect(mockDeleteContactLog).toHaveBeenCalledWith(42);
+    });
+
+    it('should throw when user does not own the log entry', async () => {
+      mockGetContactLogById.mockResolvedValueOnce({ Contact_Log_ID: 42, Made_By: 42 });
+      await expect(deleteContactLog(42)).rejects.toThrow(
+        'You can only delete contact logs that you created'
+      );
+      expect(mockDeleteContactLog).not.toHaveBeenCalled();
+    });
+
+    it('should throw when log entry not found', async () => {
+      mockGetContactLogById.mockResolvedValueOnce(null);
+      await expect(deleteContactLog(42)).rejects.toThrow('Failed to delete contact log');
+      expect(mockDeleteContactLog).not.toHaveBeenCalled();
     });
   });
 

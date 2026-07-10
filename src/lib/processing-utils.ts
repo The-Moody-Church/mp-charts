@@ -115,6 +115,37 @@ export const ALLOWED_DOCUMENT_TYPES = [...ALLOWED_IMAGE_TYPES, 'application/pdf'
 /** Maximum file size for uploads (20 MB — matches Ministry Platform limit). */
 export const MAX_FILE_SIZE = 20 * 1024 * 1024;
 
+/** MIME types we accept but can't reliably magic-sniff (plain text has no signature). */
+const UNSNIFFABLE_UPLOAD_TYPES = ['text/plain', 'text/csv'];
+
+/**
+ * Detect the MIME type of binary content from its leading bytes ("magic number").
+ * Covers the binary upload types we accept; returns null for anything unrecognized.
+ */
+function sniffBinaryMimeType(bytes: Uint8Array): string | null {
+  const at = (sig: number[], offset = 0) => sig.every((b, i) => bytes[offset + i] === b);
+  if (at([0xff, 0xd8, 0xff])) return 'image/jpeg';
+  if (at([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return 'image/png';
+  if (at([0x47, 0x49, 0x46, 0x38])) return 'image/gif'; // GIF8(7a|9a)
+  if (at([0x42, 0x4d])) return 'image/bmp'; // BM
+  if (at([0x52, 0x49, 0x46, 0x46]) && at([0x57, 0x45, 0x42, 0x50], 8)) return 'image/webp'; // RIFF....WEBP
+  if (at([0x25, 0x50, 0x44, 0x46])) return 'application/pdf'; // %PDF
+  return null;
+}
+
+/**
+ * Verify an upload's actual bytes match its claimed MIME type. `file.type` is set
+ * by the client and is trivially spoofable, so checking only `file.type` lets an
+ * HTML/SVG/script payload be smuggled under an allowed Content-Type. This reads the
+ * leading bytes and confirms the real format. Text types (txt/csv) have no reliable
+ * signature and are allowed without a content check. Returns true when acceptable.
+ */
+export async function fileMagicMatchesType(file: File): Promise<boolean> {
+  if (UNSNIFFABLE_UPLOAD_TYPES.includes(file.type)) return true;
+  const header = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  return sniffBinaryMimeType(header) === file.type;
+}
+
 /**
  * Current date/time formatted as an ISO-like string in Central time.
  * Ministry Platform expects Central time for date fields.

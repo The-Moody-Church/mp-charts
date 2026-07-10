@@ -74,14 +74,21 @@ if (!ALLOWED_DOCUMENT_TYPES.includes(file.type)) {
 
 Never use user-supplied URLs for redirects without validation:
 
+Do **not** validate with string-prefix checks like `startsWith("//")` / `includes("://")` — they miss the backslash bypass: browsers normalize `\` to `/`, so `"/\evil.com"` passes those checks yet navigates off-site. Resolve against your own origin and require it to stay same-origin:
+
 ```typescript
-// Validate callback URLs are relative paths
+// Validate callback URLs are same-origin (client component — uses window.location)
 function getSafeCallbackUrl(url: string | null): string {
   if (!url) return "/";
-  if (url.startsWith("/") && !url.startsWith("//") && !url.includes("://")) {
-    return url;
+  // Reject backslashes and control chars first (browsers normalize "\" to "/").
+  if (/[\\\x00-\x1f]/.test(url)) return "/";
+  try {
+    const resolved = new URL(url, window.location.origin);
+    if (resolved.origin !== window.location.origin) return "/";
+    return resolved.pathname + resolved.search + resolved.hash;
+  } catch {
+    return "/";
   }
-  return "/";
 }
 ```
 

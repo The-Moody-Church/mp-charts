@@ -1,5 +1,5 @@
 import { MPHelper } from '@/lib/providers/ministry-platform';
-import { sanitizeIds } from '@/lib/providers/ministry-platform/utils/filter-sanitize';
+import { sanitizeIds, sanitizeId } from '@/lib/providers/ministry-platform/utils/filter-sanitize';
 import {
   JourneyParticipantInfo,
   JourneyCard,
@@ -11,6 +11,7 @@ import {
 } from '@/lib/dto';
 import { getJourneyToolBySlug, type JourneyToolConfig } from '@/lib/journey-tools-config';
 import { nowCentral } from '@/lib/processing-utils';
+import { enforceScope } from '@/lib/scope-enforcement';
 
 const BATCH_SIZE = 100;
 
@@ -79,6 +80,81 @@ export class JourneyProcessingService {
     } else {
       this.instances.clear();
     }
+  }
+
+  // ---------------------------------------------------------------
+  // Per-record scope authorization (F2)
+  // ---------------------------------------------------------------
+
+  /**
+   * Resolves the set of Participant_IDs this journey tool legitimately manages —
+   * the same population getParticipants()/getPausedParticipants() surface. Used to
+   * gate per-record access so a user of one tool cannot read or write another
+   * tool's participants by passing a different (valid) ID. Mirrors the discovery
+   * filters in getParticipantsForGroup / getParticipantsFromMilestones.
+   */
+  private async getScopedParticipantIds(): Promise<Set<number>> {
+    const ids = new Set<number>();
+    const { trackingGroupId, pausedGroupId, supportsPause, programId } = this.config;
+
+    if (trackingGroupId) {
+      const now = nowCentral();
+      const groupIds = [trackingGroupId];
+      if (supportsPause && pausedGroupId) groupIds.push(pausedGroupId);
+      const rows = await this.mp.getTableRecords<{ Participant_ID: number }>({
+        table: 'Group_Participants',
+        select: 'Participant_ID',
+        filter: `Group_ID IN (${sanitizeIds(groupIds)}) AND (End_Date IS NULL OR End_Date >= '${now}')`,
+      });
+      for (const r of rows) ids.add(r.Participant_ID);
+      return ids;
+    }
+
+    // Milestone-discovery mode: participants holding any of this tool's milestones
+    // within the configured program (mirrors getParticipantsFromMilestones).
+    const milestoneIds = this.config.milestones.map(m => m.milestoneId);
+    if (this.config.pauseMilestoneId) milestoneIds.push(this.config.pauseMilestoneId);
+    if (milestoneIds.length === 0) return ids;
+    for (let i = 0; i < milestoneIds.length; i += BATCH_SIZE) {
+      const batch = milestoneIds.slice(i, i + BATCH_SIZE);
+      const rows = await this.mp.getTableRecords<{ Participant_ID: number }>({
+        table: 'Participant_Milestones',
+        select: 'Participant_ID',
+        filter: `Milestone_ID IN (${sanitizeIds(batch)}) AND Program_ID = ${programId}`,
+      });
+      for (const r of rows) ids.add(r.Participant_ID);
+    }
+    return ids;
+  }
+
+  /** Throw/report (per F2_SCOPE_ENFORCEMENT) if the participant is not in tool scope. */
+  private async assertParticipantInScope(participantId: number): Promise<void> {
+    const scoped = await this.getScopedParticipantIds();
+    enforceScope(scoped.has(participantId), `participant ${participantId} outside this journey tool`);
+  }
+
+  /** Resolve a Group_Participant record to its Participant_ID, then assert scope. */
+  private async assertGroupParticipantInScope(groupParticipantId: number): Promise<void> {
+    const rows = await this.mp.getTableRecords<{ Participant_ID: number }>({
+      table: 'Group_Participants',
+      select: 'Participant_ID',
+      filter: `Group_Participant_ID = ${sanitizeId(groupParticipantId)}`,
+      top: 1,
+    });
+    if (!rows[0]) { enforceScope(false, `group-participant ${groupParticipantId} not found`); return; }
+    await this.assertParticipantInScope(rows[0].Participant_ID);
+  }
+
+  /** Resolve a Participant_Milestone record to its Participant_ID, then assert scope. */
+  private async assertMilestoneRecordInScope(participantMilestoneId: number): Promise<void> {
+    const rows = await this.mp.getTableRecords<{ Participant_ID: number }>({
+      table: 'Participant_Milestones',
+      select: 'Participant_ID',
+      filter: `Participant_Milestone_ID = ${sanitizeId(participantMilestoneId)}`,
+      top: 1,
+    });
+    if (!rows[0]) { enforceScope(false, `milestone ${participantMilestoneId} not found`); return; }
+    await this.assertParticipantInScope(rows[0].Participant_ID);
   }
 
   /**
@@ -155,6 +231,16 @@ export class JourneyProcessingService {
     participantId: number,
     groupParticipantId: number | null
   ): Promise<JourneyDetail | null> {
+    // SECURITY: coerce every client-supplied ID to a positive integer before it
+    // reaches a filter interpolation, defending the Contact_ID / Group_Participant_ID
+    // sinks below against OData/SQL filter injection.
+    contactId = sanitizeId(contactId);
+    participantId = sanitizeId(participantId);
+    groupParticipantId = groupParticipantId == null ? null : sanitizeId(groupParticipantId);
+    // SECURITY (F2): per-record authorization. requireFeatureAccess only proves the
+    // user may use this journey tool, not that this participant belongs to it — so
+    // verify the participant is in this tool's scope before returning any PII.
+    await this.assertParticipantInScope(participantId);
     const contacts = await this.mp.getTableRecords<ContactRecord>({
       table: 'Contacts',
       select: 'Contact_ID,First_Name,Nickname,Last_Name,dp_fileUniqueId AS Image_GUID,Email_Address,Mobile_Phone',
@@ -249,6 +335,9 @@ export class JourneyProcessingService {
       throw new Error('Complete requires a tracking group');
     }
 
+    // SECURITY (F2): the group-participant record must belong to this tool.
+    await this.assertGroupParticipantInScope(currentGroupParticipantId);
+
     const now = nowCentral();
     await this.mp.updateTableRecords(
       'Group_Participants',
@@ -268,12 +357,21 @@ export class JourneyProcessingService {
     Date_Accomplished?: string;
     Notes?: string;
   }, userId?: number): Promise<number> {
+    // SECURITY (F2): only write milestones for participants this tool manages.
+    await this.assertParticipantInScope(data.Participant_ID);
     // Check if this milestone is configured to discontinue the journey
     const milestoneConfig = this.config.milestones.find(m => m.milestoneId === data.Milestone_ID);
     const discontinueJourney = milestoneConfig?.discontinuesJourney === true;
 
+    // F2: validate the numeric write fields as positive integers. (The generated
+    // ParticipantMilestonesSchema can't be applied here — its Date_Accomplished is
+    // z.string().datetime() but we write SQL-format dates — so it would reject valid
+    // records; sanitizeId is the project's consistent ID validator.)
     const record: Record<string, unknown> = {
       ...data,
+      Participant_ID: sanitizeId(data.Participant_ID),
+      Milestone_ID: sanitizeId(data.Milestone_ID),
+      Program_ID: sanitizeId(data.Program_ID),
       Date_Accomplished: data.Date_Accomplished || nowCentral(),
     };
     if (discontinueJourney) {
@@ -298,6 +396,8 @@ export class JourneyProcessingService {
     Date_Accomplished?: string;
     Notes?: string;
   }, userId?: number): Promise<void> {
+    // SECURITY (F2): the milestone record must belong to a participant in this tool.
+    await this.assertMilestoneRecordInScope(data.Participant_Milestone_ID);
     const record: Record<string, unknown> = {
       Participant_Milestone_ID: data.Participant_Milestone_ID,
     };
@@ -324,6 +424,8 @@ export class JourneyProcessingService {
     }
 
     const { participantId, currentGroupParticipantId, notes, userId } = params;
+    // SECURITY (F2): only pause participants this tool manages.
+    await this.assertParticipantInScope(participantId);
     const { pausedGroupId, pauseMilestoneId, programId, defaultGroupRoleId } = this.config;
 
     if (!pausedGroupId || !pauseMilestoneId || !programId || !defaultGroupRoleId) {
@@ -368,6 +470,8 @@ export class JourneyProcessingService {
     }
 
     const { participantId, currentGroupParticipantId, userId } = params;
+    // SECURITY (F2): only resume participants this tool manages.
+    await this.assertParticipantInScope(participantId);
     const { trackingGroupId, defaultGroupRoleId } = this.config;
 
     if (!trackingGroupId || !defaultGroupRoleId) {

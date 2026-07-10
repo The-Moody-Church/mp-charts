@@ -5,7 +5,44 @@ import {
   getDisplayName, getInitials, getImageUrl, formatDate, nowCentral,
   scoreNameMatch, getAge,
   ALLOWED_IMAGE_TYPES, ALLOWED_DOCUMENT_TYPES, MAX_FILE_SIZE,
+  fileMagicMatchesType,
 } from "./processing-utils";
+
+/** Build a File with explicit leading bytes + a claimed MIME type. */
+function fileWith(bytes: number[], type: string, name = "f"): File {
+  return new File([new Uint8Array(bytes)], name, { type });
+}
+
+const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const JPEG = [0xff, 0xd8, 0xff, 0xe0];
+const PDF = [0x25, 0x50, 0x44, 0x46, 0x2d];
+const GIF = [0x47, 0x49, 0x46, 0x38, 0x39, 0x61];
+const WEBP = [0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50];
+
+describe("fileMagicMatchesType", () => {
+  it("accepts files whose bytes match the claimed type", async () => {
+    expect(await fileMagicMatchesType(fileWith(PNG, "image/png"))).toBe(true);
+    expect(await fileMagicMatchesType(fileWith(JPEG, "image/jpeg"))).toBe(true);
+    expect(await fileMagicMatchesType(fileWith(PDF, "application/pdf"))).toBe(true);
+    expect(await fileMagicMatchesType(fileWith(GIF, "image/gif"))).toBe(true);
+    expect(await fileMagicMatchesType(fileWith(WEBP, "image/webp"))).toBe(true);
+  });
+
+  it("rejects content smuggled under an allowed image type (e.g. HTML as PNG)", async () => {
+    const html = Array.from("<html><script>").map((c) => c.charCodeAt(0));
+    expect(await fileMagicMatchesType(fileWith(html, "image/png"))).toBe(false);
+  });
+
+  it("rejects a real image claiming a different image type", async () => {
+    expect(await fileMagicMatchesType(fileWith(PNG, "image/jpeg"))).toBe(false);
+  });
+
+  it("allows text types without a content check (no reliable signature)", async () => {
+    const text = Array.from("col1,col2\n1,2").map((c) => c.charCodeAt(0));
+    expect(await fileMagicMatchesType(fileWith(text, "text/csv"))).toBe(true);
+    expect(await fileMagicMatchesType(fileWith(text, "text/plain"))).toBe(true);
+  });
+});
 
 /** Helper to create a wrapped name record for searchByName. */
 function person(first: string, last: string, nickname: string | null = null) {

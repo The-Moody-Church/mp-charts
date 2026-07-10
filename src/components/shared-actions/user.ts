@@ -1,6 +1,6 @@
 'use server';
 
-import { requireSession } from "@/lib/auth-helpers";
+import { requireSession, getUserGuid } from "@/lib/auth-helpers";
 import { getAccessibleFeatures, isSuperAdmin, type Feature } from "@/lib/authorization";
 import { MPUserProfile } from "@/lib/providers/ministry-platform/types";
 import { UserService } from '@/services/userService';
@@ -21,12 +21,18 @@ export interface ComplianceToolMeta {
 }
 
 /**
- * Fetches the current user's profile from Ministry Platform
- * @param id - The user's GUID
- * @returns The user's profile data
+ * Fetches the CURRENT user's profile from Ministry Platform.
+ *
+ * SECURITY (F4): the user GUID is derived from the authenticated session, never
+ * from a client argument. Accepting a client-supplied GUID here let any logged-in
+ * user read another user's PII (and probe who is a super-admin). The legacy
+ * parameter is retained for call-site compatibility but is intentionally ignored.
+ * @returns The current user's profile data
  */
-export async function getCurrentUserProfile(id: string): Promise<MPUserProfile | undefined> {
-  await requireSession();
+export async function getCurrentUserProfile(_requestedId?: string): Promise<MPUserProfile | undefined> {
+  const session = await requireSession();
+  const id = getUserGuid(session);
+  if (!id) return undefined;
   const userService = await UserService.getInstance();
   return userService.getUserProfile(id);
 }
@@ -36,14 +42,19 @@ export async function getCurrentUserProfile(id: string): Promise<MPUserProfile |
  * along with whether they are a super-admin.
  * Called by UserProvider at login to populate client-side authorization context.
  */
-export async function getUserAuthorization(id: string): Promise<{
+export async function getUserAuthorization(_requestedId?: string): Promise<{
   accessibleFeatures: Feature[];
   isSuperAdmin: boolean;
   journeyTools: JourneyToolMeta[];
   complianceTools: ComplianceToolMeta[];
   feedbackEnabled: boolean;
 }> {
-  await requireSession();
+  // SECURITY (F4): derive the user GUID from the session, never from the client.
+  const session = await requireSession();
+  const id = getUserGuid(session);
+  if (!id) {
+    return { accessibleFeatures: [], isSuperAdmin: false, journeyTools: [], complianceTools: [], feedbackEnabled: false };
+  }
   const userService = await UserService.getInstance();
   const profile = await userService.getUserProfile(id);
   if (!profile) {

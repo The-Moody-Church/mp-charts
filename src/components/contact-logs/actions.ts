@@ -105,15 +105,36 @@ export async function deleteContactLog(contactLogId: number): Promise<void> {
   try {
     const session = await requireFeatureAccess("contact-lookup");
     enforceRateLimit(session.user.id, "write");
+    const userId = getMpUserId(session);
+
+    if (!userId) {
+      throw new Error("Unable to determine user User_ID for audit logging");
+    }
 
     if (!contactLogId || contactLogId <= 0) {
       throw new Error("Valid Contact Log ID is required");
     }
 
+    // Verify the current user owns this contact log entry before deleting.
+    // Mirrors the ownership check in updateContactLog — without it any
+    // contact-lookup user could delete any staffer's pastoral notes (IDOR).
     const contactLogService = await ContactLogService.getInstance();
+    const existingLog = await contactLogService.getContactLogById(contactLogId);
+
+    if (!existingLog) {
+      throw new Error("Contact log not found");
+    }
+
+    if (existingLog.Made_By !== userId) {
+      throw new Error("You can only delete contact logs that you created");
+    }
+
     await contactLogService.deleteContactLog(contactLogId);
   } catch (error) {
     console.error("Error deleting contact log:", error);
+    if (error instanceof Error && error.message === "You can only delete contact logs that you created") {
+      throw error;
+    }
     throw new Error("Failed to delete contact log");
   }
 }
