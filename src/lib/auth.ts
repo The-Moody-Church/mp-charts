@@ -8,6 +8,30 @@ import { sanitizeGuid } from "@/lib/providers/ministry-platform/utils/filter-san
 const mpBaseUrl = process.env.MINISTRY_PLATFORM_BASE_URL;
 const mpOauthUrl = `${mpBaseUrl}/oauth`;
 
+/**
+ * Custom fields added to the Better Auth `user` record.
+ *
+ * ALL of these fields MUST keep `input: true`. They are populated server-side
+ * from the OAuth profile via `mapProfileToUser` below (never from a user-facing
+ * form). As of better-auth 1.6, `parseAdditionalUserInputFromProviderProfile`
+ * (better-auth/dist/db/schema — `if (schema[key]?.input === false) continue;`)
+ * strips any additional field declared with `input: false` BEFORE the user
+ * record is created. With `input: false`:
+ *   - `userGuid` is dropped -> every MP profile lookup breaks (blank avatar,
+ *     dead user menu, `userId: null`, and the session gets trapped — see the
+ *     /session-error recovery route in AuthWrapper).
+ *   - `mpUserId` is dropped -> audit attribution (`$userId`) on MP writes breaks.
+ *   - `mpContactId` is dropped -> contact-scoped lookups break.
+ * Since genericOAuth is the only sign-in path and no form sets these fields,
+ * allowing input carries no practical risk. `src/lib/auth.test.ts` guards this
+ * against future regressions. (Ported from upstream MPNext PR #66.)
+ */
+export const userAdditionalFields = {
+  userGuid: { type: "string" as const, required: false, input: true },
+  mpUserId: { type: "number" as const, required: false, input: true },
+  mpContactId: { type: "number" as const, required: false, input: true },
+};
+
 export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
   secret: process.env.BETTER_AUTH_SECRET,
@@ -21,11 +45,7 @@ export const auth = betterAuth({
   },
 
   user: {
-    additionalFields: {
-      userGuid: { type: "string", required: false, input: false },
-      mpUserId: { type: "number", required: false, input: false },
-      mpContactId: { type: "number", required: false, input: false },
-    },
+    additionalFields: userAdditionalFields,
   },
 
   plugins: [

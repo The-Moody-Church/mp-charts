@@ -34,14 +34,16 @@ This guide provides essential information for AI assistants (like Claude) workin
 
 - **Framework**: Next.js 16 (App Router, Turbopack, Cache Components/PPR) with React 19, TypeScript strict mode
 - **Ministry Platform Integration**: Custom provider at `src/lib/providers/ministry-platform/` with REST API client, auth, and type-safe models
-- **Auth**: Better Auth (`better-auth@^1.4`) with Ministry Platform OAuth via `genericOAuth` plugin (`src/lib/auth.ts`)
+- **Auth**: Better Auth (`better-auth@^1.6`) with Ministry Platform OAuth via `genericOAuth` plugin (`src/lib/auth.ts`)
   - **Server Config**: `src/lib/auth.ts` — `betterAuth()` with `genericOAuth`, `customSession`, `nextCookies()` plugins
   - **Client Config**: `src/lib/auth-client.ts` — `createAuthClient()` with matching client plugins
   - **Auth Helpers**: `src/lib/auth-helpers.ts` — `getSession()`, `requireSession()`, `getMpUserId()`, `getUserGuid()` for server actions
   - **Route Handler**: `src/app/api/auth/[...all]/route.ts` — Better Auth API route
   - **Route Protection**: `src/proxy.ts` — Next.js 16 proxy with session cookie validation via `getSessionCookie` from `better-auth/cookies`
   - **Session Strategy**: JWT cookie-based sessions; no per-user OIDC tokens stored — services use client credentials (`MPHelper` singleton) with `$userId` for audit attribution
-  - **User Fields**: `additionalFields` on user model: `userGuid`, `mpUserId`, `mpContactId` — populated at login via `getUserInfo` callback
+  - **User Fields**: `additionalFields` on user model (exported as `userAdditionalFields`): `userGuid`, `mpUserId`, `mpContactId` — populated server-side at login via `getUserInfo`/`mapProfileToUser`
+    - **MANDATORY `input: true`**: All three fields MUST keep `input: true`. As of better-auth 1.6, `parseAdditionalUserInputFromProviderProfile` strips any additional field declared `input: false` before the user record is created — silently dropping our server-populated fields (breaks avatar/user menu, `getUserGuid()`, and `$userId` audit attribution). Guarded by `src/lib/auth.test.ts`. Do NOT flip these back to `input: false`.
+  - **Session recovery**: If a session somehow lacks `userGuid`, `AuthWrapper` redirects to `/session-error` (a minimal recovery page with a sign-out button that lives outside the `(web)` route group so it can't redirect-loop) instead of rendering a dead app with no sign-out control.
   - **OIDC Logout**: Implements RP-initiated logout flow to properly end Ministry Platform OAuth sessions
   - **Required Environment Variables**: `MINISTRY_PLATFORM_BASE_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`
   - **MP OAuth Setup**: Requires Post-Logout Redirect URIs configured in Ministry Platform OAuth client (see README.md)
