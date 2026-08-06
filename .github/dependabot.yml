@@ -17,11 +17,32 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    # Group minor and patch updates together to reduce PR noise
+    # Cap concurrent PRs so a backlog is visible rather than silently truncated.
+    open-pull-requests-limit: 10
     groups:
-      minor-and-patch:
+      # Security updates get their OWN group, separate from routine version
+      # bumps. Previously a single `patterns: ["*"]` minor-and-patch group
+      # swallowed everything, so a superseding group PR would orphan the
+      # individual security PRs — #150, #169 and #182 all died that way
+      # (#182's closing comment: "js-yaml is no longer updatable, so this is
+      # no longer needed"). Security fixes must not be collateral of a
+      # routine-bump rebase.
+      security:
+        applies-to: security-updates
         patterns:
           - "*"
+
+      # Routine version updates, split prod vs dev so a runtime bump is never
+      # buried in a pile of tooling churn and can be reviewed on its own risk.
+      prod-minor-patch:
+        applies-to: version-updates
+        dependency-type: "production"
+        update-types:
+          - "minor"
+          - "patch"
+      dev-minor-patch:
+        applies-to: version-updates
+        dependency-type: "development"
         update-types:
           - "minor"
           - "patch"
