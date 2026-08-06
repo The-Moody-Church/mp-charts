@@ -41,16 +41,73 @@ jobs:
       # code. Those sinks are guarded at the service boundary via sanitizeId/sanitizeIds
       # (see .claude/rules/security.md) and code review instead.
 
-  build-scan-and-push:
+  # Everything that does NOT need repository secrets. Runs for every actor,
+  # including dependabot[bot] — which is the point: until this job existed,
+  # `build-scan-and-push` was skipped wholesale for Dependabot (see #152), so
+  # bot PRs merged with no npm audit, no build, no tests and no image scan.
+  # Nothing here touches the registry, so there is no reason to gate it.
+  verify:
     needs: security-lint
-    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Audit npm dependencies
         run: npm audit --audit-level=high
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests
+        run: npm run test:run
+
+      - name: Build
+        run: npm run build
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build image locally (no push — no secrets needed)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: mp-charts:ci-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: 'mp-charts:ci-${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'  # Fail on CRITICAL/HIGH
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+  # Registry login + push. This is the only part that needs secrets, and
+  # Dependabot PRs cannot access them, so the actor gate stays here.
+  build-scan-and-push:
+    needs: verify
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
