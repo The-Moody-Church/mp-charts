@@ -25,6 +25,21 @@ const eslintConfig = defineConfig([
     files: ["cache-handler.js"],
     rules: { "@typescript-eslint/no-require-imports": "off" },
   },
+  {
+    // React Compiler rules introduced by eslint-plugin-react-hooks 7.1 (pulled in
+    // with eslint-config-next 16.3.0). They flag 19 PRE-EXISTING patterns — no new
+    // code triggered them — dominated by the "load data in useEffect, then setState"
+    // shape used across 14 processing/admin components.
+    //
+    // Downgraded to "warn" so they stay visible without blocking `npm run lint`.
+    // Fixing them properly means restructuring data loading in those components,
+    // which is a behavior-affecting refactor and does not belong in a security
+    // dependency bump. Tracked in docs/ideas.md ("Adopt React Compiler lint rules").
+    rules: {
+      "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/immutability": "warn",
+    },
+  },
 ]);
 
 export default eslintConfig;
