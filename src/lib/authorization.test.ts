@@ -52,9 +52,11 @@ vi.mock(import("@/services/userService"), async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...actual,
+    // Only getInstance() is exercised here; cast past the full class shape
+    // (prototype/instance/profileCache/CACHE_TTL/flushProfileCache).
     UserService: {
       getInstance: vi.fn(),
-    },
+    } as unknown as typeof actual.UserService,
   };
 });
 
@@ -254,7 +256,7 @@ describe("authorization", () => {
       description: "Test journey",
       enabled: true,
       milestones: [],
-      programId: null,
+      programId: 1,
       trackingGroupId: null,
       pausedGroupId: null,
       defaultGroupRoleId: null,
@@ -330,7 +332,7 @@ describe("authorization", () => {
       journeyId: null,
       journeyMilestones: [],
       requirements: [],
-      programId: null,
+      programId: 1,
       trackingGroupId: null,
       defaultGroupRoleId: null,
       supportsPause: false,

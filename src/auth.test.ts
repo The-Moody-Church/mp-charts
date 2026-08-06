@@ -38,7 +38,7 @@ describe('Auth - MP User Profile Lookup at Sign-In', () => {
     }]);
 
     const mp = new MPHelper();
-    const records = await mp.getTableRecords({
+    const records = await mp.getTableRecords<{ User_ID: number; Contact_ID: number }>({
       table: 'dp_Users',
       filter: `User_GUID = 'user-guid-123'`,
       select: 'User_ID,Contact_ID',
@@ -67,7 +67,7 @@ describe('Auth - MP User Profile Lookup at Sign-In', () => {
     let mpContactId: number | undefined;
 
     try {
-      const records = await mp.getTableRecords({
+      const records = await mp.getTableRecords<{ User_ID: number; Contact_ID: number }>({
         table: 'dp_Users',
         filter: `User_GUID = 'test-guid'`,
         select: 'User_ID,Contact_ID',
