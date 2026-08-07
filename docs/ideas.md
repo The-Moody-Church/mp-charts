@@ -58,7 +58,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
 
 ### Technical Debt
-- [Adopt React Compiler lint rules from eslint-plugin-react-hooks 7.1](#adopt-react-compiler-lint-rules-from-eslint-plugin-react-hooks-71)
+- [Adopt React Compiler lint rules from eslint-plugin-react-hooks 7.1 (#197)](#adopt-react-compiler-lint-rules-from-eslint-plugin-react-hooks-71-197)
 - [Upgrade TypeScript 5.9 to 6.0 (#136)](#upgrade-typescript-59-to-60-136)
 - ~~[Dependency security remediation — August 2026](#dependency-security-remediation-august-2026)~~ ✅
 - ~~[IDOR Mitigation — Per-Record Authorization (#57)](#idor-mitigation-per-record-authorization-57)~~ ✅
@@ -273,7 +273,7 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 
 ## Technical Debt
 
-### Adopt React Compiler lint rules from eslint-plugin-react-hooks 7.1
+### Adopt React Compiler lint rules from eslint-plugin-react-hooks 7.1 ([#197](https://github.com/The-Moody-Church/mp-charts/issues/197))
 `eslint-config-next` 16.3.0 pulls in `eslint-plugin-react-hooks` 7.1, which adds the React Compiler rules `set-state-in-effect`, `immutability` and `incompatible-library`. They flag 19 pre-existing violations — 18 × `set-state-in-effect` across 14 processing/admin components (the "load data in `useEffect`, then `setState`" shape), plus 1 `immutability` error in `contact-lookup-search.tsx` and 1 `incompatible-library` warning in `contact-logs.tsx`.
 
 They are currently downgraded to `warn` in `eslint.config.mjs` so `npm run lint` stays green. Fixing them properly means restructuring data loading in those components — moving fetches out of effects, deriving state during render, or using the existing `'use cache'` / server-component patterns — which is behavior-affecting and was deliberately kept out of the August 2026 security bump. Once fixed, restore both rules to `error` and delete the override block.
