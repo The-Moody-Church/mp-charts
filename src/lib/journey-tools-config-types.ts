@@ -101,3 +101,43 @@ export function generateUniqueSlug(name: string, existingSlugs: string[]): strin
   while (existingSlugs.includes(`${base}-${i}`)) i++;
   return `${base}-${i}`;
 }
+
+/**
+ * The subset of Ministry Platform's milestone record this merge needs. Declared
+ * structurally rather than importing MPMilestone from the admin actions module,
+ * so this stays a dependency-free pure helper.
+ */
+export interface MilestoneSource {
+  Milestone_ID: number;
+  Milestone_Title: string;
+  Sort_Order: number | null;
+}
+
+/**
+ * Build the editor's milestone list for a journey from MP's current milestones.
+ *
+ * Entries already present in `saved` (matched on milestoneId) are returned
+ * VERBATIM, so an admin's custom label, visibility, drag order,
+ * discontinuesJourney and completionBadge all survive re-opening the editor.
+ * Anything else gets MP's title and Sort_Order with `visible: true`. Milestones
+ * MP no longer returns — the server action filters out Discontinued ones — drop
+ * off the list.
+ *
+ * Pass an empty `saved` array to get pure defaults for a newly selected journey.
+ */
+export function mergeSavedMilestones(
+  mpMilestones: MilestoneSource[],
+  saved: JourneyMilestoneConfig[]
+): JourneyMilestoneConfig[] {
+  const savedById = new Map(saved.map((m) => [m.milestoneId, m]));
+  return mpMilestones.map((m, idx) => {
+    const existing = savedById.get(m.Milestone_ID);
+    if (existing) return existing;
+    return {
+      milestoneId: m.Milestone_ID,
+      label: m.Milestone_Title,
+      sortOrder: m.Sort_Order ?? idx + 1,
+      visible: true,
+    };
+  });
+}

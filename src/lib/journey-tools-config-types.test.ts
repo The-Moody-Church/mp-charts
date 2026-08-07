@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateJourneyToolConfig, generateSlug, generateUniqueSlug } from './journey-tools-config-types';
+import { validateJourneyToolConfig, generateSlug, generateUniqueSlug, mergeSavedMilestones } from './journey-tools-config-types';
 
 describe('generateSlug', () => {
   it('lowercases and replaces spaces with hyphens', () => {
@@ -84,5 +84,55 @@ describe('validateJourneyToolConfig', () => {
       }],
     };
     expect(validateJourneyToolConfig(config).milestones[0].discontinuesJourney).toBe(true);
+  });
+});
+
+describe('mergeSavedMilestones', () => {
+  const mp = [
+    { Milestone_ID: 1, Milestone_Title: 'Attend Class', Sort_Order: 1 },
+    { Milestone_ID: 2, Milestone_Title: 'Interview', Sort_Order: 2 },
+  ];
+
+  it('returns MP defaults when nothing is saved', () => {
+    expect(mergeSavedMilestones(mp, [])).toEqual([
+      { milestoneId: 1, label: 'Attend Class', sortOrder: 1, visible: true },
+      { milestoneId: 2, label: 'Interview', sortOrder: 2, visible: true },
+    ]);
+  });
+
+  it('preserves a saved entry verbatim — custom label, hidden flag and drag order survive', () => {
+    const saved = [
+      { milestoneId: 2, label: 'Pastor Interview', sortOrder: 1, visible: false },
+    ];
+    const merged = mergeSavedMilestones(mp, saved);
+
+    // This is the highest-consequence behavior in the editor: reopening an
+    // existing tool must not silently reset an admin's customisations.
+    expect(merged.find((m) => m.milestoneId === 2)).toEqual(saved[0]);
+  });
+
+  it('surfaces milestones added in MP since the tool was configured', () => {
+    const saved = [{ milestoneId: 1, label: 'Attend Class', sortOrder: 1, visible: true }];
+    const merged = mergeSavedMilestones(mp, saved);
+
+    expect(merged).toHaveLength(2);
+    expect(merged.find((m) => m.milestoneId === 2)).toEqual({
+      milestoneId: 2, label: 'Interview', sortOrder: 2, visible: true,
+    });
+  });
+
+  it('drops saved milestones MP no longer returns (discontinued)', () => {
+    const saved = [
+      { milestoneId: 1, label: 'Attend Class', sortOrder: 1, visible: true },
+      { milestoneId: 99, label: 'Retired Step', sortOrder: 3, visible: true },
+    ];
+    const merged = mergeSavedMilestones(mp, saved);
+
+    expect(merged.map((m) => m.milestoneId)).toEqual([1, 2]);
+  });
+
+  it('falls back to positional order when MP Sort_Order is null', () => {
+    const unordered = [{ Milestone_ID: 5, Milestone_Title: 'Only', Sort_Order: null }];
+    expect(mergeSavedMilestones(unordered, [])[0].sortOrder).toBe(1);
   });
 });
