@@ -117,17 +117,34 @@ present): passes.
 
 ## Status
 
-**IN PROGRESS** — PR 1 pushed to `fix/deps-security-2026-08`, awaiting CI (first full pipeline run
-including Trivy on the real image).
+**BLOCKED ON GITHUB** — all three PRs are open; none can be verified or merged.
 
-## Follow-ups
+GitHub Actions went into an incident at 15:22 UTC (partial outage, later escalated to **major
+outage**) — *"Some workflow runs are still delayed or failing to complete."* Both CI runs on
+`fix/deps-security-2026-08` sat queued and were auto-cancelled after exactly 15 minutes with
+`runner_name: ""` and `steps: []` — **the jobs never got a runner**. Nothing to do with the branch.
+Dependabot PR #193 closed as superseded.
 
-1. **PR 2 — `chore/ci-verify-dependabot-prs`**: split `build-scan-and-push` so a secrets-free `verify`
-   job (`npm ci`, `npm audit`, lint, tests, local Docker build + Trivy) runs for everyone including
-   Dependabot, keeping the actor gate only on the registry login/push. Closes two gaps: bot PRs merge
-   unverified today, and **tests have never run in CI at all**.
-2. **PR 3 — `chore/dependabot-grouping-and-scanning`**: split the catch-all `patterns: ["*"]` group
-   (prod vs dev vs security), add `open-pull-requests-limit`, add CodeQL, enable secret scanning.
+| PR | Branch | Base | State |
+|---|---|---|---|
+| [#194](https://github.com/The-Moody-Church/mp-charts/pull/194) | `fix/deps-security-2026-08` | `main` | open, CI blocked |
+| [#195](https://github.com/The-Moody-Church/mp-charts/pull/195) | `chore/ci-verify-dependabot-prs` | #194 | open, stacked |
+| [#196](https://github.com/The-Moody-Church/mp-charts/pull/196) | `chore/dependabot-grouping-and-scanning` | #195 | open, stacked |
+
+#195 and #196 are **stacked deliberately**: #195 adds a `verify` job that runs
+`npm audit --audit-level=high`, which does not pass on current `main`. Retarget each down the chain
+as its parent merges.
+
+## Remaining work
+
+1. **Verify + merge the stack** once Actions recovers. The one gate that cannot be reproduced locally
+   is **Trivy on the real image** — `next` and `sharp` do ship inside `.next/standalone/node_modules/`,
+   so Trivy sees them.
+2. **Deploy** — `:dev` soak then `:latest`. There is no separate staging container: `/deploy-dev` swaps
+   the tag on the container serving live production traffic, so it needs a short announced window.
+   Never `docker compose down -v` (destroys the `data` volume holding `feature-access.json` / RBAC).
+   Roll back to digest `sha256:e772b28f…` or tag `:72835533cb3190669e5d93fc6016ed0a1f3ffae0`.
 3. **React Compiler rules** — refactor the 19 flagged patterns, then restore both rules to `error`.
-4. **Deploy** — `:dev` soak then `:latest`. Note there is no separate staging container: `/deploy-dev`
-   swaps the tag on the container serving live production traffic, so it needs a short announced window.
+   Should branch from a merged `main`, not stack a 14-file refactor four deep.
+4. **Secret scanning** — enable Secret Protection + push protection in repo Settings. UI-only; #196
+   cannot do it from a workflow file.
