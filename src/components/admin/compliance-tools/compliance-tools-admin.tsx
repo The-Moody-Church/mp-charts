@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -8,28 +8,33 @@ import { ComplianceToolEditor } from "./compliance-tool-editor";
 import { getComplianceToolsConfigAction, deleteComplianceToolAction } from "./actions";
 import type { ComplianceToolConfig, ComplianceToolsConfig } from "@/lib/compliance-tools-config-types";
 
-export function ComplianceToolsAdmin() {
-  const [config, setConfig] = useState<ComplianceToolsConfig | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+interface ComplianceToolsAdminProps {
+  /** Read server-side in page.tsx. Required, so a missed call site is a build error. */
+  initialConfig: ComplianceToolsConfig;
+  /** Non-null when the server-side read failed; seeds the existing error Alert. */
+  initialError: string | null;
+}
+
+export function ComplianceToolsAdmin({ initialConfig, initialError }: ComplianceToolsAdminProps) {
+  const [config, setConfig] = useState<ComplianceToolsConfig>(initialConfig);
+  const [error, setError] = useState<string | null>(initialError);
   const [editingTool, setEditingTool] = useState<ComplianceToolConfig | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  const loadConfig = useCallback(async () => {
+  // Refresh-only: the initial read happens server-side, so this now runs solely
+  // from event handlers (after a save or delete), where synchronous setState is
+  // fine. Deliberately NOT router.refresh() — that re-renders the RSC payload
+  // and can flash the Suspense fallback over the grid, whereas this keeps the
+  // existing cards on screen until fresh data arrives, exactly as it does today.
+  const reloadConfig = useCallback(async () => {
     try {
       const data = await getComplianceToolsConfigAction();
       setConfig(data);
     } catch {
       setError("Failed to load compliance tools configuration.");
-    } finally {
-      setLoading(false);
     }
   }, []);
-
-  useEffect(() => {
-    loadConfig();
-  }, [loadConfig]);
 
   const handleAdd = () => {
     setEditingTool(null);
@@ -49,27 +54,19 @@ export function ComplianceToolsAdmin() {
       setError(result.error || "Failed to delete.");
     }
     setDeleting(null);
-    loadConfig();
+    reloadConfig();
   };
 
   const handleSaved = () => {
     setShowEditor(false);
     setEditingTool(null);
-    loadConfig();
+    reloadConfig();
   };
 
   const handleCancel = () => {
     setShowEditor(false);
     setEditingTool(null);
   };
-
-  if (loading) {
-    return (
-      <div className="container mx-auto p-4 sm:p-6 lg:p-8">
-        <div className="text-muted-foreground">Loading compliance tools...</div>
-      </div>
-    );
-  }
 
   if (error) {
     return (
@@ -82,10 +79,10 @@ export function ComplianceToolsAdmin() {
     );
   }
 
-  const existingSlugs = config?.tools.map((t) => t.slug) ?? [];
-  const usedJourneyIds = config?.tools
+  const existingSlugs = config.tools.map((t) => t.slug);
+  const usedJourneyIds = config.tools
     .filter((t) => (!editingTool || t.slug !== editingTool.slug) && t.journeyId != null)
-    .map((t) => t.journeyId!) ?? [];
+    .map((t) => t.journeyId!);
 
   return (
     <div className="container mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
@@ -113,12 +110,12 @@ export function ComplianceToolsAdmin() {
 
       {!showEditor && (
         <div className="grid gap-4 md:grid-cols-2">
-          {config?.tools.length === 0 && (
+          {config.tools.length === 0 && (
             <div className="col-span-full text-center py-12 text-muted-foreground">
               No compliance tools configured yet. Click &quot;Add Compliance Tool&quot; to get started.
             </div>
           )}
-          {config?.tools.map((tool) => (
+          {config.tools.map((tool) => (
             <Card key={tool.slug}>
               <CardHeader>
                 <div className="flex items-center justify-between">

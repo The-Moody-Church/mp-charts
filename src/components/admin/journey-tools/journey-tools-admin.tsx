@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -8,16 +8,29 @@ import { JourneyToolEditor } from "./journey-tool-editor";
 import { getJourneyToolsConfigAction, deleteJourneyToolAction, resolveToolNames, type ResolvedNames } from "./actions";
 import type { JourneyToolConfig, JourneyToolsConfig } from "@/lib/journey-tools-config-types";
 
-export function JourneyToolsAdmin() {
-  const [config, setConfig] = useState<JourneyToolsConfig | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+interface JourneyToolsAdminProps {
+  /** Read server-side in page.tsx. Required, so a missed call site is a build error. */
+  initialConfig: JourneyToolsConfig;
+  /** Program/group display names, also resolved server-side. */
+  initialNames: ResolvedNames;
+  /** Non-null when the server-side read failed; seeds the existing error Alert. */
+  initialError: string | null;
+}
+
+export function JourneyToolsAdmin({ initialConfig, initialNames, initialError }: JourneyToolsAdminProps) {
+  const [config, setConfig] = useState<JourneyToolsConfig>(initialConfig);
+  const [error, setError] = useState<string | null>(initialError);
   const [editingTool, setEditingTool] = useState<JourneyToolConfig | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
-  const [names, setNames] = useState<ResolvedNames>({ programs: {}, groups: {} });
+  const [names, setNames] = useState<ResolvedNames>(initialNames);
 
-  const loadConfig = useCallback(async () => {
+  // Refresh-only: the initial read happens server-side, so this now runs solely
+  // from event handlers (after a save or delete), where synchronous setState is
+  // fine. Deliberately NOT router.refresh() — that re-renders the RSC payload
+  // and can flash the Suspense fallback over the grid, whereas this keeps the
+  // existing cards on screen until fresh data arrives, exactly as it does today.
+  const reloadConfig = useCallback(async () => {
     try {
       const data = await getJourneyToolsConfigAction();
       setConfig(data);
@@ -33,14 +46,8 @@ export function JourneyToolsAdmin() {
       }
     } catch {
       setError("Failed to load journey tools configuration.");
-    } finally {
-      setLoading(false);
     }
   }, []);
-
-  useEffect(() => {
-    loadConfig();
-  }, [loadConfig]);
 
   const handleAdd = () => {
     setEditingTool(null);
@@ -60,27 +67,19 @@ export function JourneyToolsAdmin() {
       setError(result.error || "Failed to delete.");
     }
     setDeleting(null);
-    loadConfig();
+    reloadConfig();
   };
 
   const handleSaved = () => {
     setShowEditor(false);
     setEditingTool(null);
-    loadConfig();
+    reloadConfig();
   };
 
   const handleCancel = () => {
     setShowEditor(false);
     setEditingTool(null);
   };
-
-  if (loading) {
-    return (
-      <div className="container mx-auto p-4 sm:p-6 lg:p-8">
-        <div className="text-muted-foreground">Loading journey tools...</div>
-      </div>
-    );
-  }
 
   if (error) {
     return (
@@ -93,10 +92,10 @@ export function JourneyToolsAdmin() {
     );
   }
 
-  const existingSlugs = config?.journeys.map((j) => j.slug) ?? [];
-  const usedJourneyIds = config?.journeys
+  const existingSlugs = config.journeys.map((j) => j.slug);
+  const usedJourneyIds = config.journeys
     .filter((j) => !editingTool || j.slug !== editingTool.slug)
-    .map((j) => j.journeyId) ?? [];
+    .map((j) => j.journeyId);
 
   return (
     <div className="container mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
@@ -124,12 +123,12 @@ export function JourneyToolsAdmin() {
 
       {!showEditor && (
         <div className="grid gap-4 md:grid-cols-2">
-          {config?.journeys.length === 0 && (
+          {config.journeys.length === 0 && (
             <div className="col-span-full text-center py-12 text-muted-foreground">
               No journey tools configured yet. Click &quot;Add Journey Tool&quot; to get started.
             </div>
           )}
-          {config?.journeys.map((tool) => (
+          {config.journeys.map((tool) => (
             <Card key={tool.slug}>
               <CardHeader>
                 <div className="flex items-center justify-between">
