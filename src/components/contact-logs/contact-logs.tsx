@@ -24,7 +24,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Plus, Save } from "lucide-react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRuntimeConfig } from "@/contexts";
@@ -85,7 +85,11 @@ export function ContactLogs({
   const [isEditing, setIsEditing] = useState(false);
   const [editingLog, setEditingLog] = useState<ContactLogDisplay | null>(null);
   const [logTypes, setLogTypes] = useState<ContactLogTypes[]>([]);
-  const [isLoadingLogTypes, setIsLoadingLogTypes] = useState(false);
+  // Starts true because the mount effect fetches immediately. Previously the
+  // effect body flipped this to true synchronously; carrying it in the
+  // initializer preserves the "Loading..." placeholder and removes a one-frame
+  // flash of "Select log type" that the old ordering produced on first render.
+  const [isLoadingLogTypes, setIsLoadingLogTypes] = useState(true);
   const getContactDisplayName = () => {
     return `${contactNickname || "Contact"} ${contactLastName || ""}`.trim();
   };
@@ -96,7 +100,7 @@ export function ContactLogs({
     formState: { errors },
     reset,
     setValue,
-    watch,
+    control,
   } = useForm<ContactLogFormData>({
     resolver: zodResolver(ContactLogFormSchema),
     defaultValues: {
@@ -104,6 +108,12 @@ export function ContactLogs({
       contactId: contactId,
     },
   });
+
+  // useWatch instead of watch(): the React Compiler cannot analyse watch()'s
+  // subscription (react-hooks/incompatible-library), so the component opted out
+  // of compilation entirely. Deliberately NO defaultValue — the field must stay
+  // `undefined` rather than "" so the Select renders its placeholder.
+  const contactLogType = useWatch({ control, name: "contactLogType" });
 
   const onCreateLog = async (data: ContactLogFormData) => {
     try {
@@ -183,21 +193,29 @@ export function ContactLogs({
     setIsEditModalOpen(true);
   };
 
+  // Every setState here lives in an async continuation rather than the effect
+  // body. This site is NOT reported by react-hooks/set-state-in-effect — the
+  // rule walks only the effect's own basic blocks and never descends into a
+  // nested function expression, so the old `const fetchLogTypes = async () => {
+  // setIsLoadingLogTypes(true); ... }` hid the exact pattern the rule exists to
+  // catch. Fixed for consistency, not because lint demanded it; the initial
+  // `true` now comes from the useState initializer.
   useEffect(() => {
-    const fetchLogTypes = async () => {
-      try {
-        setIsLoadingLogTypes(true);
-        const types = await getContactLogTypes();
-        setLogTypes(types);
-      } catch (error) {
+    let cancelled = false;
+    getContactLogTypes()
+      .then((types) => {
+        if (!cancelled) setLogTypes(types);
+      })
+      .catch((error) => {
         console.error("Error fetching contact log types:", error);
-        setLogTypes([]);
-      } finally {
-        setIsLoadingLogTypes(false);
-      }
+        if (!cancelled) setLogTypes([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingLogTypes(false);
+      });
+    return () => {
+      cancelled = true;
     };
-
-    fetchLogTypes();
   }, []);
 
   const getLogTypeColor = (logType: string | null | undefined) => {
@@ -251,7 +269,7 @@ export function ContactLogs({
         <Label htmlFor={isEdit ? "editContactLogType" : "createContactLogType"}>Log Type</Label>
         <Select
           onValueChange={(value) => setValue("contactLogType", value)}
-          value={watch("contactLogType")}
+          value={contactLogType}
         >
           <SelectTrigger>
             <SelectValue

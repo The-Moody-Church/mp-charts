@@ -35,11 +35,15 @@ const eslintConfig = defineConfig([
     // component-by-component; it flips back to "error" when the last one lands.
     // Tracked in docs/ideas.md ("Adopt React Compiler lint rules").
     //
-    // `immutability` is NOT downgraded — its single violation
-    // (contact-lookup-search.tsx) is fixed, so the rule is back at its default
-    // "error" from eslint-config-next and now guards against regressions.
+    // `immutability` and `incompatible-library` are NOT downgraded — their
+    // violations (contact-lookup-search.tsx and contact-logs.tsx) are fixed.
+    // `incompatible-library` is pinned to "error" rather than left at its
+    // Recommended-preset "warn" so a future useForm().watch() or a similarly
+    // uncompilable library call fails CI instead of silently opting a component
+    // out of React Compiler optimisation.
     rules: {
       "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/incompatible-library": "error",
     },
   },
 ]);
