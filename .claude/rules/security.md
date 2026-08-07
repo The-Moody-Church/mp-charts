@@ -56,6 +56,26 @@ The CI workflow includes a `security-lint` job that greps for `.join(` near `fil
 
 If you need `.join()` in a non-filter context and it triggers a false positive, add a `// filter-safety-ignore` comment on the same line.
 
+### CI Job Layout
+
+`.github/workflows/docker-build-push.yml` has three jobs, split by whether they need repository secrets:
+
+| Job | Secrets? | Runs for Dependabot? | What it does |
+|-----|----------|----------------------|--------------|
+| `security-lint` | no | yes | the `.join()` filter grep above |
+| `verify` | no | **yes** | `npm ci`, `npm audit --audit-level=high`, `npm run lint`, `npm run test:run`, `npm run build`, local Docker build (`push: false`), Trivy scan |
+| `build-scan-and-push` | **yes** | no (`if: github.actor != 'dependabot[bot]'`) | registry login, build + push `:${sha}`, Trivy, retag `:dev` / `:latest` / `:main` |
+
+**Keep verification steps in `verify`, not in `build-scan-and-push`.** Dependabot PRs cannot access
+Actions secrets, so the registry job is gated on the actor — and before `verify` existed, that gate
+skipped `npm audit`, the build and the image scan for every bot PR (they merged on `security-lint`
+alone, in ~10s). Anything that does not need the registry belongs in `verify` so it covers all actors.
+
+**`npm audit --audit-level=high` is a hard deploy gate.** It runs before any image is built, so an
+unresolved HIGH advisory blocks *all* deploys, not just dependency PRs. This has bitten twice
+(2026-07-10 after #190, and a 27-day production freeze discovered 2026-08-06). Run it locally before
+pushing.
+
 ## File Upload Validation
 
 All file upload endpoints must validate MIME type **and** file size on the server side. Limits match Ministry Platform: **20 MB max**, standard file formats (PNG, JPG, BMP, GIF, PDF, TXT, CSV):
