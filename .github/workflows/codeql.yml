@@ -1,0 +1,45 @@
+name: CodeQL
+
+# Static analysis for the app source. Complements, but does not replace, the
+# `security-lint` grep in docker-build-push.yml — that check is specific to MP
+# `$filter` injection, which CodeQL has no query for. See .claude/rules/security.md.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, so newly published queries run against unchanged code.
+    - cron: '17 9 * * 1'
+
+jobs:
+  analyze:
+    name: Analyze JavaScript/TypeScript
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      security-events: write   # required to upload results
+      contents: read
+      actions: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+          # security-extended adds lower-severity + precision queries on top of
+          # the default suite. This repo handles PII, so the extra recall is
+          # worth the additional noise.
+          queries: security-extended
+
+      # No build step: javascript-typescript uses CodeQL's extractor directly.
+      # `npm run build` would only add ~2 min and Turbopack output is not
+      # analyzed anyway.
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:javascript-typescript
