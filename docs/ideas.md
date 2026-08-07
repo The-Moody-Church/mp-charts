@@ -58,8 +58,10 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
 
 ### Technical Debt
+- [Adopt React Compiler lint rules from eslint-plugin-react-hooks 7.1](#adopt-react-compiler-lint-rules-from-eslint-plugin-react-hooks-71)
 - [Upgrade TypeScript 5.9 to 6.0 (#136)](#upgrade-typescript-59-to-60-136)
-- [~~IDOR Mitigation — Per-Record Authorization ([#57](https://github.com/The-Moody-Church/mp-charts/issues/57))~~ ✅ CLOSED (won't-fix) (#122)](#idor-mitigation-per-record-authorization-57httpsgithubcomthe-moody-churchmp-chartsissues57-closed-wont-fix-122)
+- ~~[Dependency security remediation — August 2026](#dependency-security-remediation-august-2026)~~ ✅
+- ~~[IDOR Mitigation — Per-Record Authorization (#57)](#idor-mitigation-per-record-authorization-57)~~ ✅
 - ~~[Photo upload didn't work (#148)](#photo-upload-didnt-work-148)~~ ✅
 - ~~[No.cache (#144)](#nocache-144)~~ ✅
 - ~~[BUG: Active Communities and Small Groups Chart Needs Work (#52)](#bug-active-communities-and-small-groups-chart-needs-work-52)~~ ✅
@@ -271,11 +273,25 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 
 ## Technical Debt
 
+### Adopt React Compiler lint rules from eslint-plugin-react-hooks 7.1
+`eslint-config-next` 16.3.0 pulls in `eslint-plugin-react-hooks` 7.1, which adds the React Compiler rules `set-state-in-effect`, `immutability` and `incompatible-library`. They flag 19 pre-existing violations — 18 × `set-state-in-effect` across 14 processing/admin components (the "load data in `useEffect`, then `setState`" shape), plus 1 `immutability` error in `contact-lookup-search.tsx` and 1 `incompatible-library` warning in `contact-logs.tsx`.
+
+They are currently downgraded to `warn` in `eslint.config.mjs` so `npm run lint` stays green. Fixing them properly means restructuring data loading in those components — moving fetches out of effects, deriving state during render, or using the existing `'use cache'` / server-component patterns — which is behavior-affecting and was deliberately kept out of the August 2026 security bump. Once fixed, restore both rules to `error` and delete the override block.
+
 ### Upgrade TypeScript 5.9 to 6.0 ([#136](https://github.com/The-Moody-Church/mp-charts/issues/136))
 Upgrade from TypeScript 5.9.3 to 6.0.x. TS 6.0 is a transition release (last JS-based compiler before TS 7.0 in Go). Main required change: add `"types": ["node"]` to tsconfig.json (default changed from `["*"]` to `[]`). Also simplify lib array, verify `noUncheckedSideEffectImports`. Wait until mid-April 2026 for ecosystem stability across Next.js 16, Zod v4, Vitest, and typescript-eslint.
 
-### ~~IDOR Mitigation — Per-Record Authorization ([#57](https://github.com/The-Moody-Church/mp-charts/issues/57))~~ ✅ CLOSED (won't-fix) ([#122](https://github.com/The-Moody-Church/mp-charts/issues/122))
-Closed as not planned. RBAC (feature-level gating by User Group), rate limiting, and staff-only access sufficiently mitigate IDOR risk. All authenticated users are trusted staff with MP accounts — if they have access to a feature, they should have access to all records within it. The same data is accessible directly in Ministry Platform with the same permissions model.
+### ~~Dependency security remediation — August 2026~~ ✅ COMPLETED
+Cleared all 17 open Dependabot alerts and unblocked the deploy pipeline, which had been dead since 2026-07-10: `build-scan-and-push` runs `npm audit --audit-level=high` before the Docker build, and it was exiting 1 on 6 high advisories, so no image had been published for 27 days.
+
+Runtime: **next 16.2.6 → 16.3.0** (8 alerts — of those, only GHSA-m99w-x7hq-7vfj / Server Actions DoS is actually exploitable here; the rest need rewrites, i18n locales, a custom server, image optimization, or `fetch(new Request(init), otherInit)`, none of which this app uses). **sharp 0.34.5 → 0.35.3** (libvips CVEs) came free — 16.3.0 pins `sharp ^0.35.3` where 16.2.12 still pins `^0.34.5`, so no override was needed. **postcss → 8.5.26** (note 8.5.18, the version the alert cited, is *not* sufficient — GHSA-fxqj-rqcc-2cmp covers `<=8.5.22`).
+
+Dev-scope, all lockfile-only and absent from the standalone image: undici → 7.29.0, js-yaml → 4.3.1, brace-expansion 1.x → 1.1.18. Also bumped brace-expansion 5.0.7 → 5.0.9: not yet alerted, but the pin added in `8ba3166` for GHSA-jxxr-4gwj-5jf2 had been overtaken (range is now `<=1.1.17 || 4.0.0 - 5.0.8`).
+
+Two things surfaced along the way: Next 16.3.0 widens `next build`'s type-check scope to include test files, exposing 16 latent type errors that were already failing `tsc --noEmit` on main; and `eslint-plugin-react-hooks` 7.1 added rules flagging 19 pre-existing patterns (tracked above).
+
+### ~~IDOR Mitigation — Per-Record Authorization ([#57](https://github.com/The-Moody-Church/mp-charts/issues/57))~~ ✅ COMPLETED
+Closed as not planned (tracked to closure in [#122](https://github.com/The-Moody-Church/mp-charts/issues/122)). RBAC (feature-level gating by User Group), rate limiting, and staff-only access sufficiently mitigate IDOR risk. All authenticated users are trusted staff with MP accounts — if they have access to a feature, they should have access to all records within it. The same data is accessible directly in Ministry Platform with the same permissions model.
 
 ### ~~Photo upload didn't work ([#148](https://github.com/The-Moody-Church/mp-charts/issues/148))~~ ✅ COMPLETED
 Next.js server actions default to a 1 MB body size limit. Photo uploads larger than 1 MB hit a 413 error before the server action code executed, causing intermittent "Failed to upload photo" errors (small photos worked, larger ones didn't). Fixed by adding `serverActions.bodySizeLimit: '20mb'` to `next.config.ts` to match the existing 20 MB limit in `processing-utils.ts`.
