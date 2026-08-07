@@ -178,5 +178,97 @@ describe('UserContext', () => {
       expect(result.current.isSuperAdmin).toBe(false);
       expect(result.current.feedbackEnabled).toBe(false);
     });
+
+    // ---------------------------------------------------------------------
+    // Characterization tests — added 2026-08-07 before refactoring the
+    // setState-in-effect pattern flagged by react-hooks/set-state-in-effect
+    // (eslint-plugin-react-hooks 7.1). These pin down behavior the existing
+    // suite did not cover, so the refactor can be proven not to change it.
+    // If one of these fails after a change here, the change is wrong.
+    // ---------------------------------------------------------------------
+
+    it('should stay loading while the session is still pending', () => {
+      mockUseSession.mockReturnValue({
+        data: undefined,
+        isPending: true,
+      });
+
+      const { result } = renderHook(() => useUser(), { wrapper: createWrapper() });
+
+      // Must NOT resolve to "signed out" while auth is still resolving —
+      // otherwise the app flashes an unauthenticated shell on every load.
+      expect(result.current.isLoading).toBe(true);
+      expect(result.current.userProfile).toBeNull();
+      expect(mockGetCurrentUserProfile).not.toHaveBeenCalled();
+    });
+
+    it('should reload the profile when userGuid changes to a different user', async () => {
+      const profileA = { User_ID: 1, User_GUID: 'guid-A', First_Name: 'Ann', Last_Name: 'A', roles: [], userGroups: [], userGroupIds: [1] };
+      const profileB = { User_ID: 2, User_GUID: 'guid-B', First_Name: 'Bob', Last_Name: 'B', roles: [], userGroups: [], userGroupIds: [2] };
+
+      mockUseSession.mockReturnValue({
+        data: { user: { id: 'id-A', userGuid: 'guid-A' } },
+        isPending: false,
+      });
+      mockGetCurrentUserProfile.mockResolvedValueOnce(profileA);
+
+      const { result, rerender } = renderHook(() => useUser(), { wrapper: createWrapper() });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.userProfile).toEqual(profileA);
+
+      // Switch identity — the provider must refetch, not serve user A's data.
+      mockUseSession.mockReturnValue({
+        data: { user: { id: 'id-B', userGuid: 'guid-B' } },
+        isPending: false,
+      });
+      mockGetCurrentUserProfile.mockResolvedValueOnce(profileB);
+      rerender();
+
+      await waitFor(() => expect(result.current.userProfile).toEqual(profileB));
+      expect(mockGetCurrentUserProfile).toHaveBeenLastCalledWith('guid-B');
+    });
+
+    it('should not refetch when re-rendered with an unchanged session', async () => {
+      const profile = { User_ID: 1, User_GUID: 'guid-123', First_Name: 'John', Last_Name: 'Doe', roles: [], userGroups: [], userGroupIds: [29] };
+
+      mockUseSession.mockReturnValue({
+        data: { user: { id: 'internal-id', userGuid: 'guid-123' } },
+        isPending: false,
+      });
+      mockGetCurrentUserProfile.mockResolvedValue(profile);
+
+      const { result, rerender } = renderHook(() => useUser(), { wrapper: createWrapper() });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      const callsAfterInitialLoad = mockGetCurrentUserProfile.mock.calls.length;
+      rerender();
+      rerender();
+
+      // Guards against a refactor that re-runs the load on every render —
+      // that would hammer the MP API on an already-rate-limited endpoint.
+      expect(mockGetCurrentUserProfile.mock.calls.length).toBe(callsAfterInitialLoad);
+    });
+
+    it('should clear a previously loaded profile when the session goes away', async () => {
+      const profile = { User_ID: 1, User_GUID: 'guid-123', First_Name: 'John', Last_Name: 'Doe', roles: [], userGroups: [], userGroupIds: [29] };
+
+      mockUseSession.mockReturnValue({
+        data: { user: { id: 'internal-id', userGuid: 'guid-123' } },
+        isPending: false,
+      });
+      mockGetCurrentUserProfile.mockResolvedValueOnce(profile);
+
+      const { result, rerender } = renderHook(() => useUser(), { wrapper: createWrapper() });
+      await waitFor(() => expect(result.current.userProfile).toEqual(profile));
+
+      // Sign out — stale PII must not linger in context.
+      mockUseSession.mockReturnValue({ data: null, isPending: false });
+      rerender();
+
+      await waitFor(() => expect(result.current.userProfile).toBeNull());
+      expect(result.current.accessibleFeatures).toEqual([]);
+      expect(result.current.isSuperAdmin).toBe(false);
+      expect(result.current.isLoading).toBe(false);
+    });
   });
 });
