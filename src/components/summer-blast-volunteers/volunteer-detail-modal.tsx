@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -39,14 +39,6 @@ export function VolunteerDetailModal({
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
-
-  React.useEffect(() => {
-    if (open) {
-      setError(null);
-      setActionLoading(null);
-      setShowRemoveConfirm(false);
-    }
-  }, [open]);
 
   if (!card) return null;
 
