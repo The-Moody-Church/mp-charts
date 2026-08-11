@@ -187,18 +187,72 @@ was the problem. **Mutation-testing every characterization test is not optional 
 Also worth keeping: an open Radix dialog `aria-hidden`s the rest of the page, so asserting on
 background elements needs `{ hidden: true }` in the role query.
 
-## Remaining — 4 sites
+## PR 5 — manage-members (2 sites)
 
-Next per the plan: **PR 5** — manage-members (2 sites: the shell's deep-link resolution, Shape 1, and
-`member-detail-modal`, Shape 3). Two notes carried from the plan: use `fetchMemberDetail` for the deep
-link rather than the cache-only `fetchMemberCard`, and do **not** patch the shell with `key={memberId}`
-— that would wipe tab, search and page state. Then PR 6 (contact-lookup-details, 1), PR 7
-(`user-context`, 1 — last, it gates sign-in), PR 8 (flip the rule to `error`).
+`set-state-in-effect`: **4 → 2**. Lint 0 errors, 580 tests, build clean.
 
-**Finding C starts mattering again at PR 5**, which is a Shape 1 site. Deferred by ruling, so PR 5
-proceeds on the prediction. Settle it in the end-to-end pass: `/admin/compliance-tools` → edit
-`data/compliance-tools.json` on disk → `/admin` → Back. If the grid is stale, PRs 5/6/7 each need a
-refresh mitigation.
+**The shell's deep-link site is not a Shape 1 site.** The plan put it under "mount fetch → Server
+Component props", then in its own risk table priced the hazard that creates: a `useState` initializer
+doesn't re-run on soft navigation, so a `<Link>` to `?member=N` would stop opening the modal. It
+justified proceeding by verifying that today's only producer is a clipboard Copy Link — a full
+navigation. Safe now, fragile later.
+
+None of it was needed. The violation is one line: the synchronous `setHasAutoOpened(true)`. Everything
+else in that effect already ran in the promise continuation, which the rule permits. A `useRef` latch
+retires the warning with no server-side move, no initializer, no soft-navigation exposure. Not
+Finding A's cop-out either — the setState is *gone*, not relocated into a nested function, and the
+latch is read in exactly one place (its own guard), so nothing renders from it.
+
+**It also fixed the latch.** As state the guard never worked where it could matter: under StrictMode's
+double-invoke — Next leaves `reactStrictMode` on in dev — the second run read the stale `false` from
+its own closure and fetched twice. A ref mutates immediately. In production the guard was unreachable
+either way, since the effect's only dep is `initialMemberId`, which can't change without a navigation
+that remounts. That's also why no characterization test could catch its removal: mutation L (drop the
+latch) passed all five, correctly.
+
+**The detail modal was the odd one in the set** — its resets lived on the effect's *close* branch, not
+the open one. Both branches had synchronous setState. Converged on the per-open key idiom per the plan
+rather than the analyst's close-handler + `loadedFor` sentinel, keeping their one good point: `loading`
+is not derived from `detail === null`, because `fetchMemberDetail` legitimately resolves `null`. Also
+added the `.catch` the chain never had — a failed detail fetch was an unhandled rejection.
+
+### Tests
+
+`manage-members-shell.test.tsx`, 6 tests. Five are characterization tests; mutation-tested — keying the
+modal effect on `[member]` alone (the `key={contactId}` proxy) fails both same-member reopen tests, and
+dropping the close-branch resets fails the milestone-collapse test.
+
+The sixth is **labelled in-file as not a characterization test**: it asserts the StrictMode
+single-fetch the ref latch adds, and it was verified to fail against the old state latch (2 calls vs
+1). Kept because it's the only executable evidence the latch does anything.
+
+One dead end worth noting: a first attempt tried to observe the modal's reset through "the previous
+member's detail must not show while the next loads". Not observable — `loading` gates the entire modal
+body, so nothing member-specific renders during the fetch. The milestone-expansion state was the
+observable reset.
+
+## Remaining — 2 sites
+
+Next per the plan: **PR 6** — `contact-lookup-details` (1 site, Shape 1). Introduces two new modules
+(`household-sort.ts`, `page-data.ts`), both requiring co-located tests per `testing.md`. Constraints
+from the plan: `onRefresh` must stay a **full** reload, not `router.refresh()` — the "Last Activity"
+badge is derived from `getContactBadges` and a partial refresh would silently stop it flipping to
+"Today" — and `page-data.ts` must keep importing the `'use server'` actions so `requireFeatureAccess`
+and `enforceRateLimit` stay in one place. Then PR 7 (`user-context` — last, it gates sign-in) and
+PR 8 (flip the rule to `error`).
+
+**Finding C now matters at PR 6.** It did not apply to PR 5 after all, since that site turned out not
+to need a server-side move. Deferred by ruling, so PR 6 proceeds on the prediction. Settle it in the
+end-to-end pass: `/admin/compliance-tools` → edit `data/compliance-tools.json` on disk → `/admin` →
+Back. If the grid is stale, PRs 6 and 7 need a refresh mitigation.
+
+## Files Changed (PR 5)
+
+- **Modified**: `src/components/manage-members/manage-members-shell.tsx` — latch → `useRef`; per-open
+  `detailSession` counter and `openMember()`; `handleCardClick` removed
+- **Modified**: `src/components/manage-members/member-detail-modal.tsx` — close-branch resets deleted,
+  `loading` initialiser → `true`, cancel guard and `.catch` added
+- **Created**: `src/components/manage-members/manage-members-shell.test.tsx` (6 tests)
 
 ## Files Changed (PR 4)
 

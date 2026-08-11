@@ -4,8 +4,8 @@ Generated 2026-08-07 from a 10-agent analysis of all 20 `react-hooks/*` violatio
 introduced when next 16.3.0 pulled eslint-plugin-react-hooks 7.1.
 
 **Status (2026-08-11):** `immutability` and `incompatible-library` are retired and enforced at
-`error`. `set-state-in-effect` is at **4 of 18** — manage-members (2), contact-lookup-details (1) and
-`user-context` (1). PRs 0, 1, 2, 3 and 4 are done. Sections 1, 3, 4 and 6 below remain the working
+`error`. `set-state-in-effect` is at **2 of 18** — contact-lookup-details (1) and `user-context` (1).
+PRs 0, 1, 2, 3, 4 and 5 are done. Sections 1, 3, 4 and 6 below remain the working
 reference for the rest.
 
 **Correction C — the compliance derived-`loading` machine is rejected, as §4 already concluded.**
@@ -41,6 +41,18 @@ should still refetch), and PRs 5, 6 and 7 proceed on it. The experiment surface 
 PR 1: load `/admin/compliance-tools`, edit `data/compliance-tools.json` on disk, navigate to
 `/admin`, hit Back, check whether the grid updated. If it did not, those three PRs each need a
 refresh mitigation.
+
+**Correction D — `manage-members-shell.tsx:103` is not a Shape 1 site.** §1 lists it under "Mount fetch
+→ Server Component props" and §3 row 13 then prices the hazard that creates (a `useState` initializer
+that won't re-run on soft navigation, so a `<Link>` to `?member=N` would stop opening the modal). None
+of it is needed: the only violation is the synchronous `setHasAutoOpened(true)`, and everything else in
+that effect already ran in the promise continuation. Making the latch a `useRef` retires the warning
+with no server-side move. Shipped that way; the Shape 1 count drops from 5 to 3
+(contact-lookup-details, `user-context`, and the two admin lists already done in PR 1).
+
+That also **fixed** the latch. As state it never worked under StrictMode's double-invoke — the second
+run read the stale `false` from its own closure — and in production it was unreachable, since the
+effect's only dep is `initialMemberId`, which cannot change without a navigation that remounts.
 
 **Also settled in passing:** the per-open counter is one counter *per modal*, not one shared across
 a screen's modals — a shared bump remounts the other modal mid-exit-animation.
