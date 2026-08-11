@@ -58,6 +58,9 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
 
 ### Technical Debt
+- [Member detail modal shows the old photo after upload](#member-detail-modal-shows-the-old-photo-after-upload)
+- [Compliance tool editor silently drops orphaned journey config](#compliance-tool-editor-silently-drops-orphaned-journey-config)
+- [Blank journey selection reads as ID 0, not null](#blank-journey-selection-reads-as-id-0-not-null)
 - [Adopt React Compiler lint rules from eslint-plugin-react-hooks 7.1 (#197)](#adopt-react-compiler-lint-rules-from-eslint-plugin-react-hooks-71-197)
 - [Upgrade TypeScript 5.9 to 6.0 (#136)](#upgrade-typescript-59-to-60-136)
 - ~~[Dependency security remediation — August 2026](#dependency-security-remediation-august-2026)~~ ✅
@@ -273,6 +276,20 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 
 ## Technical Debt
 
+### Member detail modal shows the old photo after upload
+`handlePhotoUpload` in `src/components/manage-members/member-detail-modal.tsx:84` awaits `uploadMemberPhoto`, then calls `onUpdate()` to reload the parent list — but never re-fetches `detail`. The rendered record is `detail?.member ?? member` (line 122), so once `detail` is loaded the modal keeps rendering the **stale** `fileUniqueId` and the old photo stays on screen until the modal is closed and reopened.
+
+Found during the React Compiler remediation and deliberately left reproduced so the refactor stayed behavior-preserving. Fix candidate: re-run `fetchMemberDetail` in the upload's success path, or lift the new image GUID out of the upload action's return value.
+
+### Compliance tool editor silently drops orphaned journey config
+Two related cases in `src/components/admin/compliance-tools/compliance-tool-editor.tsx`, both pre-existing and both deliberately preserved by the 2026-08-11 refactor:
+
+- **Orphaned milestones are wiped on open.** A tool saved with `journeyId: null` but a non-empty `journeyMilestones` array loses those milestones the moment the editor mounts, and the next save writes `[]`. The behavior now lives in the `useState` initializer's `existingTool?.journeyId ? … : []` ternary (previously the mount pass of the journey effect). Arguably correct — milestones with no journey can't be written to MP — but it happens with no warning to the admin.
+- **`pauseMilestoneId` is never cleared when the journey changes.** Detaching or switching the journey replaces `journeyMilestones` but leaves `pauseMilestoneId` pointing at a milestone that is no longer in the list. The pause-milestone `<select>` is hidden when there's no journey, so the stale ID survives to the save payload unseen.
+
+### Blank journey selection reads as ID 0, not null
+`src/components/admin/journey-tools/journey-tool-editor.tsx:309` does `handleJourneySelect(Number(e.target.value))` with no empty-string guard, so choosing the `<option value="">Select a journey...</option>` placeholder sets `selectedJourneyId` to `Number("") === 0` rather than `null`. Every downstream check is falsy-based so nothing breaks today, but the `<select>`'s `value` then matches no option, and any future `!== null` / `??` check on that field would read `0` as a real selection. The compliance editor's equivalent select already guards this correctly (`e.target.value ? Number(...) : null`).
+
 ### Adopt React Compiler lint rules from eslint-plugin-react-hooks 7.1 ([#197](https://github.com/The-Moody-Church/mp-charts/issues/197))
 `eslint-config-next` 16.3.0 pulls in `eslint-plugin-react-hooks` 7.1, which adds the React Compiler rules `set-state-in-effect`, `immutability` and `incompatible-library`. They flagged 20 pre-existing violations across 17 files — no new code triggered them.
 
@@ -280,7 +297,9 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 - `react-hooks/immutability` — the "Active contacts only" toggle re-ran the search from an effect that called `handleSearch` before its `const` declaration. Now runs from the checkbox's `onChange` with a **required** scope parameter, so the type checker catches the stale-value bug the effect existed to dodge.
 - `react-hooks/incompatible-library` — `watch()` opted `contact-logs` out of React Compiler optimisation entirely; swapped for `useWatch({ control, name })`.
 
-`set-state-in-effect` is at **16 of 18** remaining and stays `warn` until the last site lands. Full per-site plan, risk ranking, traps and manual test checklist: `.claude/notes/react-compiler-lint-plan.md`.
+`set-state-in-effect` is at **14 of 18** remaining and stays `warn` until the last site lands. Full per-site plan, risk ranking, traps and manual test checklist: `.claude/notes/react-compiler-lint-plan.md`.
+
+**Progress (2026-08-11):** both admin tool editors done (plan's PR 2). The journey and compliance milestone-load effects moved into their `<select>` change handlers — separately, because the compliance select isn't `disabled={isEditing}` and its three branches have different semantics (switching back to the saved journey is a staff undo that must restore verbatim with no MP call). A dead no-op effect in the compliance editor was deleted. Three pre-existing bugs found along the way were deliberately reproduced rather than fixed mid-refactor; they are the three entries above.
 
 Three findings from the analysis worth carrying forward:
 - **The rule under-approximates.** It walks only an effect's own basic blocks and never descends into nested function expressions, so a loader declared *inside* the effect hides the identical pattern (`contact-logs.tsx:186` was invisible to lint). There is a one-line non-fix at every remaining site — wrap the body in a nested async function and the warning disappears with the pattern intact. Reject any diff whose only structural change is nesting depth.
