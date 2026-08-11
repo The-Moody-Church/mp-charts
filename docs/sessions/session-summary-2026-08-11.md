@@ -78,11 +78,10 @@ before writing them up, then added to `docs/ideas.md`:
   placeholder sets `selectedJourneyId` to `0` rather than `null`. Harmless today (every check is
   falsy-based); the compliance editor's equivalent select already guards it.
 
-## Files Changed
+## Files Changed (PR 2)
 
 - **Modified**: `src/components/admin/compliance-tools/compliance-tool-editor.tsx`
 - **Created**: `src/components/admin/compliance-tools/compliance-tool-editor.test.tsx` (5 tests)
-- **Modified**: `docs/ideas.md`, `docs/status.md`; **Created**: this file
 
 ## PR 3 — summer-blast (4 sites, 3 shapes)
 
@@ -130,6 +129,18 @@ test green, which is precisely the trap they exist for. Neutering the prune fail
 
 One test-harness note: Radix `TabsTrigger` switches on mousedown/focus, not on a synthetic click, so
 `fireEvent.mouseDown(tab, { button: 0 })` is required to reach the Volunteers tab.
+
+## Files Changed (PR 3)
+
+- **Modified**: `src/components/summer-blast-volunteers/summer-blast-volunteers.tsx` — `fetchAll`
+  split into `loadAll` / `applyData` / `refresh`; prune folded into `applyData`; per-modal session
+  counters and `key`
+- **Modified**: `src/components/summer-blast-volunteers/intake-detail-modal.tsx`,
+  `volunteer-detail-modal.tsx` — `[open]` reset effects deleted, unused `React` default import
+  dropped
+- **Created**: `src/components/summer-blast-volunteers/summer-blast-volunteers.test.tsx` (5 tests)
+- **Modified**: `.claude/notes/react-compiler-lint-plan.md` (rulings + two corrections),
+  `docs/ideas.md`, `docs/status.md`; **Created**: this file
 
 ## Remaining — 10 sites
 
