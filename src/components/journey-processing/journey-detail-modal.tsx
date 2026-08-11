@@ -71,7 +71,9 @@ export function JourneyDetailModal({
 }: JourneyDetailModalProps) {
   const { mpFileUrl } = useRuntimeConfig();
   const [detail, setDetail] = useState<JourneyDetail | null>(null);
-  const [loading, setLoading] = useState(false);
+  // `true` at mount: this instance is remounted per open, and an open always
+  // starts a fetch. While it is mounted-and-closed the value renders nothing.
+  const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [milestoneNotes, setMilestoneNotes] = useState("");
   const [milestoneDate, setMilestoneDate] = useState(() => new Date().toISOString().split("T")[0]);
@@ -96,40 +98,43 @@ export function JourneyDetailModal({
   const editFileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
+  // Load the detail. The thirteen hand-resets that used to open this effect are
+  // gone: the parent bumps a per-open counter used as this component's `key`, so
+  // every open is a fresh mount and the useState initialisers supply them. That
+  // also clears `milestoneNotes`, `milestoneDate` and `selectedMilestoneKey`,
+  // which the resets did NOT cover — notes typed for one participant could
+  // previously be submitted against the next one.
   useEffect(() => {
-    if (open && participant) {
-      setLoading(true);
-      setDetail(null);
-      setExpandedKey(null);
-      setRecordFiles({});
-      setFileError(null);
-      setLinkCopied(false);
-      setEditingKey(null);
-      setEditError(null);
-      setShowCompleteConfirm(false);
-      setShowPauseConfirm(false);
-      setShowResumeConfirm(false);
-      setQuickActionExpanded(false);
-      setPauseNotes("");
-      getJourneyParticipantDetail(
-        slug,
-        participant.info.Contact_ID,
-        participant.info.Participant_ID,
-        participant.info.Group_Participant_ID
-      )
-        .then((d) => {
-          setDetail(d);
-          if (d?.milestones) {
-            for (const m of d.milestones) {
-              getJourneyMilestoneFiles(slug, m.Participant_Milestone_ID)
-                .then((files) => setRecordFiles((prev) => ({ ...prev, [m.Participant_Milestone_ID]: files })))
-                .catch(() => setRecordFiles((prev) => ({ ...prev, [m.Participant_Milestone_ID]: [] })));
-            }
+    if (!open || !participant) return;
+    let cancelled = false;
+    getJourneyParticipantDetail(
+      slug,
+      participant.info.Contact_ID,
+      participant.info.Participant_ID,
+      participant.info.Group_Participant_ID
+    )
+      .then((d) => {
+        if (cancelled) return;
+        setDetail(d);
+        if (d?.milestones) {
+          for (const m of d.milestones) {
+            getJourneyMilestoneFiles(slug, m.Participant_Milestone_ID)
+              .then((files) => {
+                if (!cancelled) setRecordFiles((prev) => ({ ...prev, [m.Participant_Milestone_ID]: files }));
+              })
+              .catch(() => {
+                if (!cancelled) setRecordFiles((prev) => ({ ...prev, [m.Participant_Milestone_ID]: [] }));
+              });
           }
-        })
-        .catch((err) => console.error("Failed to load detail:", err))
-        .finally(() => setLoading(false));
-    }
+        }
+      })
+      .catch((err) => console.error("Failed to load detail:", err))
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [open, participant, slug]);
 
   const findMilestoneRecord = (key: string): JourneyMilestoneDetail | null => {
