@@ -194,15 +194,6 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
   // Manual refresh — re-fetch requirements from MP and merge with current edits.
   const handleRefreshRequirements = () => fetchAndMergeRequirements(selectedGroupRoleIds);
 
-  // Load requirements on initial edit
-  useEffect(() => {
-    if (isEditing && selectedGroupRoleIds.length > 0 && requirements.length > 0) {
-      // Already have requirements from existing config, don't reload
-      return;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // When journey selection changes, fetch milestones.
   //
   // Fetching here rather than from an effect keyed on journeyId keeps setState out
