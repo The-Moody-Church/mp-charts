@@ -84,14 +84,60 @@ before writing them up, then added to `docs/ideas.md`:
 - **Created**: `src/components/admin/compliance-tools/compliance-tool-editor.test.tsx` (5 tests)
 - **Modified**: `docs/ideas.md`, `docs/status.md`; **Created**: this file
 
-## Remaining — 14 sites
+## PR 3 — summer-blast (4 sites, 3 shapes)
 
-Next per the plan: **PR 3** (summer-blast-volunteers, 4 sites, Shapes 1 + 4 + 3) — also where the
-"unsaved form state now clears on open" ruling needs an explicit yes, and where the `modalSession`
-counter idiom gets established. Then PR 4 (processing, 6), PR 5 (manage-members, 2), PR 6
-(contact-lookup-details, 1), PR 7 (`user-context`, 1 — last, it gates sign-in), PR 8 (flip the rule
-to `error`).
+`set-state-in-effect`: **14 → 10**. Lint 0 errors, 563 tests, build clean.
 
-**Still blocking the 5 remaining Shape 1 sites: Finding C.** Whether mount fetches still refresh on
-Back-navigation under `<Activity mode="hidden">` once the read moves to a Server Component. Needs a
-signed-in browser; settle it in the end-to-end test pass before PRs 3/5/6/7 replicate the recipe.
+Three decisions were taken before writing any code, and two of them changed the plan.
+
+**Ruling 1 — a modal remount clears unsaved form state.** Verified what is actually at stake before
+asking: in summer-blast, **nothing** — both modals' `[open]` effects already reset every field they
+hold, so the remount is byte-identical to today. In the journey/compliance modals (PR 4) exactly
+three fields survive a close/reopen: `milestoneNotes`, `milestoneDate`, `selectedMilestoneKey`.
+Clearing them closes the path where notes typed for Alice get submitted against Bob, and makes
+`milestoneDate` re-evaluate to today instead of once per mount.
+
+*Correction to the plan:* it also lists the **file input** among the survivors. It isn't one —
+`DialogContent` has no `forceMount`, so Radix unmounts the dialog subtree on close and the input's
+DOM node is already destroyed. One less user-visible change than the plan priced.
+
+**Ruling 2 — summer-blast is Shape 1b, not Shape 1.** The plan assigned it to Shape 1 (read moves to
+the RSC). Its page fallback is a bare `Loading Summer Blast volunteers...` text div, while the
+component renders the full header, search, tabs and a skeleton grid — the exact criterion the plan
+used to keep the two processing screens on 1b. Staying client-side also preserves the Back-navigation
+refresh on the one screen whose cache was deliberately removed, which took **Finding C off this PR's
+critical path**. Shape 1 count drops 6 → 5.
+
+**Ruling 3 — Finding C deferred** to the end-to-end pass. PRs 5–7 proceed on the prediction that Back
+still refetches. The experiment surface already exists from PR 1 (`/admin/compliance-tools` + editing
+`data/compliance-tools.json` on disk).
+
+### The per-open counter
+
+`key={responseId}` / `key={groupParticipantId}` would have been wrong. Confirmed by reading the
+parent: neither `selectedIntake` nor `selectedVolunteer` is ever cleared on close, so a record-id key
+does not change on a same-record reopen — the reset silently stops happening for exactly that case,
+leaving a stale `Group_Role_ID` bound for MP or a "Confirm Remove" pre-armed for a different
+volunteer. Used **one counter per modal**, not one shared: a shared bump would remount the other
+modal mid-exit-animation.
+
+### Tests
+
+`summer-blast-volunteers.test.tsx`, 5 tests, written against the unrefactored code and
+mutation-tested. The sharpest result: keying the resets on `[card]` — the behavioral proxy for
+`key={recordId}` — fails **exactly** the two same-record reopen tests and leaves the different-record
+test green, which is precisely the trap they exist for. Neutering the prune fails both bulk tests.
+
+One test-harness note: Radix `TabsTrigger` switches on mousedown/focus, not on a synthetic click, so
+`fireEvent.mouseDown(tab, { button: 0 })` is required to reach the Volunteers tab.
+
+## Remaining — 10 sites
+
+Next per the plan: **PR 4** — journey-processing + compliance-processing (6 sites, Shapes 1b + 4 + 3).
+Largest PR in the series; two commits, journey pair then compliance pair, so a revert is per-family.
+This is where Ruling 1 actually bites. Then PR 5 (manage-members, 2), PR 6 (contact-lookup-details,
+1), PR 7 (`user-context`, 1 — last, it gates sign-in), PR 8 (flip the rule to `error`).
+
+**Finding C is deferred, not resolved.** It no longer blocks anything until PR 5. Settle it in the
+end-to-end pass: `/admin/compliance-tools` → edit `data/compliance-tools.json` on disk → `/admin` →
+Back. If the grid is stale, PRs 5/6/7 each need a refresh mitigation.

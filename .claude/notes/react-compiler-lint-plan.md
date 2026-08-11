@@ -3,9 +3,42 @@
 Generated 2026-08-07 from a 10-agent analysis of all 20 `react-hooks/*` violations
 introduced when next 16.3.0 pulled eslint-plugin-react-hooks 7.1.
 
-**Status:** commits on `fix/react-compiler-lint-rules` retired `immutability` and
-`incompatible-library` (both now `error`) and 2 of 18 `set-state-in-effect` sites.
-16 remain. Sections 1, 3, 4 and 6 below are the working reference for those.
+**Status (2026-08-11):** `immutability` and `incompatible-library` are retired and enforced at
+`error`. `set-state-in-effect` is at **10 of 18**. PRs 0, 1, 2 and 3 are done. Sections 1, 3, 4 and 6
+below remain the working reference for the rest.
+
+## Rulings and corrections since the plan was written
+
+Four things below are now settled or wrong. Read these before acting on the sections that follow.
+
+**Ruling 1 — unsaved form state clears on reopen. Ratified.** A remount discards everything,
+including the fields the `[open]` effects don't currently reset. Verified: in the journey and
+compliance detail modals exactly **three** survive a close/reopen today — `milestoneNotes`,
+`milestoneDate`, `selectedMilestoneKey`. Everything else in those 13–14-field effects is already
+reset or a transient boolean. Clearing them closes the wrong-write path (notes typed for Alice
+submitted against Bob) and makes `milestoneDate` re-evaluate to today on every open instead of once
+per mount. Applies to PR 4.
+
+**Correction A — the file input is not at stake.** §3 and the cross-cutting notes list it among the
+fields a remount would newly clear. It isn't: `DialogContent` has no `forceMount`, so Radix unmounts
+the dialog subtree on close and the input's DOM node is destroyed already. One less user-visible
+change than the plan priced.
+
+**Correction B — `summer-blast-volunteers.tsx:114` is Shape 1b, not Shape 1.** The page's Suspense
+fallback is a bare `Loading Summer Blast volunteers...` text div, while the component renders the
+full header, search, tabs and a skeleton grid. Moving the read server-side would swap all of that for
+the one line — the same criterion §1 used to keep the two processing screens on 1b. Shipped as 1b.
+This also removes Finding C from PR 3's critical path; the Shape 1 count drops from 6 to 5.
+
+**Ruling 2 — Finding C is deferred to the end-to-end pass.** Not resolved. The prediction stands
+(`staleTimes.dynamic` defaults to `0`, `await connection()` makes these routes dynamic, so Back
+should still refetch), and PRs 5, 6 and 7 proceed on it. The experiment surface already exists from
+PR 1: load `/admin/compliance-tools`, edit `data/compliance-tools.json` on disk, navigate to
+`/admin`, hit Back, check whether the grid updated. If it did not, those three PRs each need a
+refresh mitigation.
+
+**Also settled in passing:** the per-open counter is one counter *per modal*, not one shared across
+a screen's modals — a shared bump remounts the other modal mid-exit-animation.
 
 ---
 
