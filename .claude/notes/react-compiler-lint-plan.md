@@ -4,8 +4,13 @@ Generated 2026-08-07 from a 10-agent analysis of all 20 `react-hooks/*` violatio
 introduced when next 16.3.0 pulled eslint-plugin-react-hooks 7.1.
 
 **Status (2026-08-11):** `immutability` and `incompatible-library` are retired and enforced at
-`error`. `set-state-in-effect` is at **10 of 18**. PRs 0, 1, 2 and 3 are done. Sections 1, 3, 4 and 6
-below remain the working reference for the rest.
+`error`. `set-state-in-effect` is at **4 of 18** — manage-members (2), contact-lookup-details (1) and
+`user-context` (1). PRs 0, 1, 2, 3 and 4 are done. Sections 1, 3, 4 and 6 below remain the working
+reference for the rest.
+
+**Correction C — the compliance derived-`loading` machine is rejected, as §4 already concluded.**
+Recorded here because §1 still lists it as the recipe for `compliance-processing.tsx:54`. Both
+processing screens use the journey split.
 
 ## Rulings and corrections since the plan was written
 

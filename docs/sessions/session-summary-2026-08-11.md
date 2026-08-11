@@ -142,13 +142,69 @@ One test-harness note: Radix `TabsTrigger` switches on mousedown/focus, not on a
 - **Modified**: `.claude/notes/react-compiler-lint-plan.md` (rulings + two corrections),
   `docs/ideas.md`, `docs/status.md`; **Created**: this file
 
-## Remaining — 10 sites
+## PR 4 — both processing families (6 sites, 3 shapes)
 
-Next per the plan: **PR 4** — journey-processing + compliance-processing (6 sites, Shapes 1b + 4 + 3).
-Largest PR in the series; two commits, journey pair then compliance pair, so a revert is per-family.
-This is where Ruling 1 actually bites. Then PR 5 (manage-members, 2), PR 6 (contact-lookup-details,
-1), PR 7 (`user-context`, 1 — last, it gates sign-in), PR 8 (flip the rule to `error`).
+`set-state-in-effect`: **10 → 4**. Lint 0 errors, 574 tests, build clean. Two commits — journey pair,
+then compliance pair — so a revert is per-family.
 
-**Finding C is deferred, not resolved.** It no longer blocks anything until PR 5. Settle it in the
-end-to-end pass: `/admin/compliance-tools` → edit `data/compliance-tools.json` on disk → `/admin` →
-Back. If the grid is stale, PRs 5/6/7 each need a refresh mitigation.
+Same three shapes as summer-blast, applied to a pair of screens `ui-standards.md` requires to stay
+structurally identical. Notable decisions:
+
+- **`LoadedParticipants` leaves the inapplicable lists `undefined`, not `[]`.** The plan expected
+  "always writes all three" and flagged tab-count-badge flicker as something to verify. Sidestepped
+  instead: applying a result never writes a list the current mode doesn't read.
+- **The deep-link latch became a `useRef` and moved into the load continuation.** It still latches
+  when nothing matched — the old fall-through — but a *failed* load never reaches the continuation, so
+  unlike before, a transient MP error no longer burns the deep link.
+- **Every open routes through `openParticipant()`,** including the deep link, so "an open is always a
+  fresh mount" holds unconditionally rather than by argument about which paths can reach
+  `setSelectedParticipant`.
+- **Rejected the plan's derived-`loading` machine for compliance** (`settledRequestId !== requestId`),
+  as §4 of the plan itself concluded once Finding B established that dynamic segments remount.
+- **Extracted compliance's modal render into one const.** It was duplicated across the tabs and
+  no-tabs branches, so `key=` would have had to be added twice and could silently diverge.
+
+This is where Ruling 1 first has teeth: `milestoneNotes`, `milestoneDate` and `selectedMilestoneKey`
+now clear on reopen.
+
+### The mock that silently defanged a test
+
+`journey-processing.test.tsx` (6) and `compliance-processing.test.tsx` (5) were written against the
+unrefactored code. Mutation results: keying the modal effect on `[participant]` alone — the proxy for
+`key={recordId}` — fails the same-participant-reopen tests; removing `setActiveTab` from the paused
+branch fails the paused-tab test.
+
+**Dropping the latch initially passed all 11.** The cause was in the test, not the code:
+`mockResolvedValue([...])` evaluates its argument once and resolves the *same array instance* on every
+call, so `setCurrentParticipants` got a reference-equal value, React bailed out of the re-render, and
+a list refresh was unobservable. Switched to `mockImplementation(async () => [...])` and the mutation
+fails as it should.
+
+That is the second time this session a characterization test passed under the exact mutation it was
+written to catch. Both times the test looked reasonable and the assertion was real — the reachability
+was the problem. **Mutation-testing every characterization test is not optional here.**
+
+Also worth keeping: an open Radix dialog `aria-hidden`s the rest of the page, so asserting on
+background elements needs `{ hidden: true }` in the role query.
+
+## Remaining — 4 sites
+
+Next per the plan: **PR 5** — manage-members (2 sites: the shell's deep-link resolution, Shape 1, and
+`member-detail-modal`, Shape 3). Two notes carried from the plan: use `fetchMemberDetail` for the deep
+link rather than the cache-only `fetchMemberCard`, and do **not** patch the shell with `key={memberId}`
+— that would wipe tab, search and page state. Then PR 6 (contact-lookup-details, 1), PR 7
+(`user-context`, 1 — last, it gates sign-in), PR 8 (flip the rule to `error`).
+
+**Finding C starts mattering again at PR 5**, which is a Shape 1 site. Deferred by ruling, so PR 5
+proceeds on the prediction. Settle it in the end-to-end pass: `/admin/compliance-tools` → edit
+`data/compliance-tools.json` on disk → `/admin` → Back. If the grid is stale, PRs 5/6/7 each need a
+refresh mitigation.
+
+## Files Changed (PR 4)
+
+- **Modified**: `src/components/journey-processing/journey-processing.tsx`,
+  `journey-detail-modal.tsx`; `src/app/(web)/journey/[slug]/page.tsx`
+- **Modified**: `src/components/compliance-processing/compliance-processing.tsx`,
+  `compliance-detail-modal.tsx`; `src/app/(web)/compliance/[slug]/page.tsx`
+- **Created**: `src/components/journey-processing/journey-processing.test.tsx` (6 tests),
+  `src/components/compliance-processing/compliance-processing.test.tsx` (5 tests)
