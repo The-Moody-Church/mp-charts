@@ -34,7 +34,11 @@ async function CompliancePageContent({ params, searchParams }: CompliancePagePro
 
   return (
     <div className="container mx-auto p-4 sm:p-6 lg:p-8">
-      <ComplianceProcessing slug={slug} config={config} initialApplicantId={initialApplicantId} />
+      {/* key={slug} is redundant — the dynamic segment's value is part of Next's
+          router cache key, so /compliance/a -> /compliance/b already remounts — but
+          the deep-link latch and the per-open modal counter both assume a fresh
+          mount per tool, so state the invariant rather than inheriting it. */}
+      <ComplianceProcessing key={slug} slug={slug} config={config} initialApplicantId={initialApplicantId} />
     </div>
   );
 }
