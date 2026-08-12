@@ -3,75 +3,99 @@
 Generated 2026-08-07 from a 10-agent analysis of all 20 `react-hooks/*` violations
 introduced when next 16.3.0 pulled eslint-plugin-react-hooks 7.1.
 
-**Status (2026-08-12):** `immutability` and `incompatible-library` are retired and enforced at
-`error`. `set-state-in-effect` is at **1 of 18** — `user-context` only. PRs 0, 1, 2, 3, 4, 5 and 6 are
-done.
+**Status: COMPLETE (2026-08-12).** All 20 violations fixed across PRs 0–8; all three rules enforced at
+`error`. Enforcement verified by injecting a violation — lint exits 1.
 
-**Correction E — `contact-lookup-details.tsx:291` is Shape 1b, not Shape 1.** Third and last of these.
-`loading` was already a `useState(true)` initialiser, so the client-side split retires the warning; the
-component's centred spinner is also richer than the page's bare "Loading contact..." fallback, the same
-criterion as Corrections B. The planned `page-data.ts` is not needed and does not exist. `household-sort.ts`
-was still extracted, with tests — that was the proposal's real value, and it is independent of where the
-fetch runs. The deferred server-side read is filed in `docs/ideas.md` with its prerequisites.
+The plan below is kept as written, because the reasoning is still the best record of why each site was
+approached the way it was. **Everything in it is superseded by the rulings and corrections in the next
+section** — read those first; §1's shape assignments in particular were wrong at four of six sites.
 
-Net effect of Corrections B, D and E: **outside PR 1, no site the plan called Shape 1 turned out to need
-a server-side move.** The only one that shipped is the admin pair from the exemplar — admin-only, used by
-about two people, which is exactly why the plan chose it to test Finding C on.
+---
 
-So Finding C's live exposure is that one screen, plus PR 7 if `user-context` keeps the plan's shape. It is
-low-consequence at both: a stale avatar or feature list, or an admin tool grid needing a reload, not stale
-MP records on a daily-use screen. It remains a genuine prerequisite only for the deferred contact-detail
-read in `docs/ideas.md`, where the "Last Activity" badge depends on it. Sections 1, 3, 4 and 6 below remain the working
-reference for the rest.
+## Rulings and corrections (in the order they were settled)
 
-**Correction C — the compliance derived-`loading` machine is rejected, as §4 already concluded.**
-Recorded here because §1 still lists it as the recipe for `compliance-processing.tsx:54`. Both
-processing screens use the journey split.
+**Ruling 1 — unsaved form state clears on reopen. Ratified 2026-08-11.** A modal remount discards
+everything, including the fields the `[open]` effects did not reset. Verified: in the journey and
+compliance detail modals exactly **three** survived a close/reopen — `milestoneNotes`, `milestoneDate`,
+`selectedMilestoneKey`. Everything else in those 13–14-field effects was already reset or a transient
+boolean. Clearing them closed a wrong-write path (notes typed for Alice submitted against Bob) and made
+`milestoneDate` re-evaluate to today on every open instead of once per mount.
 
-## Rulings and corrections since the plan was written
+**Ruling 2 — Finding C deferred to the end-to-end pass.** Never resolved, and it never had to be: see
+the final tally below. The prediction stands (`staleTimes.dynamic` defaults to `0` and
+`await connection()` makes these routes dynamic, so Back should still refetch). The experiment surface
+exists from PR 1: load `/admin/compliance-tools`, edit `data/compliance-tools.json` on disk, navigate to
+`/admin`, hit Back, check whether the grid updated.
 
-Four things below are now settled or wrong. Read these before acting on the sections that follow.
-
-**Ruling 1 — unsaved form state clears on reopen. Ratified.** A remount discards everything,
-including the fields the `[open]` effects don't currently reset. Verified: in the journey and
-compliance detail modals exactly **three** survive a close/reopen today — `milestoneNotes`,
-`milestoneDate`, `selectedMilestoneKey`. Everything else in those 13–14-field effects is already
-reset or a transient boolean. Clearing them closes the wrong-write path (notes typed for Alice
-submitted against Bob) and makes `milestoneDate` re-evaluate to today on every open instead of once
-per mount. Applies to PR 4.
-
-**Correction A — the file input is not at stake.** §3 and the cross-cutting notes list it among the
-fields a remount would newly clear. It isn't: `DialogContent` has no `forceMount`, so Radix unmounts
-the dialog subtree on close and the input's DOM node is destroyed already. One less user-visible
-change than the plan priced.
+**Correction A — the file input was never at stake.** §3 and the cross-cutting notes list it among the
+fields a remount would newly clear. It isn't: `DialogContent` has no `forceMount`, so Radix unmounts the
+dialog subtree on close and the input's DOM node is already destroyed.
 
 **Correction B — `summer-blast-volunteers.tsx:114` is Shape 1b, not Shape 1.** The page's Suspense
-fallback is a bare `Loading Summer Blast volunteers...` text div, while the component renders the
-full header, search, tabs and a skeleton grid. Moving the read server-side would swap all of that for
-the one line — the same criterion §1 used to keep the two processing screens on 1b. Shipped as 1b.
-This also removes Finding C from PR 3's critical path; the Shape 1 count drops from 6 to 5.
+fallback is a bare `Loading Summer Blast volunteers...` text div, while the component renders the full
+header, search, tabs and a skeleton grid. Moving the read server-side would swap all of that for the one
+line — the same criterion §1 used to keep the two processing screens on 1b.
 
-**Ruling 2 — Finding C is deferred to the end-to-end pass.** Not resolved. The prediction stands
-(`staleTimes.dynamic` defaults to `0`, `await connection()` makes these routes dynamic, so Back
-should still refetch), and PRs 5, 6 and 7 proceed on it. The experiment surface already exists from
-PR 1: load `/admin/compliance-tools`, edit `data/compliance-tools.json` on disk, navigate to
-`/admin`, hit Back, check whether the grid updated. If it did not, those three PRs each need a
-refresh mitigation.
+**Correction C — the compliance derived-`loading` machine is rejected**, as §4 already concluded once
+Finding B landed. Recorded because §1 still lists it as the recipe for `compliance-processing.tsx:54`.
+Both processing screens use the journey split.
 
-**Correction D — `manage-members-shell.tsx:103` is not a Shape 1 site.** §1 lists it under "Mount fetch
-→ Server Component props" and §3 row 13 then prices the hazard that creates (a `useState` initializer
-that won't re-run on soft navigation, so a `<Link>` to `?member=N` would stop opening the modal). None
-of it is needed: the only violation is the synchronous `setHasAutoOpened(true)`, and everything else in
-that effect already ran in the promise continuation. Making the latch a `useRef` retires the warning
-with no server-side move. Shipped that way; the Shape 1 count drops from 5 to 3
-(contact-lookup-details, `user-context`, and the two admin lists already done in PR 1).
+**Correction D — `manage-members-shell.tsx:103` is not a Shape 1 site.** §1 lists it under "mount fetch →
+Server Component props" and §3 row 13 then prices the hazard that creates (a `useState` initialiser that
+won't re-run on soft navigation, so a `<Link>` to `?member=N` would stop opening the modal). None of it
+was needed: the only violation was the synchronous `setHasAutoOpened(true)`, and everything else in that
+effect already ran in the promise continuation. A `useRef` latch retires the warning outright.
 
-That also **fixed** the latch. As state it never worked under StrictMode's double-invoke — the second
-run read the stale `false` from its own closure — and in production it was unreachable, since the
-effect's only dep is `initialMemberId`, which cannot change without a navigation that remounts.
+That also **fixed** the latch. As state it never worked under StrictMode's double-invoke — the second run
+read the stale `false` from its own closure — and in production it was unreachable, since the effect's
+only dep is `initialMemberId`, which cannot change without a navigation that remounts.
 
-**Also settled in passing:** the per-open counter is one counter *per modal*, not one shared across
-a screen's modals — a shared bump remounts the other modal mid-exit-animation.
+**Correction E — `contact-lookup-details.tsx:291` is Shape 1b, not Shape 1.** `loading` was already a
+`useState(true)` initialiser, so the client-side split retires the warning; the component's centred
+spinner is also richer than the page's bare "Loading contact..." fallback. The planned `page-data.ts` is
+not needed and does not exist. `household-sort.ts` was still extracted with tests — that was the
+proposal's real value, and it is independent of where the fetch runs. The deferred server-side read is
+filed in `docs/ideas.md` with its prerequisites.
+
+**Correction F — `user-context.tsx:80` is not a Shape 1 site.** Its two synchronous setState blocks
+existed only to reset six state variables to their initial values (one for the no-guid case, one for
+sign-out). State that is a pure function of the session does not need storing: each load is now tagged
+with the `userGuid` it was made for, so "is this the current user's data?" is a comparison and the reset
+disappears. No `getUserBootstrap`, no layout await, no TTFB measurement, and the layout never blocks on
+MP — the risk §4 priced at HIGH. All 11 existing tests passed unchanged, so the "mandatory" replacement
+`shared-actions/user.test.ts` was moot; no server action was touched. The rewrite also fixed a defect the
+plan did not identify: the old provider served the previous user's profile and feature list while the
+next user's load was in flight.
+
+**Also settled in passing:** the per-open remount counter is one counter *per modal*, not one shared
+across a screen's modals — a shared bump remounts the other modal mid-exit-animation.
+
+---
+
+## Final tally on Shape 1 — the one lesson to carry forward
+
+§1 assigned Shape 1 ("move the read into a Server Component, seed `useState` from props") to **six**
+sites. It was the right recipe at **one**: the PR 1 admin exemplar. Corrections B, D, E and F each found
+a fix that removed the setState instead of relocating the read.
+
+The rule flags *where a setState is reachable*, so the cheapest correct fix is usually to make the state
+unnecessary — derive it during render, move it to a `useState` initialiser, or move it into an event
+handler — not to move the fetch to the server. Reach for a server-side move when the first paint
+genuinely needs it, as a performance decision on its own merits.
+
+Because of that, **Finding C never became load-bearing.** Its only live exposure is the PR 1 admin tool
+grids, and it remains a genuine prerequisite only for the deferred contact-detail server read.
+
+Two more things worth keeping, both learned the hard way:
+
+- **Finding A's cop-out is real and tempting.** The rule does not descend into nested function
+  expressions, so wrapping an effect body in an async IIFE silences it with the pattern intact. This is
+  now written into `eslint.config.mjs` next to the rule, where the next person will actually see it.
+- **Mutation-test every characterization test.** Four times in this migration a test passed under the
+  exact bug it was written to catch. Every time the assertion was real and the *reachability* was the
+  problem: a merge keyed on an id two fixtures never shared, `mockResolvedValue` handing back one array
+  instance so React bailed out of the re-render, a fixture whose own row the assertion filtered out, and
+  a latch that was unreachable in production to begin with.
 
 ---
 

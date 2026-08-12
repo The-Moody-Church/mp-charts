@@ -270,30 +270,135 @@ other two members. Added an explicit "the legal first name must not appear" asse
 shows the nickname, so it can only appear if the wrong `excludeContactId` was passed) and confirmed it
 fails. Third time this session; the pattern is always the same — real assertion, unreachable by the bug.
 
-## Remaining — 1 site
+## PR 7 — user-context (1 site) — 2026-08-12
 
-Next per the plan: **PR 7** — `contexts/user-context.tsx`, the highest-blast-radius change in the
-series, which is why the plan sequenced it last. Its constraints:
+`set-state-in-effect`: **1 → 0**.
 
-- `getUserBootstrap` goes in `src/components/shared-actions/user.ts` and must derive the GUID from
-  `requireSession()` only (the F4 security invariant); `AuthWrapper`'s two redirects must still run
-  before `WebLayoutContent` is invoked. Both need a line in the PR's security review.
-- `shared-actions/user.test.ts` is **mandatory**, not optional — it is a server action, and it replaces
-  the assertions the rewritten `user-context.test.tsx` loses. Net assertion count must not drop.
-- Keep `UserContextValue.error: Error | null` and reconstruct from `errorMessage` client-side; do not
-  change the context's public shape mid-refactor.
-- Measure layout TTFB cold vs. warm `UserService` cache. The risk the plan named is real: the layout's
-  single Suspense boundary would make every page wait on MP, converting a degraded-avatar failure mode
-  into a whole-app-slow one. Escape hatch on the shelf — create the promise without awaiting in the
-  layout and read it in the provider with React 19's `use()` behind its own boundary.
-- Do **not** wire `refreshUserProfile()` into the admin Permissions screen here; file it instead.
+**Not a Shape 1 site either — the fourth and last correction of that kind.** The plan wanted a new
+`getUserBootstrap()` server action awaited in `(web)/layout.tsx`, threaded through `Providers`, seeded
+into `useState`. Its own risk note priced the cost: the layout's *single* Suspense boundary would make
+every page wait on MP, turning a degraded-avatar failure into whole-app-slow on a cold `UserService`
+cache. It also meant rewriting the repo's only component-level suite and making sign-in depend on the
+least-tested change in the programme.
 
-Then **PR 8**: flip `react-hooks/set-state-in-effect` to `error`.
+The violation was smaller than that. The effect held two synchronous setState blocks, and both existed
+only to wipe six state variables back to their initial values — one for the no-`userGuid` case, one for
+sign-out. **State that is a pure function of the session doesn't need storing.** Each load is now tagged
+with the `userGuid` it was made for:
 
-**Finding C's live exposure is now just the PR 1 admin pair** — the only server-side move that shipped,
-admin-only, which is why the plan picked it as the test surface. Given Corrections B, D and E, no other
-shipped site depends on it. Still worth the two-minute check in the end-to-end pass:
-`/admin/compliance-tools` → edit `data/compliance-tools.json` on disk → `/admin` → Back.
+```
+{ status: "loading" } | { status: "ready"; guid, data } | { status: "failed"; guid, error }
+```
+
+"Is this the current user's data?" becomes `state.guid === userGuid`, so signing out or switching
+identity needs no effect and no wipe — the stored value stops matching and the context serves
+`EMPTY_BOOTSTRAP`. The effect body now has zero setState.
+
+**All 11 existing tests pass unchanged.** The plan expected this change to invalidate 4 of them and made
+a replacement `shared-actions/user.test.ts` mandatory to keep the net assertion count up. No server
+action was added or modified, so there was nothing new to test and nothing lost — net assertions went up
+by 2.
+
+**It also fixed a defect the plan never identified.** The old provider kept user A's profile and feature
+list in state until user B's load resolved, so one user's PII and permissions were briefly served under
+another's session. The header gates on `!isLoading && userProfile`, so it now shows the avatar
+placeholder instead. That is the first of the two added tests.
+
+The second test is labelled as a regression guard, not added behavior: a session refetch that flips
+`isPending` while current data is held must not flash `isLoading`. It passes before and after —
+`isLoading` used to be stored state a refetch couldn't disturb, and deriving it naively from `isPending`
+would have turned the whole app into a loading shell on every background session refresh. Designed
+against, then pinned.
+
+Checked every consumer (header, sidebar, home-cards, feedback-wrapper, use-authorization): none depends
+on data persisting past its own session.
+
+## PR 8 — the rule flip
+
+`react-hooks/set-state-in-effect` → `error`. Verified by injecting a synchronous setState into
+user-context's effect: lint exits 1 with "1 problem (1 error, 0 warnings)". Reverted, clean.
+
+`immutability` is now listed explicitly too — it was already `error` via the preset, but all three
+severities being visible in one place beats two of them being inherited.
+
+The rule comment in `eslint.config.mjs` now carries Finding A, because it is the thing most likely to be
+lost with the plan note and the thing a future contributor is most likely to reach for: the rule does
+not descend into nested function expressions, so an async IIFE silences it with the pattern intact. The
+four legitimate destinations for a pre-await setState are listed inline.
+
+## Done — 20 → 0
+
+| Rule | Start | End |
+|---|---|---|
+| `react-hooks/set-state-in-effect` | warn, 18 | **error, 0** |
+| `react-hooks/immutability` | warn, 1 | **error, 0** |
+| `react-hooks/incompatible-library` | warn, 1 | **error, 0** |
+
+Lint 0 problems, 597 tests (from 548 at the start of this branch), build clean.
+
+### The one lesson
+
+§1 of the plan assigned Shape 1 — move the read into a Server Component, seed `useState` from props — to
+**six** sites. It was right at **one**: the PR 1 admin exemplar. Corrections B, D, E and F each found a
+fix that removed the setState instead of relocating the read.
+
+The rule flags *where a setState is reachable*, so the cheapest correct fix is usually to make the state
+unnecessary — derive it during render, move it to a `useState` initialiser, or move it into an event
+handler. A server-side move is a performance decision and should be made on those merits.
+
+Consequence: **Finding C never became load-bearing.** It is still unresolved, its only live exposure is
+the PR 1 admin tool grids, and it now blocks only the deferred contact-detail server read filed in
+`ideas.md`.
+
+### The other lesson
+
+**Four times** a characterization test passed under the exact bug it was written to catch. Every time the
+assertion was real and the *reachability* was the problem:
+
+1. a merge keyed on a `Milestone_ID` two fixtures never shared (PR 2)
+2. `mockResolvedValue` returning one array instance, so React bailed out of the re-render and a list
+   refresh was unobservable (PR 4)
+3. a fixture whose own household row the assertion filtered out (PR 6)
+4. a latch that was unreachable in production to begin with (PR 5) — correctly uncatchable
+
+Mutation-testing every characterization test is not optional for this kind of work. A test that survives
+its own bug reads as coverage.
+
+## Remaining — nothing in this series
+
+The series is complete. What's left is yours, not mine:
+
+**The end-to-end pass.** Eight PRs are stacked and unmerged on `fix/react-compiler-tool-editors` (on top
+of PR #200's branch) precisely so this happens once. The per-PR manual checklists in §6 of the plan note
+accumulate for it. Highest-value items, in order:
+
+1. **Finding C** — `/admin/compliance-tools` → edit `data/compliance-tools.json` on disk → `/admin` →
+   Back. Does the grid show the new value? Only the admin grids depend on it now.
+2. **Modal reopen, both processing screens** — open a participant, close, reopen the *same* one: the
+   detail must refetch. Then check that notes/date/milestone typed for one participant are gone when the
+   next one opens (Ruling 1, now in effect).
+3. **Deep links** — `?applicant=N` for a paused participant: the tab must switch *before* the modal
+   paints, and the action set must offer Resume, not Pause. Close it, save something, confirm it does
+   not spring back open.
+4. **Sign-in, both roles** — non-admin sees no "Setup" and the right journey/compliance entries in both
+   sidebar and home grid; admin sees "Setup". Avatar on first paint with no placeholder flash.
+5. **Summer Blast** — same-record reopen resets the role select to "Temp"; bulk partial failure leaves
+   the failed row checked and reads "Added N; 1 failed".
+6. **Contact detail** — create a log, confirm "Last Activity" flips to Today; expand Groups, trigger a
+   refresh, confirm it collapses.
+
+**Then the PR.** Per `.claude/rules/git-workflow.md`: `--repo The-Moody-Church/mp-charts` is mandatory,
+a security-review section is required (nothing in these eight touches filter construction, uploads or
+redirects, so it should be short), and merge with `--merge`, never squash.
+
+## Files Changed (PR 7 + 8)
+
+- **Modified**: `src/contexts/user-context.tsx` — tagged `LoadState`, derived context value, zero
+  setState in the effect body
+- **Modified**: `src/contexts/user-context.test.tsx` — +2 tests (11 existing unchanged)
+- **Modified**: `eslint.config.mjs` — all three rules at `error`, Finding A documented inline
+- **Modified**: `docs/ideas.md` (#197 marked COMPLETED), `docs/status.md`,
+  `.claude/notes/react-compiler-lint-plan.md` (header rewritten: Corrections A–F, final tally)
 
 ## Files Changed (PR 6)
 
