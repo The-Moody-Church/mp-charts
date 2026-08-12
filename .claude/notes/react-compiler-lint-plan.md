@@ -3,9 +3,25 @@
 Generated 2026-08-07 from a 10-agent analysis of all 20 `react-hooks/*` violations
 introduced when next 16.3.0 pulled eslint-plugin-react-hooks 7.1.
 
-**Status (2026-08-11):** `immutability` and `incompatible-library` are retired and enforced at
-`error`. `set-state-in-effect` is at **2 of 18** — contact-lookup-details (1) and `user-context` (1).
-PRs 0, 1, 2, 3, 4 and 5 are done. Sections 1, 3, 4 and 6 below remain the working
+**Status (2026-08-12):** `immutability` and `incompatible-library` are retired and enforced at
+`error`. `set-state-in-effect` is at **1 of 18** — `user-context` only. PRs 0, 1, 2, 3, 4, 5 and 6 are
+done.
+
+**Correction E — `contact-lookup-details.tsx:291` is Shape 1b, not Shape 1.** Third and last of these.
+`loading` was already a `useState(true)` initialiser, so the client-side split retires the warning; the
+component's centred spinner is also richer than the page's bare "Loading contact..." fallback, the same
+criterion as Corrections B. The planned `page-data.ts` is not needed and does not exist. `household-sort.ts`
+was still extracted, with tests — that was the proposal's real value, and it is independent of where the
+fetch runs. The deferred server-side read is filed in `docs/ideas.md` with its prerequisites.
+
+Net effect of Corrections B, D and E: **outside PR 1, no site the plan called Shape 1 turned out to need
+a server-side move.** The only one that shipped is the admin pair from the exemplar — admin-only, used by
+about two people, which is exactly why the plan chose it to test Finding C on.
+
+So Finding C's live exposure is that one screen, plus PR 7 if `user-context` keeps the plan's shape. It is
+low-consequence at both: a stale avatar or feature list, or an admin tool grid needing a reload, not stale
+MP records on a daily-use screen. It remains a genuine prerequisite only for the deferred contact-detail
+read in `docs/ideas.md`, where the "Last Activity" badge depends on it. Sections 1, 3, 4 and 6 below remain the working
 reference for the rest.
 
 **Correction C — the compliance derived-`loading` machine is rejected, as §4 already concluded.**

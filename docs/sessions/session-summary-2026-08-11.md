@@ -231,20 +231,79 @@ member's detail must not show while the next loads". Not observable — `loading
 body, so nothing member-specific renders during the fetch. The milestone-expansion state was the
 observable reset.
 
-## Remaining — 2 sites
+## PR 6 — contact-lookup-details (1 site) — 2026-08-12
 
-Next per the plan: **PR 6** — `contact-lookup-details` (1 site, Shape 1). Introduces two new modules
-(`household-sort.ts`, `page-data.ts`), both requiring co-located tests per `testing.md`. Constraints
-from the plan: `onRefresh` must stay a **full** reload, not `router.refresh()` — the "Last Activity"
-badge is derived from `getContactBadges` and a partial refresh would silently stop it flipping to
-"Today" — and `page-data.ts` must keep importing the `'use server'` actions so `requireFeatureAccess`
-and `enforceRateLimit` stay in one place. Then PR 7 (`user-context` — last, it gates sign-in) and
-PR 8 (flip the rule to `error`).
+`set-state-in-effect`: **2 → 1**. Lint 0 errors, 595 tests, build clean.
 
-**Finding C now matters at PR 6.** It did not apply to PR 5 after all, since that site turned out not
-to need a server-side move. Deferred by ruling, so PR 6 proceeds on the prediction. Settle it in the
-end-to-end pass: `/admin/compliance-tools` → edit `data/compliance-tools.json` on disk → `/admin` →
-Back. If the grid is stale, PRs 6 and 7 need a refresh mitigation.
+**Shape 1b, not Shape 1 — the third time a shape assignment didn't hold.** The plan wanted five MP
+reads moved into the page's async RSC behind a new `page-data.ts`, with the Suspense fallback reworked.
+That is MED-HIGH, carries a security-review obligation (a `'use server'` module called from an RSC, with
+`requireFeatureAccess` and `enforceRateLimit` still on every read), and depends on the unresolved
+Finding C — on the one screen where badge freshness is explicitly load-bearing. `loading` was already a
+`useState(true)` initialiser, so the standard 1b split retires the warning outright.
+
+**The plan's real prize was testability, and it's kept.** The household filter+sort moved to
+`src/lib/household-sort.ts` with 9 co-located tests. It had been buried in a `setFamilyMembers()`
+callback where no test could reach it, and that extraction is independent of where the fetch runs. Also
+documented there why the lexicographic `Date_of_Birth` compare is correct: MP date strings sort
+chronologically, so it sidesteps the `Date` parsing that CLAUDE.md's timezone rule warns about.
+
+The deferred server-side read is **filed in `docs/ideas.md`** with its prerequisites rather than dropped.
+
+Preserved deliberately: the four synchronous resets live in the event-handler reload only (no-ops on
+mount, but on a reload they collapse the Groups section and drop its cached list — now tested), and
+`related` is left *undefined* rather than zeroed when a contact has no `Contact_ID`, matching the
+skipped branch. Two accepted differences, both hidden under the spinner: the breadcrumb name lands one
+round trip later, and a second-stage failure no longer leaves a name in the breadcrumb above an error
+page.
+
+### Tests, and the discipline slip
+
+I refactored before writing the component tests here. Corrected by reverting the file, authoring the 6
+tests against the original, verifying, mutation-testing, then reapplying — rather than shipping tests
+that only ever saw the new code.
+
+Mutations: dropping the groups resets from the reload fails the collapse test; using `First_Name`
+instead of the nickname fails the breadcrumb test. **Breaking the household filter initially passed** —
+the fixture's own household entry rendered as "Jonathan Tester" while the assertion only matched the
+other two members. Added an explicit "the legal first name must not appear" assertion (the card header
+shows the nickname, so it can only appear if the wrong `excludeContactId` was passed) and confirmed it
+fails. Third time this session; the pattern is always the same — real assertion, unreachable by the bug.
+
+## Remaining — 1 site
+
+Next per the plan: **PR 7** — `contexts/user-context.tsx`, the highest-blast-radius change in the
+series, which is why the plan sequenced it last. Its constraints:
+
+- `getUserBootstrap` goes in `src/components/shared-actions/user.ts` and must derive the GUID from
+  `requireSession()` only (the F4 security invariant); `AuthWrapper`'s two redirects must still run
+  before `WebLayoutContent` is invoked. Both need a line in the PR's security review.
+- `shared-actions/user.test.ts` is **mandatory**, not optional — it is a server action, and it replaces
+  the assertions the rewritten `user-context.test.tsx` loses. Net assertion count must not drop.
+- Keep `UserContextValue.error: Error | null` and reconstruct from `errorMessage` client-side; do not
+  change the context's public shape mid-refactor.
+- Measure layout TTFB cold vs. warm `UserService` cache. The risk the plan named is real: the layout's
+  single Suspense boundary would make every page wait on MP, converting a degraded-avatar failure mode
+  into a whole-app-slow one. Escape hatch on the shelf — create the promise without awaiting in the
+  layout and read it in the provider with React 19's `use()` behind its own boundary.
+- Do **not** wire `refreshUserProfile()` into the admin Permissions screen here; file it instead.
+
+Then **PR 8**: flip `react-hooks/set-state-in-effect` to `error`.
+
+**Finding C's live exposure is now just the PR 1 admin pair** — the only server-side move that shipped,
+admin-only, which is why the plan picked it as the test surface. Given Corrections B, D and E, no other
+shipped site depends on it. Still worth the two-minute check in the end-to-end pass:
+`/admin/compliance-tools` → edit `data/compliance-tools.json` on disk → `/admin` → Back.
+
+## Files Changed (PR 6)
+
+- **Modified**: `src/components/contact-lookup-details/contact-lookup-details.tsx` —
+  `fetchContactDetails` split into `loadContactDetails` / `applyContactDetails` /
+  `refreshContactDetails`; household sort extracted out
+- **Created**: `src/lib/household-sort.ts` + `src/lib/household-sort.test.ts` (9 tests)
+- **Created**: `src/components/contact-lookup-details/contact-lookup-details.test.tsx` (6 tests)
+- **Modified**: `.claude/notes/react-compiler-lint-plan.md` (Correction E), `docs/ideas.md` (deferred
+  server-render entry), `docs/status.md`
 
 ## Files Changed (PR 5)
 

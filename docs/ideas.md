@@ -58,6 +58,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
 
 ### Technical Debt
+- [Server-render the contact detail page's initial read](#server-render-the-contact-detail-pages-initial-read)
 - [Member detail modal shows the old photo after upload](#member-detail-modal-shows-the-old-photo-after-upload)
 - [Compliance tool editor silently drops orphaned journey config](#compliance-tool-editor-silently-drops-orphaned-journey-config)
 - [Blank journey selection reads as ID 0, not null](#blank-journey-selection-reads-as-id-0-not-null)
@@ -276,6 +277,16 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 
 ## Technical Debt
 
+### Server-render the contact detail page's initial read
+`/contact-lookup/[guid]` fetches all five of its MP reads from the client after hydration — contact details, then logs + badges + household + user id in parallel. Moving them into the page's async RSC (behind a small `page-data.ts`) would save a round trip on a daily-use screen and let the data stream with the shell.
+
+Scoped out of the React Compiler remediation (2026-08-12) rather than dropped: retiring the lint warning only needed the client-side loader split, and the server-side move is MED-HIGH on its own terms. Prerequisites, from `.claude/notes/react-compiler-lint-plan.md`:
+
+- **Finding C must be settled first.** `useState` initializers don't re-run when a hidden `<Activity>` is restored, so seeding from props could delete the Back-navigation refresh. This screen's "Last Activity" badge freshness is load-bearing.
+- The page's Suspense fallback needs to become the equivalent spinner block, or the loading UX regresses from a centred spinner to one line of text.
+- `page-data.ts` must keep importing the `'use server'` actions so `requireFeatureAccess("contact-lookup")` and `enforceRateLimit(…, "search")` still run on every read — and the PR needs a security-review line confirming the MP call count per page load is unchanged (5).
+- `onRefresh` must stay a **full** client reload, never `router.refresh()`.
+
 ### Member detail modal shows the old photo after upload
 `handlePhotoUpload` in `src/components/manage-members/member-detail-modal.tsx:84` awaits `uploadMemberPhoto`, then calls `onUpdate()` to reload the parent list — but never re-fetches `detail`. The rendered record is `detail?.member ?? member` (line 122), so once `detail` is loaded the modal keeps rendering the **stale** `fileUniqueId` and the old photo stays on screen until the modal is closed and reopened.
 
@@ -297,7 +308,7 @@ Two related cases in `src/components/admin/compliance-tools/compliance-tool-edit
 - `react-hooks/immutability` — the "Active contacts only" toggle re-ran the search from an effect that called `handleSearch` before its `const` declaration. Now runs from the checkbox's `onChange` with a **required** scope parameter, so the type checker catches the stale-value bug the effect existed to dodge.
 - `react-hooks/incompatible-library` — `watch()` opted `contact-logs` out of React Compiler optimisation entirely; swapped for `useWatch({ control, name })`.
 
-`set-state-in-effect` is at **2 of 18** remaining and stays `warn` until the last site lands. Full per-site plan, risk ranking, traps and manual test checklist: `.claude/notes/react-compiler-lint-plan.md`.
+`set-state-in-effect` is at **1 of 18** remaining and stays `warn` until the last site lands. Full per-site plan, risk ranking, traps and manual test checklist: `.claude/notes/react-compiler-lint-plan.md`.
 
 **Progress (2026-08-11):** both admin tool editors done (plan's PR 2). The journey and compliance milestone-load effects moved into their `<select>` change handlers — separately, because the compliance select isn't `disabled={isEditing}` and its three branches have different semantics (switching back to the saved journey is a staff undo that must restore verbatim with no MP call). A dead no-op effect in the compliance editor was deleted. Three pre-existing bugs found along the way were deliberately reproduced rather than fixed mid-refactor; they are the three entries above.
 
@@ -306,6 +317,8 @@ Two related cases in `src/components/admin/compliance-tools/compliance-tool-edit
 **Progress (2026-08-11, cont.):** both processing families done (plan's PR 4) — six sites, two commits so a revert is per-family. Mount loads split as in summer-blast; the deep-link auto-open folded into the load continuation with the latch as a `useRef` (and a *failed* load no longer burns the link, since it never reaches the continuation); both detail modals reset by remount on a per-open counter, which is where the ratified clear-on-reopen ruling first has teeth. The plan's derived-`loading` state machine for compliance was rejected, as the plan itself concluded once Finding B landed.
 
 **Progress (2026-08-11, cont.):** manage-members done (plan's PR 5). The shell's deep-link site turned out **not** to be a Shape 1 site — the only violation was one synchronous `setHasAutoOpened(true)`, so making the latch a `useRef` retired it with no server-side move and none of the soft-navigation exposure the plan had priced. That also fixed the latch, which as state never held under StrictMode's double-invoke. The detail modal converged on the per-open key idiom. Two sites left: `contact-lookup-details` and `user-context`.
+
+**Progress (2026-08-12):** `contact-lookup-details` done (plan's PR 6) — Shape 1b rather than the planned Shape 1, the third time the plan's shape assignment didn't hold. The plan's real prize, testability, is kept: the household filter+sort moved to `src/lib/household-sort.ts` with 9 tests, out of a `setFamilyMembers()` callback nothing could reach. The deferred server-side read is filed as its own entry above. One site left: `user-context`.
 
 Three findings from the analysis worth carrying forward:
 - **The rule under-approximates.** It walks only an effect's own basic blocks and never descends into nested function expressions, so a loader declared *inside* the effect hides the identical pattern (`contact-logs.tsx:186` was invisible to lint). There is a one-line non-fix at every remaining site — wrap the body in a nested async function and the warning disappears with the pattern intact. Reject any diff whose only structural change is nesting depth.
