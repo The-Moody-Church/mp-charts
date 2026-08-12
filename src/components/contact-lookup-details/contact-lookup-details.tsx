@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { getContactDetails, getContactLogsByContactId, getHouseholdMembers, getContactBadges, getContactGroups, uploadContactLookupPhoto } from "./actions";
@@ -12,9 +12,21 @@ import { useBreadcrumbOverride } from "@/components/layout/dynamic-breadcrumb";
 import { useRuntimeConfig } from "@/contexts";
 import { MAX_FILE_SIZE } from "@/lib/processing-utils";
 import { statusBadgeColor } from "@/lib/contact-badge-utils";
+import { sortHouseholdMembers } from "@/lib/household-sort";
 
 interface ContactLookupDetailsProps {
   guid: string;
+}
+
+/** What one load produced. `related` is absent when the contact has no Contact_ID. */
+interface LoadedContact {
+  contact: ContactLookupDetailsType;
+  related?: {
+    logs: ContactLogDisplay[];
+    badges: ContactBadges;
+    currentUserId: number | null;
+    familyMembers: HouseholdMember[];
+  };
 }
 
 function getDisplayName(firstName?: string, nickname?: string) {
@@ -135,14 +147,41 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
     return () => setBreadcrumb(null);
   }, [setBreadcrumb]);
 
-  const fetchContactDetails = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      setGroups(null);
-      setGroupsOpen(false);
+  // Pure fetch — returns everything the card needs and touches no state, so it is
+  // safe to call from an effect body. The read deliberately stays on the client:
+  // `loading` was already a `useState(true)` initialiser, and the existing
+  // `if (loading)` spinner block is richer than the page's bare
+  // "Loading contact..." Suspense fallback.
+  //
+  // `related` is undefined — not zeroed — when the contact has no Contact_ID, so
+  // applying the result leaves logs/badges/family/user untouched exactly as the
+  // skipped `if (contactDetails.Contact_ID)` branch did.
+  const loadContactDetails = useCallback(async (): Promise<LoadedContact> => {
+    const contactDetails = await getContactDetails(guid);
+    if (!contactDetails.Contact_ID) return { contact: contactDetails };
 
-      const contactDetails = await getContactDetails(guid);
+    const [logs, badgeData, household, userId] = await Promise.all([
+      getContactLogsByContactId(contactDetails.Contact_ID),
+      getContactBadges(contactDetails.Contact_ID, contactDetails.Household_Position_ID),
+      contactDetails.Household_ID
+        ? getHouseholdMembers(contactDetails.Household_ID)
+        : Promise.resolve([]),
+      getCurrentUserMpUserId(),
+    ]);
+
+    return {
+      contact: contactDetails,
+      related: {
+        logs,
+        badges: badgeData,
+        currentUserId: userId,
+        familyMembers: sortHouseholdMembers(household, contactDetails.Contact_ID),
+      },
+    };
+  }, [guid]);
+
+  const applyContactDetails = useCallback(
+    ({ contact: contactDetails, related }: LoadedContact) => {
       setContact(contactDetails);
 
       // Update layout breadcrumb with contact name
@@ -152,45 +191,43 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
         { label: `${name} ${contactDetails.Last_Name}` },
       ]);
 
-      if (contactDetails.Contact_ID) {
-        const [logs, badgeData, household, userId] = await Promise.all([
-          getContactLogsByContactId(contactDetails.Contact_ID),
-          getContactBadges(contactDetails.Contact_ID, contactDetails.Household_Position_ID),
-          contactDetails.Household_ID
-            ? getHouseholdMembers(contactDetails.Household_ID)
-            : Promise.resolve([]),
-          getCurrentUserMpUserId(),
-        ]);
-        setContactLogs(logs);
-        setCurrentUserId(userId);
-        setBadges(badgeData);
-        // Filter out current contact and sort by position then DOB
-        setFamilyMembers(
-          household
-            .filter((m) => m.Contact_ID !== contactDetails.Contact_ID)
-            .sort((a, b) => {
-              const posA = a.Household_Position_ID ?? 999;
-              const posB = b.Household_Position_ID ?? 999;
-              if (posA !== posB) return posA - posB;
-              // Oldest first: earliest DOB first
-              if (!a.Date_of_Birth && !b.Date_of_Birth) return 0;
-              if (!a.Date_of_Birth) return 1;
-              if (!b.Date_of_Birth) return -1;
-              return a.Date_of_Birth.localeCompare(b.Date_of_Birth);
-            })
-        );
+      if (related) {
+        setContactLogs(related.logs);
+        setCurrentUserId(related.currentUserId);
+        setBadges(related.badges);
+        setFamilyMembers(related.familyMembers);
       }
-    } catch (err) {
-      console.error("Error loading contact details:", err);
-      const errorMessage =
-        err instanceof Error
-          ? err.message
-          : "An error occurred while loading contact details";
-      setError(errorMessage);
-    } finally {
       setLoading(false);
+    },
+    [setBreadcrumb]
+  );
+
+  const handleLoadError = useCallback((err: unknown) => {
+    console.error("Error loading contact details:", err);
+    setError(
+      err instanceof Error ? err.message : "An error occurred while loading contact details"
+    );
+    setLoading(false);
+  }, []);
+
+  // Event-handler reload, used by the refresh control and after a photo upload.
+  // setState is unrestricted here, so this is where the synchronous resets live —
+  // on mount they were all no-ops against the initial state anyway.
+  //
+  // Deliberately a FULL reload, not router.refresh(): the "Last Activity" badge is
+  // derived server-side by getContactBadges, so a partial refresh would silently
+  // stop it flipping to "Today".
+  const refreshContactDetails = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setGroups(null);
+    setGroupsOpen(false);
+    try {
+      applyContactDetails(await loadContactDetails());
+    } catch (err) {
+      handleLoadError(err);
     }
-  };
+  }, [loadContactDetails, applyContactDetails, handleLoadError]);
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -212,7 +249,7 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
         setPhotoError(result.error || "Upload failed");
         return;
       }
-      await fetchContactDetails();
+      await refreshContactDetails();
     } catch (err) {
       console.error("Photo upload failed:", err);
       setPhotoError("Failed to upload photo");
@@ -286,12 +323,23 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
     }
   };
 
+  // Mount load. Every setState lives in the async continuation; the initial
+  // `loading: true` comes from the useState initialiser above, so nothing has to be
+  // set synchronously here.
   useEffect(() => {
-    if (guid) {
-      fetchContactDetails();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [guid]);
+    if (!guid) return;
+    let cancelled = false;
+    loadContactDetails()
+      .then((data) => {
+        if (!cancelled) applyContactDetails(data);
+      })
+      .catch((err) => {
+        if (!cancelled) handleLoadError(err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [guid, loadContactDetails, applyContactDetails, handleLoadError]);
 
   const getImageUrl = (imageGuid: string) => {
     return `${mpFileUrl}/${imageGuid}?$thumbnail=true`;
@@ -757,7 +805,7 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
             contactNickname={contact.Nickname}
             contactLastName={contact.Last_Name}
             currentUserId={currentUserId}
-            onRefresh={fetchContactDetails}
+            onRefresh={refreshContactDetails}
           />
         </div>
       </div>
