@@ -123,16 +123,22 @@ describe("ManageMembersShell", () => {
   it("opens the deep-linked member and fetches its detail", async () => {
     renderShell(2);
 
-    const dialog = await screen.findByRole("dialog");
-    expect(dialog.textContent).toContain("Bob Tester");
+    await screen.findByRole("dialog");
+    // waitFor, not a bare assertion: the modal body is gated on `loading`, so the
+    // name is absent until fetchMemberDetail resolves.
+    await waitFor(() =>
+      expect(screen.getByRole("dialog").textContent).toContain("Bob Tester")
+    );
     expect(mockFetchMemberDetail).toHaveBeenCalledWith(2);
   });
 
   it("does not re-apply the deep link when a later save refreshes the list", async () => {
     renderShell(1);
 
-    const dialog = await screen.findByRole("dialog");
-    expect(dialog.textContent).toContain("Alice Tester");
+    await screen.findByRole("dialog");
+    await waitFor(() =>
+      expect(screen.getByRole("dialog").textContent).toContain("Alice Tester")
+    );
     closeDialog();
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
