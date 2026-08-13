@@ -274,9 +274,18 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 ## Technical Debt
 
 ### Adopt React Compiler lint rules from eslint-plugin-react-hooks 7.1 ([#197](https://github.com/The-Moody-Church/mp-charts/issues/197))
-`eslint-config-next` 16.3.0 pulls in `eslint-plugin-react-hooks` 7.1, which adds the React Compiler rules `set-state-in-effect`, `immutability` and `incompatible-library`. They flag 19 pre-existing violations — 18 × `set-state-in-effect` across 14 processing/admin components (the "load data in `useEffect`, then `setState`" shape), plus 1 `immutability` error in `contact-lookup-search.tsx` and 1 `incompatible-library` warning in `contact-logs.tsx`.
+`eslint-config-next` 16.3.0 pulls in `eslint-plugin-react-hooks` 7.1, which adds the React Compiler rules `set-state-in-effect`, `immutability` and `incompatible-library`. They flagged 20 pre-existing violations across 17 files — no new code triggered them.
 
-They are currently downgraded to `warn` in `eslint.config.mjs` so `npm run lint` stays green. Fixing them properly means restructuring data loading in those components — moving fetches out of effects, deriving state during render, or using the existing `'use cache'` / server-component patterns — which is behavior-affecting and was deliberately kept out of the August 2026 security bump. Once fixed, restore both rules to `error` and delete the override block.
+**Progress (2026-08-07):** two of the three rules are done and enforced at `error`:
+- `react-hooks/immutability` — the "Active contacts only" toggle re-ran the search from an effect that called `handleSearch` before its `const` declaration. Now runs from the checkbox's `onChange` with a **required** scope parameter, so the type checker catches the stale-value bug the effect existed to dodge.
+- `react-hooks/incompatible-library` — `watch()` opted `contact-logs` out of React Compiler optimisation entirely; swapped for `useWatch({ control, name })`.
+
+`set-state-in-effect` is at **16 of 18** remaining and stays `warn` until the last site lands. Full per-site plan, risk ranking, traps and manual test checklist: `.claude/notes/react-compiler-lint-plan.md`.
+
+Three findings from the analysis worth carrying forward:
+- **The rule under-approximates.** It walks only an effect's own basic blocks and never descends into nested function expressions, so a loader declared *inside* the effect hides the identical pattern (`contact-logs.tsx:186` was invisible to lint). There is a one-line non-fix at every remaining site — wrap the body in a nested async function and the warning disappears with the pattern intact. Reject any diff whose only structural change is nesting depth.
+- **Dynamic segments remount.** `/journey/[slug]` and `/contact-lookup/[guid]` are part of the router cache key, so navigating between records remounts. This retires a proposed hand-rolled loading state machine and closes a suspected `defaultValues` data-integrity bug that turns out to be unreachable.
+- **Finding C, unresolved.** `cacheComponents: true` wraps segments in `<Activity mode="hidden">`, and React destroys/recreates hidden effects — so mount fetches currently re-run on Back-navigation. Moving those reads to Server Components seeds `useState`, whose initializers do *not* re-run on Activity restore, which would delete that refresh. Next's `staleTimes.dynamic` defaults to `0` (and `await connection()` makes these routes dynamic), which predicts Back still refetches — but this needs a signed-in browser to confirm and affects the 5 remaining Shape 1 sites.
 
 ### Upgrade TypeScript 5.9 to 6.0 ([#136](https://github.com/The-Moody-Church/mp-charts/issues/136))
 Upgrade from TypeScript 5.9.3 to 6.0.x. TS 6.0 is a transition release (last JS-based compiler before TS 7.0 in Go). Main required change: add `"types": ["node"]` to tsconfig.json (default changed from `["*"]` to `[]`). Also simplify lib array, verify `noUncheckedSideEffectImports`. Wait until mid-April 2026 for ecosystem stability across Next.js 16, Zod v4, Vitest, and typescript-eslint.

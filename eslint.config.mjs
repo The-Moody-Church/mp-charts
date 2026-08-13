@@ -31,13 +31,19 @@ const eslintConfig = defineConfig([
     // code triggered them — dominated by the "load data in useEffect, then setState"
     // shape used across 14 processing/admin components.
     //
-    // Downgraded to "warn" so they stay visible without blocking `npm run lint`.
-    // Fixing them properly means restructuring data loading in those components,
-    // which is a behavior-affecting refactor and does not belong in a security
-    // dependency bump. Tracked in docs/ideas.md ("Adopt React Compiler lint rules").
+    // `set-state-in-effect` stays "warn" while the remaining sites are migrated
+    // component-by-component; it flips back to "error" when the last one lands.
+    // Tracked in docs/ideas.md ("Adopt React Compiler lint rules").
+    //
+    // `immutability` and `incompatible-library` are NOT downgraded — their
+    // violations (contact-lookup-search.tsx and contact-logs.tsx) are fixed.
+    // `incompatible-library` is pinned to "error" rather than left at its
+    // Recommended-preset "warn" so a future useForm().watch() or a similarly
+    // uncompilable library call fails CI instead of silently opting a component
+    // out of React Compiler optimisation.
     rules: {
       "react-hooks/set-state-in-effect": "warn",
-      "react-hooks/immutability": "warn",
+      "react-hooks/incompatible-library": "error",
     },
   },
 ]);
