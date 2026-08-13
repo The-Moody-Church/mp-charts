@@ -364,16 +364,57 @@ assertion was real and the *reachability* was the problem:
 Mutation-testing every characterization test is not optional for this kind of work. A test that survives
 its own bug reads as coverage.
 
+## Post-series: Finding C resolved — 2026-08-13
+
+Deployed the stack to TMC1 via `:dev` and ran the experiment the plan had been deferring since 2026-08-07.
+**It reproduces.**
+
+Edited `data/compliance-tools.json` in the `mpcharts_data` volume (disabled Stillson Residents),
+navigated to `/admin`, hit Back — the grid still read "Enabled". A hard refresh, which re-runs the RSC,
+showed "Disabled".
+
+**The plan's prediction was wrong, and it was wrong about the layer.** §0 argued that
+`staleTimes.dynamic: 0` plus `await connection()` would keep Back refreshing. The router cache is not
+what breaks. React destroys a hidden `<Activity>`'s effects and re-creates them on restore but
+**preserves state** — so a client component seeded from RSC props survives with its stale `useState`
+value and has no effect left to re-run. Before PR 1 the mount fetch lived in an effect, which is exactly
+why Back used to refresh. Two days of analysis pointed at the wrong mechanism; two minutes in a browser
+settled it.
+
+**Fixed** in both admin grids: re-read on mount and on Activity restore, server-side read kept so first
+paint is unchanged.
+
+### The mistake worth recording
+
+I told the user the fix was a one-line `useEffect(() => { reloadConfig(); }, [reloadConfig])`, reasoning
+that every setState inside `reloadConfig` is post-await and therefore legal. **Lint rejected it.** The
+rule flags a `useCallback` loader invoked from an effect regardless of where its setState sits — Finding
+A's asymmetry, which I had written into `eslint.config.mjs` myself two commits earlier — and it is the
+exact violation `journey-tools-admin.tsx:42` had before PR 1. I had reintroduced the thing the series
+removed.
+
+The continuation has to be **inline** for the rule to see it. Also corrected: I priced the duplicate read
+as "a 7.7 KB disk read", which is true of the compliance grid but not the journey one, whose
+`reloadConfig` resolves program and group names through the MP API.
+
+### Scope
+
+These two screens only. Corrections B, D, E and F meant nothing else in the series moved server-side, so
+nothing else was exposed. The knock-on is for the deferred contact-detail server read in `ideas.md`: its
+Finding C prerequisite is now a **confirmed blocker** rather than an open question, and it needs this
+same mitigation — on that screen the staleness would hit the "Last Activity" badge, not an admin grid.
+
 ## Remaining — nothing in this series
 
-The series is complete. What's left is yours, not mine:
+The series is complete, and the first item of the end-to-end pass (Finding C) is done — it found a real
+regression, which is what that pass is for. What's left:
 
-**The end-to-end pass.** Eight PRs are stacked and unmerged on `fix/react-compiler-tool-editors` (on top
+**The rest of the end-to-end pass.** Eight PRs are stacked and unmerged on `fix/react-compiler-tool-editors` (on top
 of PR #200's branch) precisely so this happens once. The per-PR manual checklists in §6 of the plan note
 accumulate for it. Highest-value items, in order:
 
-1. **Finding C** — `/admin/compliance-tools` → edit `data/compliance-tools.json` on disk → `/admin` →
-   Back. Does the grid show the new value? Only the admin grids depend on it now.
+1. ~~**Finding C**~~ — done 2026-08-13. Reproduced, fixed, needs one re-verification on the next `:dev`
+   build to confirm the mitigation works.
 2. **Modal reopen, both processing screens** — open a participant, close, reopen the *same* one: the
    detail must refetch. Then check that notes/date/milestone typed for one participant are gone when the
    next one opens (Ruling 1, now in effect).

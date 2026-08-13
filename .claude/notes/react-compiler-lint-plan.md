@@ -21,11 +21,27 @@ compliance detail modals exactly **three** survived a close/reopen — `mileston
 boolean. Clearing them closed a wrong-write path (notes typed for Alice submitted against Bob) and made
 `milestoneDate` re-evaluate to today on every open instead of once per mount.
 
-**Ruling 2 — Finding C deferred to the end-to-end pass.** Never resolved, and it never had to be: see
-the final tally below. The prediction stands (`staleTimes.dynamic` defaults to `0` and
-`await connection()` makes these routes dynamic, so Back should still refetch). The experiment surface
-exists from PR 1: load `/admin/compliance-tools`, edit `data/compliance-tools.json` on disk, navigate to
-`/admin`, hit Back, check whether the grid updated.
+**Finding C — RESOLVED 2026-08-13, and it REPRODUCES.** Run on TMC1 with `:dev`: edited
+`data/compliance-tools.json` in the `mpcharts_data` volume, navigated to `/admin`, hit Back — the grid
+still showed the old value. A hard refresh, which re-runs the RSC, picked it up.
+
+**The plan's prediction was wrong.** §0 reasoned that `staleTimes.dynamic: 0` plus `await connection()`
+would keep Back refreshing. That analysis was aimed at the wrong layer: the router cache is not what
+breaks. React destroys a hidden `<Activity>`'s effects and re-creates them when it becomes visible, but
+**preserves state** — so a client component seeded from RSC props survives the restore with its stale
+`useState` value and has no effect left to re-run. Before PR 1 the mount fetch lived in an effect, which
+is exactly why Back used to refresh.
+
+**Mitigation shipped** in both admin grids: re-read on mount and on Activity restore, with the fetch
+inlined in the effect. The server-side read stays, so first paint is unchanged and the effect reconciles
+behind it. Costs one duplicate read per page load — the pre-PR-1 cost returning — and note the journey
+grid's duplicate includes an MP round trip, since program/group names resolve through the API.
+
+**A trap worth recording:** the obvious version of this mitigation — `useEffect(() => { reloadConfig(); })`
+— does NOT lint, even though every setState inside `reloadConfig` is post-await. The rule flags a
+`useCallback` loader invoked from an effect wherever its setState sits (Finding A's asymmetry), and that
+is precisely the violation `journey-tools-admin.tsx:42` had before PR 1. The continuation has to be
+inline for the rule to see it.
 
 **Correction A — the file input was never at stake.** §3 and the cross-cutting notes list it among the
 fields a remount would newly clear. It isn't: `DialogContent` has no `forceMount`, so Radix unmounts the
@@ -83,8 +99,10 @@ unnecessary — derive it during render, move it to a `useState` initialiser, or
 handler — not to move the fetch to the server. Reach for a server-side move when the first paint
 genuinely needs it, as a performance decision on its own merits.
 
-Because of that, **Finding C never became load-bearing.** Its only live exposure is the PR 1 admin tool
-grids, and it remains a genuine prerequisite only for the deferred contact-detail server read.
+Because of that, Finding C's exposure was limited to the PR 1 admin tool grids — where it **did** bite,
+and is now fixed. It remains a confirmed blocker for the deferred contact-detail server read: that idea
+needs the same mount-and-restore mitigation to be worth doing, and on that screen the staleness would hit
+the "Last Activity" badge rather than an admin grid.
 
 Two more things worth keeping, both learned the hard way:
 
