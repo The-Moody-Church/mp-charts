@@ -214,9 +214,12 @@ export const ContactLookupDetails: React.FC<ContactLookupDetailsProps> = ({
   // setState is unrestricted here, so this is where the synchronous resets live —
   // on mount they were all no-ops against the initial state anyway.
   //
-  // Deliberately a FULL reload, not router.refresh(): the "Last Activity" badge is
-  // derived server-side by getContactBadges, so a partial refresh would silently
-  // stop it flipping to "Today".
+  // Deliberately a FULL reload, not router.refresh(): every badge comes from
+  // getContactBadges, which is only re-run by reloading the whole card, so a partial
+  // refresh would leave membership status, in-group/serving and last activity stale.
+  // (An earlier version of this comment claimed a new contact log makes the "Last
+  // Activity" badge flip to "Today" — it does not. That badge reads MP's
+  // Activity_Log, not Contact_Log. See getLastActivityDate in contactService.)
   const refreshContactDetails = useCallback(async () => {
     setLoading(true);
     setError(null);
