@@ -22,7 +22,7 @@ import {
   type MPGroup,
   type MPGroupRole,
 } from "./actions";
-import { generateUniqueSlug, type JourneyToolConfig, type JourneyMilestoneConfig } from "@/lib/journey-tools-config-types";
+import { mergeSavedMilestones, generateUniqueSlug, type JourneyToolConfig, type JourneyMilestoneConfig } from "@/lib/journey-tools-config-types";
 
 interface JourneyToolEditorProps {
   existingTool?: JourneyToolConfig | null;
@@ -78,11 +78,20 @@ export function JourneyToolEditor({ existingTool, existingSlugs, usedJourneyIds,
   useEffect(() => {
     async function load() {
       try {
-        const [j, p, g, gr] = await Promise.all([
+        const [j, p, g, gr, mpMilestones] = await Promise.all([
           getAvailableJourneys(),
           getAvailablePrograms(),
           getAvailableGroups(),
           getAvailableGroupRoles(),
+          // Isolated catch: a milestone failure must not blank the four
+          // dropdowns or raise the reference-data error banner. The effect this
+          // replaces had its own .catch() with exactly that effect.
+          existingTool?.journeyId
+            ? getJourneyMilestones(existingTool.journeyId).catch((err) => {
+                console.error("Failed to load milestones:", err);
+                return null;
+              })
+            : Promise.resolve(null),
         ]);
         setJourneys(j);
         setGroupRoles(gr);
@@ -106,6 +115,11 @@ export function JourneyToolEditor({ existingTool, existingSlugs, usedJourneyIds,
           const paused = await getGroupsByIds([existingTool.pausedGroupId]);
           setPausedGroups(paused);
         }
+
+        // Reconcile the saved milestone list against MP's current one.
+        if (mpMilestones) {
+          setMilestones(mergeSavedMilestones(mpMilestones, existingTool?.milestones ?? []));
+        }
       } catch (err) {
         console.error("Failed to load reference data:", err);
         setError("Failed to load configuration data from Ministry Platform.");
@@ -116,36 +130,6 @@ export function JourneyToolEditor({ existingTool, existingSlugs, usedJourneyIds,
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // When journey selection changes, fetch milestones from MP.
-  // When editing, merge with existing config to preserve custom labels/visibility/order.
-  useEffect(() => {
-    if (!selectedJourneyId) return;
-
-    setLoadingMilestones(true);
-    getJourneyMilestones(selectedJourneyId)
-      .then((mpMilestones) => {
-        const existingByIds = new Map(
-          (existingTool?.milestones ?? []).map((m) => [m.milestoneId, m])
-        );
-        const merged: JourneyMilestoneConfig[] = mpMilestones.map((m, idx) => {
-          const existing = existingByIds.get(m.Milestone_ID);
-          if (existing && isEditing && selectedJourneyId === existingTool?.journeyId) {
-            return existing;
-          }
-          return {
-            milestoneId: m.Milestone_ID,
-            label: m.Milestone_Title,
-            sortOrder: m.Sort_Order ?? idx + 1,
-            visible: true,
-          };
-        });
-        setMilestones(merged);
-      })
-      .catch((err) => console.error("Failed to load milestones:", err))
-      .finally(() => setLoadingMilestones(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedJourneyId]);
 
   // Manual refresh — re-fetch milestones from MP and merge with current in-memory edits.
   // Preserves all user changes (labels, visibility, sort order, discontinue config) and
@@ -178,13 +162,34 @@ export function JourneyToolEditor({ existingTool, existingSlugs, usedJourneyIds,
   };
 
   // Auto-generate slug and name from journey selection
-  const handleJourneySelect = (journeyId: number) => {
+  // Fetching here rather than from an effect keyed on selectedJourneyId keeps
+  // setState out of an effect body. The <select> is disabled={isEditing}, so
+  // after mount this handler is the ONLY way selectedJourneyId can change —
+  // the mount-time reconcile lives in the reference-data effect above.
+  const handleJourneySelect = async (journeyId: number) => {
     setSelectedJourneyId(journeyId);
     const journey = journeys.find((j) => j.Journey_ID === journeyId);
     if (journey && !isEditing) {
       setJourneyName(journey.Journey_Name);
       setDescription(journey.Description || "");
       setSlug(generateUniqueSlug(journey.Journey_Name, existingSlugs));
+    }
+
+    if (!journeyId) {
+      setMilestones([]);
+      return;
+    }
+
+    setLoadingMilestones(true);
+    try {
+      const mpMilestones = await getJourneyMilestones(journeyId);
+      // Empty `saved` — picking a different journey means fresh defaults, never
+      // a merge against the previous journey's customisations.
+      setMilestones(mergeSavedMilestones(mpMilestones, []));
+    } catch (err) {
+      console.error("Failed to load milestones:", err);
+    } finally {
+      setLoadingMilestones(false);
     }
   };
 

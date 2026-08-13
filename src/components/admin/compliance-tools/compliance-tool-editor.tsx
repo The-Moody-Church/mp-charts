@@ -34,7 +34,7 @@ import {
   type ComplianceRequirementConfig,
   type ComplianceMilestoneConfig,
 } from "@/lib/compliance-tools-config-types";
-import type { JourneyMilestoneConfig } from "@/lib/journey-tools-config-types";
+import { mergeSavedMilestones, type JourneyMilestoneConfig } from "@/lib/journey-tools-config-types";
 
 interface ComplianceToolEditorProps {
   existingTool?: ComplianceToolConfig | null;
@@ -68,7 +68,13 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
   const [selectedGroupRoleIds, setSelectedGroupRoleIds] = useState<number[]>(existingTool?.groupRoleIds ?? []);
   const [requirements, setRequirements] = useState<ComplianceRequirementConfig[]>(existingTool?.requirements ?? []);
   const [journeyId, setJourneyId] = useState<number | null>(existingTool?.journeyId ?? null);
-  const [journeyMilestones, setJourneyMilestones] = useState<ComplianceMilestoneConfig[]>(existingTool?.journeyMilestones ?? []);
+  // Deliberately `existingTool?.journeyId ? … : []`, not `?? []`. A tool whose
+  // journey has been detached in MP can still carry orphaned milestones, and the
+  // effect this initialiser replaces cleared them on mount. Reproduced, not fixed
+  // — see docs/ideas.md.
+  const [journeyMilestones, setJourneyMilestones] = useState<ComplianceMilestoneConfig[]>(
+    existingTool?.journeyId ? existingTool.journeyMilestones : []
+  );
   const [programId, setProgramId] = useState<number | null>(existingTool?.programId ?? null);
   const [trackingGroupId, setTrackingGroupId] = useState<number | null>(existingTool?.trackingGroupId ?? null);
   const [defaultGroupRoleId, setDefaultGroupRoleId] = useState<number | null>(existingTool?.defaultGroupRoleId ?? 2);
@@ -188,43 +194,43 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
   // Manual refresh — re-fetch requirements from MP and merge with current edits.
   const handleRefreshRequirements = () => fetchAndMergeRequirements(selectedGroupRoleIds);
 
-  // Load requirements on initial edit
-  useEffect(() => {
-    if (isEditing && selectedGroupRoleIds.length > 0 && requirements.length > 0) {
-      // Already have requirements from existing config, don't reload
-      return;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // When journey selection changes, fetch milestones.
+  //
+  // Fetching here rather than from an effect keyed on journeyId keeps setState out
+  // of an effect body (react-hooks/set-state-in-effect). `setJourneyId` has exactly
+  // one call site — this handler — so after mount it is the only way journeyId can
+  // change; the mount case is carried by the useState initialiser above. Note the
+  // <select> is NOT disabled while editing, unlike the journey editor's.
+  //
+  // Three branches, and they are deliberately not the journey editor's semantics:
+  // that one merges MP's list against the saved config on every load.
+  const handleJourneySelect = async (nextJourneyId: number | null) => {
+    setJourneyId(nextJourneyId);
 
-  // When journey selection changes, fetch milestones
-  useEffect(() => {
-    if (!journeyId) {
+    if (!nextJourneyId) {
       setJourneyMilestones([]);
       return;
     }
 
-    // Switching back to the saved journey — restore saved milestones
-    if (isEditing && journeyId === existingTool?.journeyId) {
+    // Switching back to the saved journey is the staff undo — restore the saved
+    // config verbatim, with no MP call and no merge.
+    if (isEditing && nextJourneyId === existingTool?.journeyId) {
       setJourneyMilestones(existingTool.journeyMilestones);
       return;
     }
 
     setLoadingMilestones(true);
-    getJourneyMilestones(journeyId)
-      .then((mpMilestones) => {
-        const newMilestones: ComplianceMilestoneConfig[] = mpMilestones.map((m, idx) => ({
-          milestoneId: m.Milestone_ID,
-          label: m.Milestone_Title,
-          sortOrder: m.Sort_Order ?? idx + 1,
-          visible: true,
-        }));
-        setJourneyMilestones(newMilestones);
-      })
-      .catch((err) => console.error("Failed to load milestones:", err))
-      .finally(() => setLoadingMilestones(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [journeyId]);
+    try {
+      const mpMilestones = await getJourneyMilestones(nextJourneyId);
+      // Empty `saved` — picking a different journey means fresh defaults, never a
+      // merge against the previous journey's customisations.
+      setJourneyMilestones(mergeSavedMilestones(mpMilestones, []));
+    } catch (err) {
+      console.error("Failed to load milestones:", err);
+    } finally {
+      setLoadingMilestones(false);
+    }
+  };
 
   // Manual refresh — re-fetch journey milestones from MP and merge with current edits.
   const handleRefreshMilestones = async () => {
@@ -553,7 +559,7 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
             <select
               id="journey-select"
               value={journeyId ?? ""}
-              onChange={(e) => setJourneyId(e.target.value ? Number(e.target.value) : null)}
+              onChange={(e) => handleJourneySelect(e.target.value ? Number(e.target.value) : null)}
               className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base sm:text-sm shadow-sm"
             >
               <option value="">No journey attached</option>

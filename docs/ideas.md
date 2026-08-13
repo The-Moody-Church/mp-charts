@@ -58,8 +58,12 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
 
 ### Technical Debt
-- [Adopt React Compiler lint rules from eslint-plugin-react-hooks 7.1 (#197)](#adopt-react-compiler-lint-rules-from-eslint-plugin-react-hooks-71-197)
+- [Server-render the contact detail page's initial read](#server-render-the-contact-detail-pages-initial-read)
+- [Member detail modal shows the old photo after upload](#member-detail-modal-shows-the-old-photo-after-upload)
+- [Compliance tool editor silently drops orphaned journey config](#compliance-tool-editor-silently-drops-orphaned-journey-config)
+- [Blank journey selection reads as ID 0, not null](#blank-journey-selection-reads-as-id-0-not-null)
 - [Upgrade TypeScript 5.9 to 6.0 (#136)](#upgrade-typescript-59-to-60-136)
+- ~~[Adopt React Compiler lint rules from eslint-plugin-react-hooks 7.1 (#197)](#adopt-react-compiler-lint-rules-from-eslint-plugin-react-hooks-71-197)~~ ✅
 - ~~[Dependency security remediation — August 2026](#dependency-security-remediation-august-2026)~~ ✅
 - ~~[IDOR Mitigation — Per-Record Authorization (#57)](#idor-mitigation-per-record-authorization-57)~~ ✅
 - ~~[Photo upload didn't work (#148)](#photo-upload-didnt-work-148)~~ ✅
@@ -273,22 +277,62 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 
 ## Technical Debt
 
-### Adopt React Compiler lint rules from eslint-plugin-react-hooks 7.1 ([#197](https://github.com/The-Moody-Church/mp-charts/issues/197))
+### Server-render the contact detail page's initial read
+`/contact-lookup/[guid]` fetches all five of its MP reads from the client after hydration — contact details, then logs + badges + household + user id in parallel. Moving them into the page's async RSC (behind a small `page-data.ts`) would save a round trip on a daily-use screen and let the data stream with the shell.
+
+Scoped out of the React Compiler remediation (2026-08-12) rather than dropped: retiring the lint warning only needed the client-side loader split, and the server-side move is MED-HIGH on its own terms. Prerequisites, from `.claude/notes/react-compiler-lint-plan.md`:
+
+- **Finding C is settled and it reproduces (verified on TMC1, 2026-08-13).** React re-creates a restored `<Activity>`'s effects but preserves state, so a component seeded from RSC props keeps its stale `useState` value on Back-navigation — only a hard refresh re-runs the RSC. This screen's "Last Activity" badge freshness is load-bearing, so the server-side read is **only** worth doing together with the mount-and-restore effect that both admin grids now use (see `compliance-tools-admin.tsx`). Note the effect must inline its fetch: calling an existing `useCallback` loader from an effect fails `react-hooks/set-state-in-effect` regardless of where its setState sits.
+- The page's Suspense fallback needs to become the equivalent spinner block, or the loading UX regresses from a centred spinner to one line of text.
+- `page-data.ts` must keep importing the `'use server'` actions so `requireFeatureAccess("contact-lookup")` and `enforceRateLimit(…, "search")` still run on every read — and the PR needs a security-review line confirming the MP call count per page load is unchanged (5).
+- `onRefresh` must stay a **full** client reload, never `router.refresh()`.
+
+### Member detail modal shows the old photo after upload
+`handlePhotoUpload` in `src/components/manage-members/member-detail-modal.tsx:84` awaits `uploadMemberPhoto`, then calls `onUpdate()` to reload the parent list — but never re-fetches `detail`. The rendered record is `detail?.member ?? member` (line 122), so once `detail` is loaded the modal keeps rendering the **stale** `fileUniqueId` and the old photo stays on screen until the modal is closed and reopened.
+
+Found during the React Compiler remediation and deliberately left reproduced so the refactor stayed behavior-preserving. Fix candidate: re-run `fetchMemberDetail` in the upload's success path, or lift the new image GUID out of the upload action's return value.
+
+### Compliance tool editor silently drops orphaned journey config
+Two related cases in `src/components/admin/compliance-tools/compliance-tool-editor.tsx`, both pre-existing and both deliberately preserved by the 2026-08-11 refactor:
+
+- **Orphaned milestones are wiped on open.** A tool saved with `journeyId: null` but a non-empty `journeyMilestones` array loses those milestones the moment the editor mounts, and the next save writes `[]`. The behavior now lives in the `useState` initializer's `existingTool?.journeyId ? … : []` ternary (previously the mount pass of the journey effect). Arguably correct — milestones with no journey can't be written to MP — but it happens with no warning to the admin.
+- **`pauseMilestoneId` is never cleared when the journey changes.** Detaching or switching the journey replaces `journeyMilestones` but leaves `pauseMilestoneId` pointing at a milestone that is no longer in the list. The pause-milestone `<select>` is hidden when there's no journey, so the stale ID survives to the save payload unseen.
+
+### Blank journey selection reads as ID 0, not null
+`src/components/admin/journey-tools/journey-tool-editor.tsx:309` does `handleJourneySelect(Number(e.target.value))` with no empty-string guard, so choosing the `<option value="">Select a journey...</option>` placeholder sets `selectedJourneyId` to `Number("") === 0` rather than `null`. Every downstream check is falsy-based so nothing breaks today, but the `<select>`'s `value` then matches no option, and any future `!== null` / `??` check on that field would read `0` as a real selection. The compliance editor's equivalent select already guards this correctly (`e.target.value ? Number(...) : null`).
+
+### Upgrade TypeScript 5.9 to 6.0 ([#136](https://github.com/The-Moody-Church/mp-charts/issues/136))
+Upgrade from TypeScript 5.9.3 to 6.0.x. TS 6.0 is a transition release (last JS-based compiler before TS 7.0 in Go). Main required change: add `"types": ["node"]` to tsconfig.json (default changed from `["*"]` to `[]`). Also simplify lib array, verify `noUncheckedSideEffectImports`. Wait until mid-April 2026 for ecosystem stability across Next.js 16, Zod v4, Vitest, and typescript-eslint.
+
+### ~~Adopt React Compiler lint rules from eslint-plugin-react-hooks 7.1 ([#197](https://github.com/The-Moody-Church/mp-charts/issues/197))~~ ✅ COMPLETED
 `eslint-config-next` 16.3.0 pulls in `eslint-plugin-react-hooks` 7.1, which adds the React Compiler rules `set-state-in-effect`, `immutability` and `incompatible-library`. They flagged 20 pre-existing violations across 17 files — no new code triggered them.
 
 **Progress (2026-08-07):** two of the three rules are done and enforced at `error`:
 - `react-hooks/immutability` — the "Active contacts only" toggle re-ran the search from an effect that called `handleSearch` before its `const` declaration. Now runs from the checkbox's `onChange` with a **required** scope parameter, so the type checker catches the stale-value bug the effect existed to dodge.
 - `react-hooks/incompatible-library` — `watch()` opted `contact-logs` out of React Compiler optimisation entirely; swapped for `useWatch({ control, name })`.
 
-`set-state-in-effect` is at **16 of 18** remaining and stays `warn` until the last site lands. Full per-site plan, risk ranking, traps and manual test checklist: `.claude/notes/react-compiler-lint-plan.md`.
+**All 20 violations are fixed and all three rules are enforced at `error`** (2026-08-12). Full per-site plan, risk ranking, traps and manual test checklist: `.claude/notes/react-compiler-lint-plan.md`.
+
+**Progress (2026-08-11):** both admin tool editors done (plan's PR 2). The journey and compliance milestone-load effects moved into their `<select>` change handlers — separately, because the compliance select isn't `disabled={isEditing}` and its three branches have different semantics (switching back to the saved journey is a staff undo that must restore verbatim with no MP call). A dead no-op effect in the compliance editor was deleted. Three pre-existing bugs found along the way were deliberately reproduced rather than fixed mid-refactor; they are the three entries above.
+
+**Progress (2026-08-11, cont.):** summer-blast done (plan's PR 3) — all four sites in one feature folder. Three decisions ratified and written into the plan note: (1) a modal remount **clears** unsaved form state, which costs nothing in summer-blast but discards `milestoneNotes` / `milestoneDate` / `selectedMilestoneKey` in the processing modals next PR; (2) summer-blast is **Shape 1b**, not Shape 1 — its page fallback is one line of text where the component renders header + tabs + skeleton grid, so the read stays client-side and the real-time Back refresh survives; (3) **Finding C is deferred** to the end-to-end pass, with PRs 5–7 proceeding on the prediction that Back still refetches.
+
+**Progress (2026-08-11, cont.):** both processing families done (plan's PR 4) — six sites, two commits so a revert is per-family. Mount loads split as in summer-blast; the deep-link auto-open folded into the load continuation with the latch as a `useRef` (and a *failed* load no longer burns the link, since it never reaches the continuation); both detail modals reset by remount on a per-open counter, which is where the ratified clear-on-reopen ruling first has teeth. The plan's derived-`loading` state machine for compliance was rejected, as the plan itself concluded once Finding B landed.
+
+**Progress (2026-08-11, cont.):** manage-members done (plan's PR 5). The shell's deep-link site turned out **not** to be a Shape 1 site — the only violation was one synchronous `setHasAutoOpened(true)`, so making the latch a `useRef` retired it with no server-side move and none of the soft-navigation exposure the plan had priced. That also fixed the latch, which as state never held under StrictMode's double-invoke. The detail modal converged on the per-open key idiom. Two sites left: `contact-lookup-details` and `user-context`.
+
+**Progress (2026-08-12):** `contact-lookup-details` done (plan's PR 6) — Shape 1b rather than the planned Shape 1, the third time the plan's shape assignment didn't hold. The plan's real prize, testability, is kept: the household filter+sort moved to `src/lib/household-sort.ts` with 9 tests, out of a `setFamilyMembers()` callback nothing could reach. The deferred server-side read is filed as its own entry above. One site left: `user-context`.
+
+**Done (2026-08-12):** `user-context` landed and `set-state-in-effect` flipped to `error`. Verified enforcement by injecting a violation — lint exits 1.
+
+The plan's Shape 1 (move the read to a Server Component, seed `useState` from props) turned out to be needed at **exactly one** of the six sites it was assigned to: the PR 1 admin exemplar. Corrections B, D and E each found a smaller fix, and `user-context` made four: its two synchronous setState blocks existed only to wipe state back to its initial values, so tagging each load with the `userGuid` it was made for let the whole thing be derived instead. That also removed a real defect — the old provider served the previous user's profile and feature list while the next user's load was in flight.
+
+Because no server-side move happened outside PR 1, Finding C's exposure was limited to the admin tool grids — where it **did** bite. Settled on 2026-08-13: it reproduces, and both grids now re-read on mount and on `<Activity>` restore. The one place it genuinely blocks work is the deferred contact-detail server read, filed separately above.
 
 Three findings from the analysis worth carrying forward:
 - **The rule under-approximates.** It walks only an effect's own basic blocks and never descends into nested function expressions, so a loader declared *inside* the effect hides the identical pattern (`contact-logs.tsx:186` was invisible to lint). There is a one-line non-fix at every remaining site — wrap the body in a nested async function and the warning disappears with the pattern intact. Reject any diff whose only structural change is nesting depth.
 - **Dynamic segments remount.** `/journey/[slug]` and `/contact-lookup/[guid]` are part of the router cache key, so navigating between records remounts. This retires a proposed hand-rolled loading state machine and closes a suspected `defaultValues` data-integrity bug that turns out to be unreachable.
 - **Finding C, unresolved.** `cacheComponents: true` wraps segments in `<Activity mode="hidden">`, and React destroys/recreates hidden effects — so mount fetches currently re-run on Back-navigation. Moving those reads to Server Components seeds `useState`, whose initializers do *not* re-run on Activity restore, which would delete that refresh. Next's `staleTimes.dynamic` defaults to `0` (and `await connection()` makes these routes dynamic), which predicts Back still refetches — but this needs a signed-in browser to confirm and affects the 5 remaining Shape 1 sites.
-
-### Upgrade TypeScript 5.9 to 6.0 ([#136](https://github.com/The-Moody-Church/mp-charts/issues/136))
-Upgrade from TypeScript 5.9.3 to 6.0.x. TS 6.0 is a transition release (last JS-based compiler before TS 7.0 in Go). Main required change: add `"types": ["node"]` to tsconfig.json (default changed from `["*"]` to `[]`). Also simplify lib array, verify `noUncheckedSideEffectImports`. Wait until mid-April 2026 for ecosystem stability across Next.js 16, Zod v4, Vitest, and typescript-eslint.
 
 ### ~~Dependency security remediation — August 2026~~ ✅ COMPLETED
 Cleared all 17 open Dependabot alerts and unblocked the deploy pipeline, which had been dead since 2026-07-10: `build-scan-and-push` runs `npm audit --audit-level=high` before the Docker build, and it was exiting 1 on 6 high advisories, so no image had been published for 27 days.

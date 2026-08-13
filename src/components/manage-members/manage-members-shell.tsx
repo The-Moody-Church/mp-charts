@@ -85,6 +85,22 @@ export function ManageMembersShell({
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailMember, setDetailMember] = useState<MemberCard | null>(null);
 
+  // Per-open remount counter used as the detail modal's `key`. Keying on
+  // contactId would NOT change when the same member is reopened — this shell never
+  // clears detailMember on close, so Radix can animate out — and both the modal's
+  // refetch and its milestone-expansion reset would silently stop for exactly that
+  // case. The refetch is load-bearing: milestones come from a live MP query, not
+  // the 6h contacts cache, so a status change made elsewhere has to show up.
+  const [detailSession, setDetailSession] = useState(0);
+
+  // Every open routes through here — card click and deep link alike — so "an open
+  // is always a fresh mount" holds unconditionally.
+  const openMember = useCallback((member: MemberCard) => {
+    setDetailMember(member);
+    setDetailSession((n) => n + 1);
+    setDetailOpen(true);
+  }, []);
+
   // Transition dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<MemberCard | null>(null);
@@ -97,17 +113,23 @@ export function ManageMembersShell({
   const [refreshing, setRefreshing] = useState(false);
 
   // Deep link: auto-open modal for ?member=contactId
-  const [hasAutoOpened, setHasAutoOpened] = useState(false);
+  //
+  // The latch is a ref, not state. Nothing renders from it, and the synchronous
+  // `setHasAutoOpened(true)` was the only react-hooks/set-state-in-effect
+  // violation here — everything else already ran in the promise continuation. As
+  // state the guard was also ineffective where it could have mattered: under
+  // StrictMode's double-invoke the second run read the stale `false` from its own
+  // closure and fetched again. A ref mutates immediately, so it actually holds.
+  const hasAutoOpenedRef = useRef(false);
   useEffect(() => {
-    if (!initialMemberId || hasAutoOpened) return;
-    setHasAutoOpened(true);
+    if (!initialMemberId || hasAutoOpenedRef.current) return;
+    hasAutoOpenedRef.current = true;
 
     // Fetch detail directly — works regardless of which tab the member is on
     fetchMemberDetail(initialMemberId)
       .then((result) => {
         if (result) {
-          setDetailMember(result.member);
-          setDetailOpen(true);
+          openMember(result.member);
         } else {
           console.warn("Deep link: member not found for contactId", initialMemberId);
         }
@@ -115,8 +137,7 @@ export function ManageMembersShell({
       .catch((err) => {
         console.error("Deep link: failed to fetch member detail", err);
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialMemberId]);
+  }, [initialMemberId, openMember]);
 
   const groups = buildGroups(counts);
   const activeGroup = groups.find((g) => g.key === activeTab);
@@ -191,12 +212,6 @@ export function ManageMembersShell({
     const newPage = page + 1;
     setPage(newPage);
     loadMembers(activeStatusIds, newPage, search);
-  }
-
-  // Card click → detail modal
-  function handleCardClick(member: MemberCard) {
-    setDetailMember(member);
-    setDetailOpen(true);
   }
 
   // Transition (from detail modal or directly)
@@ -300,7 +315,7 @@ export function ManageMembersShell({
                     key={member.contactId}
                     member={member}
                     mpFileUrl={mpFileUrl}
-                    onClick={handleCardClick}
+                    onClick={openMember}
                   />
                 ))}
               </div>
@@ -338,6 +353,7 @@ export function ManageMembersShell({
 
       {/* Detail modal */}
       <MemberDetailModal
+        key={detailSession}
         member={detailMember}
         open={detailOpen}
         onOpenChange={setDetailOpen}

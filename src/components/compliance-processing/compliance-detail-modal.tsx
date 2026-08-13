@@ -196,7 +196,9 @@ export function ComplianceDetailModal({
 }: ComplianceDetailModalProps) {
   const { mpFileUrl } = useRuntimeConfig();
   const [detail, setDetail] = useState<ComplianceDetail | null>(null);
-  const [loading, setLoading] = useState(false);
+  // `true` at mount: this instance is remounted per open, and an open always
+  // starts a fetch. While it is mounted-and-closed the value renders nothing.
+  const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [milestoneNotes, setMilestoneNotes] = useState("");
   const [milestoneDate, setMilestoneDate] = useState(() => new Date().toISOString().split("T")[0]);
@@ -223,50 +225,56 @@ export function ComplianceDetailModal({
   const editFileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
+  // Load the detail. The fourteen hand-resets that used to open this effect are
+  // gone: the parent bumps a per-open counter used as this component's `key`, so
+  // every open is a fresh mount and the useState initialisers supply them. That
+  // also clears `milestoneNotes`, `milestoneDate` and `selectedMilestoneKey`,
+  // which the resets did NOT cover — notes typed for one volunteer could
+  // previously be submitted against the next one.
   useEffect(() => {
-    if (open && participant) {
-      setLoading(true);
-      setDetail(null);
-      setExpandedKey(null);
-      setRecordFiles({});
-      setReqFiles({});
-      setFileError(null);
-      setLinkCopied(false);
-      setEditingKey(null);
-      setEditError(null);
-      setShowCompleteConfirm(false);
-      setShowPauseConfirm(false);
-      setShowResumeConfirm(false);
-      setQuickActionExpanded(false);
-      setPauseNotes("");
-      getComplianceParticipantDetail(
-        slug,
-        participant.info.Contact_ID,
-        participant.info.Participant_ID,
-        participant.info.Group_Participant_ID!
-      )
-        .then((d) => {
-          setDetail(d);
-          if (d?.milestones) {
-            for (const m of d.milestones) {
-              getComplianceMilestoneFiles(slug, m.Participant_Milestone_ID)
-                .then((files) => setRecordFiles((prev) => ({ ...prev, [m.Participant_Milestone_ID]: files })))
-                .catch(() => setRecordFiles((prev) => ({ ...prev, [m.Participant_Milestone_ID]: [] })));
+    if (!open || !participant) return;
+    let cancelled = false;
+    getComplianceParticipantDetail(
+      slug,
+      participant.info.Contact_ID,
+      participant.info.Participant_ID,
+      participant.info.Group_Participant_ID!
+    )
+      .then((d) => {
+        if (cancelled) return;
+        setDetail(d);
+        if (d?.milestones) {
+          for (const m of d.milestones) {
+            getComplianceMilestoneFiles(slug, m.Participant_Milestone_ID)
+              .then((files) => {
+                if (!cancelled) setRecordFiles((prev) => ({ ...prev, [m.Participant_Milestone_ID]: files }));
+              })
+              .catch(() => {
+                if (!cancelled) setRecordFiles((prev) => ({ ...prev, [m.Participant_Milestone_ID]: [] }));
+              });
+          }
+        }
+        if (d?.checklist) {
+          for (const item of d.checklist) {
+            if (item.type !== "journey_milestone" && item.recordId) {
+              getComplianceRequirementFiles(slug, item.type, item.recordId)
+                .then((files) => {
+                  if (!cancelled) setReqFiles((prev) => ({ ...prev, [item.key]: files }));
+                })
+                .catch(() => {
+                  if (!cancelled) setReqFiles((prev) => ({ ...prev, [item.key]: [] }));
+                });
             }
           }
-          if (d?.checklist) {
-            for (const item of d.checklist) {
-              if (item.type !== "journey_milestone" && item.recordId) {
-                getComplianceRequirementFiles(slug, item.type, item.recordId)
-                  .then((files) => setReqFiles((prev) => ({ ...prev, [item.key]: files })))
-                  .catch(() => setReqFiles((prev) => ({ ...prev, [item.key]: [] })));
-              }
-            }
-          }
-        })
-        .catch((err) => console.error("Failed to load detail:", err))
-        .finally(() => setLoading(false));
-    }
+        }
+      })
+      .catch((err) => console.error("Failed to load detail:", err))
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [open, participant, slug]);
 
   const findMilestoneRecord = (key: string): ComplianceMilestoneDetail | null => {

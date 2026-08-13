@@ -3,9 +3,120 @@
 Generated 2026-08-07 from a 10-agent analysis of all 20 `react-hooks/*` violations
 introduced when next 16.3.0 pulled eslint-plugin-react-hooks 7.1.
 
-**Status:** commits on `fix/react-compiler-lint-rules` retired `immutability` and
-`incompatible-library` (both now `error`) and 2 of 18 `set-state-in-effect` sites.
-16 remain. Sections 1, 3, 4 and 6 below are the working reference for those.
+**Status: COMPLETE (2026-08-12).** All 20 violations fixed across PRs 0–8; all three rules enforced at
+`error`. Enforcement verified by injecting a violation — lint exits 1.
+
+The plan below is kept as written, because the reasoning is still the best record of why each site was
+approached the way it was. **Everything in it is superseded by the rulings and corrections in the next
+section** — read those first; §1's shape assignments in particular were wrong at four of six sites.
+
+---
+
+## Rulings and corrections (in the order they were settled)
+
+**Ruling 1 — unsaved form state clears on reopen. Ratified 2026-08-11.** A modal remount discards
+everything, including the fields the `[open]` effects did not reset. Verified: in the journey and
+compliance detail modals exactly **three** survived a close/reopen — `milestoneNotes`, `milestoneDate`,
+`selectedMilestoneKey`. Everything else in those 13–14-field effects was already reset or a transient
+boolean. Clearing them closed a wrong-write path (notes typed for Alice submitted against Bob) and made
+`milestoneDate` re-evaluate to today on every open instead of once per mount.
+
+**Finding C — RESOLVED 2026-08-13, and it REPRODUCES.** Run on TMC1 with `:dev`: edited
+`data/compliance-tools.json` in the `mpcharts_data` volume, navigated to `/admin`, hit Back — the grid
+still showed the old value. A hard refresh, which re-runs the RSC, picked it up.
+
+**The plan's prediction was wrong.** §0 reasoned that `staleTimes.dynamic: 0` plus `await connection()`
+would keep Back refreshing. That analysis was aimed at the wrong layer: the router cache is not what
+breaks. React destroys a hidden `<Activity>`'s effects and re-creates them when it becomes visible, but
+**preserves state** — so a client component seeded from RSC props survives the restore with its stale
+`useState` value and has no effect left to re-run. Before PR 1 the mount fetch lived in an effect, which
+is exactly why Back used to refresh.
+
+**Mitigation shipped and verified end-to-end** (TMC1, 2026-08-13): both admin grids re-read on mount and
+on Activity restore, with the fetch inlined in the effect. Same experiment re-run against the fix — page
+loaded showing "Enabled", config flipped out-of-band, `/admin` then Back, and the badge read "Disabled"
+with no refresh. The server-side read stays, so first paint is unchanged and the effect reconciles behind
+it. This also confirms the mechanism: effects really are re-created on Activity restore, which is what
+makes the fix work and what made the pre-PR-1 code refresh. Costs one duplicate read per page load — the pre-PR-1 cost returning — and note the journey
+grid's duplicate includes an MP round trip, since program/group names resolve through the API.
+
+**A trap worth recording:** the obvious version of this mitigation — `useEffect(() => { reloadConfig(); })`
+— does NOT lint, even though every setState inside `reloadConfig` is post-await. The rule flags a
+`useCallback` loader invoked from an effect wherever its setState sits (Finding A's asymmetry), and that
+is precisely the violation `journey-tools-admin.tsx:42` had before PR 1. The continuation has to be
+inline for the rule to see it.
+
+**Correction A — the file input was never at stake.** §3 and the cross-cutting notes list it among the
+fields a remount would newly clear. It isn't: `DialogContent` has no `forceMount`, so Radix unmounts the
+dialog subtree on close and the input's DOM node is already destroyed.
+
+**Correction B — `summer-blast-volunteers.tsx:114` is Shape 1b, not Shape 1.** The page's Suspense
+fallback is a bare `Loading Summer Blast volunteers...` text div, while the component renders the full
+header, search, tabs and a skeleton grid. Moving the read server-side would swap all of that for the one
+line — the same criterion §1 used to keep the two processing screens on 1b.
+
+**Correction C — the compliance derived-`loading` machine is rejected**, as §4 already concluded once
+Finding B landed. Recorded because §1 still lists it as the recipe for `compliance-processing.tsx:54`.
+Both processing screens use the journey split.
+
+**Correction D — `manage-members-shell.tsx:103` is not a Shape 1 site.** §1 lists it under "mount fetch →
+Server Component props" and §3 row 13 then prices the hazard that creates (a `useState` initialiser that
+won't re-run on soft navigation, so a `<Link>` to `?member=N` would stop opening the modal). None of it
+was needed: the only violation was the synchronous `setHasAutoOpened(true)`, and everything else in that
+effect already ran in the promise continuation. A `useRef` latch retires the warning outright.
+
+That also **fixed** the latch. As state it never worked under StrictMode's double-invoke — the second run
+read the stale `false` from its own closure — and in production it was unreachable, since the effect's
+only dep is `initialMemberId`, which cannot change without a navigation that remounts.
+
+**Correction E — `contact-lookup-details.tsx:291` is Shape 1b, not Shape 1.** `loading` was already a
+`useState(true)` initialiser, so the client-side split retires the warning; the component's centred
+spinner is also richer than the page's bare "Loading contact..." fallback. The planned `page-data.ts` is
+not needed and does not exist. `household-sort.ts` was still extracted with tests — that was the
+proposal's real value, and it is independent of where the fetch runs. The deferred server-side read is
+filed in `docs/ideas.md` with its prerequisites.
+
+**Correction F — `user-context.tsx:80` is not a Shape 1 site.** Its two synchronous setState blocks
+existed only to reset six state variables to their initial values (one for the no-guid case, one for
+sign-out). State that is a pure function of the session does not need storing: each load is now tagged
+with the `userGuid` it was made for, so "is this the current user's data?" is a comparison and the reset
+disappears. No `getUserBootstrap`, no layout await, no TTFB measurement, and the layout never blocks on
+MP — the risk §4 priced at HIGH. All 11 existing tests passed unchanged, so the "mandatory" replacement
+`shared-actions/user.test.ts` was moot; no server action was touched. The rewrite also fixed a defect the
+plan did not identify: the old provider served the previous user's profile and feature list while the
+next user's load was in flight.
+
+**Also settled in passing:** the per-open remount counter is one counter *per modal*, not one shared
+across a screen's modals — a shared bump remounts the other modal mid-exit-animation.
+
+---
+
+## Final tally on Shape 1 — the one lesson to carry forward
+
+§1 assigned Shape 1 ("move the read into a Server Component, seed `useState` from props") to **six**
+sites. It was the right recipe at **one**: the PR 1 admin exemplar. Corrections B, D, E and F each found
+a fix that removed the setState instead of relocating the read.
+
+The rule flags *where a setState is reachable*, so the cheapest correct fix is usually to make the state
+unnecessary — derive it during render, move it to a `useState` initialiser, or move it into an event
+handler — not to move the fetch to the server. Reach for a server-side move when the first paint
+genuinely needs it, as a performance decision on its own merits.
+
+Because of that, Finding C's exposure was limited to the PR 1 admin tool grids — where it **did** bite,
+and is now fixed. It remains a confirmed blocker for the deferred contact-detail server read: that idea
+needs the same mount-and-restore mitigation to be worth doing, and on that screen the staleness would hit
+the "Last Activity" badge rather than an admin grid.
+
+Two more things worth keeping, both learned the hard way:
+
+- **Finding A's cop-out is real and tempting.** The rule does not descend into nested function
+  expressions, so wrapping an effect body in an async IIFE silences it with the pattern intact. This is
+  now written into `eslint.config.mjs` next to the rule, where the next person will actually see it.
+- **Mutation-test every characterization test.** Four times in this migration a test passed under the
+  exact bug it was written to catch. Every time the assertion was real and the *reachability* was the
+  problem: a merge keyed on an id two fixtures never shared, `mockResolvedValue` handing back one array
+  instance so React bailed out of the re-render, a fixture whose own row the assertion filtered out, and
+  a latch that was unreachable in production to begin with.
 
 ---
 
@@ -360,7 +471,9 @@ Of 35 test files, only **3** are `.tsx`, and only **one** touches anything in th
 - **PR 2** — Edit a configured journey tool: custom labels/hidden flags/drag order intact; a milestone added in MP since configuration appears with defaults; a discontinued one is gone. Kill the MP milestone endpoint → dropdowns still populate, no red banner. Compliance editor: select "No journey attached" → milestones block disappears; re-select the saved journey → saved config returns **with no network call**.
 - **PR 3** — Card A → change role → close → card B: select reads "Temp". Same for reopening A. Volunteer A → "Remove from Group" → close → volunteer B: button collapsed.
 - **PR 4** — Deep link `?applicant=N` for a paused/completed participant: tab switches **before** the modal paints, right action set shown. Close it, save something, confirm it does not spring back. Sidebar-navigate between two journey tools; confirm skeletons, never tool A's cards under tool B's heading. Close and reopen the *same* participant → detail refetches.
-- **PR 6** — Create a contact log → "Last Activity" badge flips to **Today**. Click an email/phone pill → log list refreshes with **no** full-page spinner. Groups section starts collapsed and resets to collapsed after a full reload. Breadcrumb reads `Home / Contact Lookup / <Nickname> <LastName>` and clears on leave.
+- **PR 6** — ~~Create a contact log → "Last Activity" badge flips to **Today**.~~ **This expectation was
+  wrong** (confirmed in production 2026-08-13): the badge reads MP's `Activity_Log`, not `Contact_Log`, so
+  creating a contact log does not move it. Nothing to fix — the check itself was invalid. Click an email/phone pill → log list refreshes with **no** full-page spinner. Groups section starts collapsed and resets to collapsed after a full reload. Breadcrumb reads `Home / Contact Lookup / <Nickname> <LastName>` and clears on leave.
 - **PR 7** — Sign in as non-admin: no "Setup", correct journey/compliance entries in **both** sidebar and home grid. Sign in as admin: "Setup" present. Header avatar on first paint with no placeholder flash. Point `MINISTRY_PLATFORM_BASE_URL` at a dead host → app renders **degraded**, not the error boundary. **Measure layout TTFB cold vs. warm `UserService` cache.**
 - **PR 8** — Add Log → placeholder → pick a type → trigger updates → submit → dropdown resets.
 

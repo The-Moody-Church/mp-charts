@@ -167,7 +167,7 @@ export class ContactService {
       this.getActiveGroupParticipants(safeParticipantIds, today, [1, 11]),
       // Serving: active Group_Participant with a role that has Group_Role_Type_ID 1 (Leader) or 3 (Servant)
       this.getServingParticipants(safeParticipantIds, today),
-      // Last activity: most recent Contact_Log entry
+      // Last activity: most recent Activity_Log entry (NOT Contact_Log — see below)
       this.getLastActivityDate(safeContactId),
       // Dropped date: milestone 49 for dropped members (status 5-9)
       isDropped ? this.getDroppedMilestoneDate(safeParticipantIds) : Promise.resolve(null),
@@ -240,6 +240,17 @@ export class ContactService {
     });
   }
 
+  /**
+   * Most recent entry in MP's platform-maintained `Activity_Log`.
+   *
+   * This is NOT `Contact_Log`, despite the similar name. Creating a contact log
+   * through our API does not move this date — verified in production 2026-08-13 —
+   * so the badge means "this record was last touched in MP", not "we last reached
+   * out to this person". Don't infer otherwise from the badge label.
+   *
+   * Page 316 is Group Participants, excluded so that routine group-roster churn
+   * doesn't read as contact activity (see c028eb8, issue #92).
+   */
   private async getLastActivityDate(safeContactId: string): Promise<string | null> {
     const logs = await this.mp!.getTableRecords<{ Activity_Date: string }>({
       table: "Activity_Log",

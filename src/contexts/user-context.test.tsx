@@ -249,6 +249,66 @@ describe('UserContext', () => {
       expect(mockGetCurrentUserProfile.mock.calls.length).toBe(callsAfterInitialLoad);
     });
 
+    // ---------------------------------------------------------------------
+    // The 2026-08-12 rewrite tags each load with the userGuid it was made for and
+    // derives the context value from that, instead of clearing six state variables
+    // from an effect.
+    //
+    // The first test below is ADDED behavior — it fails against the old provider,
+    // which kept the previous user's data in state until the next load resolved.
+    // The second is a regression guard for the derivation itself: it passes both
+    // before and after, because `isLoading` used to be stored state that a session
+    // refetch couldn't disturb. Deriving it from `isPending` naively would have
+    // flashed the whole app back into a loading shell.
+    // ---------------------------------------------------------------------
+
+    it('should not serve the previous user\'s data while the next user loads', async () => {
+      const profileA = { User_ID: 1, User_GUID: 'guid-A', First_Name: 'Ann', Last_Name: 'A', roles: [], userGroups: [], userGroupIds: [1] };
+
+      mockUseSession.mockReturnValue({
+        data: { user: { id: 'id-A', userGuid: 'guid-A' } },
+        isPending: false,
+      });
+      mockGetCurrentUserProfile.mockResolvedValueOnce(profileA);
+
+      const { result, rerender } = renderHook(() => useUser(), { wrapper: createWrapper() });
+      await waitFor(() => expect(result.current.userProfile).toEqual(profileA));
+
+      // Switch identity, with user B's load left hanging.
+      mockUseSession.mockReturnValue({
+        data: { user: { id: 'id-B', userGuid: 'guid-B' } },
+        isPending: false,
+      });
+      mockGetCurrentUserProfile.mockImplementation(() => new Promise(() => {}));
+      rerender();
+
+      // The old provider kept A's profile in state until B resolved, so A's PII and
+      // A's feature list were briefly served under B's session.
+      await waitFor(() => expect(result.current.isLoading).toBe(true));
+      expect(result.current.userProfile).toBeNull();
+      expect(result.current.accessibleFeatures).toEqual([]);
+    });
+
+    it('should not flash loading when the session refetches with data already held', async () => {
+      const profile = { User_ID: 1, User_GUID: 'guid-123', First_Name: 'John', Last_Name: 'Doe', roles: [], userGroups: [], userGroupIds: [29] };
+      const sessionData = { user: { id: 'internal-id', userGuid: 'guid-123' } };
+
+      mockUseSession.mockReturnValue({ data: sessionData, isPending: false });
+      mockGetCurrentUserProfile.mockResolvedValue(profile);
+
+      const { result, rerender } = renderHook(() => useUser(), { wrapper: createWrapper() });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      // A background session refetch flips isPending while keeping the session.
+      mockUseSession.mockReturnValue({ data: sessionData, isPending: true });
+      rerender();
+
+      // isLoading is derived, so it must not turn the whole app back into a
+      // loading shell for data that is already held and still current.
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.userProfile).toEqual(profile);
+    });
+
     it('should clear a previously loaded profile when the session goes away', async () => {
       const profile = { User_ID: 1, User_GUID: 'guid-123', First_Name: 'John', Last_Name: 'Doe', roles: [], userGroups: [], userGroupIds: [29] };
 

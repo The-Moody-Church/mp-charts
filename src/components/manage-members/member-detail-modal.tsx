@@ -34,7 +34,9 @@ export function MemberDetailModal({
   onUpdate,
 }: MemberDetailModalProps) {
   const [detail, setDetail] = useState<MemberDetail | null>(null);
-  const [loading, setLoading] = useState(false);
+  // `true` at mount: this instance is remounted per open, and an open always
+  // starts a fetch. While it is mounted-and-closed the value renders nothing.
+  const [loading, setLoading] = useState(true);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -46,18 +48,26 @@ export function MemberDetailModal({
 
   const mpBaseOrigin = mpFileUrl ? new URL(mpFileUrl).origin : null;
 
+  // Load the detail. The close-branch resets are gone: the parent bumps a per-open
+  // counter used as this component's `key`, so every open is a fresh mount and the
+  // useState initialisers supply detail/expandedId/recordFiles.
   useEffect(() => {
-    if (!open || !member) {
-      setDetail(null);
-      setExpandedId(null);
-      setRecordFiles({});
-      return;
-    }
-
-    setLoading(true);
+    if (!open || !member) return;
+    let cancelled = false;
     fetchMemberDetail(member.contactId)
-      .then(setDetail)
-      .finally(() => setLoading(false));
+      .then((d) => {
+        if (!cancelled) setDetail(d);
+      })
+      // The old chain had no .catch at all, so a failed fetch surfaced as an
+      // unhandled rejection. Same visible outcome (the body falls back to "No
+      // membership milestones recorded"), logged rather than thrown.
+      .catch((err) => console.error("Failed to load member detail:", err))
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [open, member]);
 
   const handleToggleExpand = useCallback(async (milestoneRecordId: number) => {

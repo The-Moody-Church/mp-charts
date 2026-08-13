@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -44,14 +44,6 @@ export function IntakeDetailModal({
   const [selectedRoleId, setSelectedRoleId] = useState<string>("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  React.useEffect(() => {
-    if (open) {
-      setSelectedRoleId("");
-      setError(null);
-      setActionLoading(null);
-    }
-  }, [open]);
 
   if (!card) return null;
 

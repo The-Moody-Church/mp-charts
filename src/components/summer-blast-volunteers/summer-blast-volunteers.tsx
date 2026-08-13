@@ -42,6 +42,11 @@ interface Props {
   tempGroupRoleId: number;
 }
 
+interface LoadedData {
+  intakeData: SummerBlastIntakeCard[];
+  volunteerData: SummerBlastVolunteerCard[];
+}
+
 function formatCutoffLabel(eventEndDate: string): string {
   // eventEndDate is "YYYY-MM-DD" in CT.
   const [y, m, d] = eventEndDate.split("-").map(Number);
@@ -74,6 +79,18 @@ export function SummerBlastVolunteers({
   const [selectedVolunteer, setSelectedVolunteer] = useState<SummerBlastVolunteerCard | null>(null);
   const [volunteerModalOpen, setVolunteerModalOpen] = useState(false);
 
+  // Per-open remount counters, bumped in the card click handlers and used as the
+  // modals' `key`. Deliberately NOT the record id: neither `selectedIntake` nor
+  // `selectedVolunteer` is cleared on close (Radix needs the record to animate
+  // out), so a record-id key would not change when the SAME record is reopened —
+  // the reset would silently stop happening for exactly that case, leaving a
+  // stale Group_Role_ID or a pre-armed "Confirm Remove" behind.
+  //
+  // One counter per modal, not one shared: a shared bump would remount the other
+  // modal mid-exit-animation.
+  const [intakeSession, setIntakeSession] = useState(0);
+  const [volunteerSession, setVolunteerSession] = useState(0);
+
   // Bulk selection for the Signups tab — selected response IDs
   const [bulkSelected, setBulkSelected] = useState<Set<number>>(new Set());
   const [bulkSubmitting, setBulkSubmitting] = useState(false);
@@ -92,34 +109,33 @@ export function SummerBlastVolunteers({
   }, []);
   const clearBulkSelection = useCallback(() => setBulkSelected(new Set()), []);
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [intakeData, volunteerData] = await Promise.all([
-        getSummerBlastIntake(),
-        getSummerBlastVolunteers(),
-      ]);
-      setIntake(intakeData);
-      setVolunteers(volunteerData);
-    } catch (err) {
-      console.error("Failed to load Summer Blast data:", err);
-      setError("Failed to load data. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+  // Pure fetch — returns data and touches no state, so calling it from an effect
+  // body is legal. The read deliberately stays on the client: this screen exists
+  // to show real-time signups (its cache layer was removed on purpose in 4d521c2),
+  // and the page's Suspense fallback is a bare line of text, so moving the read
+  // into the RSC would replace the header, tabs and skeleton grid with it.
+  const loadAll = useCallback(async (): Promise<LoadedData> => {
+    const [intakeData, volunteerData] = await Promise.all([
+      getSummerBlastIntake(),
+      getSummerBlastVolunteers(),
+    ]);
+    return { intakeData, volunteerData };
   }, []);
 
-  useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
-
-  // Drop selections for response IDs that are no longer in the intake list
-  // (e.g., after a bulk add closes their Responses).
-  useEffect(() => {
+  const applyData = useCallback(({ intakeData, volunteerData }: LoadedData) => {
+    setIntake(intakeData);
+    setVolunteers(volunteerData);
+    // Drop selections for response IDs that are no longer in the intake list
+    // (e.g., after a bulk add closes their Responses). Pruned here against the
+    // resolved data rather than from an effect keyed on `intake` — `setIntake` has
+    // no other call site, so this runs exactly when the list changes.
+    //
+    // Deriving `bulkSelected ∩ present` during render instead would leave the
+    // stale IDs in state forever, so a re-opened Opportunity Response would come
+    // back pre-checked. The prune has to be permanent.
     setBulkSelected((prev) => {
       if (prev.size === 0) return prev;
-      const present = new Set(intake.map((c) => c.responseId));
+      const present = new Set(intakeData.map((c) => c.responseId));
       let changed = false;
       const next = new Set<number>();
       prev.forEach((id) => {
@@ -128,7 +144,44 @@ export function SummerBlastVolunteers({
       });
       return changed ? next : prev;
     });
-  }, [intake]);
+    setLoading(false);
+  }, []);
+
+  const handleLoadError = useCallback((err: unknown) => {
+    console.error("Failed to load Summer Blast data:", err);
+    setError("Failed to load data. Please try again.");
+    setLoading(false);
+  }, []);
+
+  // Mount load. Every setState lives in the async continuation; the initial
+  // `loading: true` comes from the useState initialiser above, which is why
+  // nothing has to be set synchronously here.
+  useEffect(() => {
+    let cancelled = false;
+    loadAll()
+      .then((data) => {
+        if (!cancelled) applyData(data);
+      })
+      .catch((err) => {
+        if (!cancelled) handleLoadError(err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadAll, applyData, handleLoadError]);
+
+  // Event-handler refresh, called after a modal write or a bulk add. setState is
+  // unrestricted here, so unlike the mount path this one puts the grids back into
+  // their loading state first.
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      applyData(await loadAll());
+    } catch (err) {
+      handleLoadError(err);
+    }
+  }, [loadAll, applyData, handleLoadError]);
 
   const handleBulkConfirm = async () => {
     if (bulkSelected.size === 0) return;
@@ -144,7 +197,7 @@ export function SummerBlastVolunteers({
         failedCount: result.failures.length,
       });
       if (result.succeededCount > 0) {
-        await fetchAll(); // succeeded IDs leave the intake list; the prune effect drops them from selection. Failed IDs remain selected so the user can retry.
+        await refresh(); // succeeded IDs leave the intake list; applyData prunes them from the selection. Failed IDs remain selected so the user can retry.
       }
     } catch (err) {
       console.error("Bulk add failed:", err);
@@ -272,6 +325,7 @@ export function SummerBlastVolunteers({
                 card={c}
                 onClick={() => {
                   setSelectedIntake(c);
+                  setIntakeSession((n) => n + 1);
                   setIntakeModalOpen(true);
                 }}
                 cutoffDateLabel={cutoffLabel}
@@ -299,6 +353,7 @@ export function SummerBlastVolunteers({
                 card={c}
                 onClick={() => {
                   setSelectedVolunteer(c);
+                  setVolunteerSession((n) => n + 1);
                   setVolunteerModalOpen(true);
                 }}
                 cutoffDateLabel={cutoffLabel}
@@ -310,19 +365,21 @@ export function SummerBlastVolunteers({
       </Tabs>
 
       <IntakeDetailModal
+        key={intakeSession}
         card={selectedIntake}
         open={intakeModalOpen}
         onOpenChange={setIntakeModalOpen}
-        onUpdate={fetchAll}
+        onUpdate={refresh}
         roleOptions={roleOptions}
         tempGroupRoleId={tempGroupRoleId}
         cutoffDateLabel={cutoffLabel}
       />
       <VolunteerDetailModal
+        key={volunteerSession}
         card={selectedVolunteer}
         open={volunteerModalOpen}
         onOpenChange={setVolunteerModalOpen}
-        onUpdate={fetchAll}
+        onUpdate={refresh}
         cutoffDateLabel={cutoffLabel}
       />
     </div>
