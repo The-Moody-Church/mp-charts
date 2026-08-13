@@ -381,8 +381,11 @@ value and has no effect left to re-run. Before PR 1 the mount fetch lived in an 
 why Back used to refresh. Two days of analysis pointed at the wrong mechanism; two minutes in a browser
 settled it.
 
-**Fixed** in both admin grids: re-read on mount and on Activity restore, server-side read kept so first
-paint is unchanged.
+**Fixed and re-verified** in both admin grids: re-read on mount and on Activity restore, server-side read
+kept so first paint is unchanged. Ran the identical experiment against the fix — loaded the page showing
+"Enabled", flipped the config out-of-band, `/admin` then Back, badge read "Disabled" with no refresh. That
+also confirms the mechanism rather than just the symptom: effects are re-created on Activity restore,
+which is both why the fix works and why the pre-PR-1 code refreshed.
 
 ### The mistake worth recording
 
@@ -413,8 +416,7 @@ regression, which is what that pass is for. What's left:
 of PR #200's branch) precisely so this happens once. The per-PR manual checklists in §6 of the plan note
 accumulate for it. Highest-value items, in order:
 
-1. ~~**Finding C**~~ — done 2026-08-13. Reproduced, fixed, needs one re-verification on the next `:dev`
-   build to confirm the mitigation works.
+1. ~~**Finding C**~~ — done 2026-08-13. Reproduced, fixed, and the fix re-verified on `:dev`.
 2. **Modal reopen, both processing screens** — open a participant, close, reopen the *same* one: the
    detail must refetch. Then check that notes/date/milestone typed for one participant are gone when the
    next one opens (Ruling 1, now in effect).

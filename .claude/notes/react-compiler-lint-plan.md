@@ -32,9 +32,12 @@ breaks. React destroys a hidden `<Activity>`'s effects and re-creates them when 
 `useState` value and has no effect left to re-run. Before PR 1 the mount fetch lived in an effect, which
 is exactly why Back used to refresh.
 
-**Mitigation shipped** in both admin grids: re-read on mount and on Activity restore, with the fetch
-inlined in the effect. The server-side read stays, so first paint is unchanged and the effect reconciles
-behind it. Costs one duplicate read per page load — the pre-PR-1 cost returning — and note the journey
+**Mitigation shipped and verified end-to-end** (TMC1, 2026-08-13): both admin grids re-read on mount and
+on Activity restore, with the fetch inlined in the effect. Same experiment re-run against the fix — page
+loaded showing "Enabled", config flipped out-of-band, `/admin` then Back, and the badge read "Disabled"
+with no refresh. The server-side read stays, so first paint is unchanged and the effect reconciles behind
+it. This also confirms the mechanism: effects really are re-created on Activity restore, which is what
+makes the fix work and what made the pre-PR-1 code refresh. Costs one duplicate read per page load — the pre-PR-1 cost returning — and note the journey
 grid's duplicate includes an MP round trip, since program/group names resolve through the API.
 
 **A trap worth recording:** the obvious version of this mitigation — `useEffect(() => { reloadConfig(); })`
