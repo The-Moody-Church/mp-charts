@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -34,6 +34,37 @@ export function ComplianceToolsAdmin({ initialConfig, initialError }: Compliance
     } catch {
       setError("Failed to load compliance tools configuration.");
     }
+  }, []);
+
+  // Re-read on mount AND on <Activity> restore.
+  //
+  // React destroys a hidden Activity's effects and re-creates them when it becomes
+  // visible again, but PRESERVES state — so the server-seeded initialConfig goes
+  // stale on back-navigation: the useState seed survives and, once the read moved
+  // server-side, no effect was left to re-run. Confirmed on TMC1 (2026-08-13):
+  // edited the config out-of-band, navigated away, hit Back, and the grid still
+  // showed the old value; only a hard refresh, which re-runs the RSC, picked it up.
+  //
+  // The fetch is inlined rather than calling reloadConfig() because the rule flags
+  // a useCallback loader invoked from an effect regardless of where its setState
+  // sits (Finding A's asymmetry) — that is the exact violation moving this read
+  // server-side removed. Here every setState is in a continuation the rule can see.
+  //
+  // Costs one duplicate read per page load, right after the server already did it.
+  // Accepted: admin-only screen, and it is the pre-server-move cost returning
+  // rather than a new one.
+  useEffect(() => {
+    let cancelled = false;
+    getComplianceToolsConfigAction()
+      .then((data) => {
+        if (!cancelled) setConfig(data);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Failed to load compliance tools configuration.");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleAdd = () => {

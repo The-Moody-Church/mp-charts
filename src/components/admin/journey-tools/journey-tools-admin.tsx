@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -47,6 +47,41 @@ export function JourneyToolsAdmin({ initialConfig, initialNames, initialError }:
     } catch {
       setError("Failed to load journey tools configuration.");
     }
+  }, []);
+
+  // Re-read on mount AND on <Activity> restore. See the twin in
+  // compliance-tools-admin.tsx for the full reasoning; in short, React re-creates a
+  // restored Activity's effects but preserves state, so the server-seeded
+  // initialConfig went stale on back-navigation once the read moved server-side.
+  // Confirmed on TMC1 (2026-08-13).
+  //
+  // Inlined rather than calling reloadConfig(): the rule flags a useCallback loader
+  // invoked from an effect wherever its setState sits (Finding A's asymmetry), and
+  // that is the exact violation this file's server-side move removed.
+  //
+  // Note this duplicate costs an MP round trip, not just a disk read, because the
+  // program/group names are resolved through the API. Still the pre-server-move
+  // cost returning, on a screen used by about two people.
+  useEffect(() => {
+    let cancelled = false;
+    getJourneyToolsConfigAction()
+      .then(async (data) => {
+        if (cancelled) return;
+        setConfig(data);
+        const programIds = data.journeys.map((j) => j.programId).filter(Boolean) as number[];
+        const groupIds = data.journeys.flatMap((j) =>
+          [j.trackingGroupId, j.pausedGroupId].filter(Boolean) as number[]
+        );
+        if (programIds.length === 0 && groupIds.length === 0) return;
+        const resolved = await resolveToolNames(programIds, groupIds);
+        if (!cancelled) setNames(resolved);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Failed to load journey tools configuration.");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleAdd = () => {
