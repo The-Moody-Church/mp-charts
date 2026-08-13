@@ -58,10 +58,10 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
 
 ### Technical Debt
-- [Server-render the contact detail page's initial read](#server-render-the-contact-detail-pages-initial-read)
-- [Member detail modal shows the old photo after upload](#member-detail-modal-shows-the-old-photo-after-upload)
-- [Compliance tool editor silently drops orphaned journey config](#compliance-tool-editor-silently-drops-orphaned-journey-config)
-- [Blank journey selection reads as ID 0, not null](#blank-journey-selection-reads-as-id-0-not-null)
+- [Server-render the contact detail page's initial read (#202)](#server-render-the-contact-detail-pages-initial-read-202)
+- [Member detail modal shows the old photo after upload (#203)](#member-detail-modal-shows-the-old-photo-after-upload-203)
+- [Compliance tool editor silently drops orphaned journey config (#204)](#compliance-tool-editor-silently-drops-orphaned-journey-config-204)
+- [Blank journey selection reads as ID 0, not null (#205)](#blank-journey-selection-reads-as-id-0-not-null-205)
 - [Upgrade TypeScript 5.9 to 6.0 (#136)](#upgrade-typescript-59-to-60-136)
 - ~~[Adopt React Compiler lint rules from eslint-plugin-react-hooks 7.1 (#197)](#adopt-react-compiler-lint-rules-from-eslint-plugin-react-hooks-71-197)~~ ✅
 - ~~[Dependency security remediation — August 2026](#dependency-security-remediation-august-2026)~~ ✅
@@ -277,7 +277,7 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 
 ## Technical Debt
 
-### Server-render the contact detail page's initial read
+### Server-render the contact detail page's initial read ([#202](https://github.com/The-Moody-Church/mp-charts/issues/202))
 `/contact-lookup/[guid]` fetches all five of its MP reads from the client after hydration — contact details, then logs + badges + household + user id in parallel. Moving them into the page's async RSC (behind a small `page-data.ts`) would save a round trip on a daily-use screen and let the data stream with the shell.
 
 Scoped out of the React Compiler remediation (2026-08-12) rather than dropped: retiring the lint warning only needed the client-side loader split, and the server-side move is MED-HIGH on its own terms. Prerequisites, from `.claude/notes/react-compiler-lint-plan.md`:
@@ -287,18 +287,18 @@ Scoped out of the React Compiler remediation (2026-08-12) rather than dropped: r
 - `page-data.ts` must keep importing the `'use server'` actions so `requireFeatureAccess("contact-lookup")` and `enforceRateLimit(…, "search")` still run on every read — and the PR needs a security-review line confirming the MP call count per page load is unchanged (5).
 - `onRefresh` must stay a **full** client reload, never `router.refresh()`.
 
-### Member detail modal shows the old photo after upload
+### Member detail modal shows the old photo after upload ([#203](https://github.com/The-Moody-Church/mp-charts/issues/203))
 `handlePhotoUpload` in `src/components/manage-members/member-detail-modal.tsx:84` awaits `uploadMemberPhoto`, then calls `onUpdate()` to reload the parent list — but never re-fetches `detail`. The rendered record is `detail?.member ?? member` (line 122), so once `detail` is loaded the modal keeps rendering the **stale** `fileUniqueId` and the old photo stays on screen until the modal is closed and reopened.
 
 Found during the React Compiler remediation and deliberately left reproduced so the refactor stayed behavior-preserving. Fix candidate: re-run `fetchMemberDetail` in the upload's success path, or lift the new image GUID out of the upload action's return value.
 
-### Compliance tool editor silently drops orphaned journey config
+### Compliance tool editor silently drops orphaned journey config ([#204](https://github.com/The-Moody-Church/mp-charts/issues/204))
 Two related cases in `src/components/admin/compliance-tools/compliance-tool-editor.tsx`, both pre-existing and both deliberately preserved by the 2026-08-11 refactor:
 
 - **Orphaned milestones are wiped on open.** A tool saved with `journeyId: null` but a non-empty `journeyMilestones` array loses those milestones the moment the editor mounts, and the next save writes `[]`. The behavior now lives in the `useState` initializer's `existingTool?.journeyId ? … : []` ternary (previously the mount pass of the journey effect). Arguably correct — milestones with no journey can't be written to MP — but it happens with no warning to the admin.
 - **`pauseMilestoneId` is never cleared when the journey changes.** Detaching or switching the journey replaces `journeyMilestones` but leaves `pauseMilestoneId` pointing at a milestone that is no longer in the list. The pause-milestone `<select>` is hidden when there's no journey, so the stale ID survives to the save payload unseen.
 
-### Blank journey selection reads as ID 0, not null
+### Blank journey selection reads as ID 0, not null ([#205](https://github.com/The-Moody-Church/mp-charts/issues/205))
 `src/components/admin/journey-tools/journey-tool-editor.tsx:309` does `handleJourneySelect(Number(e.target.value))` with no empty-string guard, so choosing the `<option value="">Select a journey...</option>` placeholder sets `selectedJourneyId` to `Number("") === 0` rather than `null`. Every downstream check is falsy-based so nothing breaks today, but the `<select>`'s `value` then matches no option, and any future `!== null` / `??` check on that field would read `0` as a real selection. The compliance editor's equivalent select already guards this correctly (`e.target.value ? Number(...) : null`).
 
 ### Upgrade TypeScript 5.9 to 6.0 ([#136](https://github.com/The-Moody-Church/mp-charts/issues/136))
