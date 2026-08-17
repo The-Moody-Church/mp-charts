@@ -15,52 +15,21 @@ This guide provides essential information for AI assistants (like Claude) workin
 
 **Read the relevant rule file before working in that area.** The pre-commit checklist is in `context-management.md` — run it before every commit.
 
-## Commands
-
-- **Dev**: `npm run dev` (Next.js dev server)
-- **Build**: `npm run build` (production build with Turbopack, runs type checking)
-- **Lint**: `npm run lint` (ESLint — `next lint` was removed in Next.js 16, uses `eslint` directly)
-- **Generate MP Types**: `npm run mp:generate:models` (generates TypeScript types + Zod schemas from Ministry Platform API, cleans output directory first)
-- **Tests**: `npm test` (Vitest in watch mode), `npm run test:run` (single run), `npm run test:coverage` (with coverage)
-- **Setup**: `npm run setup` (interactive project setup), `npm run setup:check` (validation-only mode)
-
-### Type Generation Notes
-
-- Generated types automatically quote field names with special characters (e.g., `"Allow_Check-in"`)
-- The `mp:generate:models` script uses `--clean` flag to remove old files before regenerating
-- Manual generation with options: `tsx src/lib/providers/ministry-platform/scripts/generate-types.ts --help`
-
 ## Architecture
 
-- **Framework**: Next.js 16 (App Router, Turbopack, Cache Components/PPR) with React 19, TypeScript strict mode
-- **Ministry Platform Integration**: Custom provider at `src/lib/providers/ministry-platform/` with REST API client, auth, and type-safe models
 - **Auth**: Better Auth (`better-auth@^1.6`) with Ministry Platform OAuth via `genericOAuth` plugin (`src/lib/auth.ts`)
-  - **Server Config**: `src/lib/auth.ts` — `betterAuth()` with `genericOAuth`, `customSession`, `nextCookies()` plugins
-  - **Client Config**: `src/lib/auth-client.ts` — `createAuthClient()` with matching client plugins
-  - **Auth Helpers**: `src/lib/auth-helpers.ts` — `getSession()`, `requireSession()`, `getMpUserId()`, `getUserGuid()` for server actions
-  - **Route Handler**: `src/app/api/auth/[...all]/route.ts` — Better Auth API route
-  - **Route Protection**: `src/proxy.ts` — Next.js 16 proxy with session cookie validation via `getSessionCookie` from `better-auth/cookies`
-  - **Session Strategy**: JWT cookie-based sessions; no per-user OIDC tokens stored — services use client credentials (`MPHelper` singleton) with `$userId` for audit attribution
   - **User Fields**: `additionalFields` on user model (exported as `userAdditionalFields`): `userGuid`, `mpUserId`, `mpContactId` — populated server-side at login via `getUserInfo`/`mapProfileToUser`
     - **MANDATORY `input: true`**: All three fields MUST keep `input: true`. As of better-auth 1.6, `parseAdditionalUserInputFromProviderProfile` strips any additional field declared `input: false` before the user record is created — silently dropping our server-populated fields (breaks avatar/user menu, `getUserGuid()`, and `$userId` audit attribution). Guarded by `src/lib/auth.test.ts`. Do NOT flip these back to `input: false`.
   - **Session recovery**: If a session somehow lacks `userGuid`, `AuthWrapper` redirects to `/session-error` (a minimal recovery page with a sign-out button that lives outside the `(web)` route group so it can't redirect-loop) instead of rendering a dead app with no sign-out control.
   - **OIDC Logout**: Implements RP-initiated logout flow to properly end Ministry Platform OAuth sessions
   - **Required Environment Variables**: `MINISTRY_PLATFORM_BASE_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`
   - **MP OAuth Setup**: Requires Post-Logout Redirect URIs configured in Ministry Platform OAuth client (see README.md)
-- **Services Layer**: Singleton service classes in `src/services/` wrap MPHelper for domain logic (ContactService, ContactLogService, ComplianceProcessingService, DashboardService, FeedbackService, JourneyProcessingService, MemberService, UserService)
-- **Contexts**: React context providers in `src/contexts/` (UserProvider, RuntimeConfigProvider) composed in `src/app/providers.tsx`; session access via `authClient.useSession()` from `src/lib/auth-client.ts`
 - **Validation**: Zod v4 (`zod@^4.3`) — note: different API from Zod v3 (e.g., `z.guid()` instead of `z.string().uuid()`, type imports via `z.ZodObject<z.ZodRawShape>`)
-- **UI**: Radix UI primitives + shadcn/ui components in `src/components/ui/`, Tailwind CSS v4
-- **Path Alias**: `@/*` maps to `src/*`
 
 ## Next.js 16 Notes
 
 - **Proxy (formerly Middleware)**: Route protection lives in `src/proxy.ts` with an exported `proxy()` function (not `middleware.ts`/`middleware()`)
-- **Turbopack**: Default bundler for both `dev` and `build` — no `--turbopack` flag needed
-- **ESLint**: Uses `eslint .` directly (not `next lint`); config is native flat config in `eslint.config.mjs`
 - **Async Dynamic APIs**: `params`, `searchParams`, `cookies()`, `headers()` must always be awaited — synchronous access is removed
-- **Dev output**: `next dev` outputs to `.next/dev` (not `.next`)
-- **Cache Components (PPR)**: `cacheComponents: true` in `next.config.ts` enables Partial Prerendering — static shells pre-render at build time, dynamic content streams at request time
 
 ## Code Style
 
@@ -88,31 +57,9 @@ This guide provides essential information for AI assistants (like Claude) workin
   - For updates, set `partial: false` to require all fields (default is `partial: true` for partial updates)
   - Validation errors provide detailed feedback with record index and field-level issues
 
-## Component Organization
-
-```
-src/components/
-├── shared-actions/       # Shared actions used across features
-├── ui/                   # shadcn/ui components
-├── processing/           # Shared processing UI components (barrel export)
-├── layout/               # Layout components with barrel export (index.ts)
-│   ├── auth-wrapper.tsx  # Authentication wrapper (Server Component)
-│   ├── header.tsx        # App header with navigation
-│   ├── sidebar.tsx       # Navigation sidebar
-│   └── dynamic-breadcrumb.tsx
-├── feature-name/         # Feature components (kebab-case)
-│   ├── feature-name.tsx
-│   ├── actions.ts        # Feature-specific server actions
-│   └── index.ts          # Barrel exports
-```
-
 ## Data Flow
 
-Server actions in `actions.ts` should call **service classes** (not MPHelper directly):
-
-```
-Component -> Server Action -> Service (singleton) -> MPHelper -> Ministry Platform API
-```
+Server actions in `actions.ts` should call **service classes** (not MPHelper directly).
 
 **When writing MP queries**: Any code that builds `filter:` parameters MUST use sanitization functions. See [`.claude/rules/security.md`](.claude/rules/security.md) for the required patterns — CI will fail if `.join()` appears in filter contexts without `sanitizeIds()`.
 
@@ -131,41 +78,10 @@ Without concurrency control, bursts of 50+ simultaneous connections cause `Conne
 
 Feature visibility in the home page and sidebar is controlled by RBAC (feature-to-User-Group mappings), not environment variables. Users only see features their User Groups grant access to. Admin users (in `ADMIN_USER_GROUP_IDS` groups) see all features plus the admin settings page.
 
-**Current features:**
-- Executive Dashboard (`/dashboard`) — feature: `dashboard`
-- Contact Lookup (`/contact-lookup`) — feature: `contact-lookup`
-- Journey tools (`/journey/*`) — dynamically added from tool configuration
-- Compliance tools (`/compliance/*`) — dynamically added from tool configuration
-- Admin/Setup (`/admin`) — admin-only
-
-Feature visibility is configured in:
-- `src/components/home/home-cards.tsx` — home page feature cards
-- `src/components/layout/sidebar.tsx` — sidebar navigation items
-
-## Import Patterns
-
-- Use `@/` alias for all internal imports (e.g., `@/components/`, `@/services/`, `@/lib/`)
-- Feature components use barrel exports: `import { ContactLookup } from '@/components/contact-lookup'`
-- Auth server-side: `import { requireSession, getMpUserId } from '@/lib/auth-helpers'`
-- Auth client-side: `import { authClient } from '@/lib/auth-client'`
-- Services in actions: `import { ContactService } from '@/services/contactService'`
-- Feature-specific actions use relative path: `import { searchContacts } from './actions'`
-- **Named exports only** — no default exports
-
 ## Key Development Practices
 
-1. **Always use the `@/` path alias** for imports instead of relative paths
-2. **Prefer Server Components** - only use "use client" when absolutely necessary
-3. **Follow naming conventions strictly** - kebab-case for files/folders, PascalCase for components
-4. **Use named exports** - no default exports
-5. **Co-locate feature code** - keep actions.ts with their related components
-6. **Never manually edit generated files** - regenerate types using `npm run mp:generate:models`
-7. **Use TypeScript strict mode** - all code must be type-safe
-8. **Validate at API boundaries** - use Zod schemas with the `schema` parameter in `createTableRecords()` and `updateTableRecords()` for runtime validation
-9. **Use service classes in server actions** - call services from `src/services/`, not MPHelper directly from components or actions
-10. **Sanitize all filter parameters** - use `sanitizeIds()`, `sanitizeFilterValue()`, `sanitizeGuid()` from `filter-sanitize.ts` (see [security rules](.claude/rules/security.md))
-11. **Write tests for new testable code** - when adding or modifying functions, services, or utilities that have testable logic, include tests in the same commit (see [testing rules](.claude/rules/testing.md))
-12. **Report file changes** - after completing work, always report in chat which files were **created**, **modified**, or **removed**
+1. **Never manually edit generated files** - regenerate types using `npm run mp:generate:models`
+2. **Report file changes** - after completing work, always report in chat which files were **created**, **modified**, or **removed**
 
 ## Timezone Handling — Ministry Platform Dates
 
@@ -174,23 +90,6 @@ MP returns dates without timezone info in **US Central Time**. `new Date("2026-0
 **Rule**: Parse MP dates as local time using `parseLocalDate()` (in `src/components/contact-lookup-details/contact-lookup-details.tsx`) — extracts year/month/day components to avoid UTC shift. When sending dates to MP, use SQL format (`YYYY-MM-DD HH:MM:SS`) — convert **after** Zod validation, not before.
 
 **Sending dates to MP**: Pass ISO datetime through Zod validation, then convert to Central Time SQL format in the **service layer** using `Intl.DateTimeFormat` with `timeZone: "America/Chicago"`. Do NOT use `getHours()`/`getMinutes()` — those use server-local time, which is UTC in Docker. Reference implementation: `isoToCentralSql()` in `contactLogService.ts`. For date-only values (no meaningful time), use noon UTC (`T12:00:00.000Z`) so the date stays correct after Central conversion regardless of DST.
-
-## Validation Best Practices
-
-When working with Ministry Platform data:
-
-```typescript
-import { ContactLogSchema } from '@/lib/providers/ministry-platform/models';
-
-// Validate on create
-await mp.createTableRecords('Contact_Log', records, { schema: ContactLogSchema, $userId });
-
-// Partial validation for updates (default: partial: true)
-await mp.updateTableRecords('Contact_Log', records, { schema: ContactLogSchema, $userId });
-
-// Strict validation (all fields required)
-await mp.updateTableRecords('Contact_Log', records, { schema: ContactLogSchema, partial: false, $userId });
-```
 
 ## Reference Documents
 
