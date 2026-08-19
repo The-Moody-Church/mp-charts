@@ -1,0 +1,48 @@
+name: Nightly Audit
+
+# `npm audit --audit-level=high` is a hard deploy gate: it runs in the `verify`
+# job of docker-build-push.yml, and when it exits 1 the `build-scan-and-push`
+# job is skipped, so no image ships.
+#
+# The problem is that a red `verify` on some unrelated push looks like any other
+# CI failure — nobody connects it to "no image was pushed." That has caused
+# three silent production freezes:
+#   - 2026-07-10, after #190
+#   - a 27-day freeze discovered 2026-08-06 (see docs/status.md)
+#   - 2026-08-17, nanoid GHSA-2v37-7h3g-55p8 (this workflow's PR)
+#
+# This job runs the same audit on a schedule, against unchanged code, so a newly
+# published advisory surfaces as its own unambiguous failure the next morning
+# instead of being discovered whenever someone next tries to deploy. Same reason
+# codeql.yml carries a weekly schedule.
+
+on:
+  schedule:
+    # 07:00 America/Chicago (12:00 UTC during CDT) — before the workday, so a
+    # freeze is known about rather than discovered mid-deploy.
+    - cron: '0 12 * * *'
+  workflow_dispatch:
+
+jobs:
+  audit:
+    name: npm audit (high)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Identical to the gate in docker-build-push.yml `verify`. If this fails,
+      # deploys are already blocked — fix the advisory before merging anything.
+      - name: Audit npm dependencies
+        run: npm audit --audit-level=high
