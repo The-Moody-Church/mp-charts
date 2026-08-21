@@ -6,6 +6,20 @@ import { QueryParams, RequestBody } from "../types/provider.types";
  */
 const REQUEST_TIMEOUT_MS = 30_000;
 
+/**
+ * Strip CR/LF and other control characters from an endpoint before it is
+ * interpolated into an error message or a log line.
+ *
+ * The thrown errors below propagate to ~40 `console.error` sites, and Node's
+ * console prints `error.message` verbatim — so a newline embedded in an endpoint
+ * lets a caller forge a second log line. Callers should still validate their own
+ * path segments (see `sanitizeId` and the `encodeURIComponent` in file.service.ts);
+ * this is the last-resort net that covers every current and future caller.
+ */
+function safeEndpoint(endpoint: string): string {
+    return String(endpoint).replace(/[\x00-\x1f\x7f]/g, "");
+}
+
 export class HttpClient {
     private baseUrl: string;
     private getToken: () => string;
@@ -36,12 +50,12 @@ export class HttpClient {
             if (process.env.NODE_ENV === 'development') {
                 try {
                     const errorBody = await response.text();
-                    if (errorBody) console.warn(`[MP GET ${endpoint}] error body:`, errorBody);
+                    if (errorBody) console.warn(`[MP GET ${safeEndpoint(endpoint)}] error body:`, errorBody);
                 } catch {
                     // ignore — body is best-effort in dev
                 }
             }
-            throw new Error(`GET ${endpoint} failed: ${response.status} ${response.statusText}`);
+            throw new Error(`GET ${safeEndpoint(endpoint)} failed: ${response.status} ${response.statusText}`);
         }
 
         return await response.json() as T;
@@ -62,7 +76,7 @@ export class HttpClient {
         });
 
         if (!response.ok) {
-            throw new Error(`POST ${endpoint} failed: ${response.status} ${response.statusText}`);
+            throw new Error(`POST ${safeEndpoint(endpoint)} failed: ${response.status} ${response.statusText}`);
         }
 
         return await response.json() as T;
@@ -83,7 +97,7 @@ export class HttpClient {
         });
 
         if (!response.ok) {
-            throw new Error(`POST ${endpoint} failed: ${response.status} ${response.statusText}`);
+            throw new Error(`POST ${safeEndpoint(endpoint)} failed: ${response.status} ${response.statusText}`);
         }
 
         return await response.json() as T;
@@ -104,7 +118,7 @@ export class HttpClient {
         });
 
         if (!response.ok) {
-            throw new Error(`PUT ${endpoint} failed: ${response.status} ${response.statusText}`);
+            throw new Error(`PUT ${safeEndpoint(endpoint)} failed: ${response.status} ${response.statusText}`);
         }
 
         return await response.json() as T;
@@ -125,7 +139,7 @@ export class HttpClient {
         });
 
         if (!response.ok) {
-            throw new Error(`PUT ${endpoint} failed: ${response.status} ${response.statusText}`);
+            throw new Error(`PUT ${safeEndpoint(endpoint)} failed: ${response.status} ${response.statusText}`);
         }
 
         return await response.json() as T;
@@ -144,7 +158,7 @@ export class HttpClient {
         });
 
         if (!response.ok) {
-            throw new Error(`DELETE ${endpoint} failed: ${response.status} ${response.statusText}`);
+            throw new Error(`DELETE ${safeEndpoint(endpoint)} failed: ${response.status} ${response.statusText}`);
         }
 
         return await response.json() as T;

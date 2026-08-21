@@ -195,8 +195,13 @@ export async function getComplianceRequirementFiles(
 ): Promise<ComplianceMilestoneFileInfo[]> {
   try {
     await requireComplianceAccess(slug);
-    const table = requirementTableMap[type];
-    if (!table) throw new Error(`Unknown requirement type: ${type}`);
+    // SECURITY: use Object.hasOwn, not a truthiness check. `requirementTableMap` is
+    // a plain object literal, so `type: "constructor"` (or "__proto__") returns an
+    // inherited value that is truthy and slips past `if (!table)`. The message is
+    // static too — echoing `type` back would put client-controlled text, newlines
+    // included, into the console.error below.
+    const table = Object.hasOwn(requirementTableMap, type) ? requirementTableMap[type] : undefined;
+    if (!table) throw new Error("Unknown requirement type");
     const service = ComplianceProcessingService.getInstance(slug);
     return await service.getRecordFiles(table, recordId);
   } catch (error) {

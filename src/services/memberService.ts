@@ -1,7 +1,7 @@
 import { TransitionPayload, STATUS_TO_MILESTONE, MEMBERSHIP_JOURNEY_ID, MEMBERSHIP_PROGRAM_ID } from "@/lib/dto";
 import type { MemberMilestone, BaseFileInfo } from "@/lib/dto";
 import { MPHelper } from "@/lib/providers/ministry-platform";
-import { sanitizeIds } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
+import { sanitizeId, sanitizeIds } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
 import { nowCentral } from "@/lib/processing-utils";
 
 /** Member status lookup row. */
@@ -77,10 +77,17 @@ export class MemberService {
   // ---------------------------------------------------------------
 
   public async getMilestoneFiles(milestoneRecordId: number): Promise<BaseFileInfo[]> {
+    // SECURITY: `milestoneRecordId` arrives from a "use server" action as a
+    // type-erased React Flight argument — the `number` annotation is compile-time
+    // only. Coerce it before it reaches the MP file path. (This feature is gated by
+    // requireFeatureAccess("manage-members") rather than a per-record scope model,
+    // so there is no per-record assert to add here.)
+    const recordId = sanitizeId(milestoneRecordId);
+
     const fileBaseUrl = process.env.NEXT_PUBLIC_MINISTRY_PLATFORM_FILE_URL;
     const files = await this.mp!.getFilesByRecord({
       table: "Participant_Milestones",
-      recordId: milestoneRecordId,
+      recordId,
     });
 
     return files.map((f) => {

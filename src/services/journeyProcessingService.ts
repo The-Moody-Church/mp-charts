@@ -502,10 +502,19 @@ export class JourneyProcessingService {
   // ---------------------------------------------------------------
 
   public async getMilestoneFiles(milestoneRecordId: number): Promise<JourneyMilestoneFileInfo[]> {
+    // SECURITY: `milestoneRecordId` arrives from a "use server" action as a
+    // type-erased React Flight argument — the `number` annotation is compile-time
+    // only. Coerce it before it reaches the MP file path, and assert the record is
+    // in this tool's scope so a user of tool A cannot read tool B's file metadata
+    // (which includes the MP download URL). Every other ID-taking read in this
+    // service already does both.
+    const recordId = sanitizeId(milestoneRecordId);
+    await this.assertMilestoneRecordInScope(recordId);
+
     const fileBaseUrl = process.env.NEXT_PUBLIC_MINISTRY_PLATFORM_FILE_URL;
     const files = await this.mp.getFilesByRecord({
       table: 'Participant_Milestones',
-      recordId: milestoneRecordId
+      recordId
     });
 
     return files.map(f => {
