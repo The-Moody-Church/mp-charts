@@ -24,8 +24,14 @@ export class FileService {
                 queryParams['$default'] = defaultOnly.toString();
             }
 
+            // SECURITY: encode both path segments. `buildUrl` concatenates the
+            // endpoint onto the base URL without encoding, and fetch() then runs the
+            // result through the WHATWG URL parser, which NORMALIZES dot-segments —
+            // so an unencoded `../..` in recordId retargets the request to an
+            // arbitrary MP endpoint under the client-credentials service account.
+            // table.service.ts and procedure.service.ts already encode their segments.
             return await this.client.getHttpClient().get<FileDescription[]>(
-                `/files/${table}/${recordId}`,
+                `/files/${encodeURIComponent(table)}/${encodeURIComponent(String(recordId))}`,
                 queryParams
             );
         } catch (error) {

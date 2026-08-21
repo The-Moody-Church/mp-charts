@@ -39,6 +39,30 @@ describe('FileService', () => {
       expect(result).toEqual(files);
     });
 
+    // SECURITY regression: buildUrl concatenates the endpoint without encoding and
+    // fetch() then normalizes dot-segments, so an unencoded `../..` here would
+    // retarget the request to an arbitrary MP endpoint under the service account.
+    it('percent-encodes the recordId so a traversal cannot escape /files', async () => {
+      mockGet.mockResolvedValueOnce([]);
+      const service = createService();
+      await service.getFilesByRecord('Participant_Milestones', '../../tables/Contacts' as unknown as number);
+
+      const endpoint = mockGet.mock.calls[0][0] as string;
+      expect(endpoint).not.toContain('../');
+      expect(endpoint).toBe('/files/Participant_Milestones/..%2F..%2Ftables%2FContacts');
+
+      // The decisive check: resolving against a base must stay under /files.
+      const resolved = new URL(endpoint, 'https://mp.example.com/ministryplatformapi/');
+      expect(resolved.pathname.startsWith('/files/')).toBe(true);
+    });
+
+    it('percent-encodes the table segment too', async () => {
+      mockGet.mockResolvedValueOnce([]);
+      const service = createService();
+      await service.getFilesByRecord('../../procs/Evil', 42);
+      expect(mockGet.mock.calls[0][0]).toBe('/files/..%2F..%2Fprocs%2FEvil/42');
+    });
+
     it('passes defaultOnly param', async () => {
       mockGet.mockResolvedValueOnce([]);
       const service = createService();

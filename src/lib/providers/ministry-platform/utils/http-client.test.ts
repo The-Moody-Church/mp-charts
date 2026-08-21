@@ -33,6 +33,34 @@ describe('HttpClient', () => {
     vi.restoreAllMocks();
   });
 
+  describe('Error message sanitization', () => {
+    // SECURITY regression: thrown messages propagate to ~40 console.error sites and
+    // Node prints error.message verbatim, so a newline in the endpoint would let a
+    // caller forge a second log line.
+    it('produces a single-line message for a newline-bearing endpoint', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 404, statusText: 'Not Found' });
+      const evil = '/files/X/1\nforged-log-line';
+
+      const error = await httpClient.get(evil).catch((e: Error) => e);
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).not.toContain('\n');
+      expect((error as Error).message).toContain('forged-log-line');
+      expect((error as Error).message.split('\n')).toHaveLength(1);
+    });
+
+    it('leaves a normal endpoint untouched in the message', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 500, statusText: 'Server Error' });
+      const error = await httpClient.get('/tables/Contacts').catch((e: Error) => e);
+      expect((error as Error).message).toBe('GET /tables/Contacts failed: 500 Server Error');
+    });
+
+    it('does not alter the URL actually requested', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+      await httpClient.get('/tables/Contact_Log');
+      expect(mockFetch.mock.calls[0][0]).toBe('https://api.ministryplatform.com/tables/Contact_Log');
+    });
+  });
+
   describe('URL Building', () => {
     it('should build URL without query parameters', () => {
       const url = httpClient.buildUrl('/tables/Contacts');

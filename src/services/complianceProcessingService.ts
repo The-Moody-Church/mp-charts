@@ -573,8 +573,14 @@ export class ComplianceProcessingService {
   // ---------------------------------------------------------------
 
   public async getRecordFiles(table: string, recordId: number): Promise<ComplianceMilestoneFileInfo[]> {
+    // SECURITY: `recordId` arrives from a "use server" action as a type-erased
+    // React Flight argument — the `number` annotation is compile-time only. Coerce
+    // it before it reaches the MP file path. `table` is safe: callers resolve it
+    // from a fixed allowlist, never from raw client input.
+    const safeRecordId = sanitizeId(recordId);
+
     const fileBaseUrl = process.env.NEXT_PUBLIC_MINISTRY_PLATFORM_FILE_URL;
-    const files = await this.mp.getFilesByRecord({ table, recordId });
+    const files = await this.mp.getFilesByRecord({ table, recordId: safeRecordId });
 
     return files.map(f => {
       const ext = (f.FileExtension || '').toLowerCase().replace('.', '');
@@ -589,7 +595,12 @@ export class ComplianceProcessingService {
   }
 
   public async getMilestoneFiles(milestoneRecordId: number): Promise<ComplianceMilestoneFileInfo[]> {
-    return this.getRecordFiles('Participant_Milestones', milestoneRecordId);
+    // SECURITY: assert the milestone belongs to a participant this tool can see,
+    // so a user of tool A cannot enumerate tool B's file metadata — which carries
+    // the MP download URL (`${fileBaseUrl}/${UniqueFileId}`), not just a filename.
+    const recordId = sanitizeId(milestoneRecordId);
+    await this.assertMilestoneRecordInScope(recordId);
+    return this.getRecordFiles('Participant_Milestones', recordId);
   }
 
   public async uploadDocument(
