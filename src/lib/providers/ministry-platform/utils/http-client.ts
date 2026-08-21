@@ -17,7 +17,7 @@ const REQUEST_TIMEOUT_MS = 30_000;
  * this is the last-resort net that covers every current and future caller.
  */
 function safeEndpoint(endpoint: string): string {
-    return String(endpoint).replace(/[\x00-\x1f\x7f]/g, "");
+    return String(endpoint).replace(/[\r\n\x00-\x1f\x7f]/g, "");
 }
 
 export class HttpClient {
@@ -50,7 +50,10 @@ export class HttpClient {
             if (process.env.NODE_ENV === 'development') {
                 try {
                     const errorBody = await response.text();
-                    if (errorBody) console.warn(`[MP GET ${safeEndpoint(endpoint)}] error body:`, errorBody);
+                    // The format string is a constant and the endpoint is passed as a
+                    // separate argument — interpolating it would make this a
+                    // user-controlled format string (js/tainted-format-string).
+                    if (errorBody) console.warn('[MP GET] error body for endpoint:', safeEndpoint(endpoint), errorBody);
                 } catch {
                     // ignore — body is best-effort in dev
                 }
