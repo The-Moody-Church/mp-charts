@@ -101,4 +101,4 @@ MP stores and returns datetimes as **wall-clock values in US Central Time** with
 - **[Ministry Platform Schema](.claude/references/ministryplatform.schema.md)** - Auto-generated summary of Ministry Platform database tables, primary keys, and foreign key relationships
 - **[MP Datetime Handling](.claude/references/ministryplatform.datetimehandling.md)** - Wall-clock semantics, the `mp-datetime.ts` utility, read/write patterns per field type
 - **[MP Query Syntax](.claude/references/ministryplatform.query-syntax.md)** - `$filter`/`$select` SQL-dialect rules, `_TABLE` FK traversal, groupBy/having, common error fixes
-- **[Security Audit](.claude/notes/security-audit-2026-02-24.md)** - Full security audit report with 15 findings
+- **[Security Audits](.claude/notes/security-audit-2026-06-23.md)** - Newest full audit (2026-06-23); prior reports: [2026-05-21](.claude/notes/security-audit-2026-05-21.md) (superseded), [2026-02-24](.claude/notes/security-audit-2026-02-24.md)

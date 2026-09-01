@@ -1,5 +1,18 @@
 # Security Audit Report — 2026-05-21
 
+> **Superseded by [`security-audit-2026-06-23.md`](security-audit-2026-06-23.md).** This report was
+> authored on the never-merged branch `claude/review-mpnext-upstream-7Asdf` and landed in main on
+> 2026-09-01 as historical record, once every finding in it was fixed or superseded. Two claims are
+> corrected below as editor's notes: the #17 impact statement (better-auth ≥1.6 does not fall back to
+> a default secret in production — it throws, though only at first request) and the finding-#1 /
+> "Positive Findings" descriptions of `sanitizeLikeValue` + `LIKE_ESCAPE_CLAUSE` (that backslash-escape
+> implementation never merged; main's `sanitizeLikeValue`, landed 2026-06-24 via `9e27f7e`, uses
+> bracket-class escaping — `[%]`, `[_]`, `[[]` — and needs no ESCAPE clause).
+>
+> Finding status at landing: **#16** fixed independently via `fcfb5ae` (2026-06-24, tracked as F3 in
+> the 06-23 audit); **#17, #18, #19** fixed in the PR that landed this report (2026-09-01);
+> **#20** cleared by the dependency PRs #181/#183/#184 (2026-06-23) and later sweeps.
+
 Follow-up to the 2026-02-24 audit (which has now been updated through 2026-03-06). This audit covers the codebase as it stands on commit `1efee5f` (branch `claude/review-mpnext-upstream-7Asdf`), including all changes since the prior audit and the upstream sync work landed today.
 
 ## Executive Summary
@@ -23,17 +36,17 @@ The application's security posture remains **LOW-MEDIUM risk**, consistent with 
 
 | # | Finding | Severity | Category | Status |
 |---|---------|----------|----------|--------|
-| 16 | `deleteContactLog` missing `Made_By` ownership check | **Medium** | IDOR / Authorization | Open |
-| 17 | `BETTER_AUTH_SECRET` not validated at boot (undefined → empty signing key) | **Low** | Configuration | Open |
-| 18 | `auth.ts` returns unvalidated `profile.sub` instead of `validGuid` | **Informational** | Defensive hardening | Open |
-| 19 | `checkRateLimit` doesn't validate non-empty `userId` (defense-in-depth) | **Informational** | Defensive hardening | Open |
-| 20 | npm audit: 5 moderate vulnerabilities (better-auth, next/postcss, geist, brace-expansion) | **Low** | Dependencies | Open |
+| 16 | `deleteContactLog` missing `Made_By` ownership check | **Medium** | IDOR / Authorization | ✅ Fixed (`fcfb5ae`, 2026-06-24) |
+| 17 | `BETTER_AUTH_SECRET` not validated at boot (undefined → empty signing key) | **Low** | Configuration | ✅ Fixed (2026-09-01, boot-time fail-fast) |
+| 18 | `auth.ts` returns unvalidated `profile.sub` instead of `validGuid` | **Informational** | Defensive hardening | ✅ Fixed (2026-09-01) |
+| 19 | `checkRateLimit` doesn't validate non-empty `userId` (defense-in-depth) | **Informational** | Defensive hardening | ✅ Fixed (2026-09-01) |
+| 20 | npm audit: 5 moderate vulnerabilities (better-auth, next/postcss, geist, brace-expansion) | **Low** | Dependencies | ✅ Cleared (dep PRs #181/#183/#184 + later sweeps) |
 
 ### Prior audit findings (2026-02-24, all closed)
 
 | # | Finding | Severity | Status |
 |---|---------|----------|--------|
-| 1 | Filter injection via LIKE | High | ✅ Fixed — and now strengthened via `sanitizeLikeValue()` + `LIKE_ESCAPE_CLAUSE` (commit `1efee5f`) |
+| 1 | Filter injection via LIKE | High | ✅ Fixed — *[editor's note: the `LIKE_ESCAPE_CLAUSE` variant described here never merged; main strengthened LIKE handling with bracket-class `sanitizeLikeValue()` via `9e27f7e` on 2026-06-24]* |
 | 2 | Filter injection via IN clause | High | ✅ Fixed |
 | 3 | Open redirect on signin page | High | ✅ Fixed |
 | 4 | OIDC GUID interpolated in filter | Medium | ✅ Fixed |
@@ -134,7 +147,7 @@ export const auth = betterAuth({
 });
 ```
 
-**Description**: If `BETTER_AUTH_SECRET` is missing or empty (e.g., misconfigured deployment, typo in env var, secrets manager not loaded), the auth secret silently becomes `undefined`. Better Auth's behaviour with `secret: undefined` is to fall back to a default placeholder, which means session signing and CSRF token generation use a publicly-known key.
+**Description**: If `BETTER_AUTH_SECRET` is missing or empty (e.g., misconfigured deployment, typo in env var, secrets manager not loaded), the auth secret silently becomes `undefined`. *[Editor's note, 2026-09-01: the original claim that better-auth falls back to a publicly-known placeholder is stale for ≥1.6 — in production it throws `BetterAuthError` on a missing/default secret, but only as an un-awaited rejected promise surfacing as a 500 on the first request, and outside production (`NODE_ENV` staging/development containers) it silently accepts its built-in default secret. The residual risk was late failure and non-production default-secret acceptance; the fix converts both into a boot-time throw, skipped only during `next build` via `NEXT_PHASE`.]*
 
 The setup script (`scripts/setup.ts`) validates the variable at install time, but a production deployment that bypasses setup (e.g., Docker container with incomplete env) wouldn't trigger that check.
 
@@ -297,6 +310,8 @@ Do not blindly `npm audit fix --force` — the suggested "fix" for `next` is a d
 The upstream sync work landed today modified or added 17 files. Per-change security review:
 
 ### 1. `sanitizeLikeValue()` and `LIKE_ESCAPE_CLAUSE` — `filter-sanitize.ts`
+
+*[Editor's note, 2026-09-01: this section describes the branch's backslash-escape implementation, which never merged. Main's `sanitizeLikeValue` (landed `9e27f7e`, 2026-06-24) uses bracket-class escaping and exports no `LIKE_ESCAPE_CLAUSE`.]*
 
 - **Verdict**: Net security improvement. Strengthens prior Finding 1's remediation.
 - **Escape order**: backslash first, then `%`/`_`, then quote-doubling. Correct order — escapes the escape character before introducing it elsewhere.
