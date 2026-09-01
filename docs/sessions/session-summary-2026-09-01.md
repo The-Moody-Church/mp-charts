@@ -6,7 +6,7 @@
 2. Deploy the PR #208 build to TMC1 as `:dev`, walk through a manual test pass, then merge and return production to `:main`.
 3. Audit every branch, stash, and context doc for work that never reached a PR.
 
-## Status: COMPLETED (merge + deploy this session)
+## Status: COMPLETED — #208 merged + deployed; orphan salvaged (PRs #209/#210) and branch deleted; upstream #67–#78 reviewed with adoptions merged (PR #211) and deps refreshed (PR #215); production redeployed on the final main image
 
 ## What happened
 
