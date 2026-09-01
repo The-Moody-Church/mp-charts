@@ -70,14 +70,14 @@ export function sanitizeIdsOptional(ids: number[]): string {
  */
 export function sanitizeId(value: unknown): number {
   if (typeof value === 'number') {
-    if (!Number.isInteger(value) || value <= 0) {
+    if (!Number.isSafeInteger(value) || value <= 0) {
       throw new Error('Invalid ID');
     }
     return value;
   }
   if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
     const n = Number(value.trim());
-    if (Number.isInteger(n) && n > 0) {
+    if (Number.isSafeInteger(n) && n > 0) {
       return n;
     }
   }

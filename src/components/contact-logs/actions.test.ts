@@ -287,3 +287,36 @@ describe('contact-logs actions', () => {
     });
   });
 });
+
+/**
+ * Upstream #75 adaptation: the action boundary now routes IDs through
+ * sanitizeId(). React Flight args are type-erased, so a "number" parameter can
+ * arrive as an injection string — it must be rejected before any service call.
+ */
+describe('type-erased ID rejection (sanitizeId at the action boundary)', () => {
+  beforeEach(() => {
+    mockRequireFeatureAccess.mockResolvedValue({ user: { id: 'user-1' } });
+    mockGetMpUserId.mockReturnValue(77);
+  });
+
+  it('deleteContactLog rejects an injection string without touching the service', async () => {
+    await expect(
+      deleteContactLog('1 OR 1=1' as unknown as number)
+    ).rejects.toThrow('Failed to delete contact log');
+    expect(mockGetContactLogById).not.toHaveBeenCalled();
+    expect(mockDeleteContactLog).not.toHaveBeenCalled();
+  });
+
+  it('updateContactLog rejects an injection string without touching the service', async () => {
+    await expect(
+      updateContactLog('2; DROP TABLE Contact_Log' as unknown as number, {})
+    ).rejects.toThrow('Failed to update contact log');
+    expect(mockUpdateContactLog).not.toHaveBeenCalled();
+  });
+
+  it('getContactLogsByContactId coerces a purely numeric string id', async () => {
+    mockGetContactLogsByContactId.mockResolvedValue([]);
+    await getContactLogsByContactId('42' as unknown as number);
+    expect(mockGetContactLogsByContactId).toHaveBeenCalledWith(42);
+  });
+});

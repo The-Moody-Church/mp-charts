@@ -164,8 +164,8 @@ export class ContactLogService {
       validatedData.Contact_Date = toMpSqlDatetime(validatedData.Contact_Date);
     }
     
-    // Add the ID to the data for the update
-    const updateData = { Contact_Log_ID: contactLogId, ...validatedData };
+    // Add the ID to the data for the update (service-boundary re-validation)
+    const updateData = { Contact_Log_ID: sanitizeId(contactLogId), ...validatedData };
     
     const result = await this.mp!.updateTableRecords(
       "Contact_Log",
@@ -188,7 +188,7 @@ export class ContactLogService {
   public async deleteContactLog(contactLogId: number): Promise<void> {
     await this.mp!.deleteTableRecords(
       "Contact_Log",
-      [contactLogId]
+      [sanitizeId(contactLogId)]
     );
   }
 }

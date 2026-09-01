@@ -2,7 +2,7 @@
 
 import { requireFeatureAccess, loadFeatureAccess, saveFeatureAccess } from "@/lib/authorization";
 import { MPHelper } from "@/lib/providers/ministry-platform";
-import { sanitizeLikeValue, sanitizeIds } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
+import { sanitizeLikeValue, sanitizeId, sanitizeIds } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
 import { z } from "zod";
 import {
   loadJourneyToolsConfig,
@@ -44,9 +44,8 @@ export interface MPMilestone {
 
 export async function getJourneyMilestones(journeyId: number): Promise<MPMilestone[]> {
   await requireFeatureAccess("admin");
-  if (!Number.isFinite(journeyId) || journeyId <= 0) {
-    throw new Error("Invalid journey ID");
-  }
+  // sanitizeId over the old isFinite check: rejects floats and type-erased strings.
+  journeyId = sanitizeId(journeyId);
   const mp = new MPHelper();
   return mp.getTableRecords<MPMilestone>({
     table: "Milestones",
