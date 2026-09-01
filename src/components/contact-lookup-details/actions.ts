@@ -6,7 +6,7 @@ import { ContactLookupDetails, ContactLogDisplay, ContactLogMadeBy, HouseholdMem
 import { ContactService } from '@/services/contactService';
 import { ContactLogService } from '@/services/contactLogService';
 import { MPHelper } from '@/lib/providers/ministry-platform';
-import { sanitizeIds } from '@/lib/providers/ministry-platform/utils/filter-sanitize';
+import { sanitizeId, sanitizeIds } from '@/lib/providers/ministry-platform/utils/filter-sanitize';
 import { uploadContactPhoto } from '@/components/shared-actions/processing';
 
 export async function getContactDetails(guid: string): Promise<ContactLookupDetails> {
@@ -37,9 +37,8 @@ export async function getContactLogsByContactId(contactId: number): Promise<Cont
     const session = await requireFeatureAccess("contact-lookup");
     enforceRateLimit(session.user.id, "search"); // F9: PII reads use the stricter search tier
 
-    if (!contactId || contactId <= 0) {
-      throw new Error('Valid contact ID is required');
-    }
+    // React Flight args are type-erased — a "number" can arrive as "1 OR 1=1".
+    contactId = sanitizeId(contactId);
 
     const contactLogService = await ContactLogService.getInstance();
     const logs = await contactLogService.getContactLogsByContactId(contactId);
@@ -113,9 +112,8 @@ export async function getHouseholdMembers(householdId: number): Promise<Househol
     const session = await requireFeatureAccess("contact-lookup");
     enforceRateLimit(session.user.id, "search"); // F9: PII reads use the stricter search tier
 
-    if (!householdId || householdId <= 0) {
-      throw new Error('Valid household ID is required');
-    }
+    // React Flight args are type-erased — a "number" can arrive as "1 OR 1=1".
+    householdId = sanitizeId(householdId);
 
     const contactService = await ContactService.getInstance();
     return contactService.getHouseholdMembers(householdId);
@@ -130,9 +128,8 @@ export async function getContactBadges(contactId: number, householdPositionId?: 
     const session = await requireFeatureAccess("contact-lookup");
     enforceRateLimit(session.user.id, "search"); // F9: PII reads use the stricter search tier
 
-    if (!contactId || contactId <= 0) {
-      throw new Error('Valid contact ID is required');
-    }
+    // React Flight args are type-erased — a "number" can arrive as "1 OR 1=1".
+    contactId = sanitizeId(contactId);
 
     const contactService = await ContactService.getInstance();
     return contactService.getContactBadges(contactId, householdPositionId);
@@ -147,9 +144,8 @@ export async function getContactGroups(contactId: number): Promise<ContactGroupM
     const session = await requireFeatureAccess("contact-lookup");
     enforceRateLimit(session.user.id, "search"); // F9: PII reads use the stricter search tier
 
-    if (!contactId || contactId <= 0) {
-      throw new Error('Valid contact ID is required');
-    }
+    // React Flight args are type-erased — a "number" can arrive as "1 OR 1=1".
+    contactId = sanitizeId(contactId);
 
     const contactService = await ContactService.getInstance();
     return contactService.getContactGroupMemberships(contactId);

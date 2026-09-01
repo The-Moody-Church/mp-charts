@@ -7,6 +7,7 @@ import { ContactLogService } from "@/services/contactLogService";
 import { getMpUserId } from "@/lib/auth-helpers";
 import { requireFeatureAccess } from "@/lib/authorization";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { sanitizeId } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
 
 export async function getContactLogTypes(): Promise<ContactLogTypes[]> {
   try {
@@ -67,9 +68,8 @@ export async function updateContactLog(
       throw new Error("Unable to determine user User_ID for audit logging");
     }
 
-    if (!contactLogId || contactLogId <= 0) {
-      throw new Error("Valid Contact Log ID is required");
-    }
+    // React Flight args are type-erased — a "number" can arrive as "1 OR 1=1".
+    contactLogId = sanitizeId(contactLogId);
 
     // Verify the current user owns this contact log entry
     const contactLogService = await ContactLogService.getInstance();
@@ -111,9 +111,8 @@ export async function deleteContactLog(contactLogId: number): Promise<void> {
       throw new Error("Unable to determine user User_ID for audit logging");
     }
 
-    if (!contactLogId || contactLogId <= 0) {
-      throw new Error("Valid Contact Log ID is required");
-    }
+    // React Flight args are type-erased — a "number" can arrive as "1 OR 1=1".
+    contactLogId = sanitizeId(contactLogId);
 
     // Verify the current user owns this contact log entry before deleting.
     // Mirrors the ownership check in updateContactLog — without it any
@@ -143,9 +142,8 @@ export async function getContactLogsByContactId(contactId: number): Promise<Cont
   try {
     await requireFeatureAccess("contact-lookup");
 
-    if (!contactId || contactId <= 0) {
-      throw new Error("Valid contact ID is required");
-    }
+    // React Flight args are type-erased — a "number" can arrive as "1 OR 1=1".
+    contactId = sanitizeId(contactId);
 
     const contactLogService = await ContactLogService.getInstance();
     const results = await contactLogService.getContactLogsByContactId(contactId);
@@ -208,9 +206,8 @@ export async function getContactLogById(contactLogId: number): Promise<ContactLo
   try {
     await requireFeatureAccess("contact-lookup");
 
-    if (!contactLogId || contactLogId <= 0) {
-      throw new Error("Valid contact log ID is required");
-    }
+    // React Flight args are type-erased — a "number" can arrive as "1 OR 1=1".
+    contactLogId = sanitizeId(contactLogId);
 
     const contactLogService = await ContactLogService.getInstance();
     const result = await contactLogService.getContactLogById(contactLogId);

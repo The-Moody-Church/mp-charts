@@ -148,3 +148,23 @@ describe('sanitizeGuid', () => {
     expect(() => sanitizeGuid("'; DROP TABLE Contacts; --")).toThrow('Invalid GUID format');
   });
 });
+
+/**
+ * Safe-integer bounds (upstream #75 adaptation): beyond 2^53-1, number
+ * arithmetic silently loses precision, and the string path would coerce
+ * "9007199254740993" to the wrong number before interpolating it.
+ */
+describe('sanitizeId safe-integer bounds', () => {
+  it('accepts Number.MAX_SAFE_INTEGER', () => {
+    expect(sanitizeId(Number.MAX_SAFE_INTEGER)).toBe(Number.MAX_SAFE_INTEGER);
+  });
+
+  it('rejects 2**53 (first unsafe integer)', () => {
+    expect(() => sanitizeId(2 ** 53)).toThrow('Invalid ID');
+  });
+
+  it('rejects an unsafe-integer string instead of silently coercing it', () => {
+    // Number("9007199254740993") === 9007199254740992 — the wrong record.
+    expect(() => sanitizeId('9007199254740993')).toThrow('Invalid ID');
+  });
+});
