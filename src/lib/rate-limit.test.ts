@@ -126,3 +126,25 @@ describe("cleanup interval", () => {
     expect(result.allowed).toBe(true);
   });
 });
+
+/**
+ * Finding #19 (2026-05-21 audit): a blank identity must be denied outright —
+ * otherwise every id-less caller shares one ":tier" bucket.
+ */
+describe("blank userId fails closed", () => {
+  it("denies an empty userId on the first call", () => {
+    const result = checkRateLimit("", "general");
+    expect(result.allowed).toBe(false);
+    if (!result.allowed) {
+      expect(result.retryAfterMs).toBe(RATE_LIMITS.general.windowMs);
+    }
+  });
+
+  it("denies a whitespace-only userId", () => {
+    expect(checkRateLimit("   ", "write").allowed).toBe(false);
+  });
+
+  it("enforceRateLimit throws for a blank userId", () => {
+    expect(() => enforceRateLimit("", "general")).toThrow(/Rate limit exceeded/);
+  });
+});

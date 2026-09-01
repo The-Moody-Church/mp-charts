@@ -1,6 +1,16 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { parseAdditionalUserInputFromProviderProfile } from "better-auth/db";
-import { userAdditionalFields } from "@/lib/auth";
+import { userAdditionalFields, getMpUserInfo } from "@/lib/auth";
+
+const { mockGetTableRecords } = vi.hoisted(() => ({
+  mockGetTableRecords: vi.fn(),
+}));
+
+vi.mock("@/lib/providers/ministry-platform", () => ({
+  MPHelper: class {
+    getTableRecords = mockGetTableRecords;
+  },
+}));
 
 /**
  * Auth field-config guard.
@@ -46,5 +56,96 @@ describe("userAdditionalFields", () => {
     expect(parsed).toHaveProperty("userGuid", guid);
     expect(parsed).toHaveProperty("mpUserId", 42);
     expect(parsed).toHaveProperty("mpContactId", 99);
+  });
+});
+
+/**
+ * Finding #17 (2026-05-21 audit): the module must refuse to load without a
+ * session-signing secret — except during `next build`, where no secret is
+ * supplied (Docker builder stage, CI's bare `npm run build`).
+ */
+describe("BETTER_AUTH_SECRET fail-fast", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it("throws at module load when the secret is missing", async () => {
+    vi.resetModules();
+    vi.stubEnv("BETTER_AUTH_SECRET", "");
+    await expect(import("@/lib/auth")).rejects.toThrow(/BETTER_AUTH_SECRET/);
+  });
+
+  it("skips the check during next build (NEXT_PHASE=phase-production-build)", async () => {
+    vi.resetModules();
+    vi.stubEnv("BETTER_AUTH_SECRET", "");
+    vi.stubEnv("NEXT_PHASE", "phase-production-build");
+    await expect(import("@/lib/auth")).resolves.toBeDefined();
+  });
+});
+
+/**
+ * Finding #18 (2026-05-21 audit): the IdP-supplied `sub` must be validated
+ * before it becomes the account id / userGuid. Previously the validated GUID
+ * was only used for the MP lookup while the raw `sub` was returned.
+ */
+describe("getMpUserInfo", () => {
+  const VALID_SUB = "ab12cd34-ef56-7890-abcd-ef1234567890";
+
+  const stubUserinfo = (sub: string) =>
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({ sub, email: "jon@example.org", given_name: "Jon", family_name: "Tester" }),
+      })
+    );
+
+  beforeEach(() => {
+    mockGetTableRecords.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("rejects a malformed sub before any MP lookup", async () => {
+    stubUserinfo("not-a-guid'; DROP TABLE dp_Users;--");
+
+    await expect(getMpUserInfo("token")).rejects.toThrow(/Invalid GUID/);
+    expect(mockGetTableRecords).not.toHaveBeenCalled();
+  });
+
+  it("returns the validated GUID as both id and userGuid", async () => {
+    stubUserinfo(VALID_SUB);
+    mockGetTableRecords.mockResolvedValue([
+      { User_ID: 42, Contact_ID: 99, Nickname: "Jonny" },
+    ]);
+
+    const user = await getMpUserInfo("token");
+
+    expect(user.id).toBe(VALID_SUB);
+    expect(user.userGuid).toBe(VALID_SUB);
+    expect(user.mpUserId).toBe(42);
+    expect(user.mpContactId).toBe(99);
+    expect(user.name).toBe("Jonny Tester");
+  });
+
+  it("still returns the user when the MP enrichment lookup fails", async () => {
+    stubUserinfo(VALID_SUB);
+    mockGetTableRecords.mockRejectedValue(new Error("MP is down"));
+
+    const user = await getMpUserInfo("token");
+
+    expect(user.id).toBe(VALID_SUB);
+    expect(user.mpUserId).toBeUndefined();
+    expect(user.name).toBe("Jon Tester");
+  });
+
+  it("throws on a non-OK userinfo response", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 }));
+
+    await expect(getMpUserInfo("token")).rejects.toThrow(/401/);
   });
 });

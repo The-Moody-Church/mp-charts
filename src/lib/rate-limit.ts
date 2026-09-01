@@ -85,6 +85,13 @@ export function checkRateLimit(
   userId: string,
   tier: RateLimitTier
 ): { allowed: true } | { allowed: false; retryAfterMs: number } {
+  // Fail closed on a blank identity (2026-05-21 audit, finding #19): without
+  // this, every caller lacking a user id would share a single ":tier" bucket,
+  // letting one anonymous source exhaust it — or slip through it — for all.
+  if (!userId || !userId.trim()) {
+    return { allowed: false, retryAfterMs: RATE_LIMITS[tier].windowMs };
+  }
+
   ensureCleanup();
 
   const config = RATE_LIMITS[tier];
