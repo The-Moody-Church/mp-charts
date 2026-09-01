@@ -24,11 +24,22 @@ This rule applies to all agents, subagents, scripts, hooks, and scheduled tasks.
 Ministry Platform's REST API accepts OData-style `$filter` parameters that map to SQL WHERE clauses. **Never interpolate raw strings into filters.**
 
 ```typescript
-import { sanitizeFilterValue, sanitizeIds, sanitizeGuid } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
+import { sanitizeLikeValue, sanitizeFilterValue, sanitizeId, sanitizeIds, sanitizeGuid } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
 
-// LIKE clauses — escape single quotes
-const safe = sanitizeFilterValue(userInput);
+// LIKE clauses — escapes quotes AND neutralizes wildcards (% _ [) via character
+// classes ([%], [_], [[]), so user input matches literally. No ESCAPE clause needed.
+const safe = sanitizeLikeValue(userInput);
 filter: `Last_Name LIKE '%${safe}%'`
+
+// Non-LIKE quoted strings — escape single quotes
+const value = sanitizeFilterValue(userInput);
+filter: `Membership_Status = '${value}'`
+
+// Single numeric IDs — validates a positive integer, throws otherwise.
+// React Flight args are type-erased: a "number" parameter can arrive as the
+// string "1 OR 1=1", which passes truthiness checks like `!id || id <= 0`.
+const safeId = sanitizeId(contactId);
+filter: `Contact_ID = ${safeId}`
 
 // IN clauses — validate all IDs are finite positive numbers
 filter: `Contact_ID IN (${sanitizeIds(ids)})`
@@ -41,12 +52,16 @@ filter: `Contact_GUID = '${validGuid}'`
 **Anti-patterns — NEVER do these:**
 ```typescript
 filter: `Last_Name LIKE '%${search}%'`          // breaks on O'Brien, injectable
+filter: `Last_Name LIKE '%${sanitizeFilterValue(s)}%'` // quotes safe, but % and _ still act as wildcards
+filter: `Contact_ID = ${id}`                     // type-erased: "1 OR 1=1" interpolates verbatim
 filter: `Contact_ID IN (${ids.join(',')})`       // no numeric validation
 filter: `User_GUID = '${profile.sub}'`           // no format validation
 ```
 
 **Rule**: Every string interpolated into a `filter:` parameter MUST pass through a sanitization function from `filter-sanitize.ts`. This applies to:
-- User search input -> `sanitizeFilterValue()`
+- User search input in LIKE clauses -> `sanitizeLikeValue()`
+- User input in other quoted-string comparisons -> `sanitizeFilterValue()`
+- Single numeric IDs (even typed as `number`) -> `sanitizeId()`
 - Arrays of IDs (even from DB results) -> `sanitizeIds()` or `sanitizeIdsOptional()`
 - GUIDs (even from trusted sources like OIDC) -> `sanitizeGuid()`
 

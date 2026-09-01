@@ -85,15 +85,20 @@ Feature visibility in the home page and sidebar is controlled by RBAC (feature-t
 
 ## Timezone Handling — Ministry Platform Dates
 
-MP returns dates without timezone info in **US Central Time**. `new Date("2026-03-12")` parses as UTC, showing the wrong day in Central.
+MP stores and returns datetimes as **wall-clock values in US Central Time** with no zone marker. `new Date("2026-03-12")` parses as UTC, showing the wrong day in Central; `getHours()`/`getMinutes()` use server-local time, which is UTC in Docker. Full pattern reference: `.claude/references/ministryplatform.datetimehandling.md`.
 
-**Rule**: Parse MP dates as local time using `parseLocalDate()` (in `src/components/contact-lookup-details/contact-lookup-details.tsx`) — extracts year/month/day components to avoid UTC shift. When sending dates to MP, use SQL format (`YYYY-MM-DD HH:MM:SS`) — convert **after** Zod validation, not before.
+**Use the shared utility** `src/lib/providers/ministry-platform/utils/mp-datetime.ts`:
+- **Sending to MP**: `toMpSqlDatetime(value)` in the **service layer**, converting **after** Zod validation, not before. Accepts ISO instants (converted to Central), bare `YYYY-MM-DD` (Central midnight), zone-less datetime-local strings (treated as Central wall-clock), already-SQL strings (idempotent passthrough), and `Date` instances; throws on garbage instead of emitting `NaN`.
+- **Reading from MP (arithmetic)**: `parseMpDatetime(value)` builds the true UTC instant for an MP wall-clock string — use for date diffs, age calcs, range checks. Do NOT use raw `new Date(mpString)`.
+- **Reading from MP (display)**: format with `timeZone: getMpTimezone()` in `toLocaleDateString`/`Intl.DateTimeFormat` options (see `formatDateTime` in `contact-logs.tsx`), or for date-only fields in client components, `parseLocalDate()` (in `contact-lookup-details.tsx`) which builds browser-local midnight from the `YYYY-MM-DD` prefix.
 
-**Sending dates to MP**: Pass ISO datetime through Zod validation, then convert to Central Time SQL format in the **service layer** using `Intl.DateTimeFormat` with `timeZone: "America/Chicago"`. Do NOT use `getHours()`/`getMinutes()` — those use server-local time, which is UTC in Docker. Reference implementation: `isoToCentralSql()` in `contactLogService.ts`. For date-only values (no meaningful time), use noon UTC (`T12:00:00.000Z`) so the date stays correct after Central conversion regardless of DST.
+**Date-only values — two live conventions, don't mix them per field**: the contact-log form sends noon UTC (`${date}T12:00:00.000Z`, see `contact-logs.tsx`), which converts to 06:00/07:00 Central same-day regardless of DST; a bare `YYYY-MM-DD` through `toMpSqlDatetime` becomes Central **midnight**. Both keep the calendar day correct — but pick one per field and stay consistent, since the stored times differ.
 
 ## Reference Documents
 
 - **[Project Status](docs/status.md)** - Quick-reference snapshot of current state (read first at session start)
 - **[Components Reference](.claude/references/components.md)** - Detailed inventory of all components, their purposes, server actions, and compliance status
 - **[Ministry Platform Schema](.claude/references/ministryplatform.schema.md)** - Auto-generated summary of Ministry Platform database tables, primary keys, and foreign key relationships
+- **[MP Datetime Handling](.claude/references/ministryplatform.datetimehandling.md)** - Wall-clock semantics, the `mp-datetime.ts` utility, read/write patterns per field type
+- **[MP Query Syntax](.claude/references/ministryplatform.query-syntax.md)** - `$filter`/`$select` SQL-dialect rules, `_TABLE` FK traversal, groupBy/having, common error fixes
 - **[Security Audit](.claude/notes/security-audit-2026-02-24.md)** - Full security audit report with 15 findings

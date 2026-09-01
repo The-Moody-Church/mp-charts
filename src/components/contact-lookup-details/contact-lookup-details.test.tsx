@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import type {
   ContactLookupDetails as ContactLookupDetailsType,
@@ -115,6 +115,21 @@ describe("ContactLookupDetails", () => {
 
   const renderCard = () => render(<ContactLookupDetails guid={contact.Contact_GUID} />);
 
+  // The DOB day-shift test below only detects the bug when the runner sits west of UTC
+  // (a UTC runner renders April 12 from the buggy UTC-midnight parse too), so pin the
+  // process to Central for this file and restore afterwards.
+  const originalTz = process.env.TZ;
+  beforeAll(() => {
+    process.env.TZ = "America/Chicago";
+  });
+  afterAll(() => {
+    if (originalTz === undefined) {
+      delete process.env.TZ;
+    } else {
+      process.env.TZ = originalTz;
+    }
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetContactDetails.mockImplementation(async () => ({ ...contact }));
@@ -196,6 +211,21 @@ describe("ContactLookupDetails", () => {
     await waitFor(() => expect(screen.queryByText("Tuesday Community")).toBeNull());
     fireEvent.click(screen.getByRole("button", { name: /^Groups/ }));
     await waitFor(() => expect(mockGetContactGroups).toHaveBeenCalledTimes(2));
+  });
+
+  it("renders the birthday from a YYYY-MM-DD DOB without shifting a day", async () => {
+    // MP returns Date_of_Birth as a bare date; new Date("1985-04-12") parses as UTC
+    // midnight, which is April 11 in Central. parseLocalDate must keep it April 12.
+    mockGetContactDetails.mockImplementation(async () => ({
+      ...contact,
+      Date_of_Birth: "1985-04-12",
+    }));
+
+    renderCard();
+    await screen.findByText(/Jon Tester/);
+
+    expect(await screen.findByText(/April 12/)).toBeDefined();
+    expect(screen.queryByText(/April 11/)).toBeNull();
   });
 
   it("surfaces a load failure as the in-page error block", async () => {

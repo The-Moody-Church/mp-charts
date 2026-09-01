@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { ContactLogDisplay } from "@/lib/dto";
 import { ContactLogTypes } from "@/lib/providers/ministry-platform/models/ContactLogTypes";
+import { parseMpDatetime, getMpTimezone } from "@/lib/providers/ministry-platform/utils/mp-datetime";
 import { getContactLogTypes, createContactLog, updateContactLog } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -51,14 +52,26 @@ interface ContactLogsProps {
 }
 
 function formatDateTime(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  // MP returns wall-clock Central time with no zone marker; render it as such in every
+  // viewer timezone instead of letting the browser misparse it as local/UTC.
+  try {
+    return parseMpDatetime(dateString).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: getMpTimezone(),
+    });
+  } catch {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
 }
 
 function getTodayLocalDate(): string {

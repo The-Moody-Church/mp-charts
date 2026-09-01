@@ -3,19 +3,7 @@ import { ContactLogTypes } from "@/lib/providers/ministry-platform/models/Contac
 import { ContactLogSchema, ContactLogInput } from "@/lib/providers/ministry-platform/models/ContactLogSchema";
 import { MPHelper } from "@/lib/providers/ministry-platform";
 import { sanitizeId } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
-
-/** Convert an ISO datetime string to SQL format (YYYY-MM-DD HH:MM:SS) in US Central Time */
-function isoToCentralSql(iso: string): string {
-  const date = new Date(iso);
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Chicago",
-    year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", second: "2-digit",
-    hour12: false,
-  }).formatToParts(date);
-  const get = (type: string) => parts.find(p => p.type === type)!.value;
-  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}`;
-}
+import { toMpSqlDatetime } from "@/lib/providers/ministry-platform/utils/mp-datetime";
 
 /**
  * ContactLogService - Singleton service for managing contact log operations
@@ -142,7 +130,7 @@ export class ContactLogService {
     // Convert ISO date to SQL format in Central Time (YYYY-MM-DD HH:MM:SS)
     // Ministry Platform interprets dates as US Central Time
     if (validatedData.Contact_Date) {
-      (validatedData as Record<string, unknown>).Contact_Date = isoToCentralSql(validatedData.Contact_Date);
+      (validatedData as Record<string, unknown>).Contact_Date = toMpSqlDatetime(validatedData.Contact_Date);
     }
 
     const result = await this.mp!.createTableRecords(
@@ -173,7 +161,7 @@ export class ContactLogService {
 
     // Convert ISO date to SQL format in Central Time after validation
     if (validatedData.Contact_Date) {
-      validatedData.Contact_Date = isoToCentralSql(validatedData.Contact_Date);
+      validatedData.Contact_Date = toMpSqlDatetime(validatedData.Contact_Date);
     }
     
     // Add the ID to the data for the update

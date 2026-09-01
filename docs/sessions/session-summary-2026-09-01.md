@@ -45,6 +45,17 @@ The docs commit's CI run failed in `build-scan-and-push`: Trivy flagged `libcryp
 - Carried from prior sessions (still no issues, deliberately): scope asserts for the three non-milestone requirement types in `getRecordFiles`; server-action sweep for uncoerced ID args; enable secret scanning; publish the local security-triage report as `.claude/notes/security-audit-*.md` now that #208 has shipped.
 - #136 (TS 5.9 → 6.0): the "wait until mid-April 2026" hold has expired; actionable.
 
+## Part 2 — Orphan salvage + upstream review (after the #208 merge)
+
+Deep research pass (15 agents: orphan per-file autopsy, upstream #67–#78 enumeration + per-PR verdicts, divergence map) produced a 4-PR plan (`~/.claude/plans/ok-let-s-cherry-pick-partitioned-moonbeam.md`, user-approved):
+
+1. **PR 1 `salvage/mp-datetime-and-dob-fix`** (this branch): mp-datetime.ts utility + 17 tests salvaged from orphan commit `1efee5f`; wired into `contactLogService` (replacing local `isoToCentralSql` — drop-in proven by unchanged Central-conversion tests) and `contact-logs.tsx` `formatDateTime` (MP wall-clock now renders correctly in every viewer TZ, try/catch fallback); **DOB day-shift fix** (live bug: `calculateAge`/`formatBirthday` parsed bare `YYYY-MM-DD` as UTC midnight → April 11 in Central; fixed via `parseLocalDate`, mutation-tested regression test with TZ pinned to America/Chicago); both MP reference docs landed (query-syntax's `LIKE_ESCAPE_CLAUSE` line corrected to main's bracket-escaping contract); CLAUDE.md Timezone Handling rewritten around the utility (noon-UTC kept as the live contact-log-form convention, don't-mix note); security.md Filter & Query Safety rewritten (now covers `sanitizeLikeValue` and `sanitizeId` — both had been missing since 2026-06-24).
+2. **PR 2 `salvage/auth-secret-fail-fast`**: BETTER_AUTH_SECRET fail-fast (NEXT_PHASE build guard), audit findings #18/#19 fixes, 2026-05-21 audit report landed with superseded header.
+3. **PR 3 `upstream/adopt-77-75-better-auth-pin`**: upstream #77 token-`expires_in` fix (live bug, ~12× extra token fetches), #75 sanitizeId idiom pass, better-auth pinned `>=1.6.23 <1.7.0` (1.7 removes our only auth path), sync-log 2026-09-01 review section.
+4. **PR 4 `chore/deps-2026-09-next-16.3.3`**: next 16.3.3 + within-range patch drift.
+
+Upstream verdicts (full detail in the sync-log once PR 3 lands): #77 adopt, #75 adapt, #67 pin-only (deps we lead), #78/#69 deps PR, #68 DEFER (better-auth 1.7 migration — breaking), #70–#74/#76 skip (fork led or N/A).
+
 ## Files changed this session
 
 - `docs/status.md` — modified (new 2026-09-01 row; `(this PR)` → #208/#207/#206; last-updated date)
