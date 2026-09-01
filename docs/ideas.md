@@ -58,6 +58,9 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
 
 ### Technical Debt
+- [Vitest coverage config has an under-count blind spot (#212)](#vitest-coverage-config-has-an-under-count-blind-spot-212)
+- [Micro-robustness in getContactLogsByContactId (#213)](#micro-robustness-in-getcontactlogsbycontactid-213)
+- [Remove the vestigial `_requestedId` params in shared-actions/user.ts (#214)](#remove-the-vestigial-_requestedid-params-in-shared-actionsuserts-214)
 - [Server-render the contact detail page's initial read (#202)](#server-render-the-contact-detail-pages-initial-read-202)
 - [Member detail modal shows the old photo after upload (#203)](#member-detail-modal-shows-the-old-photo-after-upload-203)
 - [Compliance tool editor silently drops orphaned journey config (#204)](#compliance-tool-editor-silently-drops-orphaned-journey-config-204)
@@ -277,13 +280,13 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 
 ## Technical Debt
 
-### Vitest coverage config has an under-count blind spot
+### Vitest coverage config has an under-count blind spot ([#212](https://github.com/The-Moody-Church/mp-charts/issues/212))
 `vitest.config.ts` uses v8 coverage with excludes only — no `coverage.include` and no thresholds. With that shape, files nothing imports never enter the denominator, so the reported percentage silently overstates true statement coverage (upstream MPNext measured 71.6% reported vs 32.7% actual under the same config shape). Fix is fork-specific: write an explicit `include` glob for `src/**` plus thresholds calibrated against our current suite.
 
-### Micro-robustness in getContactLogsByContactId
+### Micro-robustness in getContactLogsByContactId ([#213](https://github.com/The-Moody-Church/mp-charts/issues/213))
 `src/components/contact-lookup-details/actions.ts` fetches the `Contact_Log_Types` lookup unconditionally; a contact with zero (or only untyped) logs makes one avoidable MP request, and if that request throws, the catch collapses the whole action even though the logs themselves were already retrieved. Guard with `logs.some(log => log.Contact_Log_Type_ID)` before the lookup (pattern from upstream MPNext #76).
 
-### Remove the vestigial `_requestedId` params in shared-actions/user.ts
+### Remove the vestigial `_requestedId` params in shared-actions/user.ts ([#214](https://github.com/The-Moody-Church/mp-charts/issues/214))
 `getCurrentUserProfile`/`updateCurrentUserProfile` still accept a `_requestedId` parameter (lines ~32/45) that the F4 fix deliberately ignores in favor of the session GUID. Dropping the params and their call-site arguments makes the session-bound contract visible in the signature instead of relying on the underscore convention.
 
 ### Server-render the contact detail page's initial read ([#202](https://github.com/The-Moody-Church/mp-charts/issues/202))
