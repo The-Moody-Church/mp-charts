@@ -71,6 +71,13 @@ Actions secrets, so the registry job is gated on the actor — and before `verif
 skipped `npm audit`, the build and the image scan for every bot PR (they merged on `security-lint`
 alone, in ~10s). Anything that does not need the registry belongs in `verify` so it covers all actors.
 
+**Both build steps set `no-cache-filters: runner`.** The runner stage's `apk upgrade` only patches
+Alpine CVEs if its layer actually rebuilds; a cached layer pins old packages and fails the Trivy gate
+as soon as a new OS CVE lands (CVE-2026-14456, 2026-09-01). The two jobs use different caches
+(`verify`: GHA, evicted after ~7 idle days; `build-scan-and-push`: registry `buildcache`, never
+expires), so without the filter they can even disagree — verify green, push job red. Keep the filter
+on **both** steps.
+
 **`npm audit --audit-level=high` is a hard deploy gate.** It runs before any image is built, so an
 unresolved HIGH advisory blocks *all* deploys, not just dependency PRs. This has bitten twice
 (2026-07-10 after #190, and a 27-day production freeze discovered 2026-08-06). Run it locally before

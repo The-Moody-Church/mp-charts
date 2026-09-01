@@ -381,6 +381,57 @@ describe("authorization", () => {
     });
   });
 
+  describe("loadFeatureAccess — malformed config is not trusted", () => {
+    // The config file is operator-editable and lives on a named Docker volume, so a
+    // bad value survives restart AND redeploy. hasFeatureAccess() calls .includes()
+    // on allowedGroupIds, so a non-array would throw out of getAccessibleFeatures()
+    // for every non-super-admin user — and the admin UI that could repair it dies on
+    // the same value.
+    it("ignores an entry whose allowedGroupIds is not an array", () => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFileSync).mockReturnValue(
+        JSON.stringify({ dashboard: { label: "D", description: "d", allowedGroupIds: 5 } })
+      );
+
+      const config = loadFeatureAccess();
+      expect(Array.isArray(config.dashboard.allowedGroupIds)).toBe(true);
+      // Falls back to the built-in default, which grants nothing.
+      expect(config.dashboard.allowedGroupIds).toEqual([]);
+    });
+
+    it("drops non-positive-integer members from allowedGroupIds", () => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFileSync).mockReturnValue(
+        JSON.stringify({
+          dashboard: { label: "D", description: "d", allowedGroupIds: [3, "7", -1, 0, 1.5, null, 9] },
+        })
+      );
+
+      const config = loadFeatureAccess();
+      expect(config.dashboard.allowedGroupIds).toEqual([3, 9]);
+    });
+
+    it("falls back to defaults instead of throwing on malformed JSON", () => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFileSync).mockReturnValue("{ not valid json");
+
+      expect(() => loadFeatureAccess()).not.toThrow();
+      const config = loadFeatureAccess();
+      expect(config.dashboard).toBeDefined();
+      expect(config.dashboard.allowedGroupIds).toEqual([]);
+    });
+
+    it("does not let a __proto__ key in the file pollute Object.prototype", () => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFileSync).mockReturnValue(
+        '{"__proto__":{"allowedGroupIds":[1,2,3]},"dashboard":{"label":"D","description":"d","allowedGroupIds":[4]}}'
+      );
+
+      loadFeatureAccess();
+      expect(({} as Record<string, unknown>).allowedGroupIds).toBeUndefined();
+    });
+  });
+
   describe("requireFeatureAccess", () => {
     beforeEach(() => {
       vi.mocked(existsSync).mockReturnValue(true);

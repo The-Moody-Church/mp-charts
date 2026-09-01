@@ -104,15 +104,41 @@ export function loadFeatureAccess(): FeatureAccessConfig {
   // Build the set of valid feature keys (static + dynamic)
   const validKeys = new Set(Object.keys(merged));
 
-  // Merge saved config, but only for keys that still exist
+  // Merge saved config, but only for keys that still exist.
+  //
+  // This file is operator-editable and lives on a named Docker volume, so whatever
+  // it contains survives restart AND redeploy. Trusting its shape is what makes a
+  // bad write persistent: `hasFeatureAccess()` calls `.includes()` on
+  // `allowedGroupIds`, so a non-array throws out of `getAccessibleFeatures()` for
+  // every non-super-admin user — and the admin page that could repair it crashes on
+  // the same value. Validate defensively, and fail CLOSED (fall back to the
+  // built-in defaults, which grant nothing) rather than throwing.
   if (existsSync(CONFIG_PATH)) {
-    const raw = readFileSync(CONFIG_PATH, "utf-8");
-    const parsed = JSON.parse(raw) as FeatureAccessConfig;
+    try {
+      const raw = readFileSync(CONFIG_PATH, "utf-8");
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
 
-    for (const [key, value] of Object.entries(parsed)) {
-      if (validKeys.has(key)) {
-        merged[key] = value;
+      for (const [key, value] of Object.entries(parsed)) {
+        // Unknown keys are dropped, which also discards a "__proto__" own-property
+        // that JSON.parse may have created.
+        if (!validKeys.has(key)) continue;
+        if (!value || typeof value !== "object") continue;
+
+        const candidate = value as Partial<FeatureConfig>;
+        if (!Array.isArray(candidate.allowedGroupIds)) continue;
+
+        merged[key] = {
+          ...merged[key],
+          ...candidate,
+          allowedGroupIds: candidate.allowedGroupIds.filter(
+            (id): id is number => typeof id === "number" && Number.isInteger(id) && id > 0
+          ),
+        };
       }
+    } catch (error) {
+      // Malformed JSON: keep the defaults rather than taking down every
+      // authorization check in the app.
+      console.error("Failed to read feature access config; using defaults:", error);
     }
   }
 
