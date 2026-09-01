@@ -40,8 +40,20 @@ function getInitials(firstName?: string, nickname?: string, lastName?: string) {
   return first + last;
 }
 
+// Parse a date string as local time (avoids UTC shift from ISO strings like "2026-03-12T00:00:00Z").
+// MP returns date-only fields as "YYYY-MM-DD" — JavaScript parses those as UTC midnight, which
+// shifts the calendar day backwards by one in Central browsers. Extract components and build a
+// local-midnight Date instead.
+function parseLocalDate(dateStr: string): Date {
+  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  }
+  return new Date(dateStr);
+}
+
 function calculateAge(dateOfBirth: string): number {
-  const dob = new Date(dateOfBirth);
+  const dob = parseLocalDate(dateOfBirth);
   const today = new Date();
   let age = today.getFullYear() - dob.getFullYear();
   const monthDiff = today.getMonth() - dob.getMonth();
@@ -52,7 +64,7 @@ function calculateAge(dateOfBirth: string): number {
 }
 
 function formatBirthday(dateOfBirth: string): string {
-  const dob = new Date(dateOfBirth);
+  const dob = parseLocalDate(dateOfBirth);
   return dob.toLocaleDateString("en-US", { month: "long", day: "numeric" });
 }
 
@@ -93,16 +105,6 @@ function getDirectionsUrl(address: string): string {
 
   // Desktop / fallback: Google Maps web
   return `https://www.google.com/maps/dir/?api=1&destination=${encoded}`;
-}
-
-/** Parse a date string as local time (avoids UTC shift from ISO strings like "2026-03-12T00:00:00Z") */
-function parseLocalDate(dateStr: string): Date {
-  // Extract YYYY-MM-DD from any ISO-like format and parse as local midnight
-  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (match) {
-    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  }
-  return new Date(dateStr);
 }
 
 function formatLastActivity(dateStr: string): string {
