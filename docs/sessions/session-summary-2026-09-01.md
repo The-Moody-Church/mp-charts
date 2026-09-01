@@ -21,6 +21,9 @@
 ### Manual test pass (user-executed, against `:dev` in production)
 Test plan derived from the actual #208 diff. Covered: admin save round-trip persisting through `data/feature-access.json`; non-admin lockout (`/admin/permissions` server-redirects to `/`, no Setup tile); DevTools server-action replays for `__proto__`/`constructor`/`prototype` (expect `"Unknown feature"`, nothing persisted), reflected-input check (submitted string absent from response), malformed `allowedGroupIds` (`"nope"`, `[1.5]`, `[-3]`, `[0]`, `["7"]`, 501 IDs → `"Invalid group IDs"`); write rate limit (31st save in a minute → generic failure); regression: login, feature tiles, dashboard, both admin tool editors. **User reported: tested.** Noted for future testers: the permissions UI shows no error text on a failed save — the network response is the authoritative signal.
 
+### CI failure on the docs commit — stale `apk upgrade` layer (CVE-2026-14456)
+The docs commit's CI run failed in `build-scan-and-push`: Trivy flagged `libcrypto3`/`libssl3` 3.5.7-r0 (HIGH, OpenSSL QUIC DoS, fixed 3.5.8-r0) in the pushed image — while `verify` PASSED the identical Trivy config on the same commit. Root cause: the Dockerfile's runner-stage `apk update && apk upgrade` layer was cache-hit. The two jobs use different caches — `verify`'s GHA cache had been evicted after 11 idle days (rebuilt fresh → patched → green), but `build-scan-and-push`'s registry `buildcache` never expires (Aug 21 layer → vulnerable → red). Verified live that 3.5.8-r0 is available in Alpine v3.24 main. Fix: `no-cache-filters: runner` on both build steps so the cheap runner stage always rebuilds and `apk upgrade` sees current packages; deps/builder stages stay cached. Documented in `.claude/rules/security.md` (CI Job Layout).
+
 ### Merge + `/deploy-main`
 - Pre-merge docs on the branch (this commit): `status.md` refreshed (new 2026-09-01 row; the three `(this PR)` placeholders resolved to #208/#207/#206), this session summary added. No ideas.md entries were resolved by #208 (the hardening came from code-scanning alerts, not a tracked idea).
 - PR #208 merged with a merge commit (`--merge --delete-branch`), then TMC1 returned to `:main` on the fresh post-merge image. (Merge/deploy details recorded in this session's final commit state; see PR #208.)
@@ -46,5 +49,5 @@ Test plan derived from the actual #208 diff. Covered: admin save round-trip pers
 
 - `docs/status.md` — modified (new 2026-09-01 row; `(this PR)` → #208/#207/#206; last-updated date)
 - `docs/sessions/session-summary-2026-09-01.md` — created (this file)
-
-No source code changed this session — the deploys used existing CI-built images.
+- `.github/workflows/docker-build-push.yml` — modified (`no-cache-filters: runner` on both build steps)
+- `.claude/rules/security.md` — modified (documented the runner-stage cache-bust requirement)

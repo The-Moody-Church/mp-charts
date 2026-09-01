@@ -88,6 +88,10 @@ jobs:
           tags: mp-charts:ci-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # Always rebuild the runner stage so its `apk upgrade` sees today's
+          # Alpine security fixes — a cached layer pins old packages and fails
+          # the Trivy gate once a new CVE lands (CVE-2026-14456, 2026-09-01).
+          no-cache-filters: runner
 
       - name: Scan image
         uses: aquasecurity/trivy-action@v0.36.0
@@ -130,6 +134,10 @@ jobs:
           tags: registry.gitlab.com/moodychurch/mp-charts:${{ github.sha }}
           cache-from: type=registry,ref=registry.gitlab.com/moodychurch/mp-charts:buildcache
           cache-to: type=registry,ref=registry.gitlab.com/moodychurch/mp-charts:buildcache,mode=max
+          # Same runner-stage rebuild as `verify` — the registry buildcache never
+          # expires, so without this the pushed image keeps stale OS packages even
+          # when verify's (evictable) GHA cache rebuilt them and passed its scan.
+          no-cache-filters: runner
 
       - name: Scan image
         uses: aquasecurity/trivy-action@v0.36.0
