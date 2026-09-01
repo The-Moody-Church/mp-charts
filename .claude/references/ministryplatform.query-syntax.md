@@ -10,7 +10,7 @@ The syntax is **SQL-style**, not OData. Most "weird" error messages from MP boil
 - **Comparisons**: `Contact_Status_ID = 1`, `Start_Date >= '2026-01-01'` (dates must be quoted strings).
 - **Multiple conditions**: use `AND` / `OR` (not `&&` / `||`).
 - **Wildcards**: `First_Name LIKE 'Chris%'`, `Email_Address LIKE '%@gmail.com'`, `Display_Name LIKE '%Smith%'` (no `CONTAINS` operator).
-  - **For user-supplied search input, always use `sanitizeLikeValue()` + `LIKE_ESCAPE_CLAUSE`** so that `%` and `_` typed by the user don't match as wildcards. See `.claude/rules/security.md` for the sanitization rules.
+  - **For user-supplied search input, always use `sanitizeLikeValue()`** — it wraps `%`, `_`, and `[` in character classes (`[%]`, `[_]`, `[[]`) so user input matches literally; no `ESCAPE` clause is needed. See `.claude/rules/security.md` for the sanitization rules.
 - **IN lists**: `Contact_Status_ID IN (1, 2, 3)`.
 - **Date ranges**: `Start_Date >= '2026-01-01' AND Start_Date < '2026-04-01'` (`BETWEEN` not supported).
 - **Subqueries**: strictly prohibited — no `SELECT` inside `$filter`. Use `_TABLE` traversal instead.
