@@ -277,6 +277,15 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 
 ## Technical Debt
 
+### Vitest coverage config has an under-count blind spot
+`vitest.config.ts` uses v8 coverage with excludes only — no `coverage.include` and no thresholds. With that shape, files nothing imports never enter the denominator, so the reported percentage silently overstates true statement coverage (upstream MPNext measured 71.6% reported vs 32.7% actual under the same config shape). Fix is fork-specific: write an explicit `include` glob for `src/**` plus thresholds calibrated against our current suite.
+
+### Micro-robustness in getContactLogsByContactId
+`src/components/contact-lookup-details/actions.ts` fetches the `Contact_Log_Types` lookup unconditionally; a contact with zero (or only untyped) logs makes one avoidable MP request, and if that request throws, the catch collapses the whole action even though the logs themselves were already retrieved. Guard with `logs.some(log => log.Contact_Log_Type_ID)` before the lookup (pattern from upstream MPNext #76).
+
+### Remove the vestigial `_requestedId` params in shared-actions/user.ts
+`getCurrentUserProfile`/`updateCurrentUserProfile` still accept a `_requestedId` parameter (lines ~32/45) that the F4 fix deliberately ignores in favor of the session GUID. Dropping the params and their call-site arguments makes the session-bound contract visible in the signature instead of relying on the underscore convention.
+
 ### Server-render the contact detail page's initial read ([#202](https://github.com/The-Moody-Church/mp-charts/issues/202))
 `/contact-lookup/[guid]` fetches all five of its MP reads from the client after hydration — contact details, then logs + badges + household + user id in parallel. Moving them into the page's async RSC (behind a small `page-data.ts`) would save a round trip on a daily-use screen and let the data stream with the shell.
 

@@ -61,7 +61,7 @@ filter: `User_GUID = '${profile.sub}'`           // no format validation
 **Rule**: Every string interpolated into a `filter:` parameter MUST pass through a sanitization function from `filter-sanitize.ts`. This applies to:
 - User search input in LIKE clauses -> `sanitizeLikeValue()`
 - User input in other quoted-string comparisons -> `sanitizeFilterValue()`
-- Single numeric IDs (even typed as `number`) -> `sanitizeId()`
+- Single numeric IDs (even typed as `number`) -> `sanitizeId()` — validate at the **action boundary** (reassign: `id = sanitizeId(id)`), not just in the service; it also enforces the safe-integer bound, so an unsafe-integer string can't silently coerce to the wrong record ID
 - Arrays of IDs (even from DB results) -> `sanitizeIds()` or `sanitizeIdsOptional()`
 - GUIDs (even from trusted sources like OIDC) -> `sanitizeGuid()`
 
