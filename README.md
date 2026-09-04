@@ -76,7 +76,7 @@ Feature access is controlled via admin-managed User Group mappings:
 
 ## Prerequisites
 
-- **Node.js**: v22 or higher (v20.9+ minimum, v22 LTS recommended)
+- **Node.js**: v24 LTS (pinned in `.nvmrc` and enforced by `engines` in `package.json`)
 - **Package Manager**: npm (comes with Node.js)
 - **Ministry Platform**: Active instance with API credentials and OAuth client configured (see [API Client Setup](#api-client-setup))
 
@@ -94,7 +94,7 @@ npm run setup
 ```
 
 The setup command will:
-1. Verify Node.js version (v20.9+ required, v22 LTS recommended)
+1. Verify Node.js version (v24 LTS required)
 2. Check git status
 3. Create `.env.local` from `.env.example` (if needed)
 4. Prompt for missing environment variables

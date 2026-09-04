@@ -6,7 +6,7 @@ updates:
     schedule:
       interval: "weekly"
 
-  # Maintain Docker base images (updates node:20-alpine)
+  # Maintain Docker base images (updates node:24-alpine)
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
