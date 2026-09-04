@@ -58,8 +58,8 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
 
 ### Technical Debt
-- [Digest-pin the Docker base images](#digest-pin-the-docker-base-images)
-- [cache-handler.js depends on private Next.js internals](#cache-handlerjs-depends-on-private-nextjs-internals)
+- [Digest-pin the Docker base images (#217)](#digest-pin-the-docker-base-images-217)
+- [cache-handler.js depends on private Next.js internals (#218)](#cache-handlerjs-depends-on-private-nextjs-internals-218)
 - [Vitest coverage config has an under-count blind spot (#212)](#vitest-coverage-config-has-an-under-count-blind-spot-212)
 - [Micro-robustness in getContactLogsByContactId (#213)](#micro-robustness-in-getcontactlogsbycontactid-213)
 - [Remove the vestigial `_requestedId` params in shared-actions/user.ts (#214)](#remove-the-vestigial-_requestedid-params-in-shared-actionsuserts-214)
@@ -282,7 +282,7 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 
 ## Technical Debt
 
-### Digest-pin the Docker base images
+### Digest-pin the Docker base images ([#217](https://github.com/The-Moody-Church/mp-charts/issues/217))
 All four `FROM` lines use the mutable tag `node:24-alpine` (`Dockerfile` deps/builder/runner +
 `Dockerfile.dev`), so the exact Node patch level in a shipped image is whatever Docker Hub resolved
 at build time and is recorded nowhere — `:latest`, `:main` and `:dev` can each carry a different one.
@@ -291,7 +291,7 @@ Compounding it, the Trivy gate sets `ignore-unfixed: true`, so an unpatched Node
 fail the build. Pinning `node:24-alpine@sha256:...` would make the runtime reproducible and give
 Dependabot a digest to bump; the tradeoff is a PR every time the base image is rebuilt.
 
-### cache-handler.js depends on private Next.js internals
+### cache-handler.js depends on private Next.js internals ([#218](https://github.com/The-Moody-Church/mp-charts/issues/218))
 `cache-handler.js` deep-imports two unpublished paths — `next/dist/server/lib/lru-cache` and
 `next/dist/server/lib/incremental-cache/tags-manifest.external` — and relies on the undocumented
 `revalidate: -1` stale-while-revalidate signal plus `entry.expire` (with a defensive
