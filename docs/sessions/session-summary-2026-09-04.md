@@ -5,8 +5,8 @@
 Move the app's Node runtime from **Node 22 (maintenance LTS, EOL 2027-04-30)** to **Node 24 LTS
 ("Krypton", EOL 2028-04-30)** and pin it, so the version stops drifting across dev / CI / production.
 
-**Status: IN PROGRESS** — code complete and locally verified; awaiting a `:dev` soak on TMC1 before
-merge (user-run manual test pass, per the same pattern as PR #208).
+**Status: COMPLETED** — shipped as PR #216. Soaked on TMC1 as `:dev`, user-verified on production
+hardware, then merged and returned to the released image.
 
 ## Why
 
@@ -26,8 +26,10 @@ Two things made it worth doing rather than tolerating:
 
 - **`npm audit --audit-level=high` is a hard deploy gate** and has caused three production freezes
   (2026-07-10, the 27-day one found 2026-08-06, 2026-08-17). It was being judged by **npm 10.9.8** in
-  CI while local ran **npm 11.19.0**. Node 24 bundles **npm 11.19.0**, so the gate now matches the
-  developer's npm exactly.
+  CI while local ran **npm 11.19.0**. Node 24 bundles **npm 11.x**, so the gate is now judged by the
+  same npm major the developer runs. (Precisely: 11.19.0 in the Docker image, 11.17.0 on the GitHub
+  runner, whose tool cache holds Node 24.19.0 — so "identical to local" would be overstating it.
+  The material change is 10.9.8 → 11.x.)
 - **Local dev sat 4 majors ahead of production** with nothing flagging it, and `tsconfig.json`'s
   `lib: esnext` meant TypeScript couldn't catch it either.
 
@@ -109,13 +111,29 @@ references are correct history.
 - **`cache-handler.js` depends on private Next.js internals** — two `next/dist/**` deep imports plus
   the undocumented `revalidate: -1` SWR signal. A Next minor can break it; a Node bump cannot.
 
+## Soak result (TMC1, `:dev`, 2026-09-04)
+
+Deployed over `:main` (which had been running since 2026-09-01) and verified on production hardware:
+
+| Check | Result |
+|---|---|
+| Running image / digest | `:dev` @ `sha256:c5da2273…` — matched the branch SHA exactly |
+| **Node in the container** | **v24.20.0** (was 22.x) |
+| ICU / Central time | 78.3 / `Sep 4, 2026, 8:35 AM` correct |
+| Cache warming | **5/5 succeeded, 0 failed, attempt 1**, 33.7s total |
+| Daily re-warm scheduled | 21.4h → 6:00 AM CT |
+| HTTP | `GET /` → 307 → `/signin?callbackUrl=%2F` |
+
+Two of those are the load-bearing ones. **"attempt 1"** means the cache-warm self-fetch connected
+without a single retry — the `localhost` → `127.0.0.1` fix working under the new base image, and the
+one failure here that would have been silent. And the **6:00 AM CT** reschedule proves full ICU with
+correct DST math survived the base-image change, which `mp-datetime.ts` and the scheduler depend on.
+
 ## Follow-ups
 
-- [ ] `:dev` soak on TMC1 + user manual test pass — **note `/deploy-dev` swaps the image on the
-      container serving live production traffic**; announce a window, and never `docker compose down -v`
-      (destroys the `data` volume holding `feature-access.json`/RBAC).
-- [ ] Before deploying, confirm `:dev`'s digest is actually this build — it's a single global mutable
-      tag with no `concurrency:` guard, and `/deploy-dev`'s CI check filters out `main`, so a `main`
-      push landing after ours would move `:dev` while that check still names our branch.
-- [ ] Merge with `--merge` (never squash), then `/deploy-main`.
+- [x] `:dev` soak on TMC1 + user manual test pass — **passed**. See "Soak result" below.
+- [x] Verified `:dev`'s digest matched the branch SHA before deploying (`sha256:c5da2273…`), and that
+      no `main` build had landed after ours — the check `/deploy-dev` itself cannot make, since it
+      filters `main` out of its own CI lookup.
+- [x] Merged with `--merge`, then returned production to the released image.
 - [ ] **Revisit ~2026-10-20**, when Node 24 leaves active LTS and 26 becomes the active LTS.
