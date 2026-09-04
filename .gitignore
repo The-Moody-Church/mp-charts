@@ -432,3 +432,4 @@ data/feedback-config.json
 .claude/commands/deploy.md
 .claude/commands/deploy-dev.md
 .claude/commands/deploy-main.md
+.claude/commands/rollback.md

@@ -86,6 +86,12 @@ jobs:
           push: false
           load: true
           tags: mp-charts:ci-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+            church.moody.run-id=${{ github.run_id }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           # Always rebuild the runner stage so its `apk upgrade` sees today's
@@ -132,6 +138,12 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: registry.gitlab.com/moodychurch/mp-charts:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+            church.moody.run-id=${{ github.run_id }}
           cache-from: type=registry,ref=registry.gitlab.com/moodychurch/mp-charts:buildcache
           cache-to: type=registry,ref=registry.gitlab.com/moodychurch/mp-charts:buildcache,mode=max
           # Same runner-stage rebuild as `verify` — the registry buildcache never
@@ -150,8 +162,21 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Push `dev` tag
-        # Every successful build (any branch) becomes the testing image. Pull
-        # `:dev` on the docker host to test branch builds before merging the PR.
+        # Branch builds ONLY. `:dev` is the production soak slot: /deploy-dev
+        # swaps the real `mpcharts` container onto this image so a PR can be
+        # exercised against production before it merges.
+        #
+        # The `if:` is load-bearing. Without it every push to main also
+        # overwrote `:dev`, so the tag never held a pre-merge build long enough
+        # to test — the moment anything merged, `:dev` silently became `:latest`
+        # and a soak deploy was a no-op. Found and fixed first in mp-senior-care
+        # (its PR #143, 2026-09-04), where all three tags were observed pointing
+        # at one manifest; this repo had the identical defect.
+        #
+        # Single-tenant by design: the most recent branch push wins. Check what
+        # `:dev` currently holds with
+        #   docker image inspect …:dev --format '{{index .Config.Labels "org.opencontainers.image.version"}}'
+        if: github.ref != 'refs/heads/main'
         run: |
           docker buildx imagetools create registry.gitlab.com/moodychurch/mp-charts:${{ github.sha }} --tag registry.gitlab.com/moodychurch/mp-charts:dev
 
