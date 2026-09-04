@@ -24,7 +24,11 @@ export async function register() {
   // register() runs during server initialization, before the HTTP listener
   // is bound. We poll until the server is accepting connections.
   const port = process.env.PORT || 3000;
-  const url = `http://localhost:${port}/api/cache-warm?token=${encodeURIComponent(token)}`;
+  // Use 127.0.0.1, not `localhost`: the server binds HOSTNAME=0.0.0.0 (IPv4 only,
+  // see Dockerfile), while Node's `verbatim` DNS default can resolve `localhost`
+  // to ::1 first -> ECONNREFUSED. Warming fails soft, so that would silently
+  // leave every cache cold after a restart.
+  const url = `http://127.0.0.1:${port}/api/cache-warm?token=${encodeURIComponent(token)}`;
 
   warmWithRetry(url).catch((err) => {
     console.error('[instrumentation] Cache warming failed after all retries:', err);

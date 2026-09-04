@@ -74,7 +74,10 @@ const MODELS_PATH = path.join(
 );
 const NEXT_BUILD_PATH = path.join(PROJECT_ROOT, '.next');
 
-const REQUIRED_NODE_VERSION = 20;
+// Node 24 LTS — matches .nvmrc, the Dockerfile base images, and `engines` in
+// package.json. A clean major boundary, so the major-only comparison in
+// getNodeVersion() is sufficient (the old floor of "20.9" never was).
+const REQUIRED_NODE_VERSION = 24;
 
 // Patterns to detect if this is a clone of the MPNext template repository
 const TEMPLATE_REPO_PATTERNS = [
@@ -547,7 +550,7 @@ function checkNodeVersion(): StepResult {
     return {
       success: false,
       message: `Node.js v${version} is below minimum required v${REQUIRED_NODE_VERSION}`,
-      details: 'Please upgrade Node.js to v20.9 or later (v22 LTS recommended)',
+      details: 'Please upgrade Node.js to v24 LTS or later',
     };
   }
 
@@ -834,7 +837,7 @@ async function runInteractiveSetup(options: SetupOptions): Promise<number> {
   printResult(nodeResult);
 
   if (!nodeResult.success) {
-    console.log(chalk.red('\nSetup cannot continue without Node.js v20.9 or later (v22 LTS recommended).'));
+    console.log(chalk.red('\nSetup cannot continue without Node.js v24 LTS or later.'));
     return 1;
   }
   passedSteps++;

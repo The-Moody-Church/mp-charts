@@ -15,6 +15,27 @@ This guide provides essential information for AI assistants (like Claude) workin
 
 **Read the relevant rule file before working in that area.** The pre-commit checklist is in `context-management.md` — run it before every commit.
 
+## Node Runtime
+
+**Node 24 LTS** ("Krypton", security-supported through 2028-04-30). The version is declared in
+exactly **two** places, and they must move together:
+
+- **`.nvmrc`** (`24`) — read by CI via `node-version-file` in both workflows
+  (`docker-build-push.yml`, `audit-nightly.yml`), and by any local version manager
+- **the four `FROM node:24-alpine` lines** — `Dockerfile` (deps/builder/runner) + `Dockerfile.dev`
+
+`engines.node` in `package.json` is a **floor** (`>=24.0.0`), not a pin — local dev may legitimately
+run newer. The precise guardrail is `@types/node`, deliberately held to the **same major as the
+container** (`^24`): a newer-Node-only API then fails `tsc` instead of surfacing at runtime on TMC1.
+
+Node 24 leaves *active* LTS on 2026-10-20 (Node 26 takes over) but stays security-supported to
+2028-04-30. **When bumping the major**, change all of these in one commit: `.nvmrc`, the four `FROM`
+tags, `@types/node`, `engines.node`, and `REQUIRED_NODE_VERSION` in `scripts/setup.ts`.
+
+Note the runner stage runs `npm uninstall -g npm`, so **the production image ships no npm** — the
+npm version that matters is CI's (whatever Node 24 bundles: 11.19.0), which gates
+`npm audit --audit-level=high`.
+
 ## Architecture
 
 - **Auth**: Better Auth (`better-auth@^1.6`) with Ministry Platform OAuth via `genericOAuth` plugin (`src/lib/auth.ts`)
