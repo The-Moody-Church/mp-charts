@@ -58,6 +58,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
 
 ### Technical Debt
+- [CommunicationType union is wrong: 'Text'/'Letter' are invalid — MP's enum is Unknown|Email|SMS|RssFeed|GlobalMFA (SMS sends 500) (#220)](#communicationtype-union-is-wrong-textletter-are-invalid-mps-enum-is-unknownemailsmsrssfeedglobalmfa-sms-sends-500-220)
 - [Digest-pin the Docker base images (#217)](#digest-pin-the-docker-base-images-217)
 - [cache-handler.js depends on private Next.js internals (#218)](#cache-handlerjs-depends-on-private-nextjs-internals-218)
 - [Vitest coverage config has an under-count blind spot (#212)](#vitest-coverage-config-has-an-under-count-blind-spot-212)
@@ -281,6 +282,82 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 ---
 
 ## Technical Debt
+
+### CommunicationType union is wrong: 'Text'/'Letter' are invalid — MP's enum is Unknown|Email|SMS|RssFeed|GlobalMFA (SMS sends 500) ([#220](https://github.com/The-Moody-Church/mp-charts/issues/220))
+## Problem
+
+`src/lib/providers/ministry-platform/types/provider.types.ts:41`
+
+```ts
+CommunicationType: 'Email' | 'Text' | 'Letter';
+```
+
+MP's `Platform.Messaging.CommunicationType` is:
+
+```
+Unknown | Email | SMS | RssFeed | GlobalMFA
+```
+
+`'Text'` and `'Letter'` were **never** members. MP rejects either with an opaque **HTTP 500**, not a 400:
+
+```
+HTTP 500
+{"Message":"Error converting value \"Text\" to type 'Platform.Messaging.CommunicationType'.
+ Path 'CommunicationType' ... Requested value 'Text' was not found."}
+```
+
+So the only value the type offers for texting is one that always fails, and the failure reads as a server fault rather than a bad payload.
+
+`'Email'` happens to be a real member. It is also the only value anyone has ever passed — which is why a two-thirds-wrong union has sat in the type layer unnoticed.
+
+## Also: SMS requires `TextPhoneNumberId`
+
+Once `CommunicationType: 'SMS'` is used, MP additionally requires it:
+
+```
+HTTP 500
+{"Message":"Provided communication object is invalid.
+  1. (Error) Property 'TextPhoneNumberId' is required and must be populated."}
+```
+
+`TextPhoneNumberId` is the outbound number's `dp_SMS_Numbers.SMS_Number_ID`. The field already exists on `CommunicationInfo` but is optional — it is effectively **required when `CommunicationType === 'SMS'`**. MP's own Swagger marks it optional, so the Swagger cannot be trusted here.
+
+## Verified against the live tenant
+
+Re-checked on 2026-09-08 (moody.ministryplatform.com), not taken from the Swagger alone:
+
+| Check | Result |
+|---|---|
+| `dp_Communication_Types` | `1 Email`, `2 SMS Text`, `3 RSS Feed`, `4 GlobalMFA` (`Unknown` is the zero value, no row) |
+| `dp_SMS_Numbers` | one row — `SMS_Number_ID = 1`, active, default ("Twilio MP Main") |
+
+Originally found on 2026-06-11 while building the tmc-app passwordless sign-in spike, which reuses this `/communications` pattern: email `CommunicationId 54143` delivered; SMS succeeded only after switching `'Text'` → `'SMS'` and adding `TextPhoneNumberId` (`CommunicationId 54144`).
+
+## Impact here
+
+**Latent, not a live outage.** Nothing in `src/` calls `createCommunication` — the only references are the plumbing (`helper.ts`, `provider.ts`, `communication.service.ts`) and `helper.test.ts`, which uses `'Email' as const`. So this is a wrong type surface waiting for the first person who tries to send a text, who will get a 500 with no indication their payload was at fault.
+
+## Suggested fix
+
+This was fixed in the sibling **mp-senior-care** as its #103 (PR [#162](https://github.com/The-Moody-Church/mp-senior-care/pull/162)); the change ports cleanly, since both files are byte-identical here.
+
+1. **`COMMUNICATION_TYPES` as a `const [...] as const`** with `CommunicationType` derived from it, so the enum has one source of truth and a comment naming what verified it.
+2. **Make `CommunicationInfo` a discriminated union** so the compiler requires `TextPhoneNumberId` exactly when the type is `'SMS'`. That turns a runtime 500 into a build error.
+3. **Runtime guard in `CommunicationService.createCommunication`**, placed *above* `ensureValidToken()` so a doomed payload costs neither a token refresh nor a round trip. It catches callers arriving through an `as` cast or untyped JSON, and names the accepted values so nobody needs the Swagger to fix their call.
+
+Notes from doing it there:
+
+- `provider.types.ts` is **hand-maintained**, not generated — `generate-types.ts` only writes into `models/` — so the fix will not be undone by `npm run mp:generate:models`.
+- `communication.service.ts` has **no test file** in either repo. The port is a good moment to add one. Worth asserting that a rejected payload makes *no* MP call (post, postFormData and `ensureValidToken`), not merely that an error came back — otherwise the test still passes if the guard is later moved below the POST.
+- The type itself can be covered with `@ts-expect-error` cases that fail `tsc --noEmit`. Confirmed there that test files are inside the tsconfig, so those are enforced by CI rather than decorative.
+- Existing `helper.test.ts` fixtures use `'Email' as const` and are unaffected.
+
+## Upstream
+
+**`MinistryPlatform-Community/MPNext` carries the identical line at the same line 41**, so every downstream fork of the template has this. Worth reporting upstream once the fix is settled here — flagging rather than doing, since that is a public third-party repo.
+
+---
+_Filed from the mp-senior-care session that fixed the same bug there._
 
 ### Digest-pin the Docker base images ([#217](https://github.com/The-Moody-Church/mp-charts/issues/217))
 All four `FROM` lines use the mutable tag `node:24-alpine` (`Dockerfile` deps/builder/runner +
