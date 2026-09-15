@@ -1,6 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { parseAdditionalUserInputFromProviderProfile } from "better-auth/db";
-import { userAdditionalFields, getMpUserInfo } from "@/lib/auth";
+import {
+  userAdditionalFields,
+  getMpUserInfo,
+  disabledAuthPaths,
+  syntheticEmailForSub,
+  mapMpProfileToUser,
+  SYNTHETIC_EMAIL_DOMAIN,
+  auth,
+} from "@/lib/auth";
 
 const { mockGetTableRecords } = vi.hoisted(() => ({
   mockGetTableRecords: vi.fn(),
@@ -92,13 +100,19 @@ describe("BETTER_AUTH_SECRET fail-fast", () => {
 describe("getMpUserInfo", () => {
   const VALID_SUB = "ab12cd34-ef56-7890-abcd-ef1234567890";
 
-  const stubUserinfo = (sub: string) =>
+  const stubUserinfo = (sub: string, extra: Record<string, unknown> = {}) =>
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
         json: () =>
-          Promise.resolve({ sub, email: "jon@example.org", given_name: "Jon", family_name: "Tester" }),
+          Promise.resolve({
+            sub,
+            email: "jon@example.org",
+            given_name: "Jon",
+            family_name: "Tester",
+            ...extra,
+          }),
       })
     );
 
@@ -110,11 +124,31 @@ describe("getMpUserInfo", () => {
     vi.unstubAllGlobals();
   });
 
-  it("rejects a malformed sub before any MP lookup", async () => {
+  it("returns null (not throws) for a malformed sub, before any MP lookup", async () => {
+    // better-auth 1.6 does NOT wrap getUserInfo in a try/catch, so a throw
+    // escapes as an unhandled error instead of the clean user_info_is_missing
+    // redirect a null return produces. Regression guard for that distinction.
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     stubUserinfo("not-a-guid'; DROP TABLE dp_Users;--");
 
-    await expect(getMpUserInfo("token")).rejects.toThrow(/Invalid GUID/);
+    await expect(getMpUserInfo("token")).resolves.toBeNull();
     expect(mockGetTableRecords).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("auth.userinfo.invalid_sub")
+    );
+    errorSpy.mockRestore();
+  });
+
+  it("returns null when the profile carries no sub at all", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ email: "x@y.z" }) })
+    );
+
+    await expect(getMpUserInfo("token")).resolves.toBeNull();
+    expect(mockGetTableRecords).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 
   it("returns the validated GUID as both id and userGuid", async () => {
@@ -125,11 +159,12 @@ describe("getMpUserInfo", () => {
 
     const user = await getMpUserInfo("token");
 
-    expect(user.id).toBe(VALID_SUB);
-    expect(user.userGuid).toBe(VALID_SUB);
-    expect(user.mpUserId).toBe(42);
-    expect(user.mpContactId).toBe(99);
-    expect(user.name).toBe("Jonny Tester");
+    expect(user).not.toBeNull();
+    expect(user!.id).toBe(VALID_SUB);
+    expect(user!.userGuid).toBe(VALID_SUB);
+    expect(user!.mpUserId).toBe(42);
+    expect(user!.mpContactId).toBe(99);
+    expect(user!.name).toBe("Jonny Tester");
   });
 
   it("still returns the user when the MP enrichment lookup fails", async () => {
@@ -138,14 +173,178 @@ describe("getMpUserInfo", () => {
 
     const user = await getMpUserInfo("token");
 
-    expect(user.id).toBe(VALID_SUB);
-    expect(user.mpUserId).toBeUndefined();
-    expect(user.name).toBe("Jon Tester");
+    expect(user).not.toBeNull();
+    expect(user!.id).toBe(VALID_SUB);
+    expect(user!.mpUserId).toBeUndefined();
+    expect(user!.name).toBe("Jon Tester");
   });
 
   it("throws on a non-OK userinfo response", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 }));
 
     await expect(getMpUserInfo("token")).rejects.toThrow(/401/);
+  });
+
+  // F2: emailVerified drives better-auth's implicit account-linking decision.
+  // It must reflect MP's claim, never a hardcoded true.
+  it("defaults emailVerified to false when MP omits the email_verified claim", async () => {
+    stubUserinfo(VALID_SUB);
+    mockGetTableRecords.mockResolvedValue([]);
+
+    const user = await getMpUserInfo("token");
+
+    expect(user!.emailVerified).toBe(false);
+  });
+
+  it("sets emailVerified true only when MP explicitly claims it", async () => {
+    stubUserinfo(VALID_SUB, { email_verified: true });
+    mockGetTableRecords.mockResolvedValue([]);
+
+    expect((await getMpUserInfo("token"))!.emailVerified).toBe(true);
+
+    stubUserinfo(VALID_SUB, { email_verified: "true" });
+    expect((await getMpUserInfo("token"))!.emailVerified).toBe(false);
+  });
+});
+
+/**
+ * F-UPDATE-USER (GHSA-pqxp-c5mr-5398) — session identity was reassignable.
+ *
+ * These drive the REAL `auth.handler`, not a mock of it, so they fail if the
+ * `disabledPaths` option is removed or renamed by a better-auth upgrade.
+ * Both halves are asserted on purpose: that the paths 404, AND that
+ * `userGuid` is still writable from the provider profile. A "fix" that closes
+ * the endpoint by breaking sign-in is not a fix.
+ */
+describe("disabled account-management endpoints", () => {
+  const call = (path: string, method: "GET" | "POST" = "POST") =>
+    auth.handler(
+      new Request(`http://localhost:3000/api/auth${path}`, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        ...(method === "POST" ? { body: "{}" } : {}),
+      })
+    );
+
+  it("pins the exact set of disabled paths", () => {
+    expect(disabledAuthPaths).toEqual([
+      "/update-user",
+      "/change-email",
+      "/change-password",
+      "/set-password",
+      "/delete-user",
+      "/delete-user/callback",
+    ]);
+  });
+
+  it("wires disabledAuthPaths into the better-auth options", () => {
+    expect(auth.options.disabledPaths).toBe(disabledAuthPaths);
+  });
+
+  it("returns 404 for POST /update-user — session identity is not reassignable", async () => {
+    // The attack: any authenticated user POSTing themselves another user's
+    // MP User_GUID. 404 means the router refused before sessionMiddleware.
+    const res = await call("/update-user");
+    expect(res.status).toBe(404);
+  });
+
+  it.each([
+    "/change-email",
+    "/change-password",
+    "/set-password",
+    "/delete-user",
+    "/delete-user/callback",
+  ])("returns 404 for POST %s", async (path) => {
+    expect((await call(path)).status).toBe(404);
+  });
+
+  // Negative control: without this the suite could pass vacuously (e.g. if
+  // every path 404'd because the handler was misconfigured).
+  it("still routes an endpoint that is NOT disabled", async () => {
+    const res = await call("/get-session", "GET");
+    expect(res.status).not.toBe(404);
+  });
+});
+
+/**
+ * F2 — a shared Ministry Platform email must not merge two people onto one
+ * better-auth identity. MP enforces no uniqueness on email addresses.
+ */
+describe("account identity (F2)", () => {
+  it("disables implicit account linking", () => {
+    expect(auth.options.account?.accountLinking?.enabled).toBe(false);
+  });
+
+  it("sends OAuth callback failures to our own /auth-error page", () => {
+    expect(auth.options.onAPIError?.errorURL).toBe("/auth-error");
+  });
+
+  it("derives a synthetic, non-routable email from the sub", () => {
+    const sub = "AB12CD34-EF56-7890-ABCD-EF1234567890";
+    expect(syntheticEmailForSub(sub)).toBe(
+      `ab12cd34-ef56-7890-abcd-ef1234567890@${SYNTHETIC_EMAIL_DOMAIN}`
+    );
+    // RFC 2606 reserved TLD — guaranteed never to reach a real mailbox.
+    expect(SYNTHETIC_EMAIL_DOMAIN).toBe("mp.invalid");
+  });
+
+  it("gives two subs sharing one real email two DISTINCT better-auth emails", () => {
+    const a = "ab12cd34-ef56-7890-abcd-ef1234567890";
+    const b = "ffffffff-ef56-7890-abcd-ef1234567890";
+    expect(syntheticEmailForSub(a)).not.toBe(syntheticEmailForSub(b));
+  });
+
+  it("requires userGuid and allows a null mpEmail", () => {
+    // required:true makes parseInputData refuse to create a user with no MP
+    // identity. mpEmail must stay optional — MP does not require an email.
+    expect(userAdditionalFields.userGuid.required).toBe(true);
+    expect(userAdditionalFields.mpEmail.required).toBe(false);
+  });
+
+  it("maps the provider profile to a synthetic email and a real mpEmail", () => {
+    const mapped = mapMpProfileToUser({
+      userGuid: "AB12CD34-EF56-7890-ABCD-EF1234567890",
+      email: "shared@example.org",
+      mpUserId: 42,
+      mpContactId: 99,
+    });
+
+    expect(mapped.email).toBe(
+      `ab12cd34-ef56-7890-abcd-ef1234567890@${SYNTHETIC_EMAIL_DOMAIN}`
+    );
+    expect(mapped.mpEmail).toBe("shared@example.org");
+    expect(mapped.userGuid).toBe("AB12CD34-EF56-7890-ABCD-EF1234567890");
+    expect(mapped.mpUserId).toBe(42);
+    expect(mapped.mpContactId).toBe(99);
+  });
+
+  it("never hands a real MP email to better-auth as the user email (F2 root cause)", () => {
+    // Two MP users sharing one household address must not collide on
+    // better-auth's unique `email` column.
+    const one = mapMpProfileToUser({
+      userGuid: "ab12cd34-ef56-7890-abcd-ef1234567890",
+      email: "household@example.org",
+    });
+    const two = mapMpProfileToUser({
+      userGuid: "ffffffff-ef56-7890-abcd-ef1234567890",
+      email: "household@example.org",
+    });
+
+    expect(one.email).not.toBe("household@example.org");
+    expect(two.email).not.toBe("household@example.org");
+    expect(one.email).not.toBe(two.email);
+    expect(one.mpEmail).toBe("household@example.org");
+    expect(two.mpEmail).toBe("household@example.org");
+  });
+
+  it("maps a missing MP email to null rather than an empty string", () => {
+    expect(
+      mapMpProfileToUser({ userGuid: "ab12cd34-ef56-7890-abcd-ef1234567890" }).mpEmail
+    ).toBeNull();
+  });
+
+  it("throws rather than minting a user with an empty userGuid", () => {
+    expect(() => mapMpProfileToUser({ userGuid: "" })).toThrow(/no usable sub/);
+    expect(() => mapMpProfileToUser({})).toThrow(/no usable sub/);
   });
 });

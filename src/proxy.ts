@@ -6,8 +6,11 @@ const isDev = process.env.NODE_ENV === 'development';
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Early returns for public paths
-  if (pathname.startsWith('/api') || pathname === '/signin') {
+  // Early returns for public paths.
+  // /auth-error must be public: a failed OAuth callback lands there with no
+  // session, and redirecting it to /signin would auto-start OAuth again and
+  // loop forever. (F7, upstream MPNext 91d226f.)
+  if (pathname.startsWith('/api') || pathname === '/signin' || pathname === '/auth-error') {
     if (isDev) console.log(`Proxy: Allowing public path ${pathname}`);
     return NextResponse.next();
   }

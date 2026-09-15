@@ -54,6 +54,46 @@ describe('Proxy', () => {
     } as unknown as NextRequest;
   }
 
+  /**
+   * These drive the REAL exported `proxy()` rather than re-implementing its
+   * branch inline, so they fail if the public-path list actually changes.
+   * (F7 — /auth-error must be reachable without a session, or a failed OAuth
+   * callback bounces to /signin, which auto-starts OAuth again and loops.)
+   */
+  describe('Public paths (real proxy)', () => {
+    it('lets /auth-error through with no session cookie', async () => {
+      const { proxy } = await import('./proxy');
+      mockGetSessionCookie.mockReturnValue(undefined);
+
+      const result = await proxy(createMockRequest('/auth-error'));
+
+      expect(result).toEqual({ type: 'next' });
+      expect(NextResponse.redirect).not.toHaveBeenCalled();
+      // Public paths return before the cookie is ever consulted.
+      expect(mockGetSessionCookie).not.toHaveBeenCalled();
+    });
+
+    it('lets /signin through with no session cookie', async () => {
+      const { proxy } = await import('./proxy');
+      mockGetSessionCookie.mockReturnValue(undefined);
+
+      expect(await proxy(createMockRequest('/signin'))).toEqual({ type: 'next' });
+      expect(NextResponse.redirect).not.toHaveBeenCalled();
+    });
+
+    it('still redirects a protected path with no session cookie', async () => {
+      // Negative control: proves the two assertions above are not vacuous.
+      const { proxy } = await import('./proxy');
+      mockGetSessionCookie.mockReturnValue(undefined);
+
+      const result = await proxy(createMockRequest('/dashboard')) as { type: string; url: string };
+
+      expect(result.type).toBe('redirect');
+      expect(result.url).toContain('/signin');
+      expect(result.url).toContain('callbackUrl=%2Fdashboard');
+    });
+  });
+
   describe('Public Paths', () => {
     it('should allow access to /api routes without authentication', () => {
       const request = createMockRequest('/api/auth/session');

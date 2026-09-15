@@ -44,7 +44,11 @@ export function Header() {
                     userProfile?.First_Name && userProfile?.Last_Name
                       ? `${userProfile.First_Name} ${userProfile.Last_Name}`
                       : session?.user?.name ||
-                        session?.user?.email ||
+                        // NOT `session.user.email` — that is the synthetic
+                        // <sub>@mp.invalid value better-auth stores as its
+                        // unique key (see syntheticEmailForSub in
+                        // @/lib/auth). The real MP address is `mpEmail`.
+                        (session?.user as { mpEmail?: string | null } | undefined)?.mpEmail ||
                         "User menu"
                   }
                 >

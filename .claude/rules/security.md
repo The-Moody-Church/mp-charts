@@ -152,6 +152,25 @@ console.log("Contact:", JSON.stringify(record));         // leaks email, phone
 console.log("HTTP PUT:", JSON.stringify(body, null, 2)); // leaks request payloads
 ```
 
+## Better Auth Endpoint Exposure — MANDATORY
+
+The better-auth catch-all route mounts far more HTTP endpoints than this app uses. Two controls keep that surface closed, and **both must stay**:
+
+1. **`allowedAuthRoutes` in `src/app/api/auth/[...all]/route.ts`** — a deny-by-default allowlist. Only the exact paths our browser client calls reach better-auth; everything else returns a plain 404 without touching it. Exact string match only: no regex, no prefix matching.
+2. **`disabledAuthPaths` in `src/lib/auth.ts`** — passed as `disabledPaths`, matched in better-auth's router before rate limiting, plugins and `sessionMiddleware`.
+
+**Adding a browser-side better-auth call means adding its path to the allowlist first** — the 404 is designed to make that omission loud. Never widen either list to make an unrelated failure go away.
+
+Why this matters concretely: `POST /update-user` takes a body of `z.record(z.string(), z.any())` and copies any additional field declared `input !== false` straight onto the session, with no validator. Our `userGuid`/`mpUserId`/`mpContactId` must stay `input: true` for sign-in to work, so before this was closed any authenticated user could POST themselves another user's MP identity and inherit their User Groups and audit attribution (GHSA-pqxp-c5mr-5398). `input: false` is not an alternative — the same flag governs whether the OAuth profile may populate the field, so setting it breaks sign-in.
+
+**If either control is ever removed, rotate `BETTER_AUTH_SECRET`.** Closing the endpoint does not revoke a session already forged; those live in the JWT cookie cache for up to an hour, and with no database there is no session table to clear.
+
+## Identity & Email
+
+**Never use `session.user.email` for display, lookup or mail.** It is a synthetic `<sub>@mp.invalid` value derived from the MP `User_GUID`. The real Ministry Platform address is on `session.user.mpEmail`, which is **nullable** — MP does not require an email.
+
+This exists because better-auth's `email` column is required and unique, and its OAuth callback uses `findUserByEmail` as a fallback identity lookup, while **Ministry Platform enforces no uniqueness on email at all**. Households routinely share one address across contacts who each hold a `dp_Users` login. Keying on email meant the second person to sign in inherited the first person's identity.
+
 ## Authentication & Authorization
 
 - Every server action MUST call `requireSession()` before any data access
