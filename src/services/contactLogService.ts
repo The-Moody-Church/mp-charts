@@ -1,6 +1,37 @@
 import { ContactLog } from "@/lib/providers/ministry-platform/models/ContactLog";
 import { ContactLogTypes } from "@/lib/providers/ministry-platform/models/ContactLogTypes";
 import { ContactLogSchema, ContactLogInput } from "@/lib/providers/ministry-platform/models/ContactLogSchema";
+
+/**
+ * What a caller may supply when creating a contact log.
+ *
+ * `Made_By` is absent because attribution is server-authoritative (F4) — it
+ * comes from the acting session, passed as a separate argument so it can never
+ * arrive inside a caller-shaped payload object. The type is documentation and
+ * compile-time help only; the runtime guard is the Zod `.omit()` in the
+ * service.
+ */
+export type ContactLogCreateInput = Omit<ContactLogInput, "Contact_Log_ID" | "Made_By">;
+
+/**
+ * What a caller may supply when updating a contact log.
+ *
+ * Beyond `Made_By`, `Contact_ID` is absent so a log cannot be re-parented onto
+ * a different contact, and the three linkage FKs are absent because the edit
+ * form never sends them — accepting them would only widen what a crafted
+ * request can reach.
+ */
+export type ContactLogUpdateInput = Partial<
+  Omit<
+    ContactLogInput,
+    | "Contact_Log_ID"
+    | "Made_By"
+    | "Contact_ID"
+    | "Planned_Contact_ID"
+    | "Original_Contact_Log_Entry"
+    | "Feedback_Entry_ID"
+  >
+>;
 import { MPHelper } from "@/lib/providers/ministry-platform";
 import { sanitizeId } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
 import { toMpSqlDatetime } from "@/lib/providers/ministry-platform/utils/mp-datetime";
@@ -115,27 +146,72 @@ export class ContactLogService {
   }
 
   /**
-   * Creates a new contact log record with validation
-   * 
-   * @param contactLogData - The contact log data to create
-   * @param schema - Optional Zod schema for runtime validation (defaults to ContactLogSchema)
-   * @returns Promise<ContactLog> - The created contact log record
+   * Creates a new contact log record.
+   *
+   * **Attribution is server-authoritative (F4).** `Made_By` comes ONLY from
+   * the `madeBy` argument, which the action layer supplies from the session —
+   * never from `contactLogData`. A server action is a POST endpoint whose
+   * payload shape the caller controls, and TypeScript types are erased at
+   * runtime, so a narrow parameter type guards nothing on its own. The Zod
+   * `.omit()` below is what actually strips a smuggled key: a `z.object`
+   * parse drops keys the schema does not declare. **That omit is the control**
+   * — the spread order in the record literal is only defense in depth.
+   *
+   * | Field | Create | Update |
+   * |---|---|---|
+   * | `Made_By` | this `madeBy` argument, spread LAST | never sent — MP preserves the original author |
+   * | `Contact_ID` | caller's subject contact, `sanitizeId`'d | never sent — a log cannot be re-parented |
+   *
+   * (Adapted from upstream MPNext d7adaf8 / PR #85. Upstream stamps the
+   * EDITOR on update because any role-holder may edit any log; our policy is
+   * owner-only edit with the original author preserved, so we omit `Made_By`
+   * on update instead. Under owner-only edit the two are equivalent today,
+   * and omitting stays correct if admins are ever allowed to edit others'
+   * logs.)
+   *
+   * @param contactLogData - The contact log data. `Made_By` is not accepted.
+   * @param madeBy - Acting MP `User_ID`, from the session. The only source of
+   *   `Made_By`, and the `$userId` for MP's audit trail.
    */
   public async createContactLog(
-    contactLogData: Omit<ContactLogInput, 'Contact_Log_ID'>,
+    contactLogData: ContactLogCreateInput,
+    madeBy: number,
   ): Promise<ContactLog> {
-    // Validate the input data before date format conversion
-    const validatedData = ContactLogSchema.omit({ Contact_Log_ID: true }).parse(contactLogData);
+    // Fail before touching MP if the caller could not supply an acting user.
+    const actingUserId = sanitizeId(madeBy);
+
+    // `.omit({ Made_By })` STRIPS a smuggled Made_By rather than merely
+    // leaving it untyped. Do not add `.passthrough()`/`z.looseObject` to this
+    // schema — the strip is the control.
+    const validatedData = ContactLogSchema
+      .omit({ Contact_Log_ID: true, Made_By: true })
+      .parse(contactLogData);
+
+    // React Flight args are type-erased, so a "number" can arrive as a string.
+    const contactId = sanitizeId(validatedData.Contact_ID);
 
     // Convert ISO date to SQL format in Central Time (YYYY-MM-DD HH:MM:SS)
     // Ministry Platform interprets dates as US Central Time
-    if (validatedData.Contact_Date) {
-      (validatedData as Record<string, unknown>).Contact_Date = toMpSqlDatetime(validatedData.Contact_Date);
-    }
+    const contactDate = validatedData.Contact_Date
+      ? toMpSqlDatetime(validatedData.Contact_Date)
+      : validatedData.Contact_Date;
+
+    const record = {
+      ...validatedData,
+      Contact_ID: contactId,
+      Contact_Date: contactDate,
+      // Spread last as defense in depth, NOT as the control: the `.omit()`
+      // above already removes Made_By from `validatedData`, so ordering has no
+      // observable effect today (verified by mutation — reordering this breaks
+      // no test). It matters only if the omit is ever weakened, which is why
+      // both are here.
+      Made_By: actingUserId,
+    };
 
     const result = await this.mp!.createTableRecords(
       "Contact_Log",
-      [validatedData]
+      [record],
+      { $userId: actingUserId }
     );
     
     if (!result || result.length === 0) {
@@ -146,18 +222,37 @@ export class ContactLogService {
   }
 
   /**
-   * Updates an existing contact log record with validation
-   * 
-   * @param contactLogId - The ID of the contact log record to update
-   * @param contactLogData - The updated contact log data (partial)
-   * @returns Promise<ContactLog> - The updated contact log record
+   * Updates an existing contact log record.
+   *
+   * Neither `Made_By` nor `Contact_ID` is ever sent (F4) — MP preserves both.
+   * That keeps the original author intact and makes a log un-re-parentable.
+   * The three linkage FKs are omitted for the same reason: the edit form never
+   * sends them, so accepting them only widens what a crafted request can do.
+   *
+   * @param contactLogId - The record to update.
+   * @param contactLogData - Partial data. `Made_By`, `Contact_ID` and the
+   *   linkage FKs are not accepted.
+   * @param actorUserId - Acting MP `User_ID`, from the session, for `$userId`.
    */
   public async updateContactLog(
     contactLogId: number,
-    contactLogData: Partial<Omit<ContactLogInput, 'Contact_Log_ID'>>
+    contactLogData: ContactLogUpdateInput,
+    actorUserId: number
   ): Promise<ContactLog> {
-    // Validate before date format conversion (Zod expects ISO datetime, not SQL format)
-    const validatedData = ContactLogSchema.omit({ Contact_Log_ID: true }).partial().parse(contactLogData);
+    const actingUserId = sanitizeId(actorUserId);
+
+    // Strips Made_By, Contact_ID and the linkage FKs if a caller smuggles them.
+    const validatedData = ContactLogSchema
+      .omit({
+        Contact_Log_ID: true,
+        Made_By: true,
+        Contact_ID: true,
+        Planned_Contact_ID: true,
+        Original_Contact_Log_Entry: true,
+        Feedback_Entry_ID: true,
+      })
+      .partial()
+      .parse(contactLogData);
 
     // Convert ISO date to SQL format in Central Time after validation
     if (validatedData.Contact_Date) {
@@ -169,7 +264,8 @@ export class ContactLogService {
     
     const result = await this.mp!.updateTableRecords(
       "Contact_Log",
-      [updateData]
+      [updateData],
+      { $userId: actingUserId }
     );
     
     if (!result || result.length === 0) {
@@ -180,15 +276,17 @@ export class ContactLogService {
   }
 
   /**
-   * Deletes a contact log record
-   * 
-   * @param contactLogId - The ID of the contact log record to delete
-   * @returns Promise<void>
+   * Deletes a contact log record.
+   *
+   * @param contactLogId - The record to delete.
+   * @param actorUserId - Acting MP `User_ID`, from the session, for `$userId`
+   *   so MP's audit trail names the staff member rather than the API client.
    */
-  public async deleteContactLog(contactLogId: number): Promise<void> {
+  public async deleteContactLog(contactLogId: number, actorUserId: number): Promise<void> {
     await this.mp!.deleteTableRecords(
       "Contact_Log",
-      [sanitizeId(contactLogId)]
+      [sanitizeId(contactLogId)],
+      { $userId: sanitizeId(actorUserId) }
     );
   }
 }
