@@ -73,6 +73,16 @@ async function AuthErrorContent({ searchParams }: Props) {
   // attacker- and provider-controlled text reflected into the query string;
   // showing it would let a crafted /auth-error link display arbitrary content
   // on our own domain.
+  //
+  // Precisely what that does and does not guarantee, verified live against a
+  // soak build 2026-09-17: the value never reaches the RENDERED page. It does
+  // still appear in Next's RSC flight payload, because Next serializes every
+  // page's searchParams into the document regardless of which ones a
+  // component reads — that is framework behaviour and no code here can
+  // prevent it. It is safe: Next escapes `<`/`>` to \u003c/\u003e inside
+  // that payload, so a `</script><script>` breakout attempt is inert (tested
+  // directly; script tags stayed balanced). So the guarantee is "not rendered
+  // and not executable", not "absent from the response".
   const message = (error && ERROR_MESSAGES[error]) || FALLBACK_MESSAGE;
 
   return <AuthErrorShell message={message} code={error} />;
