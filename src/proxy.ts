@@ -1,8 +1,6 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { getSessionCookie } from 'better-auth/cookies';
 
-const isDev = process.env.NODE_ENV === 'development';
-
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -11,7 +9,6 @@ export async function proxy(request: NextRequest) {
   // session, and redirecting it to /signin would auto-start OAuth again and
   // loop forever. (F7, upstream MPNext 91d226f.)
   if (pathname.startsWith('/api') || pathname === '/signin' || pathname === '/auth-error') {
-    if (isDev) console.log(`Proxy: Allowing public path ${pathname}`);
     return NextResponse.next();
   }
 
@@ -19,17 +16,17 @@ export async function proxy(request: NextRequest) {
     const sessionCookie = getSessionCookie(request);
 
     if (!sessionCookie) {
-      if (isDev) console.log("Proxy: Redirecting to signin - no session cookie");
       const signinUrl = new URL('/signin', request.url);
       signinUrl.searchParams.set('callbackUrl', pathname + request.nextUrl.search);
       return NextResponse.redirect(signinUrl);
     }
 
-    if (isDev) console.log(`Proxy: Allowing request to ${pathname}`);
     return NextResponse.next();
 
   } catch (error) {
-    console.error('Proxy: Error checking session:', error);
+    // Shape the error — never log the raw object, which may carry a
+    // response body or a $filter string. (F5)
+    console.error('Proxy: error checking session:', error instanceof Error ? error.message : String(error));
     const signinUrl = new URL('/signin', request.url);
     signinUrl.searchParams.set('callbackUrl', pathname + request.nextUrl.search);
     return NextResponse.redirect(signinUrl);
