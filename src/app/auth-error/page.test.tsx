@@ -36,6 +36,12 @@ describe("AuthErrorPage", () => {
     // Provider- and attacker-controlled text reflected in the query string.
     // Rendering it would let a crafted /auth-error link put arbitrary copy on
     // our own domain.
+    //
+    // Scope of this assertion: it pins that the value is not RENDERED. Next
+    // still serializes it into the RSC flight payload along with every other
+    // searchParam, which no code here can prevent — that path is safe because
+    // Next escapes it (verified live on a soak build, 2026-09-17). Do not
+    // read this test as proving the string is absent from the response.
     const injected = "ATTACKER-CONTROLLED-TEXT";
     await act(async () => {
       render(
