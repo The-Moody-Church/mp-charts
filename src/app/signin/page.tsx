@@ -1,74 +1,38 @@
-"use client";
+import { connection } from "next/server";
 
-import { useEffect, useRef, Suspense } from "react";
-import { authClient } from "@/lib/auth-client";
-import { useSearchParams } from "next/navigation";
+import { SignIn } from "@/components/sign-in/sign-in";
 
-function getSafeCallbackUrl(url: string | null): string {
-  if (!url) return "/";
-  // Reject backslashes and control characters first. Browsers normalize "\" to "/",
-  // so a value like "/\evil.com" would slip past naive relative-URL checks and then
-  // navigate off-site (open redirect / phishing). The previous string-prefix checks
-  // (startsWith("//"), includes("://")) did not catch this.
-  if (/[\\\x00-\x1f]/.test(url)) return "/";
-  try {
-    // Resolve against our own origin and require the result to stay same-origin.
-    // This also rejects absolute URLs, protocol-relative URLs, and javascript: URIs.
-    const resolved = new URL(url, window.location.origin);
-    if (resolved.origin !== window.location.origin) return "/";
-    return resolved.pathname + resolved.search + resolved.hash;
-  } catch {
-    return "/";
-  }
-}
+/**
+ * `instant = false` lets this route BLOCK rather than serve a prerendered
+ * shell — which is what `connection()` needs under cacheComponents, and what
+ * a nonce needs in order to exist at render time. Without it the build fails
+ * with "uncached or runtime data during prerendering".
+ */
+export const instant = false;
 
-function SignInContent() {
-  const searchParams = useSearchParams();
-  const callbackUrl = getSafeCallbackUrl(searchParams?.get("callbackUrl"));
-  const isRedirecting = useRef(false);
-  const { data: session, isPending } = authClient.useSession();
-
-  useEffect(() => {
-    if (isPending) return;
-
-    if (session) {
-      // User is already signed in, redirect to callback URL
-      window.location.href = callbackUrl;
-    } else if (!isRedirecting.current) {
-      // User is not signed in, initiate sign in
-      isRedirecting.current = true;
-      authClient.signIn.oauth2({
-        providerId: "ministryplatform",
-        callbackURL: callbackUrl,
-      });
-    }
-  }, [callbackUrl, session, isPending]);
-
-  return (
-    <div className="flex items-center justify-center min-h-screen">
-      <div className="text-center">
-        <h2 className="text-2xl font-semibold mb-4">Redirecting to sign in...</h2>
-        <div className="animate-spin h-8 w-8 border-4 border-blue-500 rounded-full border-t-transparent mx-auto"></div>
-      </div>
-    </div>
-  );
-}
-
-function SignInFallback() {
-  return (
-    <div className="flex items-center justify-center min-h-screen">
-      <div className="text-center">
-        <h2 className="text-2xl font-semibold mb-4">Loading...</h2>
-        <div className="animate-spin h-8 w-8 border-4 border-blue-500 rounded-full border-t-transparent mx-auto"></div>
-      </div>
-    </div>
-  );
-}
-
-export default function SignIn() {
-  return (
-    <Suspense fallback={<SignInFallback />}>
-      <SignInContent />
-    </Suspense>
-  );
+/**
+ * Opt out of prerendering.
+ *
+ * NOT `export const dynamic = "force-dynamic"` — Next 16 rejects that
+ * outright when `cacheComponents` is enabled ("Route segment config
+ * \"dynamic\" is not compatible with nextConfig.cacheComponents"), which is
+ * upstream MPNext's documented fix and does not apply to this config.
+ * `connection()` is the supported way to defer a route to request time here,
+ * and is the pattern already used elsewhere in this repo (see
+ * .claude/rules/caching.md).
+ *
+ * Why it matters: Next reads the CSP nonce off the INCOMING REQUEST, so a
+ * prerendered page has no nonce, its bootstrap script is blocked under an
+ * enforced policy, and it never hydrates. /signin does nothing BUT run
+ * client-side effects to start the Ministry Platform OAuth flow, so an
+ * unhydrated /signin is a permanent spinner that never reaches MP — on the
+ * one page nobody can route around.
+ *
+ * This file must also stay a SERVER component: the page body lives in
+ * `@/components/sign-in/sign-in` because route-level opt-outs are ignored in
+ * a `"use client"` module. `page.test.tsx` pins both halves.
+ */
+export default async function SignInPage() {
+  await connection();
+  return <SignIn />;
 }
