@@ -1,16 +1,43 @@
 "use client";
 
+import { useEffect } from "react";
+
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
 export default function WebError({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  // Next 16 passes `retry`, which re-fetches and re-renders the segment.
+  // `reset` still exists but only clears error state without re-fetching, so a
+  // boundary wired to it renders fine and its button silently does less.
+  retry: () => void;
 }) {
+  useEffect(() => {
+    // Identifiers only, never `error.message`. This boundary sits above
+    // components that render member names and pastoral notes, and a render
+    // error's message is not guaranteed to be content-free. `digest` joins to
+    // the un-redacted server log.
+    console.error(
+      JSON.stringify({
+        event: "ui.render.error",
+        boundary: "web",
+        name: error.name,
+        digest: error.digest ?? null,
+      })
+    );
+  }, [error]);
+
+  // NOTE on this check: Next redacts a SERVER COMPONENT error's message in
+  // production (replacing it with a generic string plus a digest), so this
+  // branch only reliably fires for errors thrown from SERVER ACTIONS, whose
+  // messages are preserved. That covers the common case — a gated action
+  // refusing — but a gated page render falls through to the generic message
+  // below. The durable fix is a layout-level redirect to an explaining page
+  // rather than pattern-matching a string here.
   const isForbidden = error.message?.includes("Forbidden") || error.message?.includes("insufficient permissions");
 
   if (isForbidden) {
@@ -35,10 +62,10 @@ export default function WebError({
       <Alert variant="destructive">
         <AlertTitle>Something went wrong</AlertTitle>
         <AlertDescription>
-          {error.message || "An unexpected error occurred. Please try again."}
+          {"An unexpected error occurred. Please try again."}
         </AlertDescription>
       </Alert>
-      <Button onClick={reset} className="mt-4">
+      <Button onClick={retry} className="mt-4">
         Try Again
       </Button>
     </div>
