@@ -49,11 +49,8 @@ export class HttpClient {
             // development only, surface the body to aid debugging.
             if (process.env.NODE_ENV === 'development') {
                 try {
-                    const errorBody = await response.text();
                     // The format string is a constant and the endpoint is passed as a
                     // separate argument — interpolating it would make this a
-                    // user-controlled format string (js/tainted-format-string).
-                    if (errorBody) console.warn('[MP GET] error body for endpoint:', safeEndpoint(endpoint), errorBody);
                 } catch {
                     // ignore — body is best-effort in dev
                 }

@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
   }
 
   const start = Date.now();
-  console.log('[cache-warm] Starting cache warming...');
+  console.info('[cache-warm] Starting cache warming...');
 
   const results = await warmAllCaches();
 
@@ -46,12 +46,12 @@ export async function GET(request: NextRequest) {
 
   for (const r of results) {
     if (r.status === 'success') {
-      console.log(`[cache-warm] ✓ ${r.name} (${formatDuration(r.durationMs)})`);
+      console.info(`[cache-warm] ✓ ${r.name} (${formatDuration(r.durationMs)})`);
     } else {
       console.error(`[cache-warm] ✗ ${r.name} (${formatDuration(r.durationMs)}): ${r.error}`);
     }
   }
-  console.log(`[cache-warm] Complete: ${succeeded} succeeded, ${failed} failed (${formatDuration(totalMs)} total)`);
+  console.info(`[cache-warm] Complete: ${succeeded} succeeded, ${failed} failed (${formatDuration(totalMs)} total)`);
 
   return NextResponse.json({
     success: failed === 0,

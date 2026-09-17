@@ -54,6 +54,34 @@ const eslintConfig = defineConfig([
       "react-hooks/incompatible-library": "error",
     },
   },
+  // F5 — member PII and pastoral notes must never reach info-level logs.
+  // Hosting and log-aggregation platforms retain console output with broader
+  // access and longer retention than the Ministry Platform database itself.
+  // `warn`/`error` stay allowed, but they must log identifiers and shape only
+  // (see .claude/rules/security.md). Generator scripts and tests are exempt.
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: [
+      "src/lib/providers/ministry-platform/scripts/**",
+      "**/*.test.{ts,tsx}",
+    ],
+    rules: {
+      "no-console": ["error", { allow: ["warn", "error"] }],
+    },
+  },
+  // Operational lifecycle logging (startup, cache warming, send audit) is
+  // deliberately kept and deliberately `info`, not `warn` — it is not a
+  // problem, and routing it through warn would pollute alerting. These files
+  // carry identifiers and counts only, never record content.
+  {
+    files: [
+      "src/instrumentation.ts",
+      "src/app/api/cache-warm/route.ts",
+    ],
+    rules: {
+      "no-console": ["error", { allow: ["info", "warn", "error"] }],
+    },
+  },
 ]);
 
 export default eslintConfig;

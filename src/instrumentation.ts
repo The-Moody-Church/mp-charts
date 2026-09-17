@@ -51,14 +51,14 @@ async function warmWithRetry(url: string, maxAttempts = 10, intervalMs = 2000): 
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        console.log(`[instrumentation] Cache warming complete (attempt ${attempt}):`, data.success ? 'all caches warmed' : 'some caches failed');
+        console.info(`[instrumentation] Cache warming complete (attempt ${attempt}):`, data.success ? 'all caches warmed' : 'some caches failed');
         return;
       }
-      console.log(`[instrumentation] Cache warming attempt ${attempt}: HTTP ${res.status}`);
+      console.info(`[instrumentation] Cache warming attempt ${attempt}: HTTP ${res.status}`);
     } catch {
       // Server not ready yet — connection refused is expected
       if (attempt < maxAttempts) {
-        console.log(`[instrumentation] Waiting for server... (attempt ${attempt}/${maxAttempts})`);
+        console.info(`[instrumentation] Waiting for server... (attempt ${attempt}/${maxAttempts})`);
       }
     }
   }
@@ -103,12 +103,12 @@ function scheduleDailyWarm(url: string): void {
   }
 
   function triggerWarm() {
-    console.log('[instrumentation] Scheduled cache re-warm triggered (6:00 AM CT)');
+    console.info('[instrumentation] Scheduled cache re-warm triggered (6:00 AM CT)');
     fetch(url)
       .then(async (res) => {
         if (res.ok) {
           const data = await res.json();
-          console.log('[instrumentation] Scheduled cache re-warm complete:', data.success ? 'all caches warmed' : 'some caches failed');
+          console.info('[instrumentation] Scheduled cache re-warm complete:', data.success ? 'all caches warmed' : 'some caches failed');
         } else {
           console.error(`[instrumentation] Scheduled cache re-warm failed: HTTP ${res.status}`);
         }
@@ -120,7 +120,7 @@ function scheduleDailyWarm(url: string): void {
 
   const delay = msUntilNext6amCT();
   const delayHours = (delay / (1000 * 60 * 60)).toFixed(1);
-  console.log(`[instrumentation] Next scheduled cache warm in ${delayHours}h (6:00 AM CT)`);
+  console.info(`[instrumentation] Next scheduled cache warm in ${delayHours}h (6:00 AM CT)`);
 
   // First fire at next 6 AM CT, then every 24 hours
   setTimeout(() => {
