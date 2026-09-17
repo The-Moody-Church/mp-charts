@@ -42,19 +42,13 @@ export class HttpClient {
         });
 
         if (!response.ok) {
-            // SECURITY (F6): never put the response body in the thrown error. MP echoes
-            // the request (including $filter values such as searched emails/phones/
-            // GUIDs/DOB) in error bodies, and this message propagates to ~40
-            // console.error sites — it would leak PII to production logs. In
-            // development only, surface the body to aid debugging.
-            if (process.env.NODE_ENV === 'development') {
-                try {
-                    // The format string is a constant and the endpoint is passed as a
-                    // separate argument — interpolating it would make this a
-                } catch {
-                    // ignore — body is best-effort in dev
-                }
-            }
+            // SECURITY (F5/F6): never put the response body in the thrown error, in
+            // ANY environment. MP echoes the request — including $filter values such
+            // as searched emails, phones, GUIDs and dates of birth — back in error
+            // bodies, and this message propagates to every caller's console.error.
+            // A dev-gated dump was removed in the F5 pass: it still ran on any
+            // machine where NODE_ENV was not 'production'. Status, statusText and
+            // the sanitized endpoint are enough to debug a failure.
             throw new Error(`GET ${safeEndpoint(endpoint)} failed: ${response.status} ${response.statusText}`);
         }
 
