@@ -39,14 +39,12 @@ export async function createContactLog(
       throw new Error("Required fields are missing: Contact_ID, Contact_Date, and Notes are required");
     }
 
-    // Add Made_By from session (User_ID of logged-in user)
-    const logDataWithUser = {
-      ...contactLogData,
-      Made_By: userId,
-    };
-
+    // Made_By is NOT assembled here. Attribution has exactly one source: the
+    // `madeBy` argument below, stamped inside the service (F4). Two layers
+    // stamping it could drift, and a caller value could slip past whichever
+    // was checked second.
     const contactLogService = await ContactLogService.getInstance();
-    const contactLog = await contactLogService.createContactLog(logDataWithUser);
+    const contactLog = await contactLogService.createContactLog(contactLogData, userId);
 
     return contactLog;
   } catch (error) {
@@ -83,13 +81,13 @@ export async function updateContactLog(
       throw new Error("You can only edit contact logs that you created");
     }
 
-    // Keep original Made_By (do not reassign ownership on edit)
-    const logDataWithUser = {
-      ...contactLogData,
-      Made_By: userId,
-    };
-
-    const contactLog = await contactLogService.updateContactLog(contactLogId, logDataWithUser);
+    // Made_By is never sent on update — MP preserves the original author, and
+    // the service strips any caller-supplied Made_By/Contact_ID (F4).
+    const contactLog = await contactLogService.updateContactLog(
+      contactLogId,
+      contactLogData,
+      userId
+    );
 
     return contactLog;
   } catch (error) {
@@ -128,7 +126,7 @@ export async function deleteContactLog(contactLogId: number): Promise<void> {
       throw new Error("You can only delete contact logs that you created");
     }
 
-    await contactLogService.deleteContactLog(contactLogId);
+    await contactLogService.deleteContactLog(contactLogId, userId);
   } catch (error) {
     console.error("Error deleting contact log:", error);
     if (error instanceof Error && error.message === "You can only delete contact logs that you created") {
@@ -179,21 +177,31 @@ export async function createAutoContactLog(
       throw new Error("Unable to determine user User_ID for audit logging");
     }
 
+    // React Flight args are type-erased — a "number" can arrive as a string.
+    // These two come straight from client components
+    // (contact-links.tsx, contact-lookup-details.tsx) and were previously
+    // passed through unvalidated.
+    contactId = sanitizeId(contactId);
+    contactLogTypeId = sanitizeId(contactLogTypeId);
+
     const userName = session.user.name || "User";
     const personalizedNotes = notes.replace("User", userName);
 
     const contactLogService = await ContactLogService.getInstance();
-    await contactLogService.createContactLog({
-      Contact_ID: contactId,
-      Contact_Log_Type_ID: contactLogTypeId,
-      Notes: personalizedNotes,
-      Contact_Date: new Date().toISOString(),
-      Made_By: userId,
-      Planned_Contact_ID: null,
-      Contact_Successful: null,
-      Original_Contact_Log_Entry: null,
-      Feedback_Entry_ID: null,
-    });
+    // No Made_By here — the service stamps it from the second argument (F4).
+    await contactLogService.createContactLog(
+      {
+        Contact_ID: contactId,
+        Contact_Log_Type_ID: contactLogTypeId,
+        Notes: personalizedNotes,
+        Contact_Date: new Date().toISOString(),
+        Planned_Contact_ID: null,
+        Contact_Successful: null,
+        Original_Contact_Log_Entry: null,
+        Feedback_Entry_ID: null,
+      },
+      userId
+    );
     return true;
   } catch (error) {
     // Fire-and-forget: log but don't throw — don't block the user's action

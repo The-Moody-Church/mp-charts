@@ -158,13 +158,12 @@ describe('ContactLogService', () => {
         Contact_ID: 42,
         Contact_Date: '2024-01-15T16:30:00.000Z',
         Contact_Log_Type_ID: 1,
-        Made_By: 100,
         Notes: 'Test note',
         Planned_Contact_ID: null,
         Contact_Successful: null,
         Original_Contact_Log_Entry: null,
         Feedback_Entry_ID: null,
-      });
+      }, 100);
 
       // Verify the date was converted from UTC to Central Time SQL format
       const createdRecord = mockCreateTableRecords.mock.calls[0][1][0];
@@ -185,9 +184,8 @@ describe('ContactLogService', () => {
           Contact_ID: 42,
           Contact_Date: 'not-a-date',
           Contact_Log_Type_ID: 1,
-          Made_By: 100,
           Notes: 'Test',
-        } as never)
+        } as never, 100)
       ).rejects.toThrow();
     });
 
@@ -201,13 +199,12 @@ describe('ContactLogService', () => {
           Contact_ID: 42,
           Contact_Date: '2024-01-15T16:30:00.000Z',
           Contact_Log_Type_ID: 1,
-          Made_By: 100,
           Notes: 'Test',
           Planned_Contact_ID: null,
           Contact_Successful: null,
           Original_Contact_Log_Entry: null,
           Feedback_Entry_ID: null,
-        })
+        }, 100)
       ).rejects.toThrow('Failed to create contact log record');
     });
   });
@@ -218,14 +215,18 @@ describe('ContactLogService', () => {
       mockUpdateTableRecords.mockResolvedValueOnce([mockUpdated]);
 
       const service = await ContactLogService.getInstance();
-      const result = await service.updateContactLog(1, { Notes: 'Updated note' });
+      const result = await service.updateContactLog(1, { Notes: 'Updated note' }, 500);
 
-      expect(mockUpdateTableRecords).toHaveBeenCalledWith('Contact_Log', [
-        expect.objectContaining({
-          Contact_Log_ID: 1,
-          Notes: 'Updated note',
-        }),
-      ]);
+      expect(mockUpdateTableRecords).toHaveBeenCalledWith(
+        'Contact_Log',
+        [
+          expect.objectContaining({
+            Contact_Log_ID: 1,
+            Notes: 'Updated note',
+          }),
+        ],
+        { $userId: 500 }
+      );
       expect(result).toEqual(mockUpdated);
     });
 
@@ -235,7 +236,7 @@ describe('ContactLogService', () => {
       const service = await ContactLogService.getInstance();
       await service.updateContactLog(1, {
         Contact_Date: '2024-06-15T20:00:00.000Z',
-      });
+      }, 500);
 
       const updateRecord = mockUpdateTableRecords.mock.calls[0][1][0];
       // 20:00 UTC in June (CDT, UTC-5) = 15:00 CT
@@ -248,8 +249,142 @@ describe('ContactLogService', () => {
 
       const service = await ContactLogService.getInstance();
       await expect(
-        service.updateContactLog(1, { Notes: 'Updated' })
+        service.updateContactLog(1, { Notes: 'Updated' }, 500)
       ).rejects.toThrow('Failed to update contact log record');
+    });
+  });
+
+  /**
+   * F4 — attribution is server-authoritative.
+   *
+   * These drive the service with the shapes a CRAFTED REQUEST can actually
+   * send, not the shapes TypeScript permits. A server action is a POST
+   * endpoint whose payload the caller controls and types are erased at
+   * runtime, so every input here is cast with `as never` on purpose.
+   */
+  describe('attribution is server-authoritative (F4)', () => {
+    const validCreate = {
+      Contact_ID: 42,
+      Contact_Date: '2024-01-15T16:30:00.000Z',
+      Contact_Log_Type_ID: 1,
+      Notes: 'Test note',
+      Planned_Contact_ID: null,
+      Contact_Successful: null,
+      Original_Contact_Log_Entry: null,
+      Feedback_Entry_ID: null,
+    };
+
+    it('ignores a caller-supplied Made_By on create and stamps the acting user', async () => {
+      mockCreateTableRecords.mockResolvedValueOnce([{ Contact_Log_ID: 1 }]);
+      const service = await ContactLogService.getInstance();
+
+      await service.createContactLog({ ...validCreate, Made_By: 999 } as never, 4242);
+
+      const record = mockCreateTableRecords.mock.calls[0][1][0];
+      expect(record.Made_By).toBe(4242);
+      expect(record.Made_By).not.toBe(999);
+      expect(mockCreateTableRecords.mock.calls[0][2]).toEqual({ $userId: 4242 });
+    });
+
+    it('strips a smuggled Made_By on update and never sends it at all', async () => {
+      mockUpdateTableRecords.mockResolvedValueOnce([{ Contact_Log_ID: 1 }]);
+      const service = await ContactLogService.getInstance();
+
+      await service.updateContactLog(1, { Notes: 'x', Made_By: 999 } as never, 500);
+
+      const record = mockUpdateTableRecords.mock.calls[0][1][0];
+      // Not merely overwritten — absent, so MP preserves the original author.
+      expect(record).not.toHaveProperty('Made_By');
+      expect(mockUpdateTableRecords.mock.calls[0][2]).toEqual({ $userId: 500 });
+    });
+
+    it('never sends Contact_ID on update, so a log cannot be re-parented', async () => {
+      mockUpdateTableRecords.mockResolvedValueOnce([{ Contact_Log_ID: 1 }]);
+      const service = await ContactLogService.getInstance();
+
+      await service.updateContactLog(1, { Notes: 'x', Contact_ID: 999 } as never, 500);
+
+      expect(mockUpdateTableRecords.mock.calls[0][1][0]).not.toHaveProperty('Contact_ID');
+    });
+
+    it('strips the linkage FKs on update', async () => {
+      mockUpdateTableRecords.mockResolvedValueOnce([{ Contact_Log_ID: 1 }]);
+      const service = await ContactLogService.getInstance();
+
+      await service.updateContactLog(
+        1,
+        {
+          Notes: 'x',
+          Planned_Contact_ID: 7,
+          Original_Contact_Log_Entry: 8,
+          Feedback_Entry_ID: 9,
+        } as never,
+        500
+      );
+
+      const record = mockUpdateTableRecords.mock.calls[0][1][0];
+      expect(record).not.toHaveProperty('Planned_Contact_ID');
+      expect(record).not.toHaveProperty('Original_Contact_Log_Entry');
+      expect(record).not.toHaveProperty('Feedback_Entry_ID');
+    });
+
+    // Two guards, two different rejections — both before any MP call.
+    it.each([0, -5])(
+      'refuses a non-positive Contact_ID (%s) via sanitizeId',
+      async (contactId) => {
+        // These pass Zod's `z.number().int()` and are caught by sanitizeId.
+        const service = await ContactLogService.getInstance();
+
+        await expect(
+          service.createContactLog({ ...validCreate, Contact_ID: contactId } as never, 100)
+        ).rejects.toThrow(/Invalid ID/);
+        expect(mockCreateTableRecords).not.toHaveBeenCalled();
+      }
+    );
+
+    it('refuses an injected string Contact_ID at the Zod boundary', async () => {
+      // A type-erased Flight arg can arrive as a string. This one never
+      // reaches sanitizeId — Zod's number check rejects it first — so the
+      // assertion is on the outcome (no MP call), not on a specific message.
+      const service = await ContactLogService.getInstance();
+
+      await expect(
+        service.createContactLog({ ...validCreate, Contact_ID: '1 OR 1=1' } as never, 100)
+      ).rejects.toThrow();
+      expect(mockCreateTableRecords).not.toHaveBeenCalled();
+    });
+
+    it.each([0, undefined, '7 OR 1=1'])(
+      'fails closed when the acting user is unusable (%s)',
+      async (madeBy) => {
+        // Better no record than a record attributed to nobody.
+        const service = await ContactLogService.getInstance();
+
+        await expect(
+          service.createContactLog(validCreate as never, madeBy as never)
+        ).rejects.toThrow(/Invalid ID/);
+        expect(mockCreateTableRecords).not.toHaveBeenCalled();
+      }
+    );
+
+    // Negative controls — prove the omits do not over-strip.
+    it('still passes a legitimate positive Contact_ID through unchanged', async () => {
+      mockCreateTableRecords.mockResolvedValueOnce([{ Contact_Log_ID: 1 }]);
+      const service = await ContactLogService.getInstance();
+
+      await service.createContactLog(validCreate as never, 100);
+
+      expect(mockCreateTableRecords.mock.calls[0][1][0].Contact_ID).toBe(42);
+    });
+
+    it('still sends an ordinary Notes-only edit', async () => {
+      mockUpdateTableRecords.mockResolvedValueOnce([{ Contact_Log_ID: 1 }]);
+      const service = await ContactLogService.getInstance();
+
+      await service.updateContactLog(1, { Notes: 'just the notes' }, 500);
+
+      const record = mockUpdateTableRecords.mock.calls[0][1][0];
+      expect(record).toEqual({ Contact_Log_ID: 1, Notes: 'just the notes' });
     });
   });
 
@@ -258,16 +393,16 @@ describe('ContactLogService', () => {
       mockDeleteTableRecords.mockResolvedValueOnce(undefined);
 
       const service = await ContactLogService.getInstance();
-      await service.deleteContactLog(42);
+      await service.deleteContactLog(42, 500);
 
-      expect(mockDeleteTableRecords).toHaveBeenCalledWith('Contact_Log', [42]);
+      expect(mockDeleteTableRecords).toHaveBeenCalledWith('Contact_Log', [42], { $userId: 500 });
     });
 
     it('should propagate delete errors', async () => {
       mockDeleteTableRecords.mockRejectedValueOnce(new Error('Record not found'));
 
       const service = await ContactLogService.getInstance();
-      await expect(service.deleteContactLog(999)).rejects.toThrow('Record not found');
+      await expect(service.deleteContactLog(999, 500)).rejects.toThrow('Record not found');
     });
   });
 });

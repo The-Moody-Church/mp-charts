@@ -107,17 +107,32 @@ describe('contact-logs actions', () => {
       expect(mockEnforceRateLimit).toHaveBeenCalledWith('user-1', 'write');
     });
 
-    it('should add Made_By from session user', async () => {
+    it('passes the session User_ID as a separate argument, never inside the payload', async () => {
+      // F4: attribution has exactly one source — the service's `madeBy`
+      // argument. The action must not assemble Made_By at all, or two layers
+      // could drift and a caller value could slip past whichever was checked
+      // second.
       mockCreateContactLog.mockResolvedValueOnce({ Contact_Log_ID: 1 });
       await createContactLog(validInput);
 
       expect(mockCreateContactLog).toHaveBeenCalledWith(
-        expect.objectContaining({
-          Contact_ID: 42,
-          Made_By: 99,
-          Notes: 'Test note',
-        })
+        expect.not.objectContaining({ Made_By: expect.anything() }),
+        99
       );
+      expect(mockCreateContactLog).toHaveBeenCalledWith(
+        expect.objectContaining({ Contact_ID: 42, Notes: 'Test note' }),
+        99
+      );
+    });
+
+    it('forwards a smuggled Made_By unchanged for the service to strip', async () => {
+      // The action deliberately does not sanitise the payload — the service's
+      // Zod omit is the single strip point. This pins that the action does not
+      // quietly start stamping it again.
+      mockCreateContactLog.mockResolvedValueOnce({ Contact_Log_ID: 1 });
+      await createContactLog({ ...validInput, Made_By: 999 } as never);
+
+      expect(mockCreateContactLog).toHaveBeenCalledWith(expect.anything(), 99);
     });
 
     it('should throw when MP user ID is unavailable', async () => {
@@ -160,10 +175,18 @@ describe('contact-logs actions', () => {
       await updateContactLog(1, { Notes: 'Updated' });
 
       expect(mockGetContactLogById).toHaveBeenCalledWith(1);
-      expect(mockUpdateContactLog).toHaveBeenCalledWith(1, expect.objectContaining({
-        Notes: 'Updated',
-        Made_By: 99,
-      }));
+      // Made_By is NOT forwarded on update — MP preserves the original author.
+      // The acting user goes in as the third argument, for $userId only.
+      expect(mockUpdateContactLog).toHaveBeenCalledWith(
+        1,
+        expect.not.objectContaining({ Made_By: expect.anything() }),
+        99
+      );
+      expect(mockUpdateContactLog).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ Notes: 'Updated' }),
+        99
+      );
     });
 
     it('should throw when user does not own the log entry', async () => {
@@ -198,7 +221,7 @@ describe('contact-logs actions', () => {
       mockDeleteContactLog.mockResolvedValueOnce(undefined);
       await deleteContactLog(42);
       expect(mockGetContactLogById).toHaveBeenCalledWith(42);
-      expect(mockDeleteContactLog).toHaveBeenCalledWith(42);
+      expect(mockDeleteContactLog).toHaveBeenCalledWith(42, 99);
     });
 
     it('should throw when user does not own the log entry', async () => {
@@ -267,9 +290,34 @@ describe('contact-logs actions', () => {
         expect.objectContaining({
           Contact_ID: 42,
           Notes: 'Test User viewed the profile',
-          Made_By: 99,
-        })
+        }),
+        99
       );
+      expect(mockCreateContactLog).toHaveBeenCalledWith(
+        expect.not.objectContaining({ Made_By: expect.anything() }),
+        99
+      );
+    });
+
+    it.each(['1 OR 1=1', 0, -1])(
+      'rejects a type-erased contactId (%s) without calling the service',
+      async (contactId) => {
+        // contactId reaches this action straight from client components
+        // (contact-links.tsx, contact-lookup-details.tsx) and was previously
+        // forwarded unvalidated. Fire-and-forget, so it returns false rather
+        // than throwing.
+        const result = await createAutoContactLog(contactId as never, 1, 'User did a thing');
+
+        expect(result).toBe(false);
+        expect(mockCreateContactLog).not.toHaveBeenCalled();
+      }
+    );
+
+    it('rejects a type-erased contactLogTypeId without calling the service', async () => {
+      const result = await createAutoContactLog(42, '2 OR 1=1' as never, 'User did a thing');
+
+      expect(result).toBe(false);
+      expect(mockCreateContactLog).not.toHaveBeenCalled();
     });
 
     it('should return true on success', async () => {

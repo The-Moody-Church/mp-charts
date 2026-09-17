@@ -171,6 +171,25 @@ Why this matters concretely: `POST /update-user` takes a body of `z.record(z.str
 
 This exists because better-auth's `email` column is required and unique, and its OAuth callback uses `findUserByEmail` as a fallback identity lookup, while **Ministry Platform enforces no uniqueness on email at all**. Households routinely share one address across contacts who each hold a `dp_Users` login. Keying on email meant the second person to sign in inherited the first person's identity.
 
+## Attribution is Server-Authoritative
+
+Any value that decides **who did this** or **whose record this is** comes from the server, never from a caller-shaped payload.
+
+For contact logs (`src/services/contactLogService.ts`):
+
+| Field | Create | Update |
+|---|---|---|
+| `Made_By` | the service's `madeBy` argument, from the session | **never sent** — MP preserves the original author |
+| `Contact_ID` | caller's subject contact, `sanitizeId`'d | **never sent** — a log cannot be re-parented |
+
+The runtime control is the Zod **`.omit()`** in the service: a `z.object` parse *strips* keys the schema does not declare, so a smuggled key is dropped rather than merely untyped. A narrow TypeScript parameter type guards nothing — types are erased at runtime and a server action is a POST endpoint whose payload shape the caller controls.
+
+Two rules that follow:
+- **Pass the acting user as a separate argument**, never as a field inside the data object. One source of attribution; two layers stamping it could drift.
+- **Do not add `.passthrough()` or `z.looseObject`** to `ContactLogSchema`, and do not regenerate it into that shape — the strip is the control, and the smuggled-key tests are what would catch it.
+
+All three writes pass `{ $userId }` so MP's audit trail names the staff member rather than the API service account.
+
 ## Authentication & Authorization
 
 - Every server action MUST call `requireSession()` before any data access
