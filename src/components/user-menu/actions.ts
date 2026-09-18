@@ -24,16 +24,42 @@ async function findMpIdToken(requestHeaders: Headers): Promise<string | null> {
   try {
     const session = await auth.api.getSession({ headers: requestHeaders });
     const userId = session?.user?.id;
-    if (!userId) return null;
+    if (!userId) return warnNoHint("no-session");
 
     const ctx = await auth.$context;
     const accounts = await ctx.internalAdapter.findAccountByUserId(userId);
     const mpAccount = accounts?.find((a) => a.providerId === MP_PROVIDER_ID);
-    return mpAccount?.idToken ?? null;
+    if (!mpAccount) return warnNoHint("no-mp-account");
+    if (!mpAccount.idToken) return warnNoHint("account-has-no-id-token");
+
+    return mpAccount.idToken;
   } catch (error) {
     logError("signout.idToken.lookup", error);
     return null;
   }
+}
+
+/**
+ * Says why sign-out could not include `id_token_hint`, and returns null.
+ *
+ * This is a WARNING rather than information because the consequence is real
+ * and otherwise invisible: without the hint, MP discards
+ * `post_logout_redirect_uri` and leaves the user on its own logged-out page.
+ * Sign-out still works, so nothing else would tell you.
+ *
+ * It exists to make one sign-out decide a question that otherwise takes
+ * guesswork: if this line does NOT appear, the app did its part and any
+ * remaining problem is MP-side registration. If it DOES appear, the reason
+ * says which of the three ways it failed.
+ *
+ * Deliberately carries no user identifier and never the token itself.
+ */
+function warnNoHint(reason: "no-session" | "no-mp-account" | "account-has-no-id-token"): null {
+  console.warn(
+    `[signout] id_token_hint omitted (${reason}) — MP will ignore post_logout_redirect_uri ` +
+      `and leave the user on its logged-out page. See docs/OAUTH_LOGOUT_SETUP.md.`
+  );
+  return null;
 }
 
 export async function handleSignOut() {
