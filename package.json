@@ -16,7 +16,8 @@
     "mp:generate": "tsx src/lib/providers/ministry-platform/scripts/generate-types.ts",
     "mp:generate:models": "tsx src/lib/providers/ministry-platform/scripts/generate-types.ts -o src/lib/providers/ministry-platform/models --zod --clean",
     "setup": "tsx scripts/setup.ts",
-    "setup:check": "tsx scripts/setup.ts --check"
+    "setup:check": "tsx scripts/setup.ts --check",
+    "check:shells": "node scripts/check-prerender-shells.mjs"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
