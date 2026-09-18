@@ -23,8 +23,21 @@ vi.mock('next/server', async () => {
   return {
     ...actual,
     NextResponse: {
-      next: vi.fn(() => ({ type: 'next' })),
-      redirect: vi.fn((url: URL) => ({ type: 'redirect', url: url.toString() })),
+      // These carry a real `Headers` because `proxy()` sets the CSP on every
+      // response it returns. The previous mock returned bare objects, which
+      // under-modelled NextResponse and would have let a missing CSP pass.
+      next: vi.fn((init?: { request?: { headers: Headers } }) => ({
+        type: 'next',
+        headers: new Headers(),
+        // Surfaced so a test can assert the nonce and policy were set on the
+        // REQUEST headers, which is the only way Next discovers the nonce.
+        requestHeaders: init?.request?.headers,
+      })),
+      redirect: vi.fn((url: URL) => ({
+        type: 'redirect',
+        url: url.toString(),
+        headers: new Headers(),
+      })),
     },
   };
 });
@@ -65,9 +78,9 @@ describe('Proxy', () => {
       const { proxy } = await import('./proxy');
       mockGetSessionCookie.mockReturnValue(undefined);
 
-      const result = await proxy(createMockRequest('/auth-error'));
+      const result = (await proxy(createMockRequest('/auth-error'))) as { type: string };
 
-      expect(result).toEqual({ type: 'next' });
+      expect(result.type).toBe('next');
       expect(NextResponse.redirect).not.toHaveBeenCalled();
       // Public paths return before the cookie is ever consulted.
       expect(mockGetSessionCookie).not.toHaveBeenCalled();
@@ -77,7 +90,7 @@ describe('Proxy', () => {
       const { proxy } = await import('./proxy');
       mockGetSessionCookie.mockReturnValue(undefined);
 
-      expect(await proxy(createMockRequest('/signin'))).toEqual({ type: 'next' });
+      expect((await proxy(createMockRequest('/signin'))).type).toBe('next');
       expect(NextResponse.redirect).not.toHaveBeenCalled();
     });
 
@@ -220,7 +233,7 @@ describe('Proxy Integration', () => {
 
     // Step 3: Should allow access (NextResponse.next())
     const response = NextResponse.next();
-    expect(response).toEqual({ type: 'next' });
+    expect(response.type).toBe('next');
   });
 
   it('should follow the complete flow for unauthenticated user', () => {
@@ -240,9 +253,93 @@ describe('Proxy Integration', () => {
     // Step 3: Should redirect to signin
     const redirectUrl = new URL('/signin', request.url);
     const response = NextResponse.redirect(redirectUrl);
-    expect(response).toEqual({
-      type: 'redirect',
-      url: 'http://localhost:3000/signin',
+    expect(response.type).toBe('redirect');
+    expect(response.url).toBe('http://localhost:3000/signin');
+  });
+
+  /**
+   * Content-Security-Policy wiring (F9).
+   *
+   * The policy VALUE is tested in `src/lib/security-headers.test.ts`. These
+   * cover the wiring, which is where it actually goes wrong: a policy that is
+   * built but never attached, attached to some responses but not others, or
+   * attached to the response but not the REQUEST — which is the only place
+   * Next looks for the nonce.
+   */
+  describe('Content-Security-Policy', () => {
+    const REPORT_ONLY = 'Content-Security-Policy-Report-Only';
+
+    it('ships report-only by default', async () => {
+      const { proxy } = await import('./proxy');
+      mockGetSessionCookie.mockReturnValue('session');
+
+      const res = (await proxy(createMockRequest('/dashboard'))) as unknown as Response;
+
+      expect(res.headers.get(REPORT_ONLY)).toContain("default-src 'self'");
+      // Nothing is blocked until someone sets CSP_ENFORCE=true.
+      expect(res.headers.get('Content-Security-Policy')).toBeNull();
+    });
+
+    it('enforces when CSP_ENFORCE is true', async () => {
+      vi.stubEnv('CSP_ENFORCE', 'true');
+      vi.resetModules();
+      const { proxy } = await import('./proxy');
+      mockGetSessionCookie.mockReturnValue('session');
+
+      const res = (await proxy(createMockRequest('/dashboard'))) as unknown as Response;
+
+      expect(res.headers.get('Content-Security-Policy')).toContain("default-src 'self'");
+      expect(res.headers.get(REPORT_ONLY)).toBeNull();
+      vi.unstubAllEnvs();
+    });
+
+    it('sets the policy and nonce on the REQUEST headers, not just the response', async () => {
+      // Next re-reads the nonce off the incoming request during render. A
+      // policy set only on the response would have a nonce matching nothing on
+      // the page, and every script would be blocked under enforcement.
+      const { proxy } = await import('./proxy');
+      mockGetSessionCookie.mockReturnValue('session');
+
+      const res = (await proxy(createMockRequest('/dashboard'))) as unknown as {
+        requestHeaders?: Headers;
+      };
+
+      const nonce = res.requestHeaders?.get('x-nonce');
+      expect(nonce).toBeTruthy();
+      expect(res.requestHeaders?.get(REPORT_ONLY)).toContain(`'nonce-${nonce}'`);
+    });
+
+    it('carries the policy on every exit, redirects included', async () => {
+      const { proxy } = await import('./proxy');
+
+      mockGetSessionCookie.mockReturnValue(undefined);
+      const redirected = (await proxy(createMockRequest('/dashboard'))) as unknown as Response;
+      expect(redirected.headers.get(REPORT_ONLY)).toBeTruthy();
+
+      const publicPath = (await proxy(createMockRequest('/signin'))) as unknown as Response;
+      expect(publicPath.headers.get(REPORT_ONLY)).toBeTruthy();
+
+      const api = (await proxy(createMockRequest('/api/auth/get-session'))) as unknown as Response;
+      expect(api.headers.get(REPORT_ONLY)).toBeTruthy();
+    });
+
+    it('uses a fresh nonce for every request', async () => {
+      // A reused nonce is the same as no nonce: an injected script can read it
+      // off the page and replay it.
+      const { proxy } = await import('./proxy');
+      mockGetSessionCookie.mockReturnValue('session');
+
+      const nonces = new Set<string>();
+      for (let i = 0; i < 5; i++) {
+        const res = (await proxy(createMockRequest('/dashboard'))) as unknown as {
+          requestHeaders?: Headers;
+        };
+        nonces.add(res.requestHeaders?.get('x-nonce') ?? '');
+      }
+
+      expect(nonces.size).toBe(5);
+      expect(nonces.has('')).toBe(false);
     });
   });
+
 });
