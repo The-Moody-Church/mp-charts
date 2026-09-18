@@ -1,4 +1,13 @@
+import { connection } from "next/server";
 import { handleSignOut } from "@/components/user-menu/actions";
+
+/**
+ * `instant = false` lets this route BLOCK rather than serve a prerendered
+ * shell — which is what `connection()` needs under cacheComponents, and what
+ * a CSP nonce needs in order to exist at render time. Without it the build
+ * fails with "uncached or runtime data during prerendering".
+ */
+export const instant = false;
 
 /**
  * Recovery page for authenticated-but-unusable sessions.
@@ -11,7 +20,12 @@ import { handleSignOut } from "@/components/user-menu/actions";
  * It lives outside the (web) route group, so it is NOT wrapped by AuthWrapper
  * and cannot cause a redirect loop.
  */
-export default function SessionErrorPage() {
+export default async function SessionErrorPage() {
+  // Defer to request time: a prerendered page receives no CSP nonce and would
+  // not hydrate under an enforced policy. `connection()` rather than
+  // `export const dynamic`, which cacheComponents rejects.
+  await connection();
+
   return (
     <div className="flex items-center justify-center min-h-screen px-4">
       <div className="max-w-md text-center">
