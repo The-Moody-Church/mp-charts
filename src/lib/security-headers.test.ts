@@ -49,22 +49,36 @@ describe("createNonce", () => {
 });
 
 describe("cspHeaderName", () => {
-  it("reports by default", () => {
+  it("ENFORCES by default", () => {
+    // The default was inverted on 2026-09-18, after the enforced browser walk.
+    // Production enforcement had been carried by a CSP_ENFORCE=true line in
+    // each container's .env, so an app that lost that line would have fallen
+    // back to report-only silently: nothing broken, nothing logged, the
+    // protection simply gone. Forgetting the variable must keep the control,
+    // not remove it.
     vi.stubEnv("CSP_ENFORCE", undefined);
-    expect(cspHeaderName()).toBe("Content-Security-Policy-Report-Only");
-  });
-
-  it('enforces ONLY on the exact string "true"', () => {
-    vi.stubEnv("CSP_ENFORCE", "true");
     expect(cspHeaderName()).toBe("Content-Security-Policy");
   });
 
-  it("reports for every near-miss value", () => {
-    // A typo or a stray capital must NOT silently start blocking scripts.
-    for (const v of ["True", "TRUE", "1", "yes", "false", "", " true"]) {
+  it('reports ONLY on the exact string "false"', () => {
+    vi.stubEnv("CSP_ENFORCE", "false");
+    expect(cspHeaderName()).toBe("Content-Security-Policy-Report-Only");
+  });
+
+  it("enforces for every near-miss value", () => {
+    // A typo or a stray capital must NOT silently disable the policy. This is
+    // the half that matters now: the risk is losing enforcement by accident,
+    // not gaining it.
+    for (const v of ["False", "FALSE", "0", "no", "true", "", " false"]) {
       vi.stubEnv("CSP_ENFORCE", v);
-      expect(cspHeaderName()).toBe("Content-Security-Policy-Report-Only");
+      expect(cspHeaderName()).toBe("Content-Security-Policy");
     }
+  });
+
+  it("still honours an explicit argument, so callers can override the env", () => {
+    vi.stubEnv("CSP_ENFORCE", undefined);
+    expect(cspHeaderName(false)).toBe("Content-Security-Policy-Report-Only");
+    expect(cspHeaderName(true)).toBe("Content-Security-Policy");
   });
 });
 

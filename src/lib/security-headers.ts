@@ -197,22 +197,34 @@ export function buildContentSecurityPolicy({
 /**
  * Which CSP header name to send.
  *
- * REPORTS ONLY by default. Enforcement requires `CSP_ENFORCE=true` exactly;
- * any other value, including unset or a typo, reports.
+ * ENFORCES by default. Report-only requires `CSP_ENFORCE=false` exactly; any
+ * other value, including unset or a typo, enforces.
  *
- * This is deliberately INVERTED from upstream, which enforces unless
- * `CSP_ENFORCE=false`. Upstream earned that default: they walked an enforced
- * policy through a production build in a browser on 2026-09-12, and that walk
- * caught a blocked runtime-injected `<style>` that report-only had NOT
- * reported. We have not done our walk yet.
+ * THIS DEFAULT WAS INVERTED ON 2026-09-18, and the direction matters more than
+ * it looks.
  *
- * Until we have, the failure we must not allow is a deploy that enforces
- * because someone forgot an environment variable. A nonce CSP is the one
- * security header that can white-screen an app. Flip this default in its own
- * change, after a clean enforced walk, so the flip is the reviewable event.
+ * It shipped the other way round — report-only unless `CSP_ENFORCE=true` —
+ * deliberately, because a nonce CSP is the one security header that can
+ * white-screen an app and we had not yet walked an enforced policy in a
+ * browser. That walk has now happened on all four apps: dialogs, navigation,
+ * Ministry Platform images, sign-out, and senior care's email-send flow end to
+ * end. Nothing broke.
+ *
+ * With the walk done, the old default had become the dangerous one. Production
+ * enforcement was carried by a `CSP_ENFORCE=true` line in each container's
+ * `.env`, so an app that lost that line — a fresh environment, a rebuilt host,
+ * a copied `.env.example` — would silently fall back to report-only. Nothing
+ * would break, nothing would be logged, and the protection would simply be
+ * gone. A security control whose absence is invisible is worse than one that
+ * fails loudly.
+ *
+ * Enforcing by default makes the failure mode safe: forgetting the variable
+ * now keeps the protection rather than removing it. Report-only becomes the
+ * unusual state you opt into to diagnose a violation, which is also what
+ * upstream settled on.
  */
 export function cspHeaderName(
-  enforce: boolean = process.env.CSP_ENFORCE === "true"
+  enforce: boolean = process.env.CSP_ENFORCE !== "false"
 ): "Content-Security-Policy" | "Content-Security-Policy-Report-Only" {
   return enforce ? "Content-Security-Policy" : "Content-Security-Policy-Report-Only";
 }
