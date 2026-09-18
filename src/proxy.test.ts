@@ -268,21 +268,12 @@ describe('Proxy Integration', () => {
    */
   describe('Content-Security-Policy', () => {
     const REPORT_ONLY = 'Content-Security-Policy-Report-Only';
+    // The default enforces, so every test below the first two reads this one.
+    const ENFORCED = 'Content-Security-Policy';
 
-    it('ships report-only by default', async () => {
-      const { proxy } = await import('./proxy');
-      mockGetSessionCookie.mockReturnValue('session');
-
-      const res = (await proxy(createMockRequest('/dashboard'))) as unknown as Response;
-
-      expect(res.headers.get(REPORT_ONLY)).toContain("default-src 'self'");
-      // Nothing is blocked until someone sets CSP_ENFORCE=true.
-      expect(res.headers.get('Content-Security-Policy')).toBeNull();
-    });
-
-    it('enforces when CSP_ENFORCE is true', async () => {
-      vi.stubEnv('CSP_ENFORCE', 'true');
-      vi.resetModules();
+    it('ENFORCES by default', async () => {
+      // Inverted on 2026-09-18. Forgetting the env var must keep the control,
+      // not silently drop it.
       const { proxy } = await import('./proxy');
       mockGetSessionCookie.mockReturnValue('session');
 
@@ -290,6 +281,18 @@ describe('Proxy Integration', () => {
 
       expect(res.headers.get('Content-Security-Policy')).toContain("default-src 'self'");
       expect(res.headers.get(REPORT_ONLY)).toBeNull();
+    });
+
+    it('falls back to report-only when CSP_ENFORCE is false', async () => {
+      vi.stubEnv('CSP_ENFORCE', 'false');
+      vi.resetModules();
+      const { proxy } = await import('./proxy');
+      mockGetSessionCookie.mockReturnValue('session');
+
+      const res = (await proxy(createMockRequest('/dashboard'))) as unknown as Response;
+
+      expect(res.headers.get(REPORT_ONLY)).toContain("default-src 'self'");
+      expect(res.headers.get('Content-Security-Policy')).toBeNull();
       vi.unstubAllEnvs();
     });
 
@@ -306,7 +309,7 @@ describe('Proxy Integration', () => {
 
       const nonce = res.requestHeaders?.get('x-nonce');
       expect(nonce).toBeTruthy();
-      expect(res.requestHeaders?.get(REPORT_ONLY)).toContain(`'nonce-${nonce}'`);
+      expect(res.requestHeaders?.get(ENFORCED)).toContain(`'nonce-${nonce}'`);
     });
 
     it('carries the policy on every exit, redirects included', async () => {
@@ -314,13 +317,13 @@ describe('Proxy Integration', () => {
 
       mockGetSessionCookie.mockReturnValue(undefined);
       const redirected = (await proxy(createMockRequest('/dashboard'))) as unknown as Response;
-      expect(redirected.headers.get(REPORT_ONLY)).toBeTruthy();
+      expect(redirected.headers.get(ENFORCED)).toBeTruthy();
 
       const publicPath = (await proxy(createMockRequest('/signin'))) as unknown as Response;
-      expect(publicPath.headers.get(REPORT_ONLY)).toBeTruthy();
+      expect(publicPath.headers.get(ENFORCED)).toBeTruthy();
 
       const api = (await proxy(createMockRequest('/api/auth/get-session'))) as unknown as Response;
-      expect(api.headers.get(REPORT_ONLY)).toBeTruthy();
+      expect(api.headers.get(ENFORCED)).toBeTruthy();
     });
 
     it('uses a fresh nonce for every request', async () => {
