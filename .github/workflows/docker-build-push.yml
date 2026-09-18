@@ -74,6 +74,14 @@ jobs:
       - name: Build
         run: npm run build
 
+      # A nonce CSP and Next's prerendered shells are mutually exclusive: a
+      # shell built at `next build` has no request, so its script tags get no
+      # nonce and are blocked once CSP_ENFORCE is on. The failure is silent —
+      # the app builds, renders and tests green either way — so it is gated
+      # here, against the actual build output. See src/app/layout.tsx.
+      - name: Check prerendered shells carry no scripts
+        run: npm run check:shells
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
