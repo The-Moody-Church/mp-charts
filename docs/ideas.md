@@ -58,7 +58,40 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
 
 ### Technical Debt
-- [CommunicationType union is wrong: 'Text'/'Letter' are invalid — MP's enum is Unknown|Email|SMS|RssFeed|GlobalMFA (SMS sends 500) (#220)](#communicationtype-union-is-wrong-textletter-are-invalid-mps-enum-is-unknownemailsmsrssfeedglobalmfa-sms-sends-500-220)
+- [Digest-pin the Docker base images (#217)](#digest-pin-the-docker-base-images-217)
+- [cache-handler.js depends on private Next.js internals (#218)](#cache-handlerjs-depends-on-private-nextjs-internals-218)
+- [Vitest coverage config has an under-count blind spot (#212)](#vitest-coverage-config-has-an-under-count-blind-spot-212)
+- [Micro-robustness in getContactLogsByContactId (#213)](#micro-robustness-in-getcontactlogsbycontactid-213)
+- [Remove the vestigial `_requestedId` params in shared-actions/user.ts (#214)](#remove-the-vestigial-_requestedid-params-in-shared-actionsuserts-214)
+- [Server-render the contact detail page's initial read (#202)](#server-render-the-contact-detail-pages-initial-read-202)
+- [Member detail modal shows the old photo after upload (#203)](#member-detail-modal-shows-the-old-photo-after-upload-203)
+- [Compliance tool editor silently drops orphaned journey config (#204)](#compliance-tool-editor-silently-drops-orphaned-journey-config-204)
+- [Blank journey selection reads as ID 0, not null (#205)](#blank-journey-selection-reads-as-id-0-not-null-205)
+- [Upgrade TypeScript 5.9 to 6.0 (#136)](#upgrade-typescript-59-to-60-136)
+- ~~[CommunicationType union is wrong: 'Text'/'Letter' are invalid — MP's enum is Unknown|Email|SMS|RssFeed|GlobalMFA (SMS sends 500) (#220)](#communicationtype-union-is-wrong-textletter-are-invalid-mps-enum-is-unknownemailsmsrssfeedglobalmfa-sms-sends-500-220)~~ ✅
+- ~~[Adopt React Compiler lint rules from eslint-plugin-react-hooks 7.1 (#197)](#adopt-react-compiler-lint-rules-from-eslint-plugin-react-hooks-71-197)~~ ✅
+- ~~[Dependency security remediation — August 2026](#dependency-security-remediation-august-2026)~~ ✅
+- ~~[IDOR Mitigation — Per-Record Authorization (#57)](#idor-mitigation-per-record-authorization-57)~~ ✅
+- ~~[Photo upload didn't work (#148)](#photo-upload-didnt-work-148)~~ ✅
+- ~~[No.cache (#144)](#nocache-144)~~ ✅
+- ~~[BUG: Active Communities and Small Groups Chart Needs Work (#52)](#bug-active-communities-and-small-groups-chart-needs-work-52)~~ ✅
+- ~~[Executive Dashboard Avg Attendance Broken (#103)](#executive-dashboard-avg-attendance-broken-103)~~ ✅
+- ~~[Contact Logs should not be editable unless Made_By = the Current Logged In User (#96)](#contact-logs-should-not-be-editable-unless-made_by-the-current-logged-in-user-96)~~ ✅
+- ~~[Contact Lookup Searching Error (#99)](#contact-lookup-searching-error-99)~~ ✅
+- ~~[Review Contact Lookup Search Scoring (#98)](#review-contact-lookup-search-scoring-98)~~ ✅
+- ~~[Role-Based Access Control (RBAC) (#58)](#role-based-access-control-rbac-58)~~ ✅
+- ~~[BUG: Baptism Counter Doesn't Respond to Date Range Changes (#51)](#bug-baptism-counter-doesnt-respond-to-date-range-changes-51)~~ ✅
+- ~~[Extract Shared Processing Components (Person Card, Milestone Checklist, Detail Modal) (#60)](#extract-shared-processing-components-person-card-milestone-checklist-detail-modal-60)~~ ✅
+- ~~[Migrate `unstable_cache` to Cache Components (`use cache`) (#21)](#migrate-unstable_cache-to-cache-components-use-cache-21)~~ ✅
+- ~~[review upstream pr42 (#35)](#review-upstream-pr42-35)~~ ✅
+- ~~[Upgrade to Next.js 16](#upgrade-to-nextjs-16)~~ ✅
+- ~~[Refine MP Permissions (#7)](#refine-mp-permissions-7)~~ ✅
+- ~~[Migrate `middleware.ts` to `proxy.ts` (#22)](#migrate-middlewarets-to-proxyts-22)~~ ✅
+- ~~[BUG: No Volunteers in Production Builds (#27)](#bug-no-volunteers-in-production-builds-27)~~ ✅
+- ~~[Images are not showing on the volunteers. Perhaps a permssions issue? (#30)](#images-are-not-showing-on-the-volunteers-perhaps-a-permssions-issue-30)~~ ✅
+- ~~[Links to MP are not showing in production in the volunteer processing pages. (#31)](#links-to-mp-are-not-showing-in-production-in-the-volunteer-processing-pages-31)~~ ✅
+- ~~[Review upstream pr 39 (#34)](#review-upstream-pr-39-34)~~ ✅
+- ~~[No attendance circle one engagement Venn diagram for single month selections. (#83)](#no-attendance-circle-one-engagement-venn-diagram-for-single-month-selections-83)~~ ✅
 
 ---
 
