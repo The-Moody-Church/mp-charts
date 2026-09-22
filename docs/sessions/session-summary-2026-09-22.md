@@ -90,3 +90,17 @@ payload shapes, and this change touches no feature, env var, route or setup step
   been investigated — it may matter for opt-out handling on a real broadcast.
 - Nothing in `src/` calls `createCommunication` in either this repo or mp-senior-care, so this stays
   a latent-surface fix until a feature sends something.
+
+## Sibling sweep (end of session)
+
+All four Better Auth siblings plus the other MP consumers were checked for the same line:
+
+| Repo | State |
+|---|---|
+| mp-senior-care | already fixed — its #103 / PR #162 is where this port came from |
+| **event-manager** | **still carries it** at `provider.types.ts:41`, same `communication.service.ts`, no app-level callers — filed as [event-manager#44](https://github.com/The-Moody-Church/event-manager/issues/44) |
+| music-db | not affected — its provider layer has no `CommunicationInfo` at all |
+| mp-n8n | **different defect, same MP behaviour** — its type dropdown is already correct (`Email`/`SMS`), but `Text Phone Number ID` is an Additional Option with `default: 0` and the builder's `if (additionalOptions.textPhoneNumberId)` drops falsy `0`, so an SMS send at the defaults omits a required field and gets MP's 500. Ships to npm. Filed as [mp-n8n#11](https://github.com/The-Moody-Church/mp-n8n/issues/11) |
+| mp-mcp | no `CommunicationType` anywhere |
+
+Both issues are written up for a later session, not scheduled.
