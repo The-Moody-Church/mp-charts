@@ -250,82 +250,6 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 
 ## Technical Debt
 
-### CommunicationType union is wrong: 'Text'/'Letter' are invalid — MP's enum is Unknown|Email|SMS|RssFeed|GlobalMFA (SMS sends 500) ([#220](https://github.com/The-Moody-Church/mp-charts/issues/220))
-## Problem
-
-`src/lib/providers/ministry-platform/types/provider.types.ts:41`
-
-```ts
-CommunicationType: 'Email' | 'Text' | 'Letter';
-```
-
-MP's `Platform.Messaging.CommunicationType` is:
-
-```
-Unknown | Email | SMS | RssFeed | GlobalMFA
-```
-
-`'Text'` and `'Letter'` were **never** members. MP rejects either with an opaque **HTTP 500**, not a 400:
-
-```
-HTTP 500
-{"Message":"Error converting value \"Text\" to type 'Platform.Messaging.CommunicationType'.
- Path 'CommunicationType' ... Requested value 'Text' was not found."}
-```
-
-So the only value the type offers for texting is one that always fails, and the failure reads as a server fault rather than a bad payload.
-
-`'Email'` happens to be a real member. It is also the only value anyone has ever passed — which is why a two-thirds-wrong union has sat in the type layer unnoticed.
-
-## Also: SMS requires `TextPhoneNumberId`
-
-Once `CommunicationType: 'SMS'` is used, MP additionally requires it:
-
-```
-HTTP 500
-{"Message":"Provided communication object is invalid.
-  1. (Error) Property 'TextPhoneNumberId' is required and must be populated."}
-```
-
-`TextPhoneNumberId` is the outbound number's `dp_SMS_Numbers.SMS_Number_ID`. The field already exists on `CommunicationInfo` but is optional — it is effectively **required when `CommunicationType === 'SMS'`**. MP's own Swagger marks it optional, so the Swagger cannot be trusted here.
-
-## Verified against the live tenant
-
-Re-checked on 2026-09-08 (moody.ministryplatform.com), not taken from the Swagger alone:
-
-| Check | Result |
-|---|---|
-| `dp_Communication_Types` | `1 Email`, `2 SMS Text`, `3 RSS Feed`, `4 GlobalMFA` (`Unknown` is the zero value, no row) |
-| `dp_SMS_Numbers` | one row — `SMS_Number_ID = 1`, active, default ("Twilio MP Main") |
-
-Originally found on 2026-06-11 while building the tmc-app passwordless sign-in spike, which reuses this `/communications` pattern: email `CommunicationId 54143` delivered; SMS succeeded only after switching `'Text'` → `'SMS'` and adding `TextPhoneNumberId` (`CommunicationId 54144`).
-
-## Impact here
-
-**Latent, not a live outage.** Nothing in `src/` calls `createCommunication` — the only references are the plumbing (`helper.ts`, `provider.ts`, `communication.service.ts`) and `helper.test.ts`, which uses `'Email' as const`. So this is a wrong type surface waiting for the first person who tries to send a text, who will get a 500 with no indication their payload was at fault.
-
-## Suggested fix
-
-This was fixed in the sibling **mp-senior-care** as its #103 (PR [#162](https://github.com/The-Moody-Church/mp-senior-care/pull/162)); the change ports cleanly, since both files are byte-identical here.
-
-1. **`COMMUNICATION_TYPES` as a `const [...] as const`** with `CommunicationType` derived from it, so the enum has one source of truth and a comment naming what verified it.
-2. **Make `CommunicationInfo` a discriminated union** so the compiler requires `TextPhoneNumberId` exactly when the type is `'SMS'`. That turns a runtime 500 into a build error.
-3. **Runtime guard in `CommunicationService.createCommunication`**, placed *above* `ensureValidToken()` so a doomed payload costs neither a token refresh nor a round trip. It catches callers arriving through an `as` cast or untyped JSON, and names the accepted values so nobody needs the Swagger to fix their call.
-
-Notes from doing it there:
-
-- `provider.types.ts` is **hand-maintained**, not generated — `generate-types.ts` only writes into `models/` — so the fix will not be undone by `npm run mp:generate:models`.
-- `communication.service.ts` has **no test file** in either repo. The port is a good moment to add one. Worth asserting that a rejected payload makes *no* MP call (post, postFormData and `ensureValidToken`), not merely that an error came back — otherwise the test still passes if the guard is later moved below the POST.
-- The type itself can be covered with `@ts-expect-error` cases that fail `tsc --noEmit`. Confirmed there that test files are inside the tsconfig, so those are enforced by CI rather than decorative.
-- Existing `helper.test.ts` fixtures use `'Email' as const` and are unaffected.
-
-## Upstream
-
-**`MinistryPlatform-Community/MPNext` carries the identical line at the same line 41**, so every downstream fork of the template has this. Worth reporting upstream once the fix is settled here — flagging rather than doing, since that is a public third-party repo.
-
----
-_Filed from the mp-senior-care session that fixed the same bug there._
-
 ### Digest-pin the Docker base images ([#217](https://github.com/The-Moody-Church/mp-charts/issues/217))
 All four `FROM` lines use the mutable tag `node:24-alpine` (`Dockerfile` deps/builder/runner +
 `Dockerfile.dev`), so the exact Node patch level in a shipped image is whatever Docker Hub resolved
@@ -378,6 +302,36 @@ Two related cases in `src/components/admin/compliance-tools/compliance-tool-edit
 
 ### Upgrade TypeScript 5.9 to 6.0 ([#136](https://github.com/The-Moody-Church/mp-charts/issues/136))
 Upgrade from TypeScript 5.9.3 to 6.0.x. TS 6.0 is a transition release (last JS-based compiler before TS 7.0 in Go). Main required change: add `"types": ["node"]` to tsconfig.json (default changed from `["*"]` to `[]`). Also simplify lib array, verify `noUncheckedSideEffectImports`. Wait until mid-April 2026 for ecosystem stability across Next.js 16, Zod v4, Vitest, and typescript-eslint.
+
+### ~~CommunicationType union is wrong: 'Text'/'Letter' are invalid — MP's enum is Unknown|Email|SMS|RssFeed|GlobalMFA (SMS sends 500) ([#220](https://github.com/The-Moody-Church/mp-charts/issues/220))~~ ✅ COMPLETED
+
+`CommunicationInfo.CommunicationType` was typed `'Email' | 'Text' | 'Letter'`. MP's
+`Platform.Messaging.CommunicationType` is `Unknown | Email | SMS | RssFeed | GlobalMFA`, so two of
+the three values the type offered were never members, and MP rejects either with an opaque HTTP
+**500** rather than a 400 — the only value the type offered for texting was one that always fails,
+and the failure reads as a server fault. `'SMS'` additionally requires `TextPhoneNumberId`
+(`dp_SMS_Numbers.SMS_Number_ID` of the outbound number), which MP's Swagger marks optional and
+which MP answers with a second 500 when absent.
+
+Shipped: `COMMUNICATION_TYPES` as the single source of truth with `CommunicationType` derived from
+it; `CommunicationInfo` as a discriminated union so the compiler requires `TextPhoneNumberId`
+exactly when the type is `'SMS'`; and an `assertSendable` guard in
+`CommunicationService.createCommunication`, placed **above** `ensureValidToken()`. New
+`communication.service.test.ts` (14 tests) including `@ts-expect-error` cases that fail `tsc`.
+Mutation-verified four ways: deleting the guard call fails 6 tests, moving it below
+`ensureValidToken()` fails 5, and either loosening of the type turns an `@ts-expect-error` into a
+TS2578 build error.
+
+**Verified end to end against the live tenant on 2026-09-19**, not only in tests: Communication
+58818 (type 2, SMS Text) delivered one segment to a staff mobile through the tenant's outbound
+number, and the two guard paths rejected `'Text'` and a number-less SMS with no network call at
+all. A re-read of `dp_Communication_Types` the same day returned exactly the four rows the type now
+encodes.
+
+**Reported upstream**:
+[MinistryPlatform-Community/MPNext#92](https://github.com/MinistryPlatform-Community/MPNext/pull/92)
+— upstream carries the identical line at the same line 41, so every fork of the template inherits
+it. Originally fixed in the sibling mp-senior-care as its #103.
 
 ### ~~Adopt React Compiler lint rules from eslint-plugin-react-hooks 7.1 ([#197](https://github.com/The-Moody-Church/mp-charts/issues/197))~~ ✅ COMPLETED
 `eslint-config-next` 16.3.0 pulls in `eslint-plugin-react-hooks` 7.1, which adds the React Compiler rules `set-state-in-effect`, `immutability` and `incompatible-library`. They flagged 20 pre-existing violations across 17 files — no new code triggered them.
