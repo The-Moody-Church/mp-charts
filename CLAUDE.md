@@ -96,6 +96,7 @@ Without concurrency control, bursts of 50+ simultaneous connections cause `Conne
 
 - **POST-based reads for long queries**: MP supports `POST tables/{table}/get` with a JSON body (`{ "Select": "...", "Filter": "...", "OrderBy": "...", "Top": N, ... }`). This avoids URL length limits when filters or select clauses are very long. We don't currently use this — our `$filter` strings fit in query parameters — but it's available if needed.
 - **Audit log joins**: You can join audit creation/update data in any `$Select` via `dp_Created.*` (who created, when) and `dp_Updated.*` (who last updated, when). Useful for "created by" or "last modified" info without a separate query.
+- **MP enum fields mirror MP, never our guess**: a hand-written union standing in for an MP enum must list the enum's real members (verify against the lookup table, not the Swagger). MP rejects an unknown member with an opaque **HTTP 500**, not a 400, so a wrong value reads as a server fault. Where a field is *conditionally* required, model it as a **discriminated union** so the compiler demands it, and re-check it in the service **above** `ensureValidToken()` so a doomed payload costs neither a token refresh nor a round trip. `CommunicationInfo` / `COMMUNICATION_TYPES` + `assertSendable` in `communication.service.ts` are the reference (#220).
 
 ## Feature Visibility & Access Control
 
