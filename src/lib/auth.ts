@@ -282,7 +282,32 @@ export const auth = betterAuth({
           discoveryUrl: `${mpOauthUrl}/.well-known/openid-configuration`,
           clientId: process.env.OIDC_CLIENT_ID!,
           clientSecret: process.env.OIDC_CLIENT_SECRET!,
-          scopes: ["openid", "offline_access", "http://www.thinkministry.com/dataplatform/scopes/all"],
+          // NO `offline_access`. It was requested until 2026-09-22 and the
+          // refresh token it bought was never used once.
+          //
+          // What it cost, read off the `MPNext` client configuration in MP:
+          // refresh token lifetime 43200 minutes — 30 days — with rotation
+          // OFF. So every sign-in minted a static 30-day credential that sat
+          // in memory and was never redeemed.
+          //
+          // Verified unused on three independent grounds before removing it:
+          //   - zero references to refresh tokens anywhere in src/, all four apps;
+          //   - better-auth only refreshes from `/get-access-token` or
+          //     `/refresh-token`, and neither is on the deny-by-default
+          //     allowlist in src/app/api/auth/[...all]/route.ts, so both 404
+          //     before reaching better-auth;
+          //   - server-to-server MP calls use a SEPARATE client_credentials
+          //     token (src/lib/providers/ministry-platform/auth/), not the
+          //     user's.
+          //
+          // The user's tokens are used once, during sign-in, to read
+          // /connect/userinfo and dp_Users. Nothing needs them afterwards.
+          //
+          // DO NOT re-add this scope to "be safe". If something later genuinely
+          // needs to act as the user after sign-in, add it deliberately, and
+          // note that MP does not rotate these — a leaked one is good for 30
+          // days.
+          scopes: ["openid", "http://www.thinkministry.com/dataplatform/scopes/all"],
           // PKCE is OFF because Ministry Platform's `MPNext` client rejects it.
           // Re-tested 2026-09-22 and the result was a clean negative. Do not
           // flip this without reading the rest of this comment.
