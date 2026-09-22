@@ -2,6 +2,7 @@
 
 import { auth } from "@/lib/auth";
 import { buildEndSessionUrl, MP_PROVIDER_ID } from "@/lib/auth-endsession";
+import { takeIdToken } from "@/lib/id-token-store";
 import { logError } from "@/lib/logger";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -23,7 +24,23 @@ import { redirect } from "next/navigation";
 async function findMpIdToken(requestHeaders: Headers): Promise<string | null> {
   try {
     const session = await auth.api.getSession({ headers: requestHeaders });
-    const userId = session?.user?.id;
+    if (!session?.user) return warnNoHint("no-session");
+
+    // PRIMARY: the process-wide store, written at sign-in.
+    //
+    // This is not a cache in front of the account record — it is the only
+    // thing that works. The account lookup below was the original
+    // implementation and it returned nothing on a real sign-out, because the
+    // session is a cookie-carried JWT while accounts live in a per-module
+    // in-memory adapter. See src/lib/id-token-store.ts.
+    const userGuid = (session.user as { userGuid?: unknown }).userGuid;
+    const stored = takeIdToken(typeof userGuid === "string" ? userGuid : null);
+    if (stored) return stored;
+
+    // FALLBACK: the account record. Kept because it costs nothing, is correct
+    // when it does work, and would start working on its own if this app ever
+    // gains a real database.
+    const userId = session.user.id;
     if (!userId) return warnNoHint("no-session");
 
     const ctx = await auth.$context;

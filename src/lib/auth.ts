@@ -4,6 +4,7 @@ import { genericOAuth, customSession } from "better-auth/plugins";
 import { MPHelper } from "@/lib/providers/ministry-platform";
 import type { MPUserProfile } from "@/lib/providers/ministry-platform/types";
 import { sanitizeGuid } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
+import { rememberIdToken } from "@/lib/id-token-store";
 
 const mpBaseUrl = process.env.MINISTRY_PLATFORM_BASE_URL;
 const mpOauthUrl = `${mpBaseUrl}/oauth`;
@@ -283,7 +284,19 @@ export const auth = betterAuth({
           clientSecret: process.env.OIDC_CLIENT_SECRET!,
           scopes: ["openid", "offline_access", "http://www.thinkministry.com/dataplatform/scopes/all"],
           pkce: false,
-          getUserInfo: async (tokens) => getMpUserInfo(tokens.accessToken),
+          getUserInfo: async (tokens) => {
+            const profile = await getMpUserInfo(tokens.accessToken);
+            // Keep the ID token for sign-out, which needs it as `id_token_hint`
+            // or MP discards `post_logout_redirect_uri` and strands the user on
+            // its logged-out page. Captured HERE rather than inside
+            // `getMpUserInfo`, which only receives the access token, and rather
+            // than read off the account record at sign-out, which does NOT work
+            // — see src/lib/id-token-store.ts for the measurement that proved it.
+            if (profile?.userGuid) {
+              rememberIdToken(profile.userGuid, tokens.idToken);
+            }
+            return profile;
+          },
           mapProfileToUser: (profile) => mapMpProfileToUser(profile),
         },
       ],
