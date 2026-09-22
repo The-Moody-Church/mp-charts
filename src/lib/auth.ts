@@ -283,6 +283,42 @@ export const auth = betterAuth({
           clientId: process.env.OIDC_CLIENT_ID!,
           clientSecret: process.env.OIDC_CLIENT_SECRET!,
           scopes: ["openid", "offline_access", "http://www.thinkministry.com/dataplatform/scopes/all"],
+          // PKCE is OFF because Ministry Platform's `MPNext` client rejects it.
+          // Re-tested 2026-09-22 and the result was a clean negative. Do not
+          // flip this without reading the rest of this comment.
+          //
+          // WHAT WAS RULED OUT, so nobody repeats the investigation:
+          //
+          //   - MP supports PKCE at the server level. Its discovery document
+          //     advertises `code_challenge_methods_supported: ['plain','S256']`.
+          //   - MP's AUTHORIZE endpoint accepts a real S256 challenge. Probed
+          //     directly: it returns the same 302 to the login page as a
+          //     request without one, not an error. The front channel is fine.
+          //   - better-auth 1.6 carries the verifier correctly. `generateState`
+          //     encodes it into the `state` parameter, which round-trips through
+          //     the browser, so it is never at risk of being lost server-side.
+          //
+          // WHAT FAILS: the token exchange, every time.
+          //
+          //     ERROR [Better Auth]: { error: 'invalid_grant', status: 400 }
+          //
+          // Three attempts, three identical failures, and the user landed on
+          // /auth-error with `oauth_code_verification_failed`.
+          //
+          // CONCLUSION, sharper than the 2026-04-20 revert could manage: this
+          // is not "MP may not support PKCE". MP does. The `MPNext` OAuth
+          // client — shared by all four of these apps — is not configured to
+          // accept a code challenge, and that configuration is not reachable
+          // through MP's REST API.
+          //
+          // WHEN TO REVISIT: only after an MP administrator enables PKCE on the
+          // `MPNext` client. Until then this flag fails the same way every time
+          // and breaks sign-in for every app at once.
+          //
+          // WORTH KEEPING IN PROPORTION: this client is CONFIDENTIAL and holds
+          // a secret, so the authorization code is already protected. PKCE here
+          // is defence in depth against code interception, not a missing
+          // control. It is not worth a login outage.
           pkce: false,
           getUserInfo: async (tokens) => {
             const profile = await getMpUserInfo(tokens.accessToken);
