@@ -22,6 +22,7 @@
 
 import { useEffect, useRef, Suspense } from "react";
 import { authClient } from "@/lib/auth-client";
+import { MP_PROVIDER_ID } from "@/lib/auth-endsession";
 import { useSearchParams } from "next/navigation";
 
 /** Exported for src/components/sign-in/safe-callback-url.test.ts. */
@@ -62,12 +63,19 @@ function SignInContent() {
       // User is already signed in, redirect to callback URL
       window.location.href = callbackUrl;
     } else if (!isRedirecting.current) {
-      // User is not signed in, initiate sign in
+      // User is not signed in, initiate sign in. `provider` is typed as any
+      // string, so a wrong id compiles and 404s at runtime — use the constant.
+      // A failure to START the flow (rate limit, network, provider missing)
+      // must not leave the user on an endless spinner.
       isRedirecting.current = true;
-      authClient.signIn.oauth2({
-        providerId: "ministryplatform",
-        callbackURL: callbackUrl,
-      });
+      authClient.signIn
+        .social({ provider: MP_PROVIDER_ID, callbackURL: callbackUrl })
+        .then(({ error }) => {
+          // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- a full navigation to /auth-error is intended; router.replace() rendered only the Suspense fallback there
+          if (error) window.location.assign("/auth-error?error=sign_in_start_failed");
+        })
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- as above
+        .catch(() => window.location.assign("/auth-error?error=sign_in_start_failed"));
     }
   }, [callbackUrl, session, isPending]);
 

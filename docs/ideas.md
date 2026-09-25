@@ -283,6 +283,9 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 
 ## Technical Debt
 
+### Upgrade Vitest 4 → 5 (unblocked by better-auth 1.7)
+better-auth 1.6 declared `vitest ^2 || ^3 || ^4` as a peer, which was the only thing holding Vitest 5. 1.7.4+ adds `^5`. Now that the 1.7 migration is in, bump `vitest` and `@vitest/coverage-v8` together in their own PR (the coverage plugin pins its vitest major). Keep it separate from any auth change so a test-runner regression can't be confused with a sign-in one.
+
 ### Digest-pin the Docker base images ([#217](https://github.com/The-Moody-Church/mp-charts/issues/217))
 All four `FROM` lines use the mutable tag `node:24-alpine` (`Dockerfile` deps/builder/runner +
 `Dockerfile.dev`), so the exact Node patch level in a shipped image is whatever Docker Hub resolved

@@ -43,7 +43,7 @@ describe("prerendering opt-out", () => {
     // upstream MPNext's documented fix and is wrong for this config.
     // anchored to a line start so the explanatory comment above it, which
     // names the rejected form, is not itself a match.
-    expect(read(file)).not.toMatch(/^\\s*export const dynamic\\b/m);
+    expect(read(file)).not.toMatch(/^\s*export const dynamic\b/m);
   });
 
   it.each(ROUTES)("%s opts out of the prerendered shell with instant=false", (_n, file) => {
@@ -56,6 +56,7 @@ describe("prerendering opt-out", () => {
   it("the sign-in body is a client component, and still the only OAuth entry point", () => {
     const src = read("src/components/sign-in/sign-in.tsx");
     expect(src).toMatch(/^\s*["']use client["']/m);
-    expect(src).toMatch(/signIn\.oauth2/);
+    expect(src).toMatch(/signIn\s*\.social\(\{\s*provider:\s*MP_PROVIDER_ID/);
+    expect(src).not.toMatch(/signIn\.oauth2|providerId:/);
   });
 });

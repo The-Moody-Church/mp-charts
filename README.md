@@ -59,9 +59,9 @@ Custom provider located at `src/lib/providers/ministry-platform/` featuring:
 - Six specialized services: Table, Procedure, Communication, File, Metadata, Domain
 
 ### Authentication
-Better Auth (`better-auth@^1.4`) with Ministry Platform OAuth via `genericOAuth` plugin:
-- **Server config**: `src/lib/auth.ts` — `betterAuth()` with `genericOAuth`, `customSession`, `nextCookies()` plugins
-- **Client config**: `src/lib/auth-client.ts` — `createAuthClient()` with matching client plugins
+Better Auth (`better-auth@~1.7`) with Ministry Platform OAuth via the `genericOAuth` plugin, which 1.7 registers as a first-class social provider:
+- **Server config**: `src/lib/auth.ts` — `betterAuth()` with `genericOAuth`, `customSession`, `nextCookies()` plugins. MP's endpoints are configured explicitly (no discovery document), `pkce: false`
+- **Client config**: `src/lib/auth-client.ts` — `createAuthClient()` with `customSessionClient`; sign-in is `authClient.signIn.social({ provider: "ministryplatform" })` (1.7 removed `genericOAuthClient`)
 - **Auth helpers**: `src/lib/auth-helpers.ts` — `getSession()`, `requireSession()`, `getMpUserId()`, `getUserGuid()`
 - **Route handler**: `src/app/api/auth/[...all]/route.ts` — Better Auth API route
 - **Route protection**: `src/proxy.ts` — Next.js 16 proxy with session cookie validation
@@ -171,10 +171,12 @@ Before running the application, you must configure an OAuth 2.0 / OpenID Connect
 
 Log in to your Ministry Platform instance as an administrator and navigate to **Administration > API Clients**.
 
+> **Existing Moody Church deployment:** the sign-in client `TM.Widgets` already exists. It is shared by mp-charts, mp-senior-care, event-manager, music-db and the congregant Widgets. **Do not create a client or regenerate its secret** — that breaks sign-in for all of them. Only ADD the `/api/auth/callback/ministryplatform` redirect URIs and keep the 1.6 `/api/auth/oauth2/callback/` entries. See [docs/OAUTH_LOGOUT_SETUP.md](docs/OAUTH_LOGOUT_SETUP.md#sign-in-redirect-uris-same-client-separate-list).
+
 Create a new API Client with the following configuration:
 
 ##### Basic Settings
-- **Client ID**: `MPNext` (or your custom client ID)
+- **Client ID**: your sign-in client, set as `OIDC_CLIENT_ID` (`MINISTRY_PLATFORM_CLIENT_ID` is a separate server-to-server client)
 - **Client Secret**: Generate a secure secret (save this securely - you'll need it for `.env.local`)
 - **Display Name**: `MPNext` (or your preferred name)
 - **Client User**: Create a scoped user or use API User
@@ -185,13 +187,15 @@ Add these authorized redirect URIs where users will be sent after authentication
 
 **Development:**
 ```
-http://localhost:3000/api/auth/oauth2/callback/ministryplatform
+http://localhost:3000/api/auth/callback/ministryplatform
 ```
 
 **Production:**
 ```
-https://yourdomain.com/api/auth/oauth2/callback/ministryplatform
+https://yourdomain.com/api/auth/callback/ministryplatform
 ```
+
+> **better-auth 1.7 path.** 1.6 used `/api/auth/oauth2/callback/ministryplatform`; 1.7 builds `/api/auth/callback/<providerId>`. Our providerId is `ministryplatform` with **no hyphen** — upstream MPNext's is `ministry-platform`, so do not copy its URI. Keep the old entry registered until no deployment can roll back to a 1.6 build.
 
 > **Important**: The redirect URI must match exactly (including protocol, domain, port, and path). Ministry Platform will reject any OAuth requests with mismatched redirect URIs.
 

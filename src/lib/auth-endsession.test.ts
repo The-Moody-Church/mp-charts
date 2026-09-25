@@ -1,5 +1,16 @@
 import { describe, it, expect } from "vitest";
 import { buildEndSessionUrl, MP_PROVIDER_ID } from "./auth-endsession";
+import type { GenericOAuthConfig } from "better-auth/plugins";
+import { auth } from "@/lib/auth";
+
+function mpConfig(): GenericOAuthConfig {
+  const plugin = auth.options.plugins?.find((p) => p.id === "generic-oauth") as
+    | { options?: { config?: GenericOAuthConfig[] } }
+    | undefined;
+  const cfg = plugin?.options?.config?.find((c) => c.providerId === MP_PROVIDER_ID);
+  if (!cfg) throw new Error("ministryplatform genericOAuth config not found");
+  return cfg;
+}
 
 const BASE = "https://moody.ministryplatform.com/ministryplatformapi";
 const APP = "https://app.example.org";
@@ -71,6 +82,6 @@ describe("buildEndSessionUrl", () => {
   it("pins the provider id the account lookup filters on", () => {
     // If this drifts from `providerId` in src/lib/auth.ts, the account lookup
     // silently finds nothing and the hint is silently never sent.
-    expect(MP_PROVIDER_ID).toBe("ministryplatform");
+    expect(MP_PROVIDER_ID).toBe(mpConfig().providerId);
   });
 });
