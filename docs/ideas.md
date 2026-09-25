@@ -58,6 +58,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
 
 ### Technical Debt
+- [Upgrade Vitest 4 → 5 (unblocked by better-auth 1.7) (#241)](#upgrade-vitest-4-5-unblocked-by-better-auth-17-241)
 - [Digest-pin the Docker base images (#217)](#digest-pin-the-docker-base-images-217)
 - [cache-handler.js depends on private Next.js internals (#218)](#cache-handlerjs-depends-on-private-nextjs-internals-218)
 - [Vitest coverage config has an under-count blind spot (#212)](#vitest-coverage-config-has-an-under-count-blind-spot-212)
@@ -283,7 +284,7 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 
 ## Technical Debt
 
-### Upgrade Vitest 4 → 5 (unblocked by better-auth 1.7)
+### Upgrade Vitest 4 → 5 (unblocked by better-auth 1.7) ([#241](https://github.com/The-Moody-Church/mp-charts/issues/241))
 better-auth 1.6 declared `vitest ^2 || ^3 || ^4` as a peer, which was the only thing holding Vitest 5. 1.7.4+ adds `^5`. Now that the 1.7 migration is in, bump `vitest` and `@vitest/coverage-v8` together in their own PR (the coverage plugin pins its vitest major). Keep it separate from any auth change so a test-runner regression can't be confused with a sign-in one.
 
 ### Digest-pin the Docker base images ([#217](https://github.com/The-Moody-Church/mp-charts/issues/217))
