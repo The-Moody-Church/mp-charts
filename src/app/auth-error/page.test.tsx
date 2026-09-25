@@ -36,6 +36,21 @@ describe("AuthErrorPage", () => {
     expect(screen.getByText(/could not complete your Ministry Platform sign-in/i)).toBeDefined();
   });
 
+  it.each(["__proto__", "constructor", "toString", "hasOwnProperty", "valueOf"])(
+    "falls back to the generic message for the Object.prototype key %s",
+    async (code) => {
+      // The map is a plain object literal indexed with untrusted query input.
+      // Without an own-key check, ?error=__proto__ resolves to Object.prototype
+      // (render throws: "Objects are not valid as a React child") and
+      // ?error=constructor resolves to a function (the message paragraph
+      // renders empty and the fallback is skipped).
+      await renderWith({ error: code });
+
+      expect(screen.getByText(/could not complete your Ministry Platform sign-in/i)).toBeDefined();
+      expect(screen.getByText(code)).toBeDefined();
+    }
+  );
+
   it("renders without any error code at all", async () => {
     await renderWith({});
 

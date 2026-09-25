@@ -95,7 +95,14 @@ async function AuthErrorContent({ searchParams }: Props) {
   // that payload, so a `</script><script>` breakout attempt is inert (tested
   // directly; script tags stayed balanced). So the guarantee is "not rendered
   // and not executable", not "absent from the response".
-  const message = (error && ERROR_MESSAGES[error]) || FALLBACK_MESSAGE;
+  //
+  // `error` is untrusted query input and ERROR_MESSAGES is a plain object, so
+  // only OWN keys are looked up: `?error=__proto__` would otherwise resolve to
+  // Object.prototype (render throws) and `?error=constructor` to a function
+  // (empty message, fallback skipped). Pinned by page.test.tsx.
+  const message =
+    (error && Object.hasOwn(ERROR_MESSAGES, error) ? ERROR_MESSAGES[error] : undefined) ||
+    FALLBACK_MESSAGE;
 
   return <AuthErrorShell message={message} code={error} />;
 }

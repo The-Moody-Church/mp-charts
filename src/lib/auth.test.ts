@@ -174,6 +174,20 @@ describe("getMpUserInfo", () => {
     expect(user!.name).toBe("Jonny Tester");
   });
 
+  it("calls MP's userinfo endpoint with the access token as a Bearer credential", async () => {
+    // getMpUserInfo builds this URL itself; the `userInfoUrl` config pin does
+    // not reach it.
+    stubUserinfo(VALID_SUB);
+    mockGetTableRecords.mockResolvedValue([]);
+
+    await getMpUserInfo("token");
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith("https://test-mp.example.com/oauth/connect/userinfo", {
+      headers: { Authorization: "Bearer token" },
+    });
+  });
+
   it("still returns the user when the MP enrichment lookup fails", async () => {
     stubUserinfo(VALID_SUB);
     mockGetTableRecords.mockRejectedValue(new Error("MP is down"));
@@ -433,6 +447,8 @@ describe("configured getUserInfo (the function better-auth actually calls)", () 
     const p = await mpConfig().getUserInfo!({ accessToken: "at", idToken: idt } as Tokens);
     expect(p).toMatchObject({ sub: VALID_SUB, id: VALID_SUB, userGuid: VALID_SUB, mpUserId: 42, mpContactId: 99 });
     expect(takeIdToken(VALID_SUB)).toBe(idt);
+    // The token endpoint's access token is what reaches userinfo.
+    expect(fetch).toHaveBeenCalledWith(expect.any(String), { headers: { Authorization: "Bearer at" } });
   });
   it("refuses an ID token whose sub differs from userinfo's", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
