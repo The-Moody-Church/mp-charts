@@ -154,6 +154,9 @@ describe("UserMenu", () => {
       order.push("onClose");
     });
     mockGetSession.mockImplementation(async () => {
+      // Settle on a later macrotask: a caller that fired the refresh without
+      // AWAITING it would then record handleSignOut first and fail this test.
+      await new Promise((resolve) => setTimeout(resolve, 0));
       order.push("getSession");
       return { data: null, error: null };
     });
