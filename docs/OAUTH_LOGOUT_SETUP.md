@@ -2,8 +2,13 @@
 
 > **Scope.** This applies to all four apps built on this auth stack — mp-charts,
 > mp-senior-care, event-manager and music-db. They share **one** Ministry
-> Platform OAuth client, `MPNext`, so the MP-side configuration below is a
-> single change that covers every app.
+> Platform sign-in client, `TM.Widgets` (`OIDC_CLIENT_ID`), so the MP-side
+> configuration below is a single change that covers every app.
+>
+> **Correction, 2026-09-24.** Earlier revisions of this page said `MPNext`.
+> `MPNext` is only the server-to-server data client (`MINISTRY_PLATFORM_CLIENT_ID`).
+> Every app signs in, and signs out, through `TM.Widgets`, so that is the client
+> whose lists matter.
 
 ## Current status, 2026-09-22 — working end to end
 
@@ -12,10 +17,10 @@
 | App session cleared on sign-out | ✅ |
 | MP OIDC session terminated on sign-out | ✅ |
 | `id_token_hint` sent on the end-session request | ✅ |
-| Post-logout redirect URLs registered on the `MPNext` client | ✅ |
+| Post-logout redirect URLs registered on the sign-in client (`TM.Widgets`) | ✅ |
 | User returned to the app after sign-out | ✅ verified on care.moodychurch.app |
 
-All four apps share the `MPNext` client and the same code, so a successful
+All four apps share the `TM.Widgets` client and the same code, so a successful
 return on one is strong evidence for the rest. Spot-check the others if you
 want certainty.
 
@@ -64,7 +69,7 @@ being allowed by the RP-Initiated Logout spec.
 
 ## Reference: the MP-side registration
 
-Register these as **Post-Logout Redirect URIs** on the `MPNext` OAuth client.
+Register these as **Post-Logout Redirect URIs** on the `TM.Widgets` OAuth client.
 All four in one list; a client holds a list, and the apps share the client.
 
 ```
@@ -85,6 +90,43 @@ parameter against the registered list as a literal string. A trailing slash on
 one side and not the other is a mismatch. The apps send exactly
 `BETTER_AUTH_URL` with no trailing slash and no path, which is why the list
 above has neither.
+
+### Sign-in redirect URIs (same client, separate list)
+
+better-auth 1.7 returns users to `/api/auth/callback/ministryplatform`. Our
+providerId has **no hyphen**; upstream MPNext's `ministry-platform` path is not
+ours. The **Redirect URIs** list on `TM.Widgets` needs, per app:
+
+```
+https://mptools.moodychurch.org/api/auth/callback/ministryplatform
+https://care.moodychurch.app/api/auth/callback/ministryplatform
+https://events.moodychurch.app/api/auth/callback/ministryplatform
+https://musictools.moodychurch.org/api/auth/callback/ministryplatform
+http://localhost:3000/api/auth/callback/ministryplatform
+```
+
+Keep the 1.6 entries (`…/api/auth/oauth2/callback/ministryplatform`) until no
+deployment can roll back to a 1.6 build: a rolled-back image sends the old
+path. The post-logout list above does not change.
+
+#### Verify the registration (before any soak)
+
+A missing entry fails on **MP's** error page, so it never reaches our
+`/auth-error` page or our logs. Check each URI with a request that follows no
+redirects and sends no credentials:
+
+```bash
+curl -s -o /tmp/p.html -w '%{http_code} %{redirect_url}\n' \
+  "https://moody.ministryplatform.com/ministryplatformapi/oauth/connect/authorize?response_type=code&client_id=TM.Widgets&scope=openid&state=probe&redirect_uri=<url-encoded URI>"
+```
+
+- `302` to `…/oauth/login?signin=…` means the URI is **registered**.
+- `200` means MP refused it. Confirm with `grep 'not registered for the client' /tmp/p.html`.
+
+Run it for all four hosts and localhost, on **both** the new
+`/api/auth/callback/ministryplatform` path (must be `302` before that app's
+first 1.7 soak) and the old `/api/auth/oauth2/callback/ministryplatform` path
+(must stay `302` while any rollback to 1.6 is possible).
 
 **Where.** Not through the MP REST API. Confirmed on 2026-09-18: there is no
 OAuth client table in the data dictionary, the OIDC discovery document
@@ -128,9 +170,12 @@ ${MINISTRY_PLATFORM_BASE_URL}/oauth/connect/endsession
 builder does not add it. The result matches the `end_session_endpoint` in MP's
 discovery document exactly.
 
-Order matters in the action: the ID token is read from the user's MP account
-record **before** `auth.api.signOut`, because the session is how the user is
-identified and signing out destroys it.
+Order matters in the action: the ID token is read **before** `auth.api.signOut`,
+because the session is how the user is identified and signing out destroys it.
+The primary source is `src/lib/id-token-store.ts`, filled at sign-in inside
+`getUserInfo`; the user's MP account record is only a fallback, and in practice
+is empty (see that file). `disableProviderLogout: true` keeps better-auth 1.7's
+own end-session URL out of the way, because it reads that same empty record.
 
 ### It degrades rather than fails
 
@@ -159,7 +204,7 @@ verbatim in the registered list above.
 
 ## Testing
 
-Sign out of **any one** of the four apps. Because they share the `MPNext`
+Sign out of **any one** of the four apps. Because they share the `TM.Widgets`
 client, a successful return proves it for all of them.
 
 1. Sign in.

@@ -21,7 +21,7 @@ Create a pull request for the current branch after validating all prerequisites 
    - Verify local branch is up to date with remote (no unpushed commits)
 
 4. **Check if PR already exists:**
-   - Run `gh pr list --head <branch-name> --state open --json number,title,url`
+   - Run `gh pr list --repo The-Moody-Church/mp-charts --head <branch-name> --state open --json number,title,url`
    - If PR exists, show the existing PR details and ask if user wants to view it
    - Abort PR creation if one already exists
 
@@ -43,7 +43,7 @@ Create a pull request for the current branch after validating all prerequisites 
      - Footer with Claude Code attribution
 
 7. **Create the PR:**
-   - Use `gh pr create --title "<title>" --body "<body>" --base <base-branch>`
+   - Use `gh pr create --repo The-Moody-Church/mp-charts --title "<title>" --body "<body>" --base <base-branch>` — the `--repo` flag is MANDATORY (see `.claude/rules/git-workflow.md`): without it `gh` opens the PR on upstream MPNext
    - Show the created PR URL to the user
 
 8. **Post-creation:**
@@ -53,7 +53,7 @@ Create a pull request for the current branch after validating all prerequisites 
 ## Arguments
 
 - `$ARGUMENTS` - Optional arguments:
-  - `--base <branch>` - Specify base branch (default: dev)
+  - `--base <branch>` - Specify base branch (default: main)
   - `--draft` - Create as draft PR
   - `--title "<title>"` - Override auto-generated title
   - `#123` or `123` - Link to specific GitHub issue (overrides auto-detection)
@@ -100,7 +100,7 @@ git ls-remote --heads origin $(git branch --show-current)
 git log origin/$(git branch --show-current)..HEAD --oneline 2>/dev/null
 
 # 5. Check for existing PR
-gh pr list --head $(git branch --show-current) --state open --json number,title,url
+gh pr list --repo The-Moody-Church/mp-charts --head $(git branch --show-current) --state open --json number,title,url
 
 # 6. Get commits for this branch
 git log main..HEAD --oneline
@@ -109,7 +109,7 @@ git log main..HEAD --oneline
 git diff main...HEAD --stat
 
 # 8. Create the PR
-gh pr create --title "Title" --body "$(cat <<'EOF'
+gh pr create --repo The-Moody-Church/mp-charts --base main --title "Title" --body "$(cat <<'EOF'
 ## Summary
 - Change 1
 - Change 2
