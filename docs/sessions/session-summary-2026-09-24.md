@@ -4,7 +4,7 @@
 
 Migrate better-auth 1.6.33 → 1.7.x, starting with mp-charts as the reference for the four apps that share this auth stack (mp-charts, mp-senior-care, event-manager, music-db). Upstream MPNext #68 was tracked as DEFERRED in `.claude/notes/upstream-sync-log.md`.
 
-## Status: IN PROGRESS — code complete and verified; live sign-in and soak outstanding
+## Status: COMPLETED (2026-09-25) — localhost sign-in against production MP passed; `:dev` soak with human sign-in/sign-out passed; #238 and #240 merged and deployed
 
 ## What 1.7 actually requires (verified, not assumed)
 
@@ -92,3 +92,9 @@ Files: `src/components/user-menu/user-menu.tsx`, `user-menu.test.tsx` (new), `ac
 **Decision:** upstream's menu also wraps `handleSignOut` in `unstable_rethrow` + `alert` (from upstream #89, defect 3). That is deferred here per the 2026-09-15 sync log and is not part of this fix; the refresh goes in without changing the component's existing behaviour.
 
 **Next:** soak on `:dev` together with #238 — delete only the `session_data` cookie, sign out from the menu, expect to land back on the app with no `[signout]` line in the log. The same change is going to mp-senior-care, event-manager and music-db.
+
+## Outcome (2026-09-25)
+
+- Localhost sign-in against production MP passed (3 sign-ins, session fields, sign-out, `/auth-error`, CSP clean).
+- `:dev` production soak: #238 from 01:55Z, then #238 + #240 from 04:34Z. Human sign-in/sign-out passed; logs clean (no `auth.userinfo.*`, no `id_token_hint omitted`, no auth 5xx). Merged after ~11 h of soak rather than the planned 24 h, at the owner's direction.
+- Follow-ups: close-out (after 7 days on 1.7 with no rollback, remove the four `…/api/auth/oauth2/callback/ministryplatform` entries from TM.Widgets and re-record rollback pins); Vitest 5; better-auth 1.7.6 patch.
