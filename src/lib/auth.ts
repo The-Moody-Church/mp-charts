@@ -342,6 +342,11 @@ export const auth = betterAuth({
   },
 
   session: {
+    // With no database, a server action can read the session ONLY from this
+    // cookie cache while it is fresh; this bundle's own in-memory store is
+    // empty. Sign-out depends on it to find the id_token_hint, which is why
+    // the user menu re-mints the cookie through GET /get-session first (see
+    // refreshSessionCookie in src/components/user-menu/user-menu.tsx).
     cookieCache: {
       enabled: true,
       maxAge: 60 * 60, // 1 hour

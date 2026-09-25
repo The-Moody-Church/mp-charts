@@ -11,6 +11,18 @@ git log main..upstream/main --oneline
 
 Or review PRs at: https://github.com/MinistryPlatform-Community/MPNext/pulls
 
+## Review: 2026-09-24 — sign-out `id_token_hint` port (#94, ours, open upstream)
+
+#94 is our own `id-token-store.ts` sign-out fix, ported upstream. Reviewing it there found a gap that is live here as well: the sign-out server action can read the session **only** from the one-hour JWT cookie cache (its bundle's in-memory store is empty), so after an idle hour the lookup got `no-session` and MP stranded the user. Brought back:
+
+| Item | Action | Notes |
+|---|---|---|
+| Pre-sign-out session refresh in the user menu | **Incorporated** | `refreshSessionCookie()` calls `authClient.getSession()` before `handleSignOut`; `GET /get-session` runs in the route handler, which holds the session and re-issues `session_data`. try/catch, never blocks sign-out. Premise proven on 1.7.5 by a harness; `route.flow.test.ts` now pins the re-issue from `session_token` alone |
+| `lookup-failed` warning in the lookup's catch | **Incorporated** | Same `[signout] id_token_hint omitted (…)` line as every other no-hint path. We keep `logError` for the error itself rather than #94's JSON `console.error` |
+| `unstable_rethrow` + `alert` around `handleSignOut` in the menu | **Not in this change** | Upstream #89 defect 3, still deferred (2026-09-15 review) |
+| `NEXTAUTH_URL` fallback for the post-logout URI | **Skipped** | Not a variable this fork uses |
+| `/session-error` without the hint | **Documented, not fixed** | No `userGuid` to key the store by; it signs out and leaves the user on MP's page. `docs/OAUTH_LOGOUT_SETUP.md` |
+
 ## Review: 2026-09-24 — better-auth 1.7 migration (#68, with #79/#87 corrections)
 
 **#68 is now incorporated, translated rather than copied.** We move to better-auth **1.7.5** (range `>=1.7.5 <1.8.0`; 1.7.6 deferred to a later patch PR). Upstream finished its own migration on 1.7.4 across three PRs: #68 (the switch), #79 (`accountIssuer` removed again, since 1.7.3 reverted issuer-keyed accounts and the option is now a type error), and #87 (`disableIdTokenNonceBinding`, because MP never echoes the nonce). So #68 alone is not the end state, and a straight port of it would have failed.

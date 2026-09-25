@@ -8,16 +8,25 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 /**
- * Reads the OIDC ID token from the signed-in user's Ministry Platform account.
+ * Finds the signed-in user's OIDC ID token, for `id_token_hint` on the
+ * end-session request. See `src/lib/auth-endsession.ts` for why that parameter
+ * is load-bearing.
  *
- * Needed as `id_token_hint` on the end-session request; see
- * `src/lib/auth-endsession.ts` for why that parameter is load-bearing.
+ * NEVER THROWS. Sign-out must not depend on this succeeding. Two normal states
+ * leave it with nothing to send, and neither is an error:
  *
- * NEVER THROWS. Sign-out must not depend on this succeeding. This app uses
- * better-auth's in-memory adapter, so a session that predates a container
- * restart has no stored account to read, and that is a normal state rather
- * than an error. Returning null degrades to the previous behaviour: still
- * signed out, just left on MP's page instead of returned here.
+ *   - a session that predates a container restart: the token store is empty;
+ *   - `no-session` once the one-hour JWT cookie cache has lapsed. This server
+ *     action can read the session ONLY from that cookie, because its own
+ *     in-memory adapter is a different, empty instance from the route
+ *     handler's (see `src/lib/id-token-store.ts`). The user menu therefore
+ *     calls `GET /api/auth/get-session` first, which runs in the route handler
+ *     and re-issues the cookie. `/session-error` posts straight here with no
+ *     such refresh, and its session has no `userGuid` to key the store by
+ *     anyway, so it signs out without the hint.
+ *
+ * Returning null degrades to signing out without the hint: still signed out,
+ * just left on MP's page instead of returned here.
  *
  * The token is deliberately not logged. It is a JWT full of user claims.
  */
@@ -52,7 +61,9 @@ async function findMpIdToken(requestHeaders: Headers): Promise<string | null> {
     return mpAccount.idToken;
   } catch (error) {
     logError("signout.idToken.lookup", error);
-    return null;
+    // The same line as every other no-hint path, so "no such line in the log"
+    // really does mean the hint was sent.
+    return warnNoHint("lookup-failed");
   }
 }
 
@@ -67,11 +78,14 @@ async function findMpIdToken(requestHeaders: Headers): Promise<string | null> {
  * It exists to make one sign-out decide a question that otherwise takes
  * guesswork: if this line does NOT appear, the app did its part and any
  * remaining problem is MP-side registration. If it DOES appear, the reason
- * says which of the three ways it failed.
+ * says which way it failed. Every path that returns no token goes through
+ * here, the catch included, so the absence of the line is conclusive.
  *
  * Deliberately carries no user identifier and never the token itself.
  */
-function warnNoHint(reason: "no-session" | "no-mp-account" | "account-has-no-id-token"): null {
+function warnNoHint(
+  reason: "no-session" | "no-mp-account" | "account-has-no-id-token" | "lookup-failed"
+): null {
   console.warn(
     `[signout] id_token_hint omitted (${reason}) — MP will ignore post_logout_redirect_uri ` +
       `and leave the user on its logged-out page. See docs/OAUTH_LOGOUT_SETUP.md.`
@@ -79,6 +93,15 @@ function warnNoHint(reason: "no-session" | "no-mp-account" | "account-has-no-id-
   return null;
 }
 
+/**
+ * Signs the user out of this app and then out of Ministry Platform.
+ *
+ * Callers: the user menu, which refreshes the session cookie cache through
+ * `GET /api/auth/get-session` immediately before calling this (see
+ * `refreshSessionCookie` in `user-menu.tsx` — without it, a cache older than
+ * an hour costs the `id_token_hint`), and `/session-error`, which cannot
+ * benefit from that refresh (see `findMpIdToken`).
+ */
 export async function handleSignOut() {
   const requestHeaders = await headers();
 

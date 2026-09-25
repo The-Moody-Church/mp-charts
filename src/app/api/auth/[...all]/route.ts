@@ -13,7 +13,7 @@ const { GET: betterAuthGET, POST: betterAuthPOST } = toNextJsHandler(auth);
  *
  * | Method | Path                        | Caller                                               |
  * |--------|-----------------------------|------------------------------------------------------|
- * | GET    | /get-session                | `authClient.useSession()` — src/components/sign-in/sign-in.tsx, src/contexts/user-context.tsx, src/contexts/session-context.tsx |
+ * | GET    | /get-session                | `authClient.useSession()` — src/components/sign-in/sign-in.tsx, src/contexts/user-context.tsx, src/contexts/session-context.tsx; `authClient.getSession()` — src/components/user-menu/user-menu.tsx (re-mints the cookie cache before sign-out) |
  * | POST   | /sign-in/social             | `authClient.signIn.social()` — src/components/sign-in/sign-in.tsx |
  * | GET    | /callback/ministryplatform  | Ministry Platform's redirect after login              |
  *
