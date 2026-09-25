@@ -24,7 +24,8 @@ import { useEffect, useRef, Suspense } from "react";
 import { authClient } from "@/lib/auth-client";
 import { useSearchParams } from "next/navigation";
 
-function getSafeCallbackUrl(url: string | null): string {
+/** Exported for src/components/sign-in/safe-callback-url.test.ts. */
+export function getSafeCallbackUrl(url: string | null): string {
   if (!url) return "/";
   // Reject backslashes and control characters first. Browsers normalize "\" to "/",
   // so a value like "/\evil.com" would slip past naive relative-URL checks and then
@@ -33,10 +34,16 @@ function getSafeCallbackUrl(url: string | null): string {
   if (/[\\\x00-\x1f]/.test(url)) return "/";
   try {
     // Resolve against our own origin and require the result to stay same-origin.
-    // This also rejects absolute URLs, protocol-relative URLs, and javascript: URIs.
+    // This rejects absolute URLs, protocol-relative INPUT and javascript: URIs.
     const resolved = new URL(url, window.location.origin);
     if (resolved.origin !== window.location.origin) return "/";
-    return resolved.pathname + resolved.search + resolved.hash;
+    const safe = resolved.pathname + resolved.search + resolved.hash;
+    // ...but the same-origin check alone is not enough. Dot segments are removed
+    // while parsing, so "/.//evil.com" (or "/..//evil.com", "/%2e//evil.com")
+    // resolves ON our origin with the pathname "//evil.com" — and that string,
+    // handed to `window.location.href`, is protocol-relative: it navigates to
+    // https://evil.com. Check the OUTPUT too.
+    return safe.startsWith("//") ? "/" : safe;
   } catch {
     return "/";
   }

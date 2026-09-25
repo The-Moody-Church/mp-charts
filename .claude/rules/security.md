@@ -127,7 +127,11 @@ function getSafeCallbackUrl(url: string | null): string {
   try {
     const resolved = new URL(url, window.location.origin);
     if (resolved.origin !== window.location.origin) return "/";
-    return resolved.pathname + resolved.search + resolved.hash;
+    const safe = resolved.pathname + resolved.search + resolved.hash;
+    // Dot segments are removed while parsing: "/.//evil.com" resolves on OUR
+    // origin to the pathname "//evil.com", which is protocol-relative when
+    // navigated to. Check the output, not just the input.
+    return safe.startsWith("//") ? "/" : safe;
   } catch {
     return "/";
   }
