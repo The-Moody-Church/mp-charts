@@ -42,7 +42,16 @@ const { mockGetTableRecords, mp } = vi.hoisted(() => {
         const idToken = `h.${Buffer.from(JSON.stringify({ sub: mp.idTokenSub })).toString("base64url")}.s`;
         return json({ access_token: "at", token_type: "Bearer", expires_in: 3600, id_token: idToken });
       }
-      if (url.startsWith("https://test-mp.example.com/oauth/connect/userinfo")) {
+      // Strict, like the real MP: the exact userinfo path (a startsWith would
+      // also accept `/connect/userinfoX`) and the token endpoint's access token
+      // as a Bearer credential. getMpUserInfo builds this request itself rather
+      // than reading `userInfoUrl` from the config, so the config pin in
+      // auth.test.ts does not cover it; a wrong path or a missing header would
+      // otherwise pass here and fail every production sign-in.
+      if (url === "https://test-mp.example.com/oauth/connect/userinfo") {
+        if (new Headers(init?.headers).get("authorization") !== "Bearer at") {
+          return new Response("", { status: 401 });
+        }
         if (mp.userinfoStatus !== 200) return new Response("", { status: mp.userinfoStatus });
         return json({
           sub: "ab12cd34-ef56-7890-abcd-ef1234567890",
