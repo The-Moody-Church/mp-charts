@@ -14,8 +14,14 @@
  * Two configuration choices combine to cause it:
  *
  *   1. `session.cookieCache.strategy: "jwt"` — the session is carried in the
- *      cookie, so `auth.api.getSession` answers without touching any store.
- *      The session therefore looks perfectly healthy.
+ *      `session_data` cookie, so `auth.api.getSession` answers without
+ *      touching any store — but ONLY while that one-hour cache is fresh. The
+ *      session therefore looks perfectly healthy. Once the cache lapses,
+ *      `getSession` falls through to its own module instance's store, which in
+ *      a server action is the empty one described below, and returns null.
+ *      So sign-out's session lookup depends on a fresh cookie too, which is
+ *      why the user menu re-mints it through `GET /api/auth/get-session` (the
+ *      route handler, whose store holds the session) before signing out.
  *   2. No `database` is configured, so better-auth uses its in-memory adapter.
  *      That store lives in whichever module instance created it.
  *

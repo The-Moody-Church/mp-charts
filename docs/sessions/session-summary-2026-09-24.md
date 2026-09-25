@@ -4,7 +4,7 @@
 
 Migrate better-auth 1.6.33 → 1.7.x, starting with mp-charts as the reference for the four apps that share this auth stack (mp-charts, mp-senior-care, event-manager, music-db). Upstream MPNext #68 was tracked as DEFERRED in `.claude/notes/upstream-sync-log.md`.
 
-## Status: IN PROGRESS — code complete and verified; live sign-in and soak outstanding
+## Status: COMPLETED (2026-09-25) — localhost sign-in against production MP passed; `:dev` soak passed (human checks on #238; clean logs on #238 + #240); #238 and #240 merged and deployed
 
 ## What 1.7 actually requires (verified, not assumed)
 
@@ -35,6 +35,7 @@ Unchanged and re-verified: `disabledPaths` (still 404s `/update-user`), the `inp
 | #237 `chore/zod-4.5-floor` | zod `^4.3.6` → `^4.5.4` (1.7.5 requires it), landed first so the auth PR is one variable | open, CI |
 | #238 `chore/better-auth-1.7` (stacked on #237) | the migration | open as draft |
 | #239 `fix/safe-callback-url-dot-segments` | pre-existing open redirect found by the review | open |
+| #240 `fix/signout-refresh-session-cookie` (stacked on #238) | sign-out keeps `id_token_hint` after the one-hour cookie cache lapses (below) | open as draft |
 
 Gates on the 1.7 branch: tsc, eslint (0 problems), `npm audit --audit-level=high` 0, **886/886 tests in 58 files** (825 in 56 before; auth files stable under shuffled order), `next build` (no discovery fetch), `check:shells` 19 shells. **27 mutation checks** each turn at least one test red. The tests previously re-simulated the OAuth callbacks in-file and passed against the wrong 1.7 contract; they now call the configured `getUserInfo`/`mapProfileToUser` taken from `auth.options`, and `route.flow.test.ts` runs a whole sign-in through the real route against a fake MP (token exchange included, where it proves no `code_verifier` is sent).
 
@@ -71,3 +72,29 @@ An adversarial review (5 lenses, every finding checked by an independent skeptic
 ## Follow-ups (out of scope here)
 
 Vitest 5 (now unblocked; ideas.md). better-auth 1.7.6 patch. PKCE retest if an MP admin enables it on TM.Widgets. `cspHeaderName()` default flip (sync log, 2026-09-15).
+
+## Follow-on: sign-out keeps `id_token_hint` after an idle hour (#240) — IN PROGRESS
+
+Found in the review of the upstream MPNext port of our sign-out fix (PR #94), and live here too.
+
+**Bug.** `handleSignOut` finds the ID token through `auth.api.getSession()`. With no database, the server-action bundle's in-memory store is empty, so that call can answer only from the JWT cookie cache (`session_data`, one hour). After an hour with no reload, tab switch or session refetch it returned null, logged `[signout] id_token_hint omitted (no-session)`, and MP left the user on its logged-out page. Sign-out itself still worked.
+
+**Fix.** The user menu calls `authClient.getSession()` immediately before the server action (`refreshSessionCookie`, try/catch, can never block sign-out). `GET /api/auth/get-session` runs in the route handler, whose store holds the session, and re-issues `session_data`; the server-action request that follows carries it. The lookup's catch now also logs `id_token_hint omitted (lookup-failed)`, so a missing `[signout]` line really does mean the hint was sent. `/get-session` was already allowlisted.
+
+**Premise, proven on better-auth 1.7.5 by a harness** (same session options, a real sign-in through the handler): server-action-side `getSession` returns a session at t+59m50s and null at t+60m10s; after `GET /get-session` re-issues the cookie it returns the session again, and the real `createAuthClient().getSession()` end to end turns `no-session` into a sent hint. 1.7.5's check that the cached token equals the `session_token` cookie passes on the re-issued cookie.
+
+**Known limitation, documented not fixed.** `/session-error` signs out a session with no `userGuid` through `<form action={handleSignOut}>`: there is no key to find the token by, so it always goes without the hint and leaves the user on MP's page.
+
+Gates: tsc, eslint 0 problems (0 on base), **912/912 tests in 60 files** (902 in 59 on base: +6 `user-menu.test.tsx`, +3 `actions.test.ts`, +1 `route.flow.test.ts`), `next build`, `check:shells`, `npm audit --audit-level=high` 0. Mutation-checked: removing the refresh call fails the order test; removing its try/catch fails the failed-refresh test; reverting the `lookup-failed` warning fails its test.
+
+Files: `src/components/user-menu/user-menu.tsx`, `user-menu.test.tsx` (new), `actions.ts`, `actions.test.ts`; `src/app/api/auth/[...all]/route.flow.test.ts` (pins that the route re-issues `session_data` from `session_token` alone), `route.ts` (allowlist caller comment); comments in `src/lib/id-token-store.ts` and `src/lib/auth.ts`; `docs/OAUTH_LOGOUT_SETUP.md`, `CLAUDE.md`, `docs/status.md`, `.claude/notes/upstream-sync-log.md`.
+
+**Decision:** upstream's menu also wraps `handleSignOut` in `unstable_rethrow` + `alert` (from upstream #89, defect 3). That is deferred here per the 2026-09-15 sync log and is not part of this fix; the refresh goes in without changing the component's existing behaviour.
+
+**Next:** soak on `:dev` together with #238 — delete only the `session_data` cookie, sign out from the menu, expect to land back on the app with no `[signout]` line in the log. The same change is going to mp-senior-care, event-manager and music-db.
+
+## Outcome (2026-09-25)
+
+- Localhost sign-in against production MP passed (3 sign-ins, session fields, sign-out, `/auth-error`, CSP clean).
+- `:dev` production soak: #238 alone from 01:55Z (human sign-in, session, sign-out, `/auth-error` and existing-session checks all passed), then #238 + #240 together from 04:34Z (smoke tests and logs clean — no `auth.userinfo.*`, no `id_token_hint omitted`, no auth 5xx; no separate human check reported on the combined build). Merged at ~11 h (#238) / ~8.5 h (#240) of soak rather than the planned 24 h, at the owner's direction.
+- Follow-ups: close-out (after 7 days on 1.7 with no rollback, remove the four `…/api/auth/oauth2/callback/ministryplatform` entries from TM.Widgets and re-record rollback pins); Vitest 5; better-auth 1.7.6 patch.

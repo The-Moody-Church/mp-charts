@@ -126,6 +126,30 @@ describe("better-auth 1.7 sign-in, end to end through the real route", () => {
     expect(takeIdToken(SUB)).toBe(`h.${Buffer.from(JSON.stringify({ sub: SUB })).toString("base64url")}.s`);
   });
 
+  it("re-issues session_data from session_token alone — what sign-out's cookie refresh relies on", async () => {
+    // The sign-out server action reads the session only from the session_data
+    // cookie cache (its own in-memory store is empty), so the user menu calls
+    // GET /get-session first to re-mint that cookie. This pins that the route
+    // does re-mint it once the cache is gone — the same state as a lapsed
+    // one-hour cache, or deleting the cookie by hand.
+    const { state, cookie } = await startSignIn();
+    const back = await returnFromMp(state, cookie);
+    const tokenOnly = cookiesOf(back)
+      .split("; ")
+      .filter((c) => c.includes("session_token="))
+      .join("; ");
+    expect(tokenOnly).not.toBe("");
+    expect(tokenOnly).not.toContain("session_data=");
+
+    const res = await GET(new NextRequest(`${ORIGIN}/api/auth/get-session`, { headers: { cookie: tokenOnly } }));
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).user).toMatchObject({ userGuid: SUB });
+    const reissued = res.headers.getSetCookie().find((c) => c.split("=")[0].endsWith("session_data"));
+    expect(reissued).toBeDefined();
+    expect(reissued).toMatch(/Max-Age=3600/i);
+  });
+
   it("exchanges the code with the registered redirect URI and no PKCE verifier", async () => {
     const { authorize, state, cookie } = await startSignIn();
     await returnFromMp(state, cookie);

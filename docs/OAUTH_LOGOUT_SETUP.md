@@ -26,8 +26,8 @@ want certainty.
 
 ### What finally fixed it, and what did not
 
-Three things were wrong at different times. Worth recording, because two of
-them were invisible and the first one sent the investigation the wrong way.
+Four things were wrong at different times. Worth recording, because they were
+invisible and the first one sent the investigation the wrong way.
 
 **1. The hint was never sent.** The code sent `post_logout_redirect_uri` alone
 from the Better Auth migration until 2026-09-18. MP runs IdentityServer, which
@@ -57,7 +57,25 @@ real sign-out and pointed straight at cause 2.
 **That warning is still in the sign-out action. Leave it there.** If sign-out
 ever strands users on MP again, one sign-out tells you whether the app stopped
 sending the hint (warning present, with the reason) or something changed on the
-MP side (no warning).
+MP side (no warning). Every path that ends without a token logs it, including
+a lookup that throws (`lookup-failed`), so no line really means the hint went.
+
+**4. After an hour idle, the hint was dropped again (`no-session`).** Found in
+the review of the upstream MPNext port (PR #94), 2026-09-24. The sign-out server
+action finds the token through the session, and it can read the session only
+from the JWT cookie cache (`session_data`, one hour). Its own in-memory store is
+the empty instance described in 2. So a user who went an hour without a reload,
+tab switch or session refetch got `[signout] id_token_hint omitted (no-session)`
+and was stranded on MP's page. Sign-out itself still worked.
+
+Fixed by having the user menu call `authClient.getSession()` immediately before
+the server action (`refreshSessionCookie` in
+`src/components/user-menu/user-menu.tsx`). `GET /api/auth/get-session` runs in
+the auth **route handler**, whose store does hold the session, and it re-issues
+a fresh `session_data` cookie. The server-action request that follows carries
+that cookie, so the lookup succeeds. The refresh is wrapped so it can never
+block sign-out; if it fails, the user signs out without the hint.
+`/get-session` was already on the route allowlist, and nothing else changed.
 
 ### Verified rather than assumed
 
@@ -184,6 +202,18 @@ so a session predating a container restart has no stored account to read — a
 normal state, not an error. With no hint the URL is still valid: the user is
 still signed out, just left on MP's page.
 
+The session lookup depends on a fresh cookie cache, because the server action
+cannot read the session any other way (see 4 above). The user menu refreshes it
+first. Anything else that calls `handleSignOut` has to do the same, or it signs
+out without the hint once the cache is more than an hour old.
+
+**Known limitation: `/session-error`.** That page signs out a session that has
+no `userGuid`, through `<form action={handleSignOut}>`. There is no key to find
+the token by, so it always signs out without the hint and leaves the user on
+MP's page (the log says `no-mp-account` or `no-session`). This is deliberate and
+not worth fixing: the page exists only to give a broken session a way out, and
+it still signs the user out of both the app and MP.
+
 ### The Content-Security-Policy has to allow it
 
 The end-session redirect is a cross-origin navigation, and `form-action`
@@ -212,6 +242,13 @@ client, a successful return proves it for all of them.
 3. Sign in again. You should be asked for credentials, not signed in silently.
 
 Both steps pass as of 2026-09-22.
+
+**The lapsed-cookie case (4 above), without waiting an hour.** Sign in, open
+DevTools → Application → Cookies, and delete ONLY the better-auth cookie whose
+name contains `session_data` (keep `session_token`). Then sign out from the
+menu. You should land back on the app, and the server log should have no
+`[signout]` line. Without the refresh, this is exactly where the log says
+`id_token_hint omitted (no-session)` and MP strands you.
 
 **If it regresses, check the logs first.** A `[signout]` warning means the app
 stopped sending the hint and the reason says why. No warning means the app is

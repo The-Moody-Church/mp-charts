@@ -10,7 +10,34 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { authClient } from "@/lib/auth-client";
 import { handleSignOut } from "./actions";
+
+/**
+ * Re-mints the session cookie cache just before signing out.
+ *
+ * `handleSignOut` needs the session to find the user's ID token for
+ * `id_token_hint`. It runs in a server action, which can read the session only
+ * from the JWT cookie cache (`session_data`): its own in-memory store is a
+ * different, empty instance (see `src/lib/id-token-store.ts`). That cache lasts
+ * an hour, so after an hour with no reload, tab switch or session refetch the
+ * action sees no session and drops the hint (`[signout] id_token_hint omitted
+ * (no-session)`), leaving the user on MP's logged-out page.
+ *
+ * `GET /api/auth/get-session` runs in the auth route handler, whose store does
+ * hold the session, and re-issues a fresh `session_data` cookie. The server
+ * action request that follows then carries it.
+ *
+ * It must never block sign-out: any failure here only means signing out
+ * without the hint, which is still signing out.
+ */
+async function refreshSessionCookie(): Promise<void> {
+  try {
+    await authClient.getSession();
+  } catch {
+    // Sign-out still proceeds; at worst it goes without the hint.
+  }
+}
 
 interface UserMenuProps {
   onClose?: () => void;
@@ -32,6 +59,7 @@ export function UserMenu({ onClose, userProfile, children }: UserMenuProps) {
       onClose();
     }
     if (action === "signout") {
+      await refreshSessionCookie();
       await handleSignOut();
     }
   };
