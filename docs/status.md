@@ -42,7 +42,7 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 ## In Progress
 
-- **better-auth 1.6.33 → 1.7.5** (branch `chore/better-auth-1.7`, stacked on #237). All automated gates pass, including an end-to-end sign-in test through the real route, and 27 mutation checks each turn a test red. **Not yet signed in against real MP.** Gates before merge: (1) the four `…/api/auth/callback/ministryplatform` redirect URIs added to the TM.Widgets client and verified with the probe in `docs/OAUTH_LOGOUT_SETUP.md` → *Verify the registration*; (2) a human sign-in on `localhost:3000` against production MP (already registered); (3) a `:dev` soak with a human sign-in and sign-out. mp-charts goes first; mp-senior-care, event-manager and music-db follow one per business day. See `docs/sessions/session-summary-2026-09-24.md`
+- **better-auth 1.6.33 → 1.7.5** ([#238](https://github.com/The-Moody-Church/mp-charts/pull/238), draft, stacked on #237). All automated gates pass, including an end-to-end sign-in test through the real route, and 27 mutation checks each turn a test red. **Not yet signed in against real MP.** Gates before merge: (1) the four `…/api/auth/callback/ministryplatform` redirect URIs added to the TM.Widgets client and verified with the probe in `docs/OAUTH_LOGOUT_SETUP.md` → *Verify the registration*; (2) a human sign-in on `localhost:3000` against production MP (already registered); (3) a `:dev` soak with a human sign-in and sign-out. mp-charts goes first; mp-senior-care, event-manager and music-db follow one per business day. See `docs/sessions/session-summary-2026-09-24.md`
 
 ## Planned
 

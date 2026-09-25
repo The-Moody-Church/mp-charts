@@ -33,7 +33,8 @@ Unchanged and re-verified: `disabledPaths` (still 404s `/update-user`), the `inp
 | PR / branch | What | Status |
 |---|---|---|
 | #237 `chore/zod-4.5-floor` | zod `^4.3.6` → `^4.5.4` (1.7.5 requires it), landed first so the auth PR is one variable | open, CI |
-| `chore/better-auth-1.7` (stacked on #237) | the migration | open as draft |
+| #238 `chore/better-auth-1.7` (stacked on #237) | the migration | open as draft |
+| #239 `fix/safe-callback-url-dot-segments` | pre-existing open redirect found by the review | open |
 
 Gates on the 1.7 branch: tsc, eslint (0 problems), `npm audit --audit-level=high` 0, **886/886 tests in 58 files** (825 in 56 before; auth files stable under shuffled order), `next build` (no discovery fetch), `check:shells` 19 shells. **27 mutation checks** each turn at least one test red. The tests previously re-simulated the OAuth callbacks in-file and passed against the wrong 1.7 contract; they now call the configured `getUserInfo`/`mapProfileToUser` taken from `auth.options`, and `route.flow.test.ts` runs a whole sign-in through the real route against a fake MP (token exchange included, where it proves no `code_verifier` is sent).
 
