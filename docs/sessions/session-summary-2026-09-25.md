@@ -4,7 +4,7 @@
 
 Finish the better-auth 1.7 rollout on mp-charts, and back-port two gaps the sibling apps' 1.7 reviews found.
 
-## Status: IN PROGRESS — #242 soaking on `:dev`
+## Status: COMPLETED — #242 soaked on `:dev` (human sign-in/sign-out passed), merged and deployed
 
 ## Done today
 
@@ -19,5 +19,4 @@ Finish the better-auth 1.7 rollout on mp-charts, and back-port two gaps the sibl
 
 ## Next
 
-- Soak #242, then merge and `/deploy`.
 - Close-out after 7 days with all four apps on 1.7: remove the old `…/api/auth/oauth2/callback/ministryplatform` entries from the TM.Widgets client, re-record rollback pins.
