@@ -16,34 +16,46 @@ import Link from "next/link";
  */
 
 /**
- * Error codes emitted by better-auth 1.6's genericOAuth callback
- * (node_modules/better-auth/dist/plugins/generic-oauth/routes.mjs) and its
- * shared OAuth helpers. These are the 1.6 names — upstream MPNext is on 1.7,
- * where several were renamed (e.g. `user_info_is_missing` became
- * `unable_to_get_user_info`). Revisit during the 1.7 migration.
+ * Error codes better-auth 1.7.5's core OAuth callback emits
+ * (dist/oauth2/errors.mjs, api/routes/callback.mjs, oauth2/state.mjs,
+ * oauth2/link-account.mjs), plus `sign_in_start_failed`, which is OURS
+ * (src/components/sign-in/sign-in.tsx, when the flow cannot even start).
+ * NOTE: `unable_to_get_user_info` covers several causes — getMpUserInfo
+ * returning null (userinfo down, bad sub, id_token/userinfo sub mismatch) and
+ * an empty account subject. The server log line tells them apart.
  */
 const ERROR_MESSAGES: Record<string, string> = {
-  user_info_is_missing:
-    "Ministry Platform signed you in, but did not return a usable user record. Your account may be missing its User GUID.",
-  id_is_missing:
-    "Ministry Platform did not return an account identifier, so we could not establish who you are.",
-  email_is_missing:
-    "Ministry Platform did not return enough profile information to complete sign-in.",
-  account_already_linked_to_different_user:
-    "This Ministry Platform account is already linked to a different user in this app.",
-  unable_to_link_account:
-    "We could not link your Ministry Platform account. Please try signing in again.",
-  invalid_code: "The sign-in link has already been used or is no longer valid.",
-  oAuth_code_missing: "The sign-in did not complete. Please start again.",
+  unable_to_get_user_info:
+    "Ministry Platform signed you in, but we could not read a usable user record. Your account may be missing its User GUID, or Ministry Platform may be briefly unavailable.",
+  sign_in_start_failed: "We could not start the Ministry Platform sign-in. Please try again in a minute.",
+  oauth_provider_not_found: "Sign-in is temporarily unavailable. Please try again in a few minutes.",
+  invalid_code:
+    "We could not complete the sign-in with Ministry Platform. The sign-in link may have expired — please try again.",
   no_code: "The sign-in did not complete. Please start again.",
-  oauth_code_verification_failed:
-    "We could not verify the response from Ministry Platform. This usually means the sign-in took too long — please try again.",
+  nonce_binding_missing: "The sign-in did not complete. Please start again.",
   invalid_callback_request: "The sign-in response could not be read. Please try again.",
+  state_not_found: "Your sign-in session expired before it completed. Please try again.",
+  state_mismatch:
+    "Your sign-in was started in another tab or window, or it expired. Please close other sign-in tabs and try again.",
+  state_invalid: "Your sign-in session could not be verified. Please try again.",
+  no_callback_url: "The sign-in did not know where to return you. Please start again.",
   issuer_mismatch:
     "The response did not come from the expected Ministry Platform server. Please contact your administrator.",
-  issuer_missing:
-    "Ministry Platform's sign-in configuration could not be read. Please try again shortly.",
-  state_not_found: "Your sign-in session expired before it completed. Please try again.",
+  email_not_found: "Ministry Platform did not return enough profile information to complete sign-in.",
+  email_not_verified: "Ministry Platform has not verified this account's email address.",
+  email_does_not_match: "This Ministry Platform account does not match the one you are signed in with.",
+  account_not_linked:
+    "This Ministry Platform account could not be matched to its record in this app. Please contact your administrator.",
+  account_already_linked_to_different_user:
+    "This Ministry Platform account is already linked to a different user in this app.",
+  unable_to_link_account: "We could not link your Ministry Platform account. Please try signing in again.",
+  unable_to_update_account: "We could not update your account record. Please try signing in again.",
+  signup_disabled: "New accounts cannot be created in this app right now. Please contact your administrator.",
+  unable_to_create_user: "We could not create your user record. Please try again.",
+  unable_to_create_session: "We could not start your session. Please try again.",
+  MISSING_FIELD:
+    "Ministry Platform signed you in, but your account is missing a required identifier. Please contact your administrator.",
+  access_denied: "Sign-in was cancelled.",
   internal_server_error: "Something went wrong while signing you in.",
 };
 

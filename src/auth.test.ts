@@ -99,49 +99,6 @@ describe('Auth - MP User Profile Lookup at Sign-In', () => {
     expect(records[0]).toBeUndefined();
   });
 
-  it('should map OIDC profile to user fields correctly', () => {
-    // Simulate the getUserInfo return → mapProfileToUser flow
-    const oidcProfile = {
-      sub: 'user-guid-123',
-      given_name: 'John',
-      family_name: 'Doe',
-      email: 'john@example.com',
-    };
-
-    const mpLookup = {
-      User_ID: 42,
-      Contact_ID: 100,
-    };
-
-    // getUserInfo returns this shape
-    const userInfo = {
-      id: oidcProfile.sub,
-      email: oidcProfile.email,
-      name: `${oidcProfile.given_name} ${oidcProfile.family_name}`.trim(),
-      image: undefined,
-      emailVerified: true,
-      userGuid: oidcProfile.sub,
-      mpUserId: mpLookup.User_ID,
-      mpContactId: mpLookup.Contact_ID,
-    };
-
-    expect(userInfo.id).toBe('user-guid-123');
-    expect(userInfo.name).toBe('John Doe');
-    expect(userInfo.userGuid).toBe('user-guid-123');
-    expect(userInfo.mpUserId).toBe(42);
-    expect(userInfo.mpContactId).toBe(100);
-
-    // mapProfileToUser extracts the custom fields
-    const mappedFields = {
-      userGuid: userInfo.userGuid,
-      mpUserId: userInfo.mpUserId,
-      mpContactId: userInfo.mpContactId,
-    };
-
-    expect(mappedFields.userGuid).toBe('user-guid-123');
-    expect(mappedFields.mpUserId).toBe(42);
-    expect(mappedFields.mpContactId).toBe(100);
-  });
 });
 
 describe('Auth - customSession Name Splitting', () => {

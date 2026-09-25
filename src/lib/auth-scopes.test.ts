@@ -1,15 +1,26 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { resolve } from "path";
+import { MP_PROVIDER_ID } from "@/lib/auth-endsession";
+import type { GenericOAuthConfig } from "better-auth/plugins";
+import { auth } from "@/lib/auth";
+
+function mpConfig(): GenericOAuthConfig {
+  const plugin = auth.options.plugins?.find((p) => p.id === "generic-oauth") as
+    | { options?: { config?: GenericOAuthConfig[] } }
+    | undefined;
+  const cfg = plugin?.options?.config?.find((c) => c.providerId === MP_PROVIDER_ID);
+  if (!cfg) throw new Error("ministryplatform genericOAuth config not found");
+  return cfg;
+}
 
 /**
  * OAuth scope guard.
  *
- * Asserts on the SOURCE rather than on `auth.options`, deliberately:
- * better-auth's genericOAuth plugin does not expose its provider config on the
- * instance — `plugins.find(p => p.id === "generic-oauth")` resolves, but the
- * provider array under it does not — so there is nothing to read at runtime.
- * Probed before writing this, rather than assumed.
+ * Asserts on BOTH the source and the runtime config. The real provider config
+ * IS reachable at runtime, on 1.6 and 1.7 alike, via
+ * `auth.options.plugins.find(p => p.id === "generic-oauth").options.config`.
+ * (An earlier version of this comment claimed otherwise; that was wrong.)
  *
  * Worth pinning anyway, because the failure is silent. Adding a scope back
  * changes nothing visible: sign-in still works, nothing errors, and MP simply
@@ -44,11 +55,20 @@ describe("Ministry Platform OAuth scopes", () => {
     //
     // The cost was real: MP's `MPNext` client sets a 43200-minute (30-day)
     // refresh token lifetime with rotation OFF, so every sign-in minted a
-    // static 30-day credential that was never redeemed.
+    // static 30-day credential that was never redeemed. (Sign-in runs on the
+    // TM.Widgets client, whose refresh settings have not been read; the
+    // scope stays gone regardless.)
     //
     // If something later genuinely needs to act as the user after sign-in,
     // add it deliberately and change this test in the same commit.
     expect(declaredScopes()).not.toContain("offline_access");
+  });
+
+  it("the RUNTIME provider config requests exactly those two", () => {
+    expect(mpConfig().scopes).toEqual([
+      "openid",
+      "http://www.thinkministry.com/dataplatform/scopes/all",
+    ]);
   });
 
   it("requests nothing beyond those two", () => {

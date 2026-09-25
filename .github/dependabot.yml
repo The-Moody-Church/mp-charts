@@ -19,6 +19,16 @@ updates:
       interval: "weekly"
     # Cap concurrent PRs so a backlog is visible rather than silently truncated.
     open-pull-requests-limit: 10
+    ignore:
+      # better-auth minors are breaking in practice: 1.7 removed our sign-in
+      # client plugin (genericOAuthClient), moved the OAuth callback path (a
+      # redirect-URI change on MP's TM.Widgets client), flipped PKCE on by
+      # default and moved provider discovery to boot time. Take minors and
+      # majors deliberately, in a branch with a live sign-in soak. Patches
+      # still arrive normally. (The package.json range `<1.8.0` is the other
+      # half of this hold.)
+      - dependency-name: "better-auth"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
     groups:
       # Security updates get their OWN group, separate from routine version
       # bumps. Previously a single `patterns: ["*"]` minor-and-patch group

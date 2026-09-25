@@ -13,12 +13,22 @@ describe("AuthErrorPage", () => {
     });
   };
 
-  it("maps a known better-auth 1.6 error code to plain English", async () => {
-    await renderWith({ error: "user_info_is_missing" });
+  it("maps a known better-auth 1.7 error code to plain English", async () => {
+    await renderWith({ error: "unable_to_get_user_info" });
 
-    expect(screen.getByText(/did not return a usable user record/i)).toBeDefined();
-    expect(screen.getByText("user_info_is_missing")).toBeDefined();
+    expect(screen.getByText(/could not read a usable user record/i)).toBeDefined();
+    expect(screen.getByText("unable_to_get_user_info")).toBeDefined();
   });
+
+  it.each(["oauth_provider_not_found", "sign_in_start_failed", "state_mismatch", "invalid_code"])(
+    "maps %s to a specific (non-fallback) message",
+    async (code) => {
+      await renderWith({ error: code });
+
+      expect(screen.queryByText(/could not complete your Ministry Platform sign-in/i)).toBeNull();
+      expect(screen.getByText(code)).toBeDefined();
+    }
+  );
 
   it("falls back to a generic message for an unknown code", async () => {
     await renderWith({ error: "something_we_have_never_seen" });
