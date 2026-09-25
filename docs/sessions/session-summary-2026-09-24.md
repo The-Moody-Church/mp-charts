@@ -4,7 +4,7 @@
 
 Migrate better-auth 1.6.33 → 1.7.x, starting with mp-charts as the reference for the four apps that share this auth stack (mp-charts, mp-senior-care, event-manager, music-db). Upstream MPNext #68 was tracked as DEFERRED in `.claude/notes/upstream-sync-log.md`.
 
-## Status: COMPLETED (2026-09-25) — localhost sign-in against production MP passed; `:dev` soak with human sign-in/sign-out passed; #238 and #240 merged and deployed
+## Status: COMPLETED (2026-09-25) — localhost sign-in against production MP passed; `:dev` soak passed (human checks on #238; clean logs on #238 + #240); #238 and #240 merged and deployed
 
 ## What 1.7 actually requires (verified, not assumed)
 
@@ -96,5 +96,5 @@ Files: `src/components/user-menu/user-menu.tsx`, `user-menu.test.tsx` (new), `ac
 ## Outcome (2026-09-25)
 
 - Localhost sign-in against production MP passed (3 sign-ins, session fields, sign-out, `/auth-error`, CSP clean).
-- `:dev` production soak: #238 from 01:55Z, then #238 + #240 from 04:34Z. Human sign-in/sign-out passed; logs clean (no `auth.userinfo.*`, no `id_token_hint omitted`, no auth 5xx). Merged after ~11 h of soak rather than the planned 24 h, at the owner's direction.
+- `:dev` production soak: #238 alone from 01:55Z (human sign-in, session, sign-out, `/auth-error` and existing-session checks all passed), then #238 + #240 together from 04:34Z (smoke tests and logs clean — no `auth.userinfo.*`, no `id_token_hint omitted`, no auth 5xx; no separate human check reported on the combined build). Merged at ~11 h (#238) / ~8.5 h (#240) of soak rather than the planned 24 h, at the owner's direction.
 - Follow-ups: close-out (after 7 days on 1.7 with no rollback, remove the four `…/api/auth/oauth2/callback/ministryplatform` entries from TM.Widgets and re-record rollback pins); Vitest 5; better-auth 1.7.6 patch.
