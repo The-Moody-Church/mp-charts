@@ -90,7 +90,8 @@ async function signIn() {
   expect(callback.headers.get("location")).toBe("/");
   const cookies = cookiePairs(callback);
   const session = await auth.api.getSession({ headers: new Headers({ cookie: header(cookies) }) });
-  expect(session?.user.userGuid).toBe(mp.sub);
+  // customSession's inferred user type omits the additional fields; they are there at runtime.
+  expect((session?.user as { userGuid?: string } | undefined)?.userGuid).toBe(mp.sub);
   const context = await auth.$context;
   const accounts = await context.internalAdapter.findAccounts(session!.user.id);
   return { cookies, accounts };
