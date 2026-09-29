@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { getSafeCallbackUrl } from "./sign-in";
+import { MAX_CALLBACK_URL_LENGTH } from "@/lib/auth-callback-url";
 
 /**
  * getSafeCallbackUrl decides where /signin sends a user who is ALREADY signed
@@ -53,6 +54,26 @@ describe("getSafeCallbackUrl", () => {
     expect(out).toBe("/");
     // Belt and braces: whatever comes back must stay on our origin when navigated to.
     expect(new URL(out, window.location.origin).origin).toBe(window.location.origin);
+  });
+
+  // The /sign-in/social body filter (route.ts) 404s a callbackURL over 2048
+  // characters, which would send the user to /auth-error. The page must never
+  // send one: an overlong deep link falls back to "/" and still signs in.
+  it("keeps a callback of exactly 2048 characters and replaces a longer one with /", () => {
+    expect(MAX_CALLBACK_URL_LENGTH).toBe(2048);
+    const atCap = "/" + "a".repeat(2047);
+    expect(getSafeCallbackUrl(atCap)).toBe(atCap);
+    expect(getSafeCallbackUrl("/" + "a".repeat(2048))).toBe("/");
+  });
+
+  it("measures the cap on what it sends, after URL normalization", () => {
+    // Each embedded space is percent-encoded to 3 characters. 702 characters
+    // in, 2102 out: over the cap.
+    const over = "/" + " ".repeat(700) + "x";
+    expect(over.length).toBeLessThanOrEqual(2048);
+    expect(getSafeCallbackUrl(over)).toBe("/");
+    // Control: 602 in, 1802 out — under the cap, returned encoded.
+    expect(getSafeCallbackUrl("/" + " ".repeat(600) + "x")).toBe("/" + "%20".repeat(600) + "x");
   });
 
   it("refuses the value URLSearchParams decodes from callbackUrl=/%09/evil.example", () => {

@@ -53,6 +53,19 @@ describe("SignIn", () => {
     expect(assign).not.toHaveBeenCalled();
   });
 
+  it("starts the flow with / for a deep link longer than the route's callbackURL cap", async () => {
+    // The route filter 404s a callbackURL over 2048 characters, which would
+    // land the user on /auth-error; they should sign in and reach home instead.
+    search.params = new URLSearchParams({ callbackUrl: "/reports?q=" + "a".repeat(3000) });
+    mockSocial.mockResolvedValue({ data: { url: "https://mp.example/authorize" }, error: null });
+
+    render(<SignIn />);
+
+    await waitFor(() => expect(mockSocial).toHaveBeenCalledTimes(1));
+    expect(mockSocial.mock.calls[0][0]).toEqual({ provider: MP_PROVIDER_ID, callbackURL: "/" });
+    expect(assign).not.toHaveBeenCalled();
+  });
+
   it("sends a user whose flow cannot start to /auth-error, not an endless spinner", async () => {
     mockSocial.mockResolvedValue({ data: null, error: { status: 429, message: "Too many requests" } });
 

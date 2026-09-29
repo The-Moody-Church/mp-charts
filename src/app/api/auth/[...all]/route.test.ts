@@ -146,10 +146,40 @@ describe("Content-Type values that must never reach better-auth", () => {
     expect(await refusedByUs(res)).toBe(true);
     expect(handler).not.toHaveBeenCalled();
   });
+
+  // Headers strips only HTTP whitespace (space, tab, CR, LF), so these leading
+  // characters reach the filter. String.prototype.trim() would strip them too,
+  // letting the value pass an "exactly application/json" check, while
+  // better-call's anchored /^application\/json/ does not match it: better-auth
+  // then either 400s on the raw stream or, with a form type in a parameter,
+  // 500s from formData(). Refused here with the same 404 instead. (U+FEFF,
+  // which trim() also strips, cannot occur: header values are Latin-1.)
+  it.each([
+    ["a leading no-break space", " application/json"],
+    ["a leading vertical tab", "\u000bapplication/json"],
+    ["a leading form feed", "\u000capplication/json"],
+    ["a leading no-break space and a form type in a parameter", " application/json; x=application/x-www-form-urlencoded"],
+    ["a trailing no-break space", "application/json "],
+  ])("refuses a Content-Type with %s", async (_label, contentType) => {
+    const handler = vi.spyOn(auth, "handler");
+    const request = socialPost(contentType);
+    expect(request.headers.get("content-type")).toBe(contentType); // not normalized away
+    const res = await POST(request);
+    expect(await refusedByUs(res)).toBe(true);
+    expect(handler).not.toHaveBeenCalled();
+  });
 });
 
 it("accepts application/json with a charset parameter", async () => {
   expect((await POST(socialPost("application/json; charset=utf-8"))).status).toBe(200);
+});
+
+it.each([
+  ["upper case", "Application/JSON"],
+  ["spaces before the parameter", "application/json ;charset=utf-8"],
+  ["a leading ASCII space (Headers strips it)", " application/json"],
+])("still accepts application/json written with %s", async (_label, contentType) => {
+  expect((await POST(socialPost(contentType))).status).toBe(200);
 });
 
 /**

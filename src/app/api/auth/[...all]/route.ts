@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { MP_PROVIDER_ID } from "@/lib/auth-endsession";
+import { MAX_CALLBACK_URL_LENGTH } from "@/lib/auth-callback-url";
 import { toNextJsHandler } from "better-auth/next-js";
 import { NextRequest } from "next/server";
 
@@ -55,7 +56,9 @@ export const allowedSignInSocialKeys = ["provider", "callbackURL"] as const;
 /**
  * Largest `POST /sign-in/social` body this route will read, in bytes. Our
  * client sends `{ provider, callbackURL }` — a few hundred bytes at most, and
- * under ~2.1 KB even at the `callbackURL` cap below. Without a cap, one
+ * under ~2.1 KB even at the `callbackURL` cap (`MAX_CALLBACK_URL_LENGTH`,
+ * src/lib/auth-callback-url.ts — shared with the sign-in page, which sends `/`
+ * instead of a longer one). Without a cap, one
  * anonymous request with a multi-megabyte relative `callbackURL` passes
  * better-auth's `isSafeRelativeURL`, is copied into the encrypted OAuth state
  * cookie, and comes back as a Set-Cookie roughly twice its size (memory/CPU
@@ -63,9 +66,6 @@ export const allowedSignInSocialKeys = ["provider", "callbackURL"] as const;
  * limiter. (Upstream MPNext 48a871b.)
  */
 const MAX_SIGN_IN_SOCIAL_BODY_BYTES = 4096;
-
-/** Longest `callbackURL` accepted (UTF-16 code units, i.e. `String.length`). */
-const MAX_CALLBACK_URL_LENGTH = 2048;
 
 /**
  * Read a request body with a hard byte cap. Returns `null` (and stops reading)
@@ -131,8 +131,16 @@ async function isAllowedSignInSocialBody(request: NextRequest): Promise<boolean>
   // `application/json` (parameters allowed) is what our client sends. A
   // repeated Content-Type header arrives here comma-joined, so it is refused
   // by the same rule.
+  //
+  // Matched with an anchored regex, NOT `.trim()`: `Headers` has already
+  // stripped the HTTP whitespace (space, tab, CR, LF) around the value, but
+  // `String.prototype.trim()` also strips U+00A0 and U+FEFF. A
+  // ` application/json` value would then pass here while better-call's
+  // anchored /^application\/json/ does not match it — so it would reach
+  // better-auth (a 400, or a logged 500 from `formData()` with a form type in
+  // a parameter) instead of getting this filter's 404.
   const contentType = (request.headers.get("content-type") ?? "").toLowerCase();
-  if (contentType.includes(",") || contentType.split(";")[0].trim() !== "application/json") {
+  if (contentType.includes(",") || !/^application\/json[ \t]*(?:;|$)/.test(contentType)) {
     return false;
   }
   const contentLength = request.headers.get("content-length");
