@@ -13,22 +13,85 @@ const mpBaseUrl = process.env.MINISTRY_PLATFORM_BASE_URL;
 const mpOauthUrl = `${mpBaseUrl}/oauth`;
 
 /**
- * Fail at boot when the session-signing secret is missing (2026-05-21 audit,
- * finding #17). Defense-in-depth: better-auth 1.6.x does refuse a missing or
- * default secret in production, but only as an un-awaited rejected promise
- * that surfaces as a 500 on the first request — and outside production it
- * silently accepts its built-in default secret. This converts both into a
- * loud failure at container start.
- *
- * The NEXT_PHASE guard keeps `next build` working (Docker builder stage and
- * CI's bare `npm run build` evaluate this module with no secret supplied).
+ * better-auth's built-in fallback secret (`DEFAULT_SECRET`,
+ * node_modules/better-auth/dist/utils/constants.mjs — not exported, so it is
+ * pinned here and src/lib/auth.secret-guard.test.ts reads the library file to
+ * catch drift). It is public: a session signed with it can be forged by anyone.
  */
-const betterAuthSecret = process.env.BETTER_AUTH_SECRET;
-if (!betterAuthSecret && process.env.NEXT_PHASE !== "phase-production-build") {
-  throw new Error(
-    "BETTER_AUTH_SECRET is not set. Refusing to start — sessions cannot be signed securely."
-  );
+export const BETTER_AUTH_DEFAULT_SECRET = "better-auth-secret-12345678901234567890";
+export const MIN_AUTH_SECRET_LENGTH = 32;
+
+/** Mirrors better-auth's `toBoolean` (@better-auth/core env-impl), which its `isTest()` applies to `TEST`. */
+function isTruthyEnvFlag(value: string | undefined): boolean {
+  return value ? value !== "false" : false;
 }
+
+/**
+ * Refuses to boot on an auth configuration that would make sessions forgeable
+ * or silently switch off better-auth's own checks. Throws; never includes the
+ * secret in the message. (Upstream MPNext fd7fc4a, without its
+ * NEXTAUTH_SECRET fallback — this app has never read that variable.)
+ *
+ * Why not rely on better-auth's own `validateSecret`
+ * (node_modules/better-auth/dist/context/create-context.mjs):
+ * - With no secret it falls back to its PUBLIC default and refuses that only
+ *   when `NODE_ENV === "production"`. With no database the signed cookie is
+ *   the only authority, so a known secret lets anyone mint a session for any
+ *   `userGuid`.
+ * - A short secret only produces a warning.
+ * - `isTest()` is `NODE_ENV === "test" || toBoolean(env.TEST)`. A truthy
+ *   `TEST` on a production process skips secret validation entirely, and
+ *   (were `advanced.disableOriginCheck` not pinned below) the Origin and
+ *   callbackURL checks too.
+ * - `BETTER_AUTH_SECRETS` (versioned secrets) silently takes precedence over
+ *   the `secret` option, so a check on `BETTER_AUTH_SECRET` would be checking
+ *   a key that is not the one in use. This app does not use versioned
+ *   secrets; refuse the variable rather than half-validate it.
+ *
+ * This replaces the 2026-05-21 audit's finding #17 check (secret unset), which
+ * it includes. Pure (takes the env as an argument) so it can be tested
+ * directly; the call below is what enforces it.
+ */
+export function assertAuthEnvironment(env: Readonly<Record<string, string | undefined>>): void {
+  const secret = env.BETTER_AUTH_SECRET;
+  if (!secret) {
+    throw new Error(
+      "[auth] BETTER_AUTH_SECRET is not set. Refusing to start: better-auth would sign sessions with its public default secret. Generate one with `openssl rand -base64 32`."
+    );
+  }
+  if (secret === BETTER_AUTH_DEFAULT_SECRET) {
+    throw new Error(
+      "[auth] BETTER_AUTH_SECRET is better-auth's public default secret. Refusing to start: anyone could forge a session. Generate one with `openssl rand -base64 32`."
+    );
+  }
+  if (secret.length < MIN_AUTH_SECRET_LENGTH) {
+    throw new Error(
+      `[auth] BETTER_AUTH_SECRET must be at least ${MIN_AUTH_SECRET_LENGTH} characters. Refusing to start. Generate one with \`openssl rand -base64 32\`.`
+    );
+  }
+  if (env.BETTER_AUTH_SECRETS) {
+    throw new Error(
+      "[auth] BETTER_AUTH_SECRETS is set, but this app signs with BETTER_AUTH_SECRET and does not support versioned secrets. Refusing to start: better-auth would silently prefer BETTER_AUTH_SECRETS over the validated secret. Unset it."
+    );
+  }
+  if (env.NODE_ENV === "production" && isTruthyEnvFlag(env.TEST)) {
+    throw new Error(
+      "[auth] TEST is set on a production process. Refusing to start: better-auth treats a truthy TEST as a test run and skips its secret validation. Unset TEST."
+    );
+  }
+}
+
+/**
+ * Enforced at module load, so a bad configuration fails the container at
+ * start instead of as a 500 on the first request. The one exemption is
+ * `next build` (NEXT_PHASE=phase-production-build): the Docker builder stage
+ * and CI's bare `npm run build` evaluate this module with no secret supplied.
+ * Vitest is NOT exempt — src/test-setup.ts supplies a valid secret.
+ */
+if (process.env.NEXT_PHASE !== "phase-production-build") {
+  assertAuthEnvironment(process.env);
+}
+const betterAuthSecret = process.env.BETTER_AUTH_SECRET;
 
 /**
  * Fetch the OIDC userinfo from Ministry Platform and enrich it with
@@ -439,6 +502,11 @@ function createAuth() {
     disabledPaths: disabledAuthPaths,
 
     advanced: {
+      // Pinned so no env var can flip it: left undefined, better-auth sets
+      // `skipOriginCheck = isTest()`, so a truthy `TEST` would switch off the
+      // Origin and callbackURL checks (context/create-context.mjs). See
+      // assertAuthEnvironment above.
+      disableOriginCheck: false,
       // Which header the rate limiter takes the client IP from. See
       // parseIpAddressOptions above.
       ipAddress: parseIpAddressOptions(process.env),
