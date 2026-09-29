@@ -299,7 +299,10 @@ export const userAdditionalFields = {
  * Ministry Platform: this app does no self-service account management and
  * calls none of them. `/set-password` is never mounted without a credential
  * provider, so it 404s either way; it is listed so that adding one later does
- * not silently open it.
+ * not silently open it. `/link-social` links a provider account onto the
+ * signed-in user (and carries its own ID-token branch, which the before-hook
+ * does not cover); with one provider and no account management there is
+ * nothing to link. Listed for parity with upstream MPNext.
  *
  * The deny-by-default allowlist in `src/app/api/auth/[...all]/route.ts` is the
  * PRIMARY control; this list is defense in depth, and is what
@@ -314,6 +317,7 @@ export const disabledAuthPaths = [
   "/set-password",
   "/delete-user",
   "/delete-user/callback",
+  "/link-social",
 ];
 
 /**

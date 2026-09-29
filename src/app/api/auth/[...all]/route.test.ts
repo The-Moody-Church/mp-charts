@@ -115,6 +115,39 @@ it.each([
   expect(await refusedByUs(await POST(socialPost(contentType)))).toBe(true);
 });
 
+// Each of these carries a body that is otherwise allowed; proving the handler
+// is never reached shows the refusal is ours, not better-auth's.
+describe("Content-Type values that must never reach better-auth", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("refuses JSON with a charset followed by form data", async () => {
+    const handler = vi.spyOn(auth, "handler");
+    const res = await POST(socialPost("application/json; charset=utf-8, application/x-www-form-urlencoded"));
+    expect(await refusedByUs(res)).toBe(true);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("refuses a Content-Type header sent twice", async () => {
+    const handler = vi.spyOn(auth, "handler");
+    const headers = new Headers({ origin: ORIGIN });
+    headers.append("content-type", "application/json");
+    headers.append("content-type", "application/json");
+    // A repeated header reaches the route comma-joined.
+    expect(headers.get("content-type")).toBe("application/json, application/json");
+    const res = await POST(
+      new NextRequest(`${ORIGIN}/api/auth/sign-in/social`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ provider: MP_PROVIDER_ID, callbackURL: "/" }),
+      })
+    );
+    expect(await refusedByUs(res)).toBe(true);
+    expect(handler).not.toHaveBeenCalled();
+  });
+});
+
 it("accepts application/json with a charset parameter", async () => {
   expect((await POST(socialPost("application/json; charset=utf-8"))).status).toBe(200);
 });
