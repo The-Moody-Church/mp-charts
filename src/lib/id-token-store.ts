@@ -28,7 +28,9 @@
  *
  * So the token is captured at sign-in, where it is definitely in hand, and
  * parked on `globalThis` — one object per PROCESS rather than per module
- * instance.
+ * instance. Its 12-hour ceiling (`MAX_AGE_MS`) matches the session lifetime
+ * (`SESSION_EXPIRES_IN_SECONDS` in src/lib/auth.ts), so a live session always
+ * still has its hint.
  *
  * WHAT THIS IS NOT. It is not a session store and must not become one. It
  * holds identity assertions that are already expiring, keyed by a value the

@@ -290,6 +290,46 @@ export function mapMpProfileToUser(profile: {
   };
 }
 
+/**
+ * Session lifetime (upstream MPNext fd7fc4a, measured on our build 2026-09-29).
+ *
+ * There is no database: the signed `session_token` + `session_data` cookies
+ * ARE the session, backed only by the in-memory adapter of the one shared
+ * `auth` instance below. Sign-out can delete that row, but it cannot recall a
+ * cookie pair someone already copied, so these settings put a hard ceiling on
+ * how long any session — including a copied pair — can live:
+ *
+ * - `expiresIn: 12h` — `expiresAt` is set once, at sign-in. Both
+ *   `/get-session` paths refuse a session past it, and it is the
+ *   `session_token` cookie's Max-Age. better-auth's default is 7 days. It
+ *   matches `MAX_AGE_MS` in src/lib/id-token-store.ts, so a live session
+ *   always still has its `id_token_hint`.
+ * - `disableSessionRefresh: true` — without it the in-memory path slides
+ *   `expiresAt` forward another `expiresIn` once per `updateAge` (1 day). With
+ *   the 7-day default, a `session_token` replayed once a day lived until the
+ *   container restarted. (`updateAge` is left at its default: with refresh
+ *   disabled nothing reads it.)
+ * - `cookieCache.refreshCache: false` — MUST be explicit. With no database
+ *   better-auth defu-merges `refreshCache: true` UNDER this config
+ *   (node_modules/better-auth/dist/context/create-context.mjs), which re-signs
+ *   `session_data` from the cookie alone — no store lookup — in the last 20%
+ *   of `maxAge`, until `expiresAt`. `false` bounds a pair with no live row
+ *   (copied before sign-out, or minted before a restart) to `maxAge` (1h)
+ *   after it was minted; after that `/get-session` asks the store, which
+ *   re-mints only if the row still exists.
+ *
+ * What users see: a session is re-checked against the store at least hourly
+ * and ends 12h after sign-in however active it is; the next page load then
+ * goes back through MP sign-in, which is silent while their MP session is
+ * alive. After a restart the store is empty, so every session ends within 1h
+ * (when its cookie cache lapses).
+ *
+ * Pinned by src/lib/auth.session-lifetime.test.ts. Emergency "sign everyone
+ * out": rotate BETTER_AUTH_SECRET (or add `cookieCache.version` and bump it).
+ */
+export const SESSION_EXPIRES_IN_SECONDS = 12 * 60 * 60;
+export const SESSION_COOKIE_CACHE_MAX_AGE_SECONDS = 60 * 60;
+
 function createAuth() {
   return betterAuth({
     baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
@@ -343,15 +383,14 @@ function createAuth() {
     },
 
     session: {
-      // With no database, a server action can read the session ONLY from this
-      // cookie cache while it is fresh; this bundle's own in-memory store is
-      // empty. Sign-out depends on it to find the id_token_hint, which is why
-      // the user menu re-mints the cookie through GET /get-session first (see
-      // refreshSessionCookie in src/components/user-menu/user-menu.tsx).
+      // See SESSION_EXPIRES_IN_SECONDS above for why each of these is set.
+      expiresIn: SESSION_EXPIRES_IN_SECONDS,
+      disableSessionRefresh: true,
       cookieCache: {
         enabled: true,
-        maxAge: 60 * 60, // 1 hour
+        maxAge: SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
         strategy: "jwt",
+        refreshCache: false,
       },
     },
 
