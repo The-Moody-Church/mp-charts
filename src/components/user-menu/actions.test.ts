@@ -116,7 +116,7 @@ describe('handleSignOut', () => {
 
       expect(mockSignOut).toHaveBeenCalledTimes(1);
       expect(redirectedTo().searchParams.has('id_token_hint')).toBe(false);
-      // client_id still identifies the client, so MP can honour the redirect.
+      // client_id is still sent (on MP it does not replace the hint).
       expect(redirectedTo().searchParams.get('client_id')).toBe('TM.Widgets');
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('id_token_hint omitted (no-session)'));
     });

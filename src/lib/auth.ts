@@ -82,11 +82,17 @@ export function assertAuthEnvironment(env: Readonly<Record<string, string | unde
 }
 
 /**
- * Enforced at module load, so a bad configuration fails the container at
- * start instead of as a 500 on the first request. The one exemption is
- * `next build` (NEXT_PHASE=phase-production-build): the Docker builder stage
- * and CI's bare `npm run build` evaluate this module with no secret supplied.
- * Vitest is NOT exempt — src/test-setup.ts supplies a valid secret.
+ * Enforced when this module loads. The one exemption is `next build`
+ * (NEXT_PHASE=phase-production-build): the Docker builder stage and CI's bare
+ * `npm run build` evaluate this module with no secret supplied. Vitest is NOT
+ * exempt — src/test-setup.ts supplies a valid secret.
+ *
+ * Next loads route modules lazily, so on a running server a bad configuration
+ * surfaces on the FIRST request that loads this module, not at process start:
+ * that request, and every later one that needs auth, returns 500 and the log
+ * names the reason (`[auth] ...`); the process stays up. Measured 2026-09-29
+ * on a standalone production build. Fail-closed either way: nothing is ever
+ * signed with a bad secret.
  */
 if (process.env.NEXT_PHASE !== "phase-production-build") {
   assertAuthEnvironment(process.env);

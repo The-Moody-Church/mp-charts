@@ -19,9 +19,8 @@ export interface EndSessionParams {
    */
   idToken?: string | null;
   /**
-   * The sign-in client's id, `OIDC_CLIENT_ID` (TM.Widgets). Sent as
-   * `client_id` so MP can check `post_logout_redirect_uri` against that
-   * client's registered list even when there is no `id_token_hint`.
+   * The sign-in client's id, `OIDC_CLIENT_ID` (TM.Widgets), sent as
+   * `client_id`. Not a substitute for `idToken` on MP — see below.
    */
   clientId?: string | null;
 }
@@ -48,13 +47,14 @@ export interface EndSessionParams {
  * MP does not expose client registration through its REST API, so that is an
  * administrator task and cannot be asserted here.
  *
- * `client_id` IS ALWAYS SENT (upstream MPNext 10ef3df). OIDC RP-Initiated
- * Logout lets the client identify itself with `client_id` when it has no
- * `id_token_hint`; without either, an IdentityServer-style provider cannot
- * tell whose post-logout URIs to check and asks "log out?" instead of
- * redirecting — and a user who closes the tab there leaves the MP session
- * alive on a shared PC. With the hint as well, `client_id` must name the
- * client the token was issued to, which it does: both are the sign-in client.
+ * `client_id` IS ALWAYS SENT (upstream MPNext 10ef3df). It is how OIDC
+ * RP-Initiated Logout lets a client identify itself when it has no
+ * `id_token_hint`; alongside the hint, the provider must check it names the
+ * client the token was issued to, which it does (both are the sign-in client).
+ * It is NOT a substitute for the hint on MP: re-tested 2026-09-22
+ * (docs/OAUTH_LOGOUT_SETUP.md), MP still discarded `post_logout_redirect_uri`
+ * with `client_id` and no hint. The hint stays load-bearing; `client_id` is
+ * spec-conformant parity with upstream that costs nothing.
  *
  * WHEN THE HINT IS MISSING we still return a valid URL. Sign-out must never
  * depend on it: these apps use better-auth's in-memory adapter, so a session

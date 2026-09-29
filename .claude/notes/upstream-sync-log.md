@@ -11,6 +11,35 @@ git log main..upstream/main --oneline
 
 Or review PRs at: https://github.com/MinistryPlatform-Community/MPNext/pulls
 
+## Review: 2026-09-29 — upstream `ea2e0ad..6c0c46b` (PRs #96, #97, #98): auth hardening
+
+Reviewed every commit upstream merged since `ea2e0ad`, against our tree, with the upstream flow tests, secret/rate-limit/restart probes and a sign-out revocation harness run on a local production build against a fake MP. The headline finding is live here: **sign-out did not revoke a copied session.** Next loads `src/lib/auth.ts` once per bundle layer (two copies on our standalone build), so the callback stored the session in one in-memory store and `handleSignOut` deleted it from the other; a `session_token` copied before sign-out stayed valid, its expiry sliding forward, until the process restarted. Adopted on branch `fix/auth-hardening`:
+
+| Commit | Title | Action | Notes |
+|---|---|---|---|
+| `0e2652e` | Share one auth instance per process | **Incorporated** | `createAuth()` + `sharedInstance(Symbol.for("tmc.auth"), createAuth)` on `globalThis`, Vitest exempt. `auth.shared-instance.test.ts` signs in through one module copy and runs the real `handleSignOut` in another, with a negative control. Side effect: server components/actions see the session after the cookie cache lapses, so `refreshSessionCookie()` is now a backup, not a requirement |
+| `fd7fc4a` | 12h stateless sessions + refuse unsafe secrets | **Incorporated, adapted** | `expiresIn` 12h, `disableSessionRefresh`, explicit `refreshCache: false` (named constants); `assertAuthEnvironment` **without** the `NEXTAUTH_SECRET` fallback, merged with our `NEXT_PHASE` build exemption in place of upstream's Vitest exemption; `disableOriginCheck: false`. **Skipped: the user-id cache TTL** — we have no such cache (`mpUserId` is resolved once at sign-in) |
+| `48a871b` | 4 KB `/sign-in/social` body cap, 2048-char `callbackURL` | **Incorporated** | `readBodyWithLimit` + Content-Length check + `callbackURL` type/length cap, keeping our stricter exact-`application/json` pin (comma refusal) and key filter |
+| `a424953` | Stop retaining the user's MP tokens | **Incorporated** | `storeAccountCookie: false` + `databaseHooks.account` strip; idToken kept for our sign-out fallback. `offline_access` was already gone here (2026-09-22) |
+| `10ef3df` | `client_id` (+ hint) on RP-initiated logout | **Adapted** | `client_id` added to our `buildEndSessionUrl`, with and without the hint. The hint still comes from our id-token store + account row, not from better-auth's provider logout URL (we keep `disableProviderLogout: true`). **Caveat:** on 2026-09-22 MP did not accept `client_id` as a substitute for the hint (`docs/OAUTH_LOGOUT_SETUP.md`); it is sent for spec conformance, not as a fix. Upstream's localhost-fallback removal was not taken |
+| `0f61f54` | Configurable rate-limiter client IP | **Incorporated, extended** | `parseIpAddressOptions` (`AUTH_IP_ADDRESS_HEADERS`, `AUTH_TRUSTED_PROXIES`; blank = today). **Ours:** `rateLimit.customRules` `/sign-in/social` 10 per 10 s (built-in is 3; staff share an office IP). Read from 1.7.5 and measured: a request with no resolvable IP is **not** skipped — it shares one `no-trusted-ip|<path>` bucket, with one warning per process |
+| `2801d11` | Fail closed when `MP_SECURITY_ROLES` is unset | **Skipped** | Not our model: feature RBAC (`requireFeatureAccess` → MP User Groups) already refuses by default, and we have no `MP_SECURITY_ROLES` |
+| `6f1d6fc` | Stop tracking `.claude/settings.local.json` | **Skipped** | Our `git-workflow.md` deliberately tracks it |
+| `9e8ef87` | Ignore all `.env` files, pre-commit block, SECURITY.md | **Handled separately** | In the housekeeping PR, not this change |
+| `7725098`, `2e927d8` | Upstream security docs | **Skipped (docs)** | Ours live in `.claude/rules/security.md`, including the GHSA-pqxp-c5mr-5398 erratum |
+| `f1ad0c8` (#98) | Header layout shift | **Not reviewed in this pass** | UI, outside this auth review; left for the next sync |
+
+Also closed here (leftovers from the 2026-09-28 comparison): `/link-social` in `disabledAuthPaths`; sanitizer tests for tab/LF/CR, the decoded `callbackUrl=/%09/evil.example` and a `blob:` URL; route tests for a comma-joined and a repeated Content-Type; an in-process `auth.api.signInSocial` idToken test.
+
+**Deliberately not in this change:** a user-id cache, `MP_SECURITY_ROLES`, a pre-commit hook, proxy body-size truncation, better-auth 1.7.6.
+
+### Things worth carrying forward
+
+- **Every module-level singleton is per bundle layer, not per process**, in any Next app. `serviceCache`, the id-token store and now `auth` are on `globalThis` for that reason. Anything new holding in-memory state must be too.
+- **The startup guard fires on the first auth request, not at process start** — Next loads route modules lazily. A bad secret shows as 500s plus a logged `[auth] …` line while the container reports healthy.
+- **A secretless `next build` logs better-auth "You are using the default secret" errors** during page-data collection. Pre-existing (the same on `main`), harmless: build workers are never served, and the `NEXT_PHASE` exemption is what keeps the build green.
+- **`next start` fills a missing `x-forwarded-for` with the socket address** (`base-server.js`, `??=`), and believes a client-supplied single value. Behind a proxy, blank IP settings key everyone on what the proxy sends.
+
 ## Review: 2026-09-24 — sign-out `id_token_hint` port (#94, ours, open upstream)
 
 #94 is our own `id-token-store.ts` sign-out fix, ported upstream. Reviewing it there found a gap that is live here as well: the sign-out server action can read the session **only** from the one-hour JWT cookie cache (its bundle's in-memory store is empty), so after an idle hour the lookup got `no-session` and MP stranded the user. Brought back:

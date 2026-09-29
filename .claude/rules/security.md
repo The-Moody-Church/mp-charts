@@ -167,7 +167,28 @@ The better-auth catch-all route mounts far more HTTP endpoints than this app use
 
 Why this matters concretely: `POST /update-user` takes a body of `z.record(z.string(), z.any())` and copies any additional field declared `input !== false` straight onto the session, with no validator. Our `userGuid`/`mpUserId`/`mpContactId` must stay `input: true` for sign-in to work, so before this was closed any authenticated user could POST themselves another user's MP identity and inherit their User Groups and audit attribution (GHSA-pqxp-c5mr-5398). `input: false` is not an alternative — the same flag governs whether the OAuth profile may populate the field, so setting it breaks sign-in.
 
-**If either control is ever removed, rotate `BETTER_AUTH_SECRET`.** Closing the endpoint does not revoke a session already forged; those live in the JWT cookie cache for up to an hour, and with no database there is no session table to clear.
+**If either control is ever removed, rotate `BETTER_AUTH_SECRET`.** Closing the endpoint does not revoke a session already forged, and with no database there is no session table to clear. Rotating the secret invalidates every signed cookie at once.
+
+> **Erratum (2026-09-29) on GHSA-pqxp-c5mr-5398.** This section used to say a forged session lived "in the JWT cookie cache for up to an hour". That was wrong for the configuration in force until 2026-09-29: better-auth silently turned `cookieCache.refreshCache` on (stateless default) and slid `expiresAt` daily, so a forged or copied cookie pair re-minted itself and could persist **up to the session's `expiresAt` — 7 days, self-renewing** — and a copied `session_token` alone lasted until the container restarted. The 2026-09-29 session settings (below) end every session that existed before that deploy within 1h of it: the restart empties the in-memory store, and `refreshCache: false` stops a cookie from re-minting itself once its one-hour cache lapses.
+
+## Better Auth Sessions — MANDATORY
+
+There is no database: the signed `session_token` + `session_data` cookies are the session, backed by an in-memory store that sign-out can delete from but that cannot recall a copied cookie. These settings in `src/lib/auth.ts` put a hard ceiling on any session's life. **Do not remove or "tidy" any of them** — each is pinned by `src/lib/auth.session-lifetime.test.ts` or `src/lib/auth.shared-instance.test.ts`.
+
+| Setting | Why |
+|---|---|
+| `auth = sharedInstance(Symbol.for("tmc.auth"), createAuth)` | Next loads `auth.ts` once per bundle layer. With a `betterAuth()` per copy, the OAuth callback stored the session in the route handler's store and sign-out deleted it from the server action's, empty one. One instance per process fixes sign-out and lets server components/actions see the session after the cookie cache lapses |
+| `session.expiresIn: 12h` | `expiresAt` is fixed at sign-in; nothing outlives it. better-auth's default is 7 days. Matches the id-token store's 12h TTL |
+| `session.disableSessionRefresh: true` | Otherwise the store slides `expiresAt` forward once a day |
+| `cookieCache: { maxAge: 1h, strategy: "jwt", refreshCache: false }` | `refreshCache: false` **must be explicit** — with no database better-auth merges `true` under our config, which re-signs `session_data` from the cookie alone. With `false`, a cookie with no live row behind it dies within 1h |
+
+What users see: they go back through sign-in at least every 12h, and within 1h of every deploy or restart (a silent redirect while their MP session is alive).
+
+**Auth option edits need a `next dev` restart.** Hot reload re-evaluates `auth.ts` but `sharedInstance` returns the instance already on `globalThis`.
+
+**Emergency "sign everyone out"**: rotate `BETTER_AUTH_SECRET` (or add `cookieCache.version` and bump it).
+
+**The user's MP OAuth tokens are not retained.** `account.storeAccountCookie: false` keeps them out of the browser (better-auth defaults it on without a database), and `databaseHooks.account` strips the access/refresh tokens and expiries before the in-memory row is written. The idToken is kept for sign-out's `id_token_hint` fallback. Nothing in this app acts as the user against MP after sign-in; if something ever needs to, add it deliberately.
 
 ## Identity & Email
 
@@ -196,6 +217,7 @@ All three writes pass `{ $userId }` so MP's audit trail names the staff member r
 
 ## Authentication & Authorization
 
+- **The auth environment is checked when `src/lib/auth.ts` loads** (`assertAuthEnvironment`): a missing/empty `BETTER_AUTH_SECRET`, better-auth's public default secret, one shorter than 32 characters, any `BETTER_AUTH_SECRETS`, or a truthy `TEST` with `NODE_ENV=production` all throw, and the message never contains the value. There is no `NEXTAUTH_SECRET` fallback. `next build` is exempt (`NEXT_PHASE=phase-production-build`). Next loads route modules lazily, so on a running server this shows as a **500 and a logged `[auth] …` reason on the first request that needs auth**, not a process exit — check the log, not just whether the container is up. `advanced.disableOriginCheck: false` is pinned so a stray `TEST` cannot switch off the Origin check
 - Every server action MUST call `requireSession()` before any data access
 - Use `getMpUserId(session)` for audit attribution on write operations
 - The proxy (`src/proxy.ts`) protects routes but only checks session presence — it does not check roles
@@ -229,6 +251,16 @@ enforceRateLimit(session.user.id, "write"); // explicit stricter limit (30/min)
 | `upload` | 10 req | 10 min | Photo and document uploads |
 | `search` | 30 req | 1 min | Contact search (PII access) |
 | `cacheRefresh` | 5 req | 1 hour | Dashboard cache invalidation |
+
+### better-auth's own limiter (the sign-in endpoints)
+
+Separate from the table above: better-auth rate-limits its own endpoints, **in production only**, keyed on `<client IP>|<path>`. `/sign-in/social` is **10 per 10 s** (`authRateLimitCustomRules` in `src/lib/auth.ts`; better-auth's built-in `/sign-in*` rule is 3, too few for staff behind one office IP when a deploy sends everyone back through sign-in).
+
+The client IP comes from `AUTH_IP_ADDRESS_HEADERS` / `AUTH_TRUSTED_PROXIES` (`parseIpAddressOptions`; invalid entries throw). Both blank is better-auth's default: `x-forwarded-for`, trusted only when it holds a single valid IP. Verified in better-auth 1.7.5 (`dist/api/rate-limiter/index.mjs`) and on a local production build:
+
+- A request whose IP cannot be resolved — the configured header missing, or a multi-hop `x-forwarded-for` chain — is **not** skipped. It is counted in **one shared bucket per path** (`no-trusted-ip|<path>`), and the process logs `Rate limiting could not determine a client IP and is falling back to a single shared per-path bucket` **once**.
+- `AUTH_IP_ADDRESS_HEADERS` **replaces** `x-forwarded-for`; it is not a fallback.
+- Name a header only if the edge always overwrites it (`cf-connecting-ip` when every request arrives through Cloudflare). A header clients can set lets them rotate past the limit or lock someone else out. With nothing in front, `next start` fills a missing `x-forwarded-for` with the socket address, and a client-supplied one is believed.
 
 When adding new server actions:
 - **Read-only actions**: No extra work — `requireSession()` handles the general limit

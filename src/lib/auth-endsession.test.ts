@@ -74,8 +74,8 @@ describe("buildEndSessionUrl", () => {
   });
 
   describe("client_id", () => {
-    // OIDC RP-Initiated Logout: without id_token_hint, client_id is what tells
-    // MP whose registered post-logout URIs to check. Sent in both cases.
+    // OIDC RP-Initiated Logout's way for a client to identify itself. Sent with
+    // and without the hint (on MP it does not replace the hint; see the builder).
     it("is sent alongside id_token_hint", () => {
       const { params } = parse(
         buildEndSessionUrl({ baseUrl: BASE, postLogoutUri: APP, idToken: "a.b.c", clientId: "TM.Widgets" })
