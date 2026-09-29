@@ -408,9 +408,10 @@ FodyWeavers.xsd
 # JetBrains Rider
 *.sln.iml
 
-# Environment
-.env.local
-.env copy.local
+# Environment: ignore every .env file (.env, .env.production, prisma/.env, ...);
+# only the documented template is tracked.
+.env*
+!.env.example
 
 # Runtime RBAC config (managed via Setup page, not committed)
 data/feature-access.json

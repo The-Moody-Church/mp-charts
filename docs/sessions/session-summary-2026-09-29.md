@@ -77,3 +77,7 @@ involved, so `docs/ideas.md` is unchanged. Nothing deployed.
 - `.claude/rules/security.md` "CI Enforcement" says the grep runs "on every push and PR to
   `main`". The workflow triggers on `push` only, for every branch. This was corrected in
   event-manager on this branch, but not here.
+
+### `.env*` is now git-ignored (upstream MPNext 9e8ef87)
+
+`.gitignore` listed only `.env.local`-style names, so a plain `.env` (which the MP model-generator scripts read), `.env.production` or a nested `.env` could be committed by accident. It now ignores `.env*` and re-includes only `.env.example`. Checked with `git check-ignore` on `.env`, `.env.production` and a nested `prisma/.env.test`; `.env.example` is still tracked. No tracked file changes status. Upstream's pre-commit hook was not adopted.
