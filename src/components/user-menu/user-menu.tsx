@@ -14,22 +14,21 @@ import { authClient } from "@/lib/auth-client";
 import { handleSignOut } from "./actions";
 
 /**
- * Re-mints the session cookie cache just before signing out.
+ * Re-mints the session cookie cache just before signing out. A cheap backup,
+ * NO LONGER REQUIRED.
  *
  * `handleSignOut` needs the session to find the user's ID token for
- * `id_token_hint`. It runs in a server action, which can read the session only
- * from the JWT cookie cache (`session_data`): its own in-memory store is a
- * different, empty instance (see `src/lib/id-token-store.ts`). That cache lasts
- * an hour, so after an hour with no reload, tab switch or session refetch the
- * action sees no session and drops the hint (`[signout] id_token_hint omitted
- * (no-session)`), leaving the user on MP's logged-out page.
- *
- * `GET /api/auth/get-session` runs in the auth route handler, whose store does
- * hold the session, and re-issues a fresh `session_data` cookie. The server
- * action request that follows then carries it.
+ * `id_token_hint`. Until 2026-09-29 each Next bundle layer had its own auth
+ * instance, so the server action could read the session only from the
+ * one-hour JWT cookie cache (`session_data`) and this refresh was what kept
+ * the hint after an idle hour. `src/lib/auth.ts` now shares one instance per
+ * process (`sharedInstance`), so the action reads the same store as
+ * `GET /api/auth/get-session` and finds the session with or without a fresh
+ * cookie. Kept because it costs one request and is harmless; a new sign-out
+ * caller does not need it.
  *
  * It must never block sign-out: any failure here only means signing out
- * without the hint, which is still signing out.
+ * without the refresh, which is still signing out.
  */
 async function refreshSessionCookie(): Promise<void> {
   try {

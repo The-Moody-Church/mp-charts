@@ -106,8 +106,8 @@ describe('handleSignOut', () => {
     });
 
     it('still signs out without a session, and says why (no-session)', async () => {
-      // What a lapsed cookie cache looks like from here. The user menu
-      // re-mints the cookie before calling this so it does not happen there.
+      // What an expired session, or a restart after the cookie cache lapsed,
+      // looks like from here.
       mockGetSession.mockResolvedValue(null);
 
       await handleSignOut();

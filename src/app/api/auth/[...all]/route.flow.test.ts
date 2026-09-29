@@ -136,11 +136,11 @@ describe("better-auth 1.7 sign-in, end to end through the real route", () => {
   });
 
   it("re-issues session_data from session_token alone — what sign-out's cookie refresh relies on", async () => {
-    // The sign-out server action reads the session only from the session_data
-    // cookie cache (its own in-memory store is empty), so the user menu calls
-    // GET /get-session first to re-mint that cookie. This pins that the route
-    // does re-mint it once the cache is gone — the same state as a lapsed
-    // one-hour cache, or deleting the cookie by hand.
+    // The user menu calls GET /get-session before signing out to re-mint the
+    // session_data cookie (a backup since the auth instance became shared per
+    // process). This pins that the route does re-mint it once the cache is
+    // gone — the same state as a lapsed one-hour cache, or deleting the cookie
+    // by hand — and only because the store still holds the row.
     const { state, cookie } = await startSignIn();
     const back = await returnFromMp(state, cookie);
     const tokenOnly = cookiesOf(back)
