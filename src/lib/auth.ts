@@ -291,6 +291,21 @@ export function mapMpProfileToUser(profile: {
 }
 
 /**
+ * Blanks the user's MP access and refresh tokens (and their expiries) on an
+ * account row before better-auth stores it; everything else, the idToken
+ * included, passes through. Returns a copy. Exported for tests.
+ */
+export function stripUserOAuthTokens<T extends object>(account: T): T {
+  return {
+    ...account,
+    accessToken: null,
+    refreshToken: null,
+    accessTokenExpiresAt: null,
+    refreshTokenExpiresAt: null,
+  };
+}
+
+/**
  * Session lifetime (upstream MPNext fd7fc4a, measured on our build 2026-09-29).
  *
  * There is no database: the signed `session_token` + `session_data` cookies
@@ -380,6 +395,29 @@ function createAuth() {
       // signing in with a shared household address would have received the
       // first person's identity. (F2, upstream MPNext 85be4b3.)
       accountLinking: { enabled: false },
+      // The user's own MP tokens are never used after sign-in: every MP data
+      // call goes through the client-credentials service account
+      // (src/lib/providers/ministry-platform/auth/), and no caller passes a
+      // user token to a service. better-auth defaults this to `true` when
+      // there is no database, which put the user's MP access and id tokens
+      // into an encrypted `account_data` cookie on every response. Nothing the
+      // route allowlist exposes reads that cookie, so keep them out of the
+      // browser. (Upstream MPNext a424953.)
+      storeAccountCookie: false,
+    },
+
+    // Keep the user's MP access/refresh tokens out of the in-memory adapter
+    // too (plaintext until restart; a heap dump would hand over every
+    // signed-in user's MP API rights). `getUserInfo` has already used the
+    // access token by the time the account row is written. The idToken is
+    // KEPT: it is not an API bearer, and sign-out's account-row fallback
+    // (findMpIdToken in src/components/user-menu/actions.ts) sends it as
+    // `id_token_hint`. (Upstream MPNext a424953.)
+    databaseHooks: {
+      account: {
+        create: { before: async (account) => ({ data: stripUserOAuthTokens(account) }) },
+        update: { before: async (account) => ({ data: stripUserOAuthTokens(account) }) },
+      },
     },
 
     session: {

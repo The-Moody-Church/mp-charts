@@ -45,7 +45,9 @@ async function findMpIdToken(requestHeaders: Headers): Promise<string | null> {
     if (stored) return stored;
 
     // FALLBACK: the account record, in the shared in-memory adapter. It works
-    // now that the auth instance is shared per process.
+    // now that the auth instance is shared per process, and the row keeps its
+    // idToken (only the access/refresh tokens are stripped before it is
+    // stored — see `stripUserOAuthTokens` in src/lib/auth.ts).
     const userId = session.user.id;
     if (!userId) return warnNoHint("no-session");
 
