@@ -6,7 +6,7 @@
 
 Port upstream MPNext's `ea2e0ad..75d249d` auth work (PRs #96, #97) to this fork, adapted to our explicit-endpoint provider, and fix the sign-out revocation gap it exposed here.
 
-### Status: PR open from `fix/auth-hardening`, not merged. Needs a `:dev` soak with a human sign-in and sign-out before it ships
+### Status: PR [#244](https://github.com/The-Moody-Church/mp-charts/pull/244) open from `fix/auth-hardening`, not merged. Needs a `:dev` soak with a human sign-in and sign-out before it ships
 
 ### The finding
 
@@ -71,7 +71,7 @@ Every active user goes back through sign-in within 1 h of the deploy (a silent r
 
 ### Follow-ups
 
-- Soak the PR on `:dev` with a human sign-in/sign-out, then merge.
+- Soak #244 on `:dev` with a human sign-in/sign-out, then merge.
 - **Operator, after deploy:** set `AUTH_IP_ADDRESS_HEADERS=cf-connecting-ip` in the app's `.env` (not needed for the fix itself).
 - Port the same change to event-manager, mp-senior-care and music-db (same branch name).
 - The GHSA-pqxp-c5mr-5398 exposure window is corrected in `.claude/rules/security.md`: up to 7 days, self-renewing, on the pre-2026-09-29 config.
