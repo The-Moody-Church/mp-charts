@@ -18,6 +18,12 @@ export interface EndSessionParams {
    * not be read.
    */
   idToken?: string | null;
+  /**
+   * The sign-in client's id, `OIDC_CLIENT_ID` (TM.Widgets). Sent as
+   * `client_id` so MP can check `post_logout_redirect_uri` against that
+   * client's registered list even when there is no `id_token_hint`.
+   */
+  clientId?: string | null;
 }
 
 /**
@@ -42,6 +48,14 @@ export interface EndSessionParams {
  * MP does not expose client registration through its REST API, so that is an
  * administrator task and cannot be asserted here.
  *
+ * `client_id` IS ALWAYS SENT (upstream MPNext 10ef3df). OIDC RP-Initiated
+ * Logout lets the client identify itself with `client_id` when it has no
+ * `id_token_hint`; without either, an IdentityServer-style provider cannot
+ * tell whose post-logout URIs to check and asks "log out?" instead of
+ * redirecting — and a user who closes the tab there leaves the MP session
+ * alive on a shared PC. With the hint as well, `client_id` must name the
+ * client the token was issued to, which it does: both are the sign-in client.
+ *
  * WHEN THE HINT IS MISSING we still return a valid URL. Sign-out must never
  * depend on it: these apps use better-auth's in-memory adapter, so a session
  * that predates a container restart has no stored token to read. The user then
@@ -57,8 +71,12 @@ export function buildEndSessionUrl({
   baseUrl,
   postLogoutUri,
   idToken = null,
+  clientId = null,
 }: EndSessionParams): string {
   const params = new URLSearchParams({ post_logout_redirect_uri: postLogoutUri });
+  if (clientId) {
+    params.set("client_id", clientId);
+  }
   if (idToken) {
     params.set("id_token_hint", idToken);
   }

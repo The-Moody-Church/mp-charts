@@ -123,6 +123,7 @@ export async function handleSignOut() {
       baseUrl,
       postLogoutUri: process.env.BETTER_AUTH_URL || 'http://localhost:3000',
       idToken,
+      clientId: process.env.OIDC_CLIENT_ID,
     })
   );
 }

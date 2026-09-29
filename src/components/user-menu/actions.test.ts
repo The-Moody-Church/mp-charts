@@ -50,6 +50,7 @@ describe('handleSignOut', () => {
     process.env = { ...originalEnv };
     process.env.MINISTRY_PLATFORM_BASE_URL = 'https://mp.example.com';
     process.env.BETTER_AUTH_URL = 'https://myapp.example.com';
+    process.env.OIDC_CLIENT_ID = 'TM.Widgets';
     mockGetSession.mockResolvedValue(null);
     mockFindAccountByUserId.mockResolvedValue([]);
     warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -102,6 +103,7 @@ describe('handleSignOut', () => {
       await handleSignOut();
 
       expect(redirectedTo().searchParams.get('id_token_hint')).toBe('id.token.jwt');
+      expect(redirectedTo().searchParams.get('client_id')).toBe('TM.Widgets');
       expect(warn).not.toHaveBeenCalled();
     });
 
@@ -114,6 +116,8 @@ describe('handleSignOut', () => {
 
       expect(mockSignOut).toHaveBeenCalledTimes(1);
       expect(redirectedTo().searchParams.has('id_token_hint')).toBe(false);
+      // client_id still identifies the client, so MP can honour the redirect.
+      expect(redirectedTo().searchParams.get('client_id')).toBe('TM.Widgets');
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('id_token_hint omitted (no-session)'));
     });
 

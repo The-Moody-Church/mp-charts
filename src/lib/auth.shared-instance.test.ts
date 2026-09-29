@@ -172,7 +172,9 @@ describe("sign-in in the route layer, the REAL handleSignOut in the action layer
     requestHeaders.current = new Headers({ cookie: header(only(jar, "session_token")) });
     await action.handleSignOut();
 
-    const hint = new URL(redirectTo.url!).searchParams.get("id_token_hint");
+    const endSession = new URL(redirectTo.url!).searchParams;
+    expect(endSession.get("client_id")).toBe("test-client-id"); // OIDC_CLIENT_ID in src/test-setup.ts
+    const hint = endSession.get("id_token_hint");
     const replayed = await sessionGuid(route, only(copied, "session_token"));
     return { hint, replayed };
   }
