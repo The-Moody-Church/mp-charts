@@ -18,7 +18,7 @@
 | MP OIDC session terminated on sign-out | ✅ |
 | `id_token_hint` sent on the end-session request | ✅ |
 | `client_id` sent on the end-session request (2026-09-29; not a substitute for the hint) | ✅ |
-| A cookie copied before sign-out dies with the session (2026-09-29, see 5) | ✅ |
+| A copied `session_token` dies at sign-out; a copied cookie pair lasts at most the rest of its 1 h cache (2026-09-29, see 5) | ✅ |
 | Post-logout redirect URLs registered on the sign-in client (`TM.Widgets`) | ✅ |
 | User returned to the app after sign-out | ✅ verified on care.moodychurch.app |
 

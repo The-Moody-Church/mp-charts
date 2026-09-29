@@ -4,9 +4,9 @@
 
 ### Objective
 
-Port upstream MPNext's `ea2e0ad..6c0c46b` auth work (PRs #96, #97) to this fork, adapted to our explicit-endpoint provider, and fix the sign-out revocation gap it exposed here.
+Port upstream MPNext's `ea2e0ad..75d249d` auth work (PRs #96, #97) to this fork, adapted to our explicit-endpoint provider, and fix the sign-out revocation gap it exposed here.
 
-### Status: IN PROGRESS — branch `fix/auth-hardening` pushed; no PR yet. Needs a `:dev` soak with a human sign-in and sign-out before it ships
+### Status: PR open from `fix/auth-hardening`, not merged. Needs a `:dev` soak with a human sign-in and sign-out before it ships
 
 ### The finding
 
@@ -26,12 +26,23 @@ Port upstream MPNext's `ea2e0ad..6c0c46b` auth work (PRs #96, #97) to this fork,
 | 8 | `/link-social` disabled; sanitizer, Content-Type and in-process `signInSocial` tests from the 2026-09-28 comparison | — |
 | 9 | Docs: CLAUDE.md, `.claude/rules/security.md` (sessions section, GHSA erratum, guard, limiter), `.env.example`, README, `docs/OAUTH_LOGOUT_SETUP.md`, upstream sync log | — |
 
-Plus one test-only follow-up commit (a tsc cast in the decision-3 test).
+Plus one test-only follow-up commit (a tsc cast in the decision-3 test), and two review follow-up commits:
+
+| Finding | Fix |
+|---|---|
+| `AUTH_TRUSTED_PROXIES` check accepted entries better-auth's own parser drops with a warning (`fe80::1%lo0`, `fe80::1%eth0/64`, `::ffff:10.0.0.0/104`, `::ffff:1.2.3.4/120`) | Also refuse whatever `findInvalidTrustedProxies` (`@better-auth/core/utils/ip`) rejects; tests incl. a negative control that better-auth only warns |
+| No test proved the real `auth` reads the IP env vars (`ipAddress: {}` left the suite green) | Hoisted env in `auth.rate-limit.test.ts`; the real instance's parsed options are pinned |
+| One-warning assertion depended on test order (failed with `--sequence.shuffle`, seeds 3 and 7) | Counted across the file; 9 seeds pass |
+| Content-Type pin used `trim()`, which strips U+00A0/VT/FF: `\u00a0application/json` reached better-auth (400, or a logged 500) | Anchored `/^application\/json[ \t]*(?:;|$)/`; route tests with `auth.handler` never called |
+| A deep link over ~2 KB now 404'd at `/sign-in/social` → `/auth-error` | `MAX_CALLBACK_URL_LENGTH` in `src/lib/auth-callback-url.ts`, shared; `getSafeCallbackUrl` sends `/` for a longer result |
+| "Invalid entries refuse startup" was wrong (lazy load: 500s, container up) | `.env.example`, `auth.ts` comment, security.md, CLAUDE.md, README |
+| Sync log listed #98 though it was not reviewed (the review command would skip it) | Entry is `ea2e0ad..75d249d` (#96, #97); `f1ad0c8` recorded as not yet reviewed |
+| Logout-doc status row overstated the fix | Token dies at sign-out; a copied pair lasts at most the rest of its 1 h cache |
 
 ### Evidence
 
-- Unit/integration: 918 → 1013 tests, 60 → 65 files, all green; tsc clean; lint 0 errors/0 warnings; `npm audit --audit-level=high` exit 0 (1 moderate, undici, lockfile unchanged); clean `next build` with no env; `check:shells` 19 shells OK; security-lint grep clean.
-- Every decision was mutation-checked: reverted, the new tests went red, restored byte-identical (sha256).
+- Unit/integration: 918 → 1029 tests, 60 → 65 files, all green; tsc clean; lint 0 errors/0 warnings; `npm audit --audit-level=high` exit 0 (1 moderate, undici, lockfile unchanged); clean `next build` with no env; `check:shells` 19 shells OK; security-lint grep clean.
+- Every decision was mutation-checked: reverted, the new tests went red, restored byte-identical (sha256). The review follow-ups too: `ipAddress: {}` → 1 failed (it passed all 1013 before); dropping `findInvalidTrustedProxies` → 5 failed; the old `trim()` pin → 5 failed; no client-side cap → 2 failed.
 - Production-build harness (fake MP on localhost, fake clock), **after** the fix:
   - sign-in sets `session_token` + `session_data` only (no `account_data`); `expiresAt` = sign-in + 12 h
   - sign-out → end-session URL has `client_id`, `id_token_hint`, `post_logout_redirect_uri`
@@ -42,6 +53,11 @@ Plus one test-only follow-up commit (a tsc cast in the decision-3 test).
   - restart: the browser's own pair lasts until its cache lapses (t+50 PRESENT, t+61 null)
   - rate limiter: 10 × 200 then 429 per client; with `AUTH_IP_ADDRESS_HEADERS=cf-connecting-ip` and the header missing, one shared bucket and one `Rate limiting could not determine a client IP` warning
   - a short secret, `TEST=1`, or an invalid `AUTH_TRUSTED_PROXIES` → the first auth request returns 500 with an `[auth] …` log line; the process stays up (Next loads route modules lazily)
+- Review follow-ups, raw-socket probes on local production builds (before = `a0f746a`, after = this branch):
+  - `\u00a0application/json; x=application/x-www-form-urlencoded` with an allowed body: before 500 + `ERROR [Better Auth]: TypeError: Content-Type was not one of "multipart/form-data" …`; after 404, no log line
+  - `\u00a0application/json`: before 400 `VALIDATION_ERROR`; after 404. Plain `application/json` control: 200 on both
+  - `AUTH_TRUSTED_PROXIES=fe80::1%lo0` or `::ffff:10.0.0.0/104`: before get-session 200 + `Ignoring invalid advanced.ipAddress.trustedProxies entries`; after 500 ×2 with the `[auth] AUTH_TRUSTED_PROXIES …` line, process still listening. `10.0.0.0/24` + `cf-connecting-ip`: 200
+  - browser (Playwright) on `/signin?callbackUrl=` + a 3000-char deep link: completed sign-in against the fake MP and landed on `/`; a direct 3000-char `callbackURL` POST still 404s
 
 ### Decisions and why
 
@@ -55,7 +71,7 @@ Every active user goes back through sign-in within 1 h of the deploy (a silent r
 
 ### Follow-ups
 
-- Open the PR (with a Security Review section), soak on `:dev` with a human sign-in/sign-out, then merge.
+- Soak the PR on `:dev` with a human sign-in/sign-out, then merge.
 - **Operator, after deploy:** set `AUTH_IP_ADDRESS_HEADERS=cf-connecting-ip` in the app's `.env` (not needed for the fix itself).
 - Port the same change to event-manager, mp-senior-care and music-db (same branch name).
 - The GHSA-pqxp-c5mr-5398 exposure window is corrected in `.claude/rules/security.md`: up to 7 days, self-renewing, on the pre-2026-09-29 config.
