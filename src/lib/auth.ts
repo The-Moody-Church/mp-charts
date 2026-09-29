@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import { genericOAuth, customSession } from "better-auth/plugins";
 import { createAuthMiddleware, APIError } from "better-auth/api";
+import { isIP } from "node:net";
 import { MPHelper } from "@/lib/providers/ministry-platform";
 import type { MPUserProfile } from "@/lib/providers/ministry-platform/types";
 import { sanitizeGuid } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
@@ -345,12 +346,107 @@ export function stripUserOAuthTokens<T extends object>(account: T): T {
 export const SESSION_EXPIRES_IN_SECONDS = 12 * 60 * 60;
 export const SESSION_COOKIE_CACHE_MAX_AGE_SECONDS = 60 * 60;
 
+/**
+ * Client-IP source for better-auth's rate limiter (upstream MPNext 0f61f54).
+ *
+ * The limiter runs in production only and keys each request on
+ * `<client IP>|<path>`. By default better-auth reads ONE header,
+ * `x-forwarded-for`, and trusts it only when it holds a single valid IP.
+ * Anything else — no header, a proxy-appended chain, an `ip:port` value —
+ * resolves to no IP, and then (better-auth 1.7.5,
+ * dist/api/rate-limiter/index.mjs `resolveRateLimitConfig`) the request is
+ * NOT skipped: it is counted in ONE shared per-path bucket,
+ * `no-trusted-ip|<path>`, and the process logs this warning once:
+ *
+ *   Rate limiting could not determine a client IP and is falling back to a
+ *   single shared per-path bucket. ...
+ *
+ * Which header is trustworthy depends on what sits in front of the app, so it
+ * is configuration, not code:
+ *
+ * - `AUTH_IP_ADDRESS_HEADERS` — comma-separated header names, tried in order,
+ *   REPLACING the `x-forwarded-for` default (it is not consulted unless
+ *   listed). Only name a header the edge always OVERWRITES, e.g.
+ *   `cf-connecting-ip` when every request reaches the app through Cloudflare;
+ *   a header clients can set lets them rotate past the limit or lock a
+ *   victim's IP out. A request that lacks every listed header falls into the
+ *   shared bucket above.
+ * - `AUTH_TRUSTED_PROXIES` — comma-separated proxy IPs/CIDRs. A forwarded
+ *   chain is walked right to left past these; the first untrusted hop is the
+ *   client.
+ *
+ * Both blank (the default) returns `{}`, which is today's behaviour. Invalid
+ * entries refuse startup: better-auth itself only warns about a bad
+ * trusted-proxy entry and ignores it, which would silently fall back to the
+ * shared bucket. Pinned by src/lib/auth.rate-limit.test.ts.
+ */
+export function parseIpAddressOptions(
+  env: Readonly<Record<string, string | undefined>>,
+): { ipAddressHeaders?: string[]; trustedProxies?: string[] } {
+  const list = (value: string | undefined) =>
+    (value ?? "").split(",").map((entry) => entry.trim()).filter(Boolean);
+
+  const ipAddressHeaders = list(env.AUTH_IP_ADDRESS_HEADERS).map((h) => h.toLowerCase());
+  const badHeaders = ipAddressHeaders.filter((h) => !/^[a-z0-9-]+$/.test(h));
+  if (badHeaders.length > 0) {
+    throw new Error(
+      `[auth] AUTH_IP_ADDRESS_HEADERS has invalid header names: ${badHeaders.join(", ")}. Use comma-separated names like "cf-connecting-ip".`,
+    );
+  }
+
+  const trustedProxies = list(env.AUTH_TRUSTED_PROXIES);
+  const badProxies = trustedProxies.filter((entry) => !isIpOrCidr(entry));
+  if (badProxies.length > 0) {
+    throw new Error(
+      `[auth] AUTH_TRUSTED_PROXIES has entries that are not an IP address or CIDR range: ${badProxies.join(", ")}.`,
+    );
+  }
+
+  return {
+    ...(ipAddressHeaders.length > 0 && { ipAddressHeaders }),
+    ...(trustedProxies.length > 0 && { trustedProxies }),
+  };
+}
+
+function isIpOrCidr(entry: string): boolean {
+  const slash = entry.indexOf("/");
+  const family = isIP(slash === -1 ? entry : entry.slice(0, slash));
+  if (family === 0) return false;
+  if (slash === -1) return true;
+  const prefix = entry.slice(slash + 1);
+  return /^\d{1,3}$/.test(prefix) && Number(prefix) <= (family === 4 ? 32 : 128);
+}
+
+/**
+ * Per-path rate-limit overrides. better-auth's built-in rule for every
+ * `/sign-in*` path is 3 requests per 10 s per client IP. Staff share an office
+ * IP, and `/sign-in/social` only builds the MP authorize URL (no credential is
+ * checked here — MP does that), so 3 would lock a room of people out when a
+ * deploy sends them all back through sign-in at once. 10 per 10 s per client
+ * IP still bounds how many OAuth state cookies one client can have minted
+ * (each capped in size by the body filter in route.ts). Pinned by
+ * src/lib/auth.rate-limit.test.ts.
+ */
+export const authRateLimitCustomRules = {
+  "/sign-in/social": { window: 10, max: 10 },
+};
+
 function createAuth() {
   return betterAuth({
     baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
     secret: betterAuthSecret,
 
     disabledPaths: disabledAuthPaths,
+
+    advanced: {
+      // Which header the rate limiter takes the client IP from. See
+      // parseIpAddressOptions above.
+      ipAddress: parseIpAddressOptions(process.env),
+    },
+
+    rateLimit: {
+      customRules: authRateLimitCustomRules,
+    },
 
     // Send OAuth callback failures to our own page rather than better-auth's
     // built-in /api/auth/error, which the route allowlist no longer exposes.
