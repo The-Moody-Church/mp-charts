@@ -43,6 +43,20 @@ involved, so `docs/ideas.md` is unchanged. Nothing deployed.
   sign-in until restart. Decision unchanged: we still configure the endpoints explicitly.
   `.claude/notes/upstream-sync-log.md` already said "at module load", so it is left alone. The
   2026-09-25 status row's "boot-time discovery" is a history row and is also left alone.
+- **`docs/status.md`**: a 2026-09-29 row, and the 7-day retention rule
+  (`.claude/rules/context-management.md`: "When adding a new entry, remove any entries older than
+  7 days") applied, which this branch's first draft had skipped. 22 rows dated 2026-05-14 →
+  2026-09-15 are dropped (66 → 44 lines). Every dropped date has a session summary, except
+  2026-08-12/13, whose work is recorded in the 2026-08-11 summary ("Post-series: Finding C
+  resolved — 2026-08-13") and in `react-compiler-lint-plan.md` ("COMPLETE (2026-08-12)"). The
+  three 2026-06-2x rows stay, as the Retention note has always said. That note's "the next-newest
+  is 2026-06-24" clause was stale (rows now run to 2026-09-29) and is replaced with a statement of
+  what is pruned and what is kept. Its #190/#191/#192 rationale is unchanged, and
+  `session-summary-2026-08-06.md` still confirms it. "Upstream sync current through PR #66
+  (reviewed 2026-07-10)" was already stale on `main` (the sync log has reviews through
+  2026-09-24), and dropping the 2026-09-01 "Upstream review #67–#78" row would have left nothing
+  contradicting it. It now points at `.claude/notes/upstream-sync-log.md` instead of naming a
+  date that goes stale.
 
 ### Verification
 
@@ -54,13 +68,12 @@ involved, so `docs/ideas.md` is unchanged. Nothing deployed.
   scratch copy all exit 1: `cancel-in-progress: sometimes` and a misspelt `cancel_in_progress`
   (`one_of` at `/concurrency`), and a broken indent (parse error). `js-yaml` parses the file to
   `concurrency: { group: "${{ github.workflow }}-${{ github.ref }}", cancel-in-progress: false }`.
-- `vitest run`: 918/918 in 60 files. `npm run lint`: 0 problems. No code changed, so both are
-  just a check that nothing broke.
+- `vitest run`: 918/918 in 60 files. `npx tsc --noEmit`: exit 0. `npm run lint`: 0 problems.
+  The CI `security-lint` grep, run locally: no matches. No code changed, so these only confirm
+  nothing broke. Re-run after the review fixes, with the same results.
 
 ### Follow-ups
 
 - `.claude/rules/security.md` "CI Enforcement" says the grep runs "on every push and PR to
   `main`". The workflow triggers on `push` only, for every branch. This was corrected in
   event-manager on this branch, but not here.
-- `docs/status.md` "Recently Completed" is far past the 7-day retention rule. This branch did not
-  prune it.
