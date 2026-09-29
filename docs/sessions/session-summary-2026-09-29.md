@@ -1,6 +1,6 @@
 # Session Summary — 2026-09-29
 
-## CI concurrency + discovery-note fix (branch `chore/ci-concurrency-docs`) — COMPLETED (PR not yet opened)
+## CI concurrency + discovery-note fix (branch `chore/ci-concurrency-docs`) — COMPLETED ([#243](https://github.com/The-Moody-Church/mp-charts/pull/243))
 
 Housekeeping, done in the same shape in all four apps that share this auth stack. No issue
 involved, so `docs/ideas.md` is unchanged. Nothing deployed.
