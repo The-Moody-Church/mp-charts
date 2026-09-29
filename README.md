@@ -287,7 +287,7 @@ When deploying to production:
 1. Update `BETTER_AUTH_URL` to your production domain
 2. Add production redirect URIs to Ministry Platform OAuth client
 3. Add production post-logout redirect URIs
-4. Ensure environment variables are set in your hosting provider. If every request reaches the app through Cloudflare, also set `AUTH_IP_ADDRESS_HEADERS=cf-connecting-ip` so better-auth's sign-in rate limit keys on the real client IP (see `.env.example`)
+4. Ensure environment variables are set in your hosting provider. If every request reaches the app through Cloudflare, also set `AUTH_IP_ADDRESS_HEADERS=cf-connecting-ip` so better-auth's sign-in rate limit keys on the real client IP (see `.env.example`), then check the log: an invalid value makes every auth request fail with an `[auth] …` line while the container stays up
 5. Enable HTTPS/SSL certificates
 6. Test the complete authentication flow in production environment
 

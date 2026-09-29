@@ -2,6 +2,10 @@ import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import { genericOAuth, customSession } from "better-auth/plugins";
 import { createAuthMiddleware, APIError } from "better-auth/api";
+// The same module better-auth imports (@better-auth/core is pinned to better-auth's
+// exact version and exports "./utils/*"). Used so our trusted-proxy check cannot
+// accept an entry better-auth would ignore.
+import { findInvalidTrustedProxies } from "@better-auth/core/utils/ip";
 import { isIP } from "node:net";
 import { MPHelper } from "@/lib/providers/ministry-platform";
 import type { MPUserProfile } from "@/lib/providers/ministry-platform/types";
@@ -449,9 +453,17 @@ export const SESSION_COOKIE_CACHE_MAX_AGE_SECONDS = 60 * 60;
  *   client.
  *
  * Both blank (the default) returns `{}`, which is today's behaviour. Invalid
- * entries refuse startup: better-auth itself only warns about a bad
- * trusted-proxy entry and ignores it, which would silently fall back to the
- * shared bucket. Pinned by src/lib/auth.rate-limit.test.ts.
+ * entries throw when this module loads (the first auth request — Next loads
+ * route modules lazily, so the container still starts and reports healthy
+ * while every auth request returns 500 with the `[auth] ...` reason logged),
+ * rather than being ignored: better-auth itself only warns about a bad
+ * trusted-proxy entry and drops it, which would silently fall back to the
+ * shared bucket. A trusted-proxy entry is refused if EITHER our check or
+ * better-auth's own parser (`findInvalidTrustedProxies`, the function its
+ * warning comes from) rejects it, so the two cannot disagree — better-auth's
+ * parser alone refuses e.g. a zone id (`fe80::1%lo0`) or an IPv4-mapped
+ * prefix over /32 (`::ffff:10.0.0.0/104`), which ours alone would accept.
+ * Pinned by src/lib/auth.rate-limit.test.ts.
  */
 export function parseIpAddressOptions(
   env: Readonly<Record<string, string | undefined>>,
@@ -468,7 +480,12 @@ export function parseIpAddressOptions(
   }
 
   const trustedProxies = list(env.AUTH_TRUSTED_PROXIES);
-  const badProxies = trustedProxies.filter((entry) => !isIpOrCidr(entry));
+  const badProxies = [
+    ...new Set([
+      ...trustedProxies.filter((entry) => !isIpOrCidr(entry)),
+      ...findInvalidTrustedProxies(trustedProxies),
+    ]),
+  ];
   if (badProxies.length > 0) {
     throw new Error(
       `[auth] AUTH_TRUSTED_PROXIES has entries that are not an IP address or CIDR range: ${badProxies.join(", ")}.`,

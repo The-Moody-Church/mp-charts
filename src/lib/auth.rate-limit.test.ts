@@ -14,11 +14,18 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
  * isolates each test file, so no other file sees it. The first test proves
  * the switch took.
  *
+ * The same block sets AUTH_IP_ADDRESS_HEADERS / AUTH_TRUSTED_PROXIES before
+ * src/lib/auth.ts loads, so the real `auth` instance is built from them and a
+ * test can prove it reads them. Every other test builds its own instance from
+ * an explicit env object (`instance()` below), so they are unaffected.
+ *
  * No network: sign-in/social only builds an authorize URL.
  */
 vi.hoisted(() => {
   (process.env as Record<string, string | undefined>).NODE_ENV = "production";
   delete process.env.TEST;
+  process.env.AUTH_IP_ADDRESS_HEADERS = "CF-Connecting-IP";
+  process.env.AUTH_TRUSTED_PROXIES = "10.0.0.0/24";
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     throw new Error(`Blocked unexpected fetch in test: ${String(input)}`);
   }) as typeof fetch;
@@ -39,6 +46,8 @@ const ORIGIN = "http://localhost:3000"; // BETTER_AUTH_URL in src/test-setup.ts
 const RATE_LIMIT_WARNING = "Rate limiting could not determine a client IP";
 
 let warnings: string[];
+/** Every warning logged in this file, across tests (see the one-warning test). */
+const allWarnings: string[] = [];
 
 /** The real auth options, with the given IP env and our (or no) custom rules. */
 function instance(env: Record<string, string>, { customRules = true } = {}) {
@@ -50,6 +59,7 @@ function instance(env: Record<string, string>, { customRules = true } = {}) {
       level: "warn",
       log: (_level: string, message: string) => {
         warnings.push(message);
+        allWarnings.push(message);
       },
     },
   });
@@ -118,7 +128,22 @@ describe("parseIpAddressOptions", () => {
     );
   });
 
-  it.each(["10.0.0.300", "proxy.local", "10.0.0.0/33", "2001:db8::/129", "10.0.0.0/", "10.0.0.0/x", "10.0.0.0/0016"])(
+  it.each([
+    "10.0.0.300",
+    "proxy.local",
+    "10.0.0.0/33",
+    "2001:db8::/129",
+    "10.0.0.0/",
+    "10.0.0.0/x",
+    "10.0.0.0/0016",
+    // node:net isIP accepts these; better-auth's own parser rejects them and
+    // would only warn and drop them. A zone id, and an IPv4-mapped address
+    // (better-auth maps it to 4 bytes, so /32 is the most it allows).
+    "fe80::1%lo0",
+    "fe80::1%eth0/64",
+    "::ffff:10.0.0.0/104",
+    "::ffff:1.2.3.4/120",
+  ])(
     "refuses an invalid trusted proxy: %s",
     (p) => {
       expect(() => parseIpAddressOptions({ AUTH_TRUSTED_PROXIES: p })).toThrow(
@@ -127,8 +152,37 @@ describe("parseIpAddressOptions", () => {
     },
   );
 
-  it("is what the real auth instance uses", () => {
-    expect(auth.options.advanced?.ipAddress).toEqual(parseIpAddressOptions(process.env));
+  it("accepts only entries better-auth parses too, so its 'Ignoring invalid' warning cannot fire", async () => {
+    const IGNORED = "Ignoring invalid `advanced.ipAddress.trustedProxies` entries";
+    const entries = ["10.0.0.5", "fe80::1%lo0", "::ffff:10.0.0.0/104", "::ffff:1.2.3.4/32", "2001:db8::/32"];
+    const accepted = entries.filter((e) => {
+      try {
+        parseIpAddressOptions({ AUTH_TRUSTED_PROXIES: e });
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    expect(accepted).toEqual(["10.0.0.5", "::ffff:1.2.3.4/32", "2001:db8::/32"]);
+    await instance({ AUTH_TRUSTED_PROXIES: accepted.join(",") }).$context;
+    expect(warnings.some((w) => w.includes(IGNORED))).toBe(false);
+
+    // Negative control: handed to better-auth directly, a refused entry is
+    // only warned about and dropped — the silent fallback the check prevents.
+    await betterAuth({
+      ...auth.options,
+      advanced: { ...auth.options.advanced, ipAddress: { trustedProxies: ["fe80::1%lo0"] } },
+      logger: { level: "warn", log: (_level: string, message: string) => void warnings.push(message) },
+    }).$context;
+    expect(warnings.some((w) => w.includes(`${IGNORED}: fe80::1%lo0.`))).toBe(true);
+  });
+
+  it("is what the real auth instance uses: read from AUTH_IP_ADDRESS_HEADERS / AUTH_TRUSTED_PROXIES", () => {
+    // Set in the hoisted block, before src/lib/auth.ts loaded.
+    expect(auth.options.advanced?.ipAddress).toEqual({
+      ipAddressHeaders: ["cf-connecting-ip"],
+      trustedProxies: ["10.0.0.0/24"],
+    });
   });
 });
 
@@ -170,9 +224,11 @@ describe("which client IP the limiter keys on", () => {
     expect((await signIn(inst, { "x-forwarded-for": "198.51.100.99" })).status).toBe(429);
     // A request that does carry the header is in its own bucket.
     expect((await signIn(inst, { "cf-connecting-ip": "203.0.113.30" })).status).toBe(200);
-    // better-auth logs it once per PROCESS (a module-level flag), and this is
-    // the first request in this file whose IP cannot be resolved.
-    expect(warnings.filter((w) => w.includes(RATE_LIMIT_WARNING))).toHaveLength(1);
+    // better-auth logs it once per PROCESS (a module-level flag), so which
+    // test logs it depends on the order tests run in (another test here also
+    // sends an unresolvable IP). Count across the whole file: by now it has
+    // been logged, and exactly once.
+    expect(allWarnings.filter((w) => w.includes(RATE_LIMIT_WARNING))).toHaveLength(1);
   });
 
   it("unconfigured (today): a single-valued x-forwarded-for is the client", async () => {
