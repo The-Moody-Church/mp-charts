@@ -26,23 +26,25 @@ Port upstream MPNext's `ea2e0ad..75d249d` auth work (PRs #96, #97) to this fork,
 | 8 | `/link-social` disabled; sanitizer, Content-Type and in-process `signInSocial` tests from the 2026-09-28 comparison | — |
 | 9 | Docs: CLAUDE.md, `.claude/rules/security.md` (sessions section, GHSA erratum, guard, limiter), `.env.example`, README, `docs/OAUTH_LOGOUT_SETUP.md`, upstream sync log | — |
 
-Plus one test-only follow-up commit (a tsc cast in the decision-3 test), and two review follow-up commits:
+Plus one test-only follow-up commit (a tsc cast in the decision-3 test), two review follow-up commits (`7f63a2d`, `353fb75`; docs in `3c841a0`), and one lockfile-only dependency commit (`c5e2ed6`, below the table):
 
 | Finding | Fix |
 |---|---|
 | `AUTH_TRUSTED_PROXIES` check accepted entries better-auth's own parser drops with a warning (`fe80::1%lo0`, `fe80::1%eth0/64`, `::ffff:10.0.0.0/104`, `::ffff:1.2.3.4/120`) | Also refuse whatever `findInvalidTrustedProxies` (`@better-auth/core/utils/ip`) rejects; tests incl. a negative control that better-auth only warns |
 | No test proved the real `auth` reads the IP env vars (`ipAddress: {}` left the suite green) | Hoisted env in `auth.rate-limit.test.ts`; the real instance's parsed options are pinned |
-| One-warning assertion depended on test order (failed with `--sequence.shuffle`, seeds 3 and 7) | Counted across the file; 9 seeds pass |
+| One-warning assertion depended on test order (failed with `--sequence.shuffle`, seeds 3 and 7) | Counted across the file; 28/28 with seeds 1, 3, 7, 11, 42, 99, 123, 555, 2026, 31337 |
 | Content-Type pin used `trim()`, which strips U+00A0/VT/FF: `\u00a0application/json` reached better-auth (400, or a logged 500) | Anchored `/^application\/json[ \t]*(?:;|$)/`; route tests with `auth.handler` never called |
 | A deep link over ~2 KB now 404'd at `/sign-in/social` → `/auth-error` | `MAX_CALLBACK_URL_LENGTH` in `src/lib/auth-callback-url.ts`, shared; `getSafeCallbackUrl` sends `/` for a longer result |
 | "Invalid entries refuse startup" was wrong (lazy load: 500s, container up) | `.env.example`, `auth.ts` comment, security.md, CLAUDE.md, README |
 | Sync log listed #98 though it was not reviewed (the review command would skip it) | Entry is `ea2e0ad..75d249d` (#96, #97); `f1ad0c8` recorded as not yet reviewed |
 | Logout-doc status row overstated the fix | Token dies at sign-out; a copied pair lasts at most the rest of its 1 h cache |
 
+**Dependency (`c5e2ed6`):** `npm audit --audit-level=high` started failing after the branch's CI run, on an unchanged lockfile: ten undici advisories fixed in 7.29.1, two of them high (GHSA-rfgv-xxqx-mfg5, GHSA-w293-vg96-wgc3), published 2026-09-29. undici comes only through jsdom (the Vitest environment) and is not in the standalone image, but the audit gates every deploy, `main` included. `npm audit fix` with CI's npm 11.19.0: undici 7.29.0 → 7.30.0, lockfile only.
+
 ### Evidence
 
-- Unit/integration: 918 → 1029 tests, 60 → 65 files, all green; tsc clean; lint 0 errors/0 warnings; `npm audit --audit-level=high` exit 0 (1 moderate, undici, lockfile unchanged); clean `next build` with no env; `check:shells` 19 shells OK; security-lint grep clean.
-- Every decision was mutation-checked: reverted, the new tests went red, restored byte-identical (sha256). The review follow-ups too: `ipAddress: {}` → 1 failed (it passed all 1013 before); dropping `findInvalidTrustedProxies` → 5 failed; the old `trim()` pin → 5 failed; no client-side cap → 2 failed.
+- Unit/integration: 918 → 1029 tests, 60 → 65 files, all green; tsc clean; lint 0 errors/0 warnings; `npm audit --audit-level=high` exit 0, 0 vulnerabilities (after `c5e2ed6`; without it, exit 1 on the undici advisories above); clean `next build` with no env; `check:shells` 19 shells OK; security-lint grep clean.
+- Every decision was mutation-checked: reverted, the new tests went red, restored byte-identical (sha256). The review follow-ups too: `ipAddress: {}` → 1 failed (it passed all 1013 before); dropping `findInvalidTrustedProxies` → 5 failed; the old `trim()` pin → 5 failed; no client-side cap → 3 failed (2 files).
 - Production-build harness (fake MP on localhost, fake clock), **after** the fix:
   - sign-in sets `session_token` + `session_data` only (no `account_data`); `expiresAt` = sign-in + 12 h
   - sign-out → end-session URL has `client_id`, `id_token_hint`, `post_logout_redirect_uri`
@@ -58,6 +60,7 @@ Plus one test-only follow-up commit (a tsc cast in the decision-3 test), and two
   - `\u00a0application/json`: before 400 `VALIDATION_ERROR`; after 404. Plain `application/json` control: 200 on both
   - `AUTH_TRUSTED_PROXIES=fe80::1%lo0` or `::ffff:10.0.0.0/104`: before get-session 200 + `Ignoring invalid advanced.ipAddress.trustedProxies entries`; after 500 ×2 with the `[auth] AUTH_TRUSTED_PROXIES …` line, process still listening. `10.0.0.0/24` + `cf-connecting-ip`: 200
   - browser (Playwright) on `/signin?callbackUrl=` + a 3000-char deep link: completed sign-in against the fake MP and landed on `/`; a direct 3000-char `callbackURL` POST still 404s
+  - re-run on the final head: all three NBSP Content-Types 404 (ASCII-space and `; charset=utf-8` controls 200); `callbackURL` of 2048 chars 200, 2049 and 3000 404; each of `fe80::1%lo0`, `::ffff:10.0.0.0/104`, `fe80::1%eth0/64`, `::ffff:1.2.3.4/120` → get-session 500 ×2 with the `[auth]` line, process still listening
 
 ### Decisions and why
 
@@ -71,7 +74,7 @@ Every active user goes back through sign-in within 1 h of the deploy (a silent r
 
 ### Follow-ups
 
-- Soak #244 on `:dev` with a human sign-in/sign-out, then merge.
+- Soak #244 on `:dev` with a human sign-in/sign-out, then merge. Until it merges, `main`'s `npm audit` gate fails on undici (fixed here by `c5e2ed6`); if the soak is long, land that lockfile change on `main` separately first.
 - **Operator, after deploy:** set `AUTH_IP_ADDRESS_HEADERS=cf-connecting-ip` in the app's `.env` (not needed for the fix itself).
 - Port the same change to event-manager, mp-senior-care and music-db (same branch name).
 - The GHSA-pqxp-c5mr-5398 exposure window is corrected in `.claude/rules/security.md`: up to 7 days, self-renewing, on the pre-2026-09-29 config.
