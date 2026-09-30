@@ -42,6 +42,8 @@ Plus one test-only follow-up commit (a tsc cast in the decision-3 test), three r
 
 **Dependency (`c5e2ed6`):** `npm audit --audit-level=high` started failing after the branch's CI run, on an unchanged lockfile: ten undici advisories fixed in 7.29.1, two of them high (GHSA-rfgv-xxqx-mfg5, GHSA-w293-vg96-wgc3), published 2026-09-29. undici comes only through jsdom (the Vitest environment) and is not in the standalone image, but the audit gates every deploy, `main` included. `npm audit fix` with CI's npm 11.19.0: undici 7.29.0 → 7.30.0, lockfile only.
 
+**Dependency (`c94508f`):** it happened again on 2026-09-30, at `9168aef`, again on an unchanged lockfile: three high brace-expansion advisories (GHSA-q2hr-2g5m-vwhr, GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p) against `<=1.1.20` and `4.0.0 - 5.0.11`. Both copies are dev-only, through eslint (minimatch 3.1.5) and typescript-eslint (minimatch 10.2.6), and neither is in the standalone build. `npm audit fix` with npm 11.19.0: 1.1.18 → 1.1.21 and 5.0.9 → 5.0.12, lockfile only. Afterwards `npm ci`, tsc, lint, 1035 tests and a no-env `next build` were clean, and `npm audit` found 0 vulnerabilities.
+
 **Parity with the ports (`b182611`; the `security.md` paragraph in a later docs commit):** a four-way comparison against event-manager, mp-senior-care and music-db found three places where this repo, the source of truth, had fallen behind them. The code was already identical; comments, docs and one test changed.
 
 | Finding | Fix |
@@ -52,7 +54,7 @@ Plus one test-only follow-up commit (a tsc cast in the decision-3 test), three r
 
 ### Evidence
 
-- Unit/integration: 918 → 1035 tests, 60 → 65 files, all green; tsc clean; lint 0 errors/0 warnings; `npm audit --audit-level=high` exit 0, 0 vulnerabilities (after `c5e2ed6`; without it, exit 1 on the undici advisories above); clean `next build` with no env; `check:shells` 19 shells OK; security-lint grep clean.
+- Unit/integration: 918 → 1035 tests, 60 → 65 files, all green; tsc clean; lint 0 errors/0 warnings; `npm audit --audit-level=high` exit 0, 0 vulnerabilities (after `c5e2ed6` and `c94508f`; without them, exit 1 on the undici and brace-expansion advisories above); clean `next build` with no env; `check:shells` 19 shells OK; security-lint grep clean.
 - Every decision was mutation-checked: reverted, the new tests went red, restored byte-identical (sha256). The review follow-ups too: `ipAddress: {}` → 1 failed (it passed all 1013 before); dropping `findInvalidTrustedProxies` → 5 failed; the old `trim()` pin → 5 failed; no client-side cap → 3 failed (2 files). The `94fa667` sign-in limit (all restored byte-identical, sha256): the page reading the 2048 cap again → 4 failed (2 files); a page limit of 1537 or 1535, or `>=` for `>` → 2 failed each; the route filter reading the page limit → 2 failed; the server cap at 1536 → 3, at 2049 → 2; a page limit of 1755 → the real-cookie test red (`expected 4098 to be less than or equal to 4096`), 1754 green.
 - Production-build harness (fake MP on localhost, fake clock), **after** the fix:
   - sign-in sets `session_token` + `session_data` only (no `account_data`); `expiresAt` = sign-in + 12 h
@@ -91,7 +93,7 @@ Every active user goes back through sign-in within 1 h of the deploy (a silent r
 
 ### Follow-ups
 
-- Soak #244 on `:dev` with a human sign-in/sign-out, then merge. Until it merges, `main`'s `npm audit` gate fails on undici (fixed here by `c5e2ed6`); if the soak is long, land that lockfile change on `main` separately first.
+- Soak #244 on `:dev` with a human sign-in/sign-out, then merge. Until it merges, `main`'s `npm audit` gate fails on undici and brace-expansion (fixed here by `c5e2ed6` and `c94508f`); if the soak is long, land those lockfile changes on `main` separately first.
 - **Operator, before promoting `:dev` (read-only):** grep the app's `.env` for a line starting `TEST=`. Only none, an empty `TEST=`, or exactly `TEST=false` is safe; any other value, `TEST=0` included, makes every auth request return 500 with the `[auth] TEST is set …` line.
 - **Operator, after deploy:** set `AUTH_IP_ADDRESS_HEADERS=cf-connecting-ip` in the app's `.env` (not needed for the fix itself).
 - **Not in this change, the proxy body-size item:** `src/proxy.ts` matches `/api/auth`, so Next reads up to 10 MB of any request body (its default proxy clone limit; `proxyClientMaxBodySize` is not set), and waits for it to end, before the 4096-byte filter and the rate limiter run. An anonymous caller can make the server hold that much per request, and a stalled body holds its request open until Node's request timeout. Fixing it needs its own review: narrowing the proxy matcher takes `/api/auth` responses out of the proxy's CSP header, and a lower `proxyClientMaxBodySize` truncates (does not refuse) every proxied body, the server-action photo uploads (20 MB limit) included.
