@@ -21,7 +21,7 @@ Port upstream MPNext's `ea2e0ad..75d249d` auth work (PRs #96, #97) to this fork,
 | 3 | `storeAccountCookie: false`; `databaseHooks.account` strip access/refresh tokens + expiries (idToken kept) | `a424953` |
 | 4 | `/sign-in/social` body ≤ 4096 bytes (Content-Length + streamed read), `callbackURL` a string ≤ 2048 chars; our exact-`application/json` pin kept | `48a871b` |
 | 5 | `AUTH_IP_ADDRESS_HEADERS` / `AUTH_TRUSTED_PROXIES` → `advanced.ipAddress`; `rateLimit.customRules` `/sign-in/social` 10 per 10 s (ours) | `0f61f54` |
-| 6 | `assertAuthEnvironment` (unset/empty, default, < 32 chars, `BETTER_AUTH_SECRETS`, `TEST` in production; no `NEXTAUTH_SECRET` fallback; `next build` exempt); `disableOriginCheck: false`; test secret ≥ 32 chars | `fd7fc4a` |
+| 6 | `assertAuthEnvironment` (unset/empty, default, < 32 chars, `BETTER_AUTH_SECRETS`, `TEST` in production, `TEST=0` included; no `NEXTAUTH_SECRET` fallback; `next build` exempt); `disableOriginCheck: false`; test secret ≥ 32 chars | `fd7fc4a` |
 | 7 | `client_id` on the end-session URL, with and without `id_token_hint` | `10ef3df` |
 | 8 | `/link-social` disabled; sanitizer, Content-Type and in-process `signInSocial` tests from the 2026-09-28 comparison | — |
 | 9 | Docs: CLAUDE.md, `.claude/rules/security.md` (sessions section, GHSA erratum, guard, limiter), `.env.example`, README, `docs/OAUTH_LOGOUT_SETUP.md`, upstream sync log | — |
@@ -42,9 +42,17 @@ Plus one test-only follow-up commit (a tsc cast in the decision-3 test), three r
 
 **Dependency (`c5e2ed6`):** `npm audit --audit-level=high` started failing after the branch's CI run, on an unchanged lockfile: ten undici advisories fixed in 7.29.1, two of them high (GHSA-rfgv-xxqx-mfg5, GHSA-w293-vg96-wgc3), published 2026-09-29. undici comes only through jsdom (the Vitest environment) and is not in the standalone image, but the audit gates every deploy, `main` included. `npm audit fix` with CI's npm 11.19.0: undici 7.29.0 → 7.30.0, lockfile only.
 
+**Parity with the ports (`b182611`):** a four-way comparison against event-manager, mp-senior-care and music-db found three places where this repo, the source of truth, had fallen behind them. The code was already identical; comments, docs and one test changed.
+
+| Finding | Fix |
+|---|---|
+| `readBodyWithLimit` said an over-cap body "is never buffered past the cap", and the filter docblock "refused before anything is cloned or read". Wrong: `src/proxy.ts` matches `/api/auth`, so Next 16.3.4 (`getCloneableBody`, `next/dist/server/body-streams.js`) has already read the whole body, up to its 10 MB proxy clone limit, and waited for it to end, before the route runs | Both docblocks now say the 4096-byte cap bounds what the filter parses and better-auth receives, not what the server buffers; CLAUDE.md and the sync log record it as the separate proxy body-size item (below). Code unchanged |
+| The Content-Type comments said a repeated header "arrives here comma-joined". Node's parser keeps the first line and drops the rest, so the filter and better-call read the same value; the `,` check covers Fetch Headers and merging intermediaries | `route.ts` and `route.test.ts` comments now match event-manager's |
+| The guard refuses `TEST=0` (better-auth's `toBoolean` is `val !== "false"`), but only music-db pinned it, and our docs said "a truthy `TEST`", which reads as if `TEST=0` were safe | `auth.secret-guard.test.ts` adds `"0"`; `.env.example`, CLAUDE.md and security.md name the safe spellings; a pre-deploy check in Follow-ups |
+
 ### Evidence
 
-- Unit/integration: 918 → 1034 tests, 60 → 65 files, all green; tsc clean; lint 0 errors/0 warnings; `npm audit --audit-level=high` exit 0, 0 vulnerabilities (after `c5e2ed6`; without it, exit 1 on the undici advisories above); clean `next build` with no env; `check:shells` 19 shells OK; security-lint grep clean.
+- Unit/integration: 918 → 1035 tests, 60 → 65 files, all green; tsc clean; lint 0 errors/0 warnings; `npm audit --audit-level=high` exit 0, 0 vulnerabilities (after `c5e2ed6`; without it, exit 1 on the undici advisories above); clean `next build` with no env; `check:shells` 19 shells OK; security-lint grep clean.
 - Every decision was mutation-checked: reverted, the new tests went red, restored byte-identical (sha256). The review follow-ups too: `ipAddress: {}` → 1 failed (it passed all 1013 before); dropping `findInvalidTrustedProxies` → 5 failed; the old `trim()` pin → 5 failed; no client-side cap → 3 failed (2 files). The `94fa667` sign-in limit (all restored byte-identical, sha256): the page reading the 2048 cap again → 4 failed (2 files); a page limit of 1537 or 1535, or `>=` for `>` → 2 failed each; the route filter reading the page limit → 2 failed; the server cap at 1536 → 3, at 2049 → 2; a page limit of 1755 → the real-cookie test red (`expected 4098 to be less than or equal to 4096`), 1754 green.
 - Production-build harness (fake MP on localhost, fake clock), **after** the fix:
   - sign-in sets `session_token` + `session_data` only (no `account_data`); `expiresAt` = sign-in + 12 h
@@ -65,6 +73,10 @@ Plus one test-only follow-up commit (a tsc cast in the decision-3 test), three r
 - `94fa667` sign-in limit, measured on this repo:
   - `oauth_state` value on the real handler (Vitest): exactly 556 + 2 × length bytes at 1, 5, 100, 1000, 1536, 1742, 1754, 1755 and 2048 characters — the same as event-manager's. With the production name (32 bytes): 3660 at 1536, 4096 at 1754, 4098 at 1755, 4684 at 2048
   - Chromium (headless, Playwright) on a local production build of `94fa667`, fake MP on localhost. The build is served over http, so the cookie is `better-auth.oauth_state` (23 bytes) and the limit falls between 1758 and 1759. A `callbackURL` POSTed straight to `/sign-in/social` (what the page used to send for anything up to 2048): 1536 → 3651 B, stored, signed in, landed on the deep link; 1758 → 4095 B, the same; 1759 → 4097 B and 2048 → 4675 B, **not stored**, ended on `/auth-error?error=state_mismatch` with no session (server log: two `State mismatch: auth state cookie not found`). Through the real `/signin?callbackUrl=` page: a 1536-character deep link was sent as-is and landed on itself; 1537, 1758, 2048 and 3000 were sent as `/`, signed in and landed on `/`
+- `b182611` parity, measured on this repo:
+  - `TEST=0` pin: a guard that also let `"0"` through fails exactly `refuses TEST=0 on a production process` (1 failed); `auth.ts` restored byte-identical (sha256)
+  - Node 24.21.0 (the production runtime) and 26.8.2, raw socket with two `Content-Type` lines: `req.headers` holds only the first, `application/json`. Next builds route-handler headers from `req.headers` (`fromNodeOutgoingHttpHeaders`)
+  - Local standalone build of `b182611` on Node 24, fake MP base URL on a closed local port, raw sockets to `/api/auth/sign-in/social`: control 200; `Content-Type` json then form 200, form then json 404, comma-joined 404; 20 concurrent 9 MB bodies (declared Content-Length) all 404, RSS 145 → 274 MB (+130 MB); a body stalled short of its Content-Length got no response in 4 s whether that Content-Length was over the cap (100000) or under it (100). Next does not change Node's 300 s `requestTimeout`. Control 200 again afterwards
 
 ### Decisions and why
 
@@ -80,6 +92,8 @@ Every active user goes back through sign-in within 1 h of the deploy (a silent r
 ### Follow-ups
 
 - Soak #244 on `:dev` with a human sign-in/sign-out, then merge. Until it merges, `main`'s `npm audit` gate fails on undici (fixed here by `c5e2ed6`); if the soak is long, land that lockfile change on `main` separately first.
+- **Operator, before promoting `:dev` (read-only):** grep the app's `.env` for a line starting `TEST=`. Only none, an empty `TEST=`, or exactly `TEST=false` is safe; any other value, `TEST=0` included, makes every auth request return 500 with the `[auth] TEST is set …` line.
 - **Operator, after deploy:** set `AUTH_IP_ADDRESS_HEADERS=cf-connecting-ip` in the app's `.env` (not needed for the fix itself).
+- **Not in this change, the proxy body-size item:** `src/proxy.ts` matches `/api/auth`, so Next reads up to 10 MB of any request body (its default proxy clone limit; `proxyClientMaxBodySize` is not set), and waits for it to end, before the 4096-byte filter and the rate limiter run. An anonymous caller can make the server hold that much per request, and a stalled body holds its request open until Node's request timeout. Fixing it needs its own review: narrowing the proxy matcher takes `/api/auth` responses out of the proxy's CSP header, and a lower `proxyClientMaxBodySize` truncates (does not refuse) every proxied body, the server-action photo uploads (20 MB limit) included.
 - Port the same change to event-manager, mp-senior-care and music-db (same branch name).
 - The GHSA-pqxp-c5mr-5398 exposure window is corrected in `.claude/rules/security.md`: up to 7 days, self-renewing, on the pre-2026-09-29 config.
