@@ -116,7 +116,7 @@ if (!ALLOWED_DOCUMENT_TYPES.includes(file.type)) {
 
 Never use user-supplied URLs for redirects without validation:
 
-Do **not** validate with string-prefix checks like `startsWith("//")` / `includes("://")` — they miss the backslash bypass: browsers normalize `\` to `/`, so `"/\evil.com"` passes those checks yet navigates off-site. Resolve against your own origin and require it to stay same-origin:
+Do **not** validate with string-prefix checks like `startsWith("//")` / `includes("://")` — they miss the backslash bypass: browsers normalize `\` to `/`, so `"/\evil.com"` passes those checks yet navigates off-site. Resolve against your own origin and require it to stay same-origin — and then check the **output** too, because dot segments are removed while parsing: `"/.//evil.com"` resolves on our origin to the pathname `"//evil.com"`, which is protocol-relative when navigated to. The live copy is `src/components/sign-in/sign-in.tsx`, tested by `safe-callback-url.test.ts` beside it:
 
 ```typescript
 // Validate callback URLs are same-origin (client component — uses window.location)
@@ -131,7 +131,11 @@ function getSafeCallbackUrl(url: string | null): string {
     // Dot segments are removed while parsing: "/.//evil.com" resolves on OUR
     // origin to the pathname "//evil.com", which is protocol-relative when
     // navigated to. Check the output, not just the input.
-    return safe.startsWith("//") ? "/" : safe;
+    if (safe.startsWith("//")) return "/";
+    // Not a security check: better-auth stores the callback in the oauth_state
+    // cookie (~2 bytes a character), which the browser drops past ~1754
+    // characters. Below that, and below the 2048 server cap, sign in to home.
+    return safe.length > MAX_SIGN_IN_CALLBACK_URL_LENGTH ? "/" : safe; // 1536
   } catch {
     return "/";
   }
