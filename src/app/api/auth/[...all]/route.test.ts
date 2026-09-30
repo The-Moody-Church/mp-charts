@@ -135,7 +135,8 @@ describe("Content-Type values that must never reach better-auth", () => {
     const headers = new Headers({ origin: ORIGIN });
     headers.append("content-type", "application/json");
     headers.append("content-type", "application/json");
-    // A repeated header reaches the route comma-joined.
+    // Fetch Headers comma-join a repeated header (as a merging proxy would);
+    // Node itself keeps the first.
     expect(headers.get("content-type")).toBe("application/json, application/json");
     const res = await POST(
       new NextRequest(`${ORIGIN}/api/auth/sign-in/social`, {

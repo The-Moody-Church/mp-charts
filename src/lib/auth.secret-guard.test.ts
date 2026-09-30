@@ -116,7 +116,11 @@ describe("assertAuthEnvironment at module load", () => {
     );
   });
 
-  it.each(["1", "true", "yes"])("refuses TEST=%s on a production process", async (flag) => {
+  // "0" included on purpose: better-auth's toBoolean is `val !== "false"`, so
+  // it reads TEST=0 as a test run. The pre-deploy check in the PR and the
+  // session summary tells the operator that only no TEST, an empty one, or
+  // exactly TEST=false is safe.
+  it.each(["1", "true", "yes", "0"])("refuses TEST=%s on a production process", async (flag) => {
     await expect(importAuthWith({ NODE_ENV: "production", TEST: flag })).rejects.toThrow(
       /TEST is set on a production process/,
     );

@@ -32,7 +32,7 @@ Not yet reviewed: `f1ad0c8` (header layout shift, merged as upstream `6c0c46b`) 
 
 Also closed here (leftovers from the 2026-09-28 comparison): `/link-social` in `disabledAuthPaths`; sanitizer tests for tab/LF/CR, the decoded `callbackUrl=/%09/evil.example` and a `blob:` URL; route tests for a comma-joined and a repeated Content-Type; an in-process `auth.api.signInSocial` idToken test.
 
-**Deliberately not in this change:** a user-id cache, `MP_SECURITY_ROLES`, a pre-commit hook, proxy body-size truncation, better-auth 1.7.6.
+**Deliberately not in this change:** a user-id cache, `MP_SECURITY_ROLES`, a pre-commit hook, the proxy body-size item (Next's proxy layer reads up to 10 MB of a request body, and waits for it to end, before the route's 4096-byte filter runs; see `readBodyWithLimit`), better-auth 1.7.6.
 
 ### Things worth carrying forward
 
