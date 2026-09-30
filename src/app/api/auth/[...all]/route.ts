@@ -57,8 +57,8 @@ export const allowedSignInSocialKeys = ["provider", "callbackURL"] as const;
  * Largest `POST /sign-in/social` body this route will read, in bytes. Our
  * client sends `{ provider, callbackURL }` — a few hundred bytes at most, and
  * under ~2.1 KB even at the `callbackURL` cap (`MAX_CALLBACK_URL_LENGTH`,
- * src/lib/auth-callback-url.ts — shared with the sign-in page, which sends `/`
- * instead of a longer one). Without a cap, one
+ * src/lib/auth-callback-url.ts; the sign-in page itself stays below it, at
+ * `MAX_SIGN_IN_CALLBACK_URL_LENGTH`). Without a cap, one
  * anonymous request with a multi-megabyte relative `callbackURL` passes
  * better-auth's `isSafeRelativeURL`, is copied into the encrypted OAuth state
  * cookie, and comes back as a Set-Cookie roughly twice its size (memory/CPU

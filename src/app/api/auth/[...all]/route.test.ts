@@ -28,6 +28,7 @@ const { fetchSpy } = vi.hoisted(() => {
 import { GET, POST, allowedAuthRoutes, allowedSignInSocialKeys } from "./route";
 import { MP_PROVIDER_ID } from "@/lib/auth-endsession";
 import { auth } from "@/lib/auth";
+import { MAX_CALLBACK_URL_LENGTH, MAX_SIGN_IN_CALLBACK_URL_LENGTH } from "@/lib/auth-callback-url";
 
 const ORIGIN = "http://localhost:3000"; // BETTER_AUTH_URL in src/test-setup.ts
 const req = (path: string, method: "GET" | "POST", body?: unknown) =>
@@ -320,6 +321,28 @@ describe("POST /sign-in/social size and type limits", () => {
     const res = await postSignIn(JSON.stringify({ provider: MP_PROVIDER_ID, callbackURL: "/" + "a".repeat(2048) }));
     expect(await refusedByUs(res)).toBe(true);
     expect(handler).not.toHaveBeenCalled();
+  });
+
+  // Why the sign-in page sends less than the server cap
+  // (src/lib/auth-callback-url.ts): better-auth stores callbackURL in the
+  // hex-encoded oauth_state cookie, and a browser silently drops a cookie
+  // whose name + value exceeds 4096 bytes — the MP callback then fails with
+  // state_mismatch. Measured on the real handler, counted with the production
+  // (__Secure-) cookie name.
+  it("keeps the oauth_state cookie within 4096 bytes at the sign-in page's limit, but not at the server cap", async () => {
+    const productionName = "__Secure-better-auth.oauth_state";
+    const cookieBytes = async (length: number) => {
+      const res = await postSignIn(
+        JSON.stringify({ provider: MP_PROVIDER_ID, callbackURL: "/" + "a".repeat(length - 1) })
+      );
+      expect(res.status).toBe(200);
+      const cookie = res.headers.getSetCookie().find((c) => /^(?:__Secure-)?better-auth\.oauth_state=/.test(c));
+      expect(cookie).toBeDefined();
+      const value = cookie!.slice(cookie!.indexOf("=") + 1).split(";")[0];
+      return productionName.length + value.length;
+    };
+    expect(await cookieBytes(MAX_SIGN_IN_CALLBACK_URL_LENGTH)).toBeLessThanOrEqual(4096);
+    expect(await cookieBytes(MAX_CALLBACK_URL_LENGTH)).toBeGreaterThan(4096);
   });
 
   it.each([

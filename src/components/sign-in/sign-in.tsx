@@ -23,7 +23,7 @@
 import { useEffect, useRef, Suspense } from "react";
 import { authClient } from "@/lib/auth-client";
 import { MP_PROVIDER_ID } from "@/lib/auth-endsession";
-import { MAX_CALLBACK_URL_LENGTH } from "@/lib/auth-callback-url";
+import { MAX_SIGN_IN_CALLBACK_URL_LENGTH } from "@/lib/auth-callback-url";
 import { useSearchParams } from "next/navigation";
 
 /** Exported for src/components/sign-in/safe-callback-url.test.ts. */
@@ -46,10 +46,12 @@ export function getSafeCallbackUrl(url: string | null): string {
     // handed to `window.location.href`, is protocol-relative: it navigates to
     // https://evil.com. Check the OUTPUT too.
     if (safe.startsWith("//")) return "/";
-    // The /sign-in/social body filter 404s a longer callbackURL (it is copied
-    // into the OAuth state cookie). Send "/" instead, so an overlong deep link
-    // still signs the user in rather than ending on /auth-error.
-    return safe.length > MAX_CALLBACK_URL_LENGTH ? "/" : safe;
+    // better-auth copies callbackURL into the OAuth state cookie (~2 bytes per
+    // character). Past ~1754 characters the browser drops that cookie and the
+    // MP callback fails with state_mismatch; past 2048 the /sign-in/social body
+    // filter 404s. Send "/" instead, below both, so an overlong deep link still
+    // signs the user in rather than ending on /auth-error.
+    return safe.length > MAX_SIGN_IN_CALLBACK_URL_LENGTH ? "/" : safe;
   } catch {
     return "/";
   }

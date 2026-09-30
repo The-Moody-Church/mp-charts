@@ -53,17 +53,35 @@ describe("SignIn", () => {
     expect(assign).not.toHaveBeenCalled();
   });
 
-  it("starts the flow with / for a deep link longer than the route's callbackURL cap", async () => {
-    // The route filter 404s a callbackURL over 2048 characters, which would
-    // land the user on /auth-error; they should sign in and reach home instead.
-    search.params = new URLSearchParams({ callbackUrl: "/reports?q=" + "a".repeat(3000) });
+  // better-auth stores callbackURL in the oauth_state cookie (~2 bytes a
+  // character), which the browser drops past ~1754 characters, and the route
+  // filter 404s one over 2048. Either would land the user on /auth-error; they
+  // should sign in and reach home instead.
+  it.each([1537, 2048, 3000])(
+    "starts the flow with / for a %i-character deep link",
+    async (length) => {
+      const deepLink = "/reports?q=" + "a".repeat(length - "/reports?q=".length);
+      expect(deepLink).toHaveLength(length);
+      search.params = new URLSearchParams({ callbackUrl: deepLink });
+      mockSocial.mockResolvedValue({ data: { url: "https://mp.example/authorize" }, error: null });
+
+      render(<SignIn />);
+
+      await waitFor(() => expect(mockSocial).toHaveBeenCalledTimes(1));
+      expect(mockSocial.mock.calls[0][0]).toEqual({ provider: MP_PROVIDER_ID, callbackURL: "/" });
+      expect(assign).not.toHaveBeenCalled();
+    }
+  );
+
+  it("keeps a 1536-character deep link", async () => {
+    const deepLink = "/reports?q=" + "a".repeat(1536 - "/reports?q=".length);
+    search.params = new URLSearchParams({ callbackUrl: deepLink });
     mockSocial.mockResolvedValue({ data: { url: "https://mp.example/authorize" }, error: null });
 
     render(<SignIn />);
 
     await waitFor(() => expect(mockSocial).toHaveBeenCalledTimes(1));
-    expect(mockSocial.mock.calls[0][0]).toEqual({ provider: MP_PROVIDER_ID, callbackURL: "/" });
-    expect(assign).not.toHaveBeenCalled();
+    expect(mockSocial.mock.calls[0][0]).toEqual({ provider: MP_PROVIDER_ID, callbackURL: deepLink });
   });
 
   it("sends a user whose flow cannot start to /auth-error, not an endless spinner", async () => {
