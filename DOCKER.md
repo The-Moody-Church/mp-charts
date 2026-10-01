@@ -194,10 +194,10 @@ Why both, and why they must match: the IDs are fixed when the image is built. Ne
 
 **If the key changes** (deliberate rotation, or a different value by mistake), the first image built with the new key renames every action. Tabs that stay open across that one deploy fail their next action and work again after a reload, which is what used to happen on every deploy. Sessions are unaffected: they are signed with `BETTER_AUTH_SECRET`. Change the GitHub secret and the runtime env together.
 
-**The build cache does not notice a key change.** BuildKit leaves secrets out of the layer cache key. A build whose Docker context is unchanged therefore reuses the cached `npm run build` layer, along with whatever key, or none, that layer was built with. This was measured: a build with a new secret over an identical context came out `CACHED` and shipped the old key. Docs-only commits produce such builds, because `*.md`, `.github/` and `.claude/` are in `.dockerignore`. In practice:
+**The build cache does not notice a key change.** BuildKit leaves secrets out of the layer cache key. A build whose Docker context is unchanged therefore reuses the cached `npm run build` layer, along with whatever key, or none, that layer was built with. This was measured: a build with a new secret over an identical context came out `CACHED` and shipped the old key. Commits that touch only `.github/`, `.claude/` or a root-level `*.md` other than `README.md` produce such builds. `.dockerignore`'s `*.md` matches only the context root, so `README.md` (re-included by `!README.md`) and everything under `docs/` are in the Docker context, and a commit touching them re-runs `npm run build` with the current secret. In practice:
 
 - Set the GitHub secret **before** the first build that should carry it. A layer built without the key is otherwise reused by every later build of the same context.
-- After a rotation, the new key ships only with a build that actually re-runs the builder stage, i.e. a commit that changes something in the Docker context.
+- After a rotation, the new key ships only with a build that actually re-runs the builder stage, i.e. a commit that changes something in the Docker context (an edit under `docs/` is enough).
 - To check a running container without printing the key:
 
   ```bash
