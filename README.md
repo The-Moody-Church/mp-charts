@@ -149,6 +149,11 @@ OIDC_CLIENT_SECRET=your_client_secret
 # Generate via: openssl rand -base64 32
 BETTER_AUTH_SECRET=your_generated_secret
 
+# Server Actions key: leave blank locally. Production sets one value, generated
+# once with openssl rand -base64 32, ONLY as the GitHub Actions secret of this
+# name; the runtime env does not need it (see DOCKER.md, "Server Actions encryption key")
+NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=
+
 # Application base URL — used for OAuth callbacks and redirects
 BETTER_AUTH_URL=http://localhost:3000
 
@@ -288,8 +293,9 @@ When deploying to production:
 2. Add production redirect URIs to Ministry Platform OAuth client
 3. Add production post-logout redirect URIs
 4. Ensure environment variables are set in your hosting provider. If every request reaches the app through Cloudflare, also set `AUTH_IP_ADDRESS_HEADERS=cf-connecting-ip` so better-auth's sign-in rate limit keys on the real client IP (see `.env.example`), then check the log: an invalid value makes every auth request fail with an `[auth] …` line while the container stays up
-5. Enable HTTPS/SSL certificates
-6. Test the complete authentication flow in production environment
+5. Set `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` (generate once: `openssl rand -base64 32`) as a GitHub Actions secret. It is build time only: the image carries it, so the container's env does not need it, and CI refuses to build an image without it. Without a stable key every deploy renames every Server Action, and a tab opened before the deploy fails its next action, sign-out included, with "Failed to find Server Action". The build cache ignores a change to the secret. See [DOCKER.md](DOCKER.md#server-actions-encryption-key)
+6. Enable HTTPS/SSL certificates
+7. Test the complete authentication flow in production environment
 
 For Docker-based deployments, see **[DOCKER.md](DOCKER.md)**.
 
