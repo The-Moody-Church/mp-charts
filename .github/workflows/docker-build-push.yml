@@ -93,6 +93,10 @@ jobs:
       - name: Tests
         run: npm run test:run
 
+      # No env is required: nothing reads MP credentials at build time, and
+      # NEXT_SERVER_ACTIONS_ENCRYPTION_KEY is optional. Next generates a
+      # throwaway key here, as it does for the image build below; the image that
+      # ships is built again in `build-scan-and-push` with the real, stable key.
       - name: Build
         run: npm run build
 
@@ -107,6 +111,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      # Deliberately NO `secrets:` here. This job runs for Dependabot, which
+      # cannot read repository secrets, and it only proves the image builds and
+      # scans clean. Without the secret the Dockerfile's `if [ -f … ]` falls
+      # through and Next uses a throwaway key. Its layers go to the GHA cache,
+      # which `build-scan-and-push` never reads, so a keyless layer cannot leak
+      # into the shipped image.
       - name: Build image locally (no push — no secrets needed)
         uses: docker/build-push-action@v7
         with:
@@ -139,8 +149,10 @@ jobs:
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
 
-  # Registry login + push. This is the only part that needs secrets, and
-  # Dependabot PRs cannot access them, so the actor gate stays here.
+  # Registry login + push. This is the only part that needs secrets
+  # (GITLAB_DEPLOY_USERNAME / GITLAB_DEPLOY_TOKEN and the stable
+  # NEXT_SERVER_ACTIONS_ENCRYPTION_KEY), and Dependabot runs cannot read
+  # repository secrets, so the actor gate stays here and ONLY here.
   build-scan-and-push:
     needs: verify
     if: github.actor != 'dependabot[bot]'
@@ -180,6 +192,16 @@ jobs:
           # expires, so without this the pushed image keeps stale OS packages even
           # when verify's (evictable) GHA cache rebuilt them and passed its scan.
           no-cache-filters: runner
+          # Stable Server Actions key, so action IDs survive a redeploy (see the
+          # Dockerfile builder stage and DOCKER.md). If the repository secret is
+          # unset, the line resolves to `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=`;
+          # build-push-action logs the warning "… is not a valid secret", skips
+          # it, and the image gets a throwaway per-build key. The build still
+          # succeeds; open tabs just break on every deploy again. A secret change
+          # does NOT invalidate the cached `npm run build` layer: an unchanged
+          # Docker context reuses the layer built with the old key (or none).
+          secrets: |
+            NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=${{ secrets.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY }}
 
       - name: Scan image
         uses: aquasecurity/trivy-action@v0.36.0

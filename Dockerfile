@@ -20,8 +20,26 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
-# Build the application
-RUN npm run build
+# Build the application.
+#
+# Server Actions encryption key: Next derives every Server Action ID from it
+# at build time, so it must be the SAME on every build. Without it each build
+# renames every action, and a tab opened before a deploy gets "Failed to find
+# Server Action" on its next one — sign-out included. Same step as
+# event-manager and mp-senior-care.
+#
+# It arrives as a BuildKit secret so it never appears in build args, ENV or
+# `docker history`. The secret is optional: local builds, CI's `verify` job and
+# Dependabot runs have none, so the `if` falls through and Next generates a
+# throwaway per-build key. Next still writes the key it used into
+# .next/server/server-reference-manifest.json, so the image itself carries it.
+# Changing the secret does NOT invalidate this layer's cache. See DOCKER.md,
+# "Server Actions encryption key".
+RUN --mount=type=secret,id=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY \
+    if [ -f /run/secrets/NEXT_SERVER_ACTIONS_ENCRYPTION_KEY ]; then \
+      export NEXT_SERVER_ACTIONS_ENCRYPTION_KEY="$(cat /run/secrets/NEXT_SERVER_ACTIONS_ENCRYPTION_KEY)"; \
+    fi; \
+    npm run build
 
 # Stage 3: Runner
 FROM node:24-alpine AS runner
