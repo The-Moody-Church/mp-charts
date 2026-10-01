@@ -5,6 +5,28 @@ on:
     branches:
       - '**'
 
+# Runs for the same ref queue instead of racing. Without this, two merges to
+# main seconds apart built in parallel and whichever run FINISHED last set
+# `:latest` — on 2026-09-25 that was the older commit, in three of the four
+# sibling apps.
+#
+# Keyed on workflow + ref, so every branch is its own queue: a push to one
+# branch never waits behind another branch or behind main. (`:dev` is therefore
+# still last-finisher-wins ACROSS branches — single-tenant by design, see the
+# `Push dev tag` step. Serializing all branches would make every push wait on
+# every other branch's full build.)
+#
+# cancel-in-progress: false, so a build is never killed halfway through a
+# push. GitHub keeps at most one RUNNING and one PENDING run per group, and a
+# newer run cancels whichever run is still pending. After a burst of merges the
+# running build finishes, the NEWEST commit builds next, and `:latest` ends on
+# it. The commits in between show as cancelled and never get a `:<sha>` image.
+# That is intended. Do not re-run one of them on main: it would retag
+# `:latest` back to the older commit.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   security-lint:
     runs-on: ubuntu-latest
