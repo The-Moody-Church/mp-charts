@@ -31,8 +31,10 @@ ENV NODE_ENV=production
 # It arrives as a BuildKit secret so it never appears in build args, ENV or
 # `docker history`. The secret is optional: local builds, CI's `verify` job and
 # Dependabot runs have none, so the `if` falls through and Next generates a
-# throwaway per-build key. Next still writes the key it used into
-# .next/server/server-reference-manifest.json, so the image itself carries it.
+# throwaway per-build key. (CI's `build-scan-and-push`, which ships the image,
+# refuses to build without it.) Next still writes the key it used into
+# .next/server/server-reference-manifest.json, so the image itself carries it
+# and the runtime env does not need it.
 # Changing the secret does NOT invalidate this layer's cache. See DOCKER.md,
 # "Server Actions encryption key".
 RUN --mount=type=secret,id=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY \

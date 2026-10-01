@@ -90,7 +90,7 @@ involved, so `docs/ideas.md` is unchanged. Nothing deployed.
 
 Port upstream MPNext's `ea2e0ad..75d249d` auth work (PRs #96, #97) to this fork, adapted to our explicit-endpoint provider, and fix the sign-out revocation gap it exposed here.
 
-### Status: PR [#244](https://github.com/The-Moody-Church/mp-charts/pull/244) open from `fix/auth-hardening`, not merged. Needs a `:dev` soak with a human sign-in and sign-out before it ships
+### Status: PR [#244](https://github.com/The-Moody-Church/mp-charts/pull/244) open from `fix/auth-hardening`, not merged. *(Update 2026-10-01: merged, `ec5ea9a`.)* Needs a `:dev` soak with a human sign-in and sign-out before it ships
 
 ### The finding
 

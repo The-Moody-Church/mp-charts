@@ -160,7 +160,7 @@ Add these secrets to your GitHub repository (Settings → Secrets and variables 
 |-------------|-------------|-----------------|
 | `GITLAB_DEPLOY_USERNAME` | GitLab username for registry | Your GitLab username or `gitlab-ci-token` |
 | `GITLAB_DEPLOY_TOKEN` | GitLab deploy token | Create at GitLab Project → Settings → Repository → Deploy Tokens |
-| `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` | Stable Server Actions key, so open tabs survive a redeploy. **Same value** as the container's runtime env | `openssl rand -base64 32`; see [Server Actions encryption key](#server-actions-encryption-key) |
+| `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` | Stable Server Actions key, so open tabs survive a redeploy. Build time only: the container's runtime env does not need it | `openssl rand -base64 32`; see [Server Actions encryption key](#server-actions-encryption-key) |
 
 ### Creating GitLab Deploy Token
 
@@ -177,34 +177,39 @@ Add these secrets to your GitHub repository (Settings → Secrets and variables 
 
 ### Server Actions encryption key
 
-`NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` keeps Server Actions working in a browser tab that was opened before a redeploy. event-manager and mp-senior-care set it up the same way.
+`NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` keeps Server Actions working in a browser tab that was opened before a redeploy. The Dockerfile step is the same as event-manager's and mp-senior-care's; like music-tools, this repo sets it in CI only and refuses to build without it.
 
-**What it fixes.** Next.js derives every Server Action's ID from this key at build time. At runtime it also uses the key to encrypt values an inline Server Action closes over. Without a key, every build generates a random one, so every deploy renames every action. A tab that loaded the previous build still sends the old IDs, so its next action fails with `Failed to find Server Action` until the page is reloaded. Sign-out is a Server Action, so it fails too. With the same key on every build, an action keeps its ID for as long as its file and export name stay the same. Measured on Next 16.3.8 (89 actions): two clean builds without a key shared **0 of 89** IDs, and two with the same key shared **89 of 89**. A server started from the second build accepted the sign-out ID from the first, and answered `404` with `x-nextjs-action-not-found` for the sign-out ID from a keyless build.
+**What it fixes.** Next.js derives every Server Action's ID from this key at build time. Without a key, every build generates a random one, so every deploy renames every action. A tab that loaded the previous build still sends the old IDs, so its next action fails with `Failed to find Server Action` until the page is reloaded. Sign-out is a Server Action, so it fails too. With the same key on every build, an action keeps its ID for as long as its file and export name stay the same. Measured on Next 16.3.8 (89 actions): two clean builds without a key shared **0 of 89** IDs, and two with the same key shared **89 of 89**. A server started from the second build accepted the sign-out ID from the first, and answered `404` with `x-nextjs-action-not-found` for the sign-out ID from a keyless build.
 
-**Generate it once:** `openssl rand -base64 32` (32 random bytes, base64: an AES-256 key). Paste the output straight into the two places below. Never commit it, and never put it in an issue, PR or log.
+**Generate it once:** `openssl rand -base64 32` (32 random bytes, base64: an AES-256 key). Paste the output straight into the repository secret below. Never commit it, and never put it in an issue, PR or log.
 
-**Set the same value in both places:**
+**Where it is set: one place, at build time.**
 
 1. **GitHub Actions repository secret** `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` (Settings → Secrets and variables → Actions). Only the `build-scan-and-push` job passes it to the Docker build, as a BuildKit secret, so it never appears in build args, `ENV` or `docker history`.
-2. **The container's runtime environment**: the `.env` file that `docker-compose.yml` loads with `env_file`.
+2. **Not in the container's runtime environment.** Leave it out of the `.env` that `docker-compose.yml` loads.
 
-Why both, and why they must match: the IDs are fixed when the image is built. Next also writes the key into the build output (`.next/server/server-reference-manifest.json`), and at runtime it prefers `process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` over that copy. A runtime value that differs from the build's leaves action IDs alone (also measured), but it breaks any Server Action whose captured values were encrypted at build time. The app has no inline Server Actions today, so a mismatch would stay latent until someone adds one.
+Why the runtime env does not need it (read from Next 16.3.8's source):
 
-**When the secret is absent** (local builds, the `verify` job, Dependabot runs, or a repository that has not set it yet), the build still succeeds and Next uses a throwaway key: the old behaviour. In `build-scan-and-push`, an unset secret shows up as the warning `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY= is not a valid secret`. A blank value in `.env` is treated the same as unset. Leave it blank for local development.
+- **Action IDs are fixed at build time.** `next build` takes the key from `process.env` or generates a random one (`dist/server/app-render/encryption-utils-server.js`, `generateEncryptionKeyBase64`, called from `dist/build/index.js`). `dist/build/turbopack-build/impl.js` hands it to Turbopack, which salts every action ID with it, and to the manifest loader, which writes it into `.next/server/server-reference-manifest.json` (`dist/shared/lib/turbopack/manifest-loader.js`). At runtime an incoming action ID is only looked up in that manifest (`dist/server/app-render/action-handler.js`); the key is not consulted. Measured too: a standalone server started with a different runtime key, or with none, still accepted the build's sign-out ID.
+- **The only runtime reader** is `getActionEncryptionKey` in `dist/server/app-render/encryption-utils.js`: `process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY || serverActionsManifest.encryptionKey`. It encrypts the values an inline Server Action, or a `"use cache"` function, closes over (`encryptActionBoundArgs` / `decryptActionBoundArgs` in `dist/server/app-render/encryption.js`). With the runtime env unset it uses the manifest's copy, which is the build key, so even a closure would stay valid across deploys. This app has no such closures today: every `"use server"` is a file-level directive, and every `"use cache"` function is a module-level function, so none closes over anything.
+- So a runtime copy can only add risk. If it ever differed from the build's key (a rotation applied to one place only), any closure value encrypted at build time would fail to decrypt.
 
-**If the key changes** (deliberate rotation, or a different value by mistake), the first image built with the new key renames every action. Tabs that stay open across that one deploy fail their next action and work again after a reload, which is what used to happen on every deploy. Sessions are unaffected: they are signed with `BETTER_AUTH_SECRET`. Change the GitHub secret and the runtime env together.
+event-manager's and mp-senior-care's `.env.example` say to set the key "AND on the runtime host". That is harmless while the two values match, but unnecessary.
+
+**When the secret is absent.** In CI, `build-scan-and-push` stops at its "Require NEXT_SERVER_ACTIONS_ENCRYPTION_KEY" step, before the registry login, with an `::error::` line. The step tests the value and never prints it, and Dependabot runs never reach it, since the whole job is skipped for them. Without that step nothing would fail: build-push-action drops an empty secret with only the warning `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY= is not a valid secret`, and the keyless `npm run build` layer would be written to the registry `:buildcache`, where the main build of the same tree would reuse it (see below). Local builds, the `verify` job and Dependabot runs have no secret by design: the Dockerfile's mount is optional, so they still build, with a throwaway key: the old behaviour. A blank value is treated the same as unset. Leave it blank for local development.
+
+**If the key changes** (deliberate rotation, or a different value by mistake), the first image built with the new key renames every action. Tabs that stay open across that one deploy fail their next action and work again after a reload, which is what used to happen on every deploy. Sessions are unaffected: they are signed with `BETTER_AUTH_SECRET`.
 
 **The build cache does not notice a key change.** BuildKit leaves secrets out of the layer cache key. A build whose Docker context is unchanged therefore reuses the cached `npm run build` layer, along with whatever key, or none, that layer was built with. This was measured: a build with a new secret over an identical context came out `CACHED` and shipped the old key. Commits that touch only `.github/`, `.claude/` or a root-level `*.md` other than `README.md` produce such builds. `.dockerignore`'s `*.md` matches only the context root, so `README.md` (re-included by `!README.md`) and everything under `docs/` are in the Docker context, and a commit touching them re-runs `npm run build` with the current secret. In practice:
 
-- Set the GitHub secret **before** the first build that should carry it. A layer built without the key is otherwise reused by every later build of the same context.
-- After a rotation, the new key ships only with a build that actually re-runs the builder stage, i.e. a commit that changes something in the Docker context (an edit under `docs/` is enough).
-- To check a running container without printing the key:
+- After a rotation, the new key ships only with a build that actually re-runs the builder stage, i.e. a commit that changes something in the Docker context (an edit under `docs/` is enough). Re-running an old run does not.
+- To check that the key is stable, without printing it, hash the action-ID set of two images built from commits that did not touch any Server Action. The same hash means the same key:
 
   ```bash
-  docker-compose exec mp-charts node -e 'const m=require("/app/.next/server/server-reference-manifest.json");console.log(m.encryptionKey===process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY?"key matches":"KEY MISMATCH (or runtime env unset)")'
+  docker run --rm --entrypoint node registry.gitlab.com/moodychurch/mp-charts:<sha> -e 'const m=require("/app/.next/server/server-reference-manifest.json");console.log(require("crypto").createHash("sha256").update(Object.keys(m.node).sort().join("\n")).digest("hex"))'
   ```
 
-**Exposure.** Next writes the key into the image's build output, so anyone who can pull the image can read it. It is not an authentication secret: every Server Action still checks the session, and action IDs are visible in the client bundles anyway. What it protects is the encrypted values that inline Server Actions capture. Treat it as a secret all the same.
+**Exposure.** Next writes the key into the image's build output, so anyone who can pull the image can read it. It is not in `.next/static`, so browsers never receive it. It is not an authentication secret: every Server Action still checks the session, and action IDs are visible in the client bundles anyway. What it protects is the encrypted values that inline Server Actions capture. Treat it as a secret all the same; if it leaks, rotate it, at the cost of one round of reloads.
 
 ### Pulling Images
 
@@ -342,7 +347,7 @@ NEXT_PUBLIC_MINISTRY_PLATFORM_FILE_URL=https://your-mp-instance.com/ministryplat
 NEXT_PUBLIC_APP_NAME=MP Tools
 ```
 
-Production also sets `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`, with the same value as the GitHub Actions secret of that name (see [Server Actions encryption key](#server-actions-encryption-key)).
+`NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` does not belong here: it is a build-time GitHub Actions secret only (see [Server Actions encryption key](#server-actions-encryption-key)).
 
 ## Troubleshooting
 
