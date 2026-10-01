@@ -5,15 +5,13 @@ import type { MPUserProfile } from "@/lib/providers/ministry-platform/types";
 /**
  * UserMenu: the app's only sign-out control.
  *
- * What is pinned here is the sign-out SEQUENCE, because the part that matters
- * cannot be seen: `handleSignOut` finds the user's ID token for
- * `id_token_hint` through the session, and a server action can read the
- * session only from the one-hour JWT cookie cache (see
- * `src/lib/id-token-store.ts`). So the menu calls `authClient.getSession()`
- * first — `GET /api/auth/get-session` runs in the auth route handler, which
- * holds the session and re-issues the cookie. Skip that and sign-out still
- * works; the user is just stranded on MP's logged-out page, and only the server
- * log says why.
+ * What is pinned here is the sign-out SEQUENCE: the menu calls
+ * `authClient.getSession()` (which re-issues the one-hour cookie cache) before
+ * `handleSignOut`. Until the auth instance was shared per process
+ * (`sharedInstance` in src/lib/auth.ts, 2026-09-29) that refresh was what let
+ * the server action find the session, and so the `id_token_hint`, after an
+ * idle hour. It is now a cheap backup rather than a requirement; the order is
+ * still pinned so a refresh, if kept, can never race the action.
  *
  * `./actions` is mocked in full (it is covered by `actions.test.ts`), and so is
  * the auth client, the same way `sign-in.test.tsx` mocks it.
@@ -147,8 +145,8 @@ describe("UserMenu", () => {
   });
 
   it("refreshes the session cookie through the auth route BEFORE the server action", async () => {
-    // The server action can read the session only from the cookie cache; a
-    // lapsed cache drops id_token_hint and strands the user on MP's page.
+    // A backup since the auth instance became shared (see the header), but
+    // if it runs it must finish before the server action does.
     const order: string[] = [];
     const onClose = vi.fn(() => {
       order.push("onClose");

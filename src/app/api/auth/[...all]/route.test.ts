@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 
 const { mockGetTableRecords } = vi.hoisted(() => ({
@@ -27,6 +27,8 @@ const { fetchSpy } = vi.hoisted(() => {
 
 import { GET, POST, allowedAuthRoutes, allowedSignInSocialKeys } from "./route";
 import { MP_PROVIDER_ID } from "@/lib/auth-endsession";
+import { auth } from "@/lib/auth";
+import { MAX_CALLBACK_URL_LENGTH, MAX_SIGN_IN_CALLBACK_URL_LENGTH } from "@/lib/auth-callback-url";
 
 const ORIGIN = "http://localhost:3000"; // BETTER_AUTH_URL in src/test-setup.ts
 const req = (path: string, method: "GET" | "POST", body?: unknown) =>
@@ -114,8 +116,274 @@ it.each([
   expect(await refusedByUs(await POST(socialPost(contentType)))).toBe(true);
 });
 
+// Each of these carries a body that is otherwise allowed; proving the handler
+// is never reached shows the refusal is ours, not better-auth's.
+describe("Content-Type values that must never reach better-auth", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("refuses JSON with a charset followed by form data", async () => {
+    const handler = vi.spyOn(auth, "handler");
+    const res = await POST(socialPost("application/json; charset=utf-8, application/x-www-form-urlencoded"));
+    expect(await refusedByUs(res)).toBe(true);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("refuses a Content-Type header sent twice", async () => {
+    const handler = vi.spyOn(auth, "handler");
+    const headers = new Headers({ origin: ORIGIN });
+    headers.append("content-type", "application/json");
+    headers.append("content-type", "application/json");
+    // Fetch Headers comma-join a repeated header (as a merging proxy would);
+    // Node itself keeps the first.
+    expect(headers.get("content-type")).toBe("application/json, application/json");
+    const res = await POST(
+      new NextRequest(`${ORIGIN}/api/auth/sign-in/social`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ provider: MP_PROVIDER_ID, callbackURL: "/" }),
+      })
+    );
+    expect(await refusedByUs(res)).toBe(true);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  // Headers strips only HTTP whitespace (space, tab, CR, LF), so these leading
+  // characters reach the filter. String.prototype.trim() would strip them too,
+  // letting the value pass an "exactly application/json" check, while
+  // better-call's anchored /^application\/json/ does not match it: better-auth
+  // then either 400s on the raw stream or, with a form type in a parameter,
+  // 500s from formData(). Refused here with the same 404 instead. (U+FEFF,
+  // which trim() also strips, cannot occur: header values are Latin-1.)
+  it.each([
+    ["a leading no-break space", " application/json"],
+    ["a leading vertical tab", "\u000bapplication/json"],
+    ["a leading form feed", "\u000capplication/json"],
+    ["a leading no-break space and a form type in a parameter", " application/json; x=application/x-www-form-urlencoded"],
+    ["a trailing no-break space", "application/json "],
+  ])("refuses a Content-Type with %s", async (_label, contentType) => {
+    const handler = vi.spyOn(auth, "handler");
+    const request = socialPost(contentType);
+    expect(request.headers.get("content-type")).toBe(contentType); // not normalized away
+    const res = await POST(request);
+    expect(await refusedByUs(res)).toBe(true);
+    expect(handler).not.toHaveBeenCalled();
+  });
+});
+
 it("accepts application/json with a charset parameter", async () => {
   expect((await POST(socialPost("application/json; charset=utf-8"))).status).toBe(200);
+});
+
+it.each([
+  ["upper case", "Application/JSON"],
+  ["spaces before the parameter", "application/json ;charset=utf-8"],
+  ["a leading ASCII space (Headers strips it)", " application/json"],
+])("still accepts application/json written with %s", async (_label, contentType) => {
+  expect((await POST(socialPost(contentType))).status).toBe(200);
+});
+
+/**
+ * Size DoS (upstream MPNext 48a871b): a relative callbackURL of any length
+ * passes better-auth's isSafeRelativeURL and comes back as a Set-Cookie ~2x
+ * its size, and this filter runs before better-auth's rate limiter. The filter
+ * caps the declared Content-Length, the bytes actually read (4096), and
+ * callbackURL itself (2048). Each refusal is checked by `auth.handler` never
+ * being called.
+ */
+describe("POST /sign-in/social size and type limits", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const legit = { provider: MP_PROVIDER_ID, callbackURL: "/contacts" };
+  const postSignIn = (body: string, contentType = "application/json", extra: Record<string, string> = {}) =>
+    POST(
+      new NextRequest(`${ORIGIN}/api/auth/sign-in/social`, {
+        method: "POST",
+        headers: { "content-type": contentType, origin: ORIGIN, ...extra },
+        body,
+      })
+    );
+  const postStream = (stream: ReadableStream<Uint8Array>) =>
+    POST(
+      new NextRequest(`${ORIGIN}/api/auth/sign-in/social`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: ORIGIN },
+        body: stream,
+        // Required by undici for a streamed request body.
+        duplex: "half",
+      } as ConstructorParameters<typeof NextRequest>[1])
+    );
+  /** A stream yielding `chunks` chunks of `chunkSize` bytes after `prefix`, counting pulls. */
+  function chunkedStream(chunkSize: number, chunks: number, prefix = "") {
+    const encoder = new TextEncoder();
+    let sent = 0;
+    const state = { pulled: 0 };
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        state.pulled += 1;
+        if (sent === 0 && prefix) controller.enqueue(encoder.encode(prefix));
+        if (sent >= chunks) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(new Uint8Array(chunkSize).fill(0x61));
+        sent += 1;
+      },
+    });
+    return { stream, state };
+  }
+  const echoHandler = () =>
+    vi.spyOn(auth, "handler").mockImplementation(async (r: Request) => Response.json(await r.json()));
+
+  it("404s a request with no body at all", async () => {
+    const handler = vi.spyOn(auth, "handler");
+    const res = await POST(
+      new NextRequest(`${ORIGIN}/api/auth/sign-in/social`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: ORIGIN },
+      })
+    );
+    expect(await refusedByUs(res)).toBe(true);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("404s a 5 MB callbackURL without reaching better-auth", async () => {
+    const handler = vi.spyOn(auth, "handler");
+    const res = await postSignIn(JSON.stringify({ provider: MP_PROVIDER_ID, callbackURL: "/" + "a".repeat(5 * 1024 * 1024) }));
+    expect(await refusedByUs(res)).toBe(true);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("404s a declared Content-Length of 1000000 before cloning or reading the body", async () => {
+    const handler = vi.spyOn(auth, "handler");
+    const clone = vi.spyOn(NextRequest.prototype, "clone");
+    const res = await postSignIn(JSON.stringify(legit), "application/json", { "content-length": "1000000" });
+    expect(await refusedByUs(res)).toBe(true);
+    expect(handler).not.toHaveBeenCalled();
+    expect(clone).not.toHaveBeenCalled();
+  });
+
+  it.each(["abc", "-1", "1e3", "100, 100", ""])("404s a malformed Content-Length %j", async (contentLength) => {
+    const handler = vi.spyOn(auth, "handler");
+    const res = await postSignIn(JSON.stringify(legit), "application/json", { "content-length": contentLength });
+    expect(await refusedByUs(res)).toBe(true);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("accepts a declared Content-Length within the cap", async () => {
+    const handler = vi.spyOn(auth, "handler").mockResolvedValue(new Response(null, { status: 204 }));
+    const body = JSON.stringify(legit);
+    const res = await postSignIn(body, "application/json", {
+      "content-length": String(new TextEncoder().encode(body).byteLength),
+    });
+    expect(res.status).toBe(204);
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses an oversized chunked body with no Content-Length, without draining it", async () => {
+    const handler = vi.spyOn(auth, "handler");
+    // 1,000 x 1 KiB chunks = ~1 MB if fully drained.
+    const { stream, state } = chunkedStream(1024, 1000, `{"provider":"${MP_PROVIDER_ID}","callbackURL":"/`);
+    const res = await postStream(stream);
+    expect(await refusedByUs(res)).toBe(true);
+    expect(handler).not.toHaveBeenCalled();
+    // Stopped a few chunks past the 4 KiB cap, not after 1,000.
+    expect(state.pulled).toBeLessThan(20);
+  });
+
+  it("accepts a small legitimate body sent as a multi-chunk stream, and better-auth reads it intact", async () => {
+    const handler = echoHandler();
+    const encoder = new TextEncoder();
+    const parts = [`{"provider":"${MP_PROVIDER_ID.slice(0, 4)}`, `${MP_PROVIDER_ID.slice(4)}","callbackURL":"/contacts"}`];
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const part of parts) controller.enqueue(encoder.encode(part));
+        controller.close();
+      },
+    });
+    const res = await postStream(stream);
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(legit);
+  });
+
+  it("accepts a callbackURL of exactly 2048 characters", async () => {
+    const handler = vi.spyOn(auth, "handler").mockResolvedValue(new Response(null, { status: 204 }));
+    const res = await postSignIn(JSON.stringify({ provider: MP_PROVIDER_ID, callbackURL: "/" + "a".repeat(2047) }));
+    expect(res.status).toBe(204);
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("404s a callbackURL of 2049 characters", async () => {
+    const handler = vi.spyOn(auth, "handler");
+    const res = await postSignIn(JSON.stringify({ provider: MP_PROVIDER_ID, callbackURL: "/" + "a".repeat(2048) }));
+    expect(await refusedByUs(res)).toBe(true);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  // Why the sign-in page sends less than the server cap
+  // (src/lib/auth-callback-url.ts): better-auth stores callbackURL in the
+  // hex-encoded oauth_state cookie, and a browser silently drops a cookie
+  // whose name + value exceeds 4096 bytes — the MP callback then fails with
+  // state_mismatch. Measured on the real handler, counted with the production
+  // (__Secure-) cookie name.
+  it("keeps the oauth_state cookie within 4096 bytes at the sign-in page's limit, but not at the server cap", async () => {
+    const productionName = "__Secure-better-auth.oauth_state";
+    const cookieBytes = async (length: number) => {
+      const res = await postSignIn(
+        JSON.stringify({ provider: MP_PROVIDER_ID, callbackURL: "/" + "a".repeat(length - 1) })
+      );
+      expect(res.status).toBe(200);
+      const cookie = res.headers.getSetCookie().find((c) => /^(?:__Secure-)?better-auth\.oauth_state=/.test(c));
+      expect(cookie).toBeDefined();
+      const value = cookie!.slice(cookie!.indexOf("=") + 1).split(";")[0];
+      return productionName.length + value.length;
+    };
+    expect(await cookieBytes(MAX_SIGN_IN_CALLBACK_URL_LENGTH)).toBeLessThanOrEqual(4096);
+    expect(await cookieBytes(MAX_CALLBACK_URL_LENGTH)).toBeGreaterThan(4096);
+  });
+
+  it.each([
+    ["a number", 42],
+    ["null", null],
+    ["an array", ["/contacts"]],
+    ["an object", { href: "/contacts" }],
+    ["a boolean", true],
+  ])("404s a callbackURL that is %s", async (_label, callbackURL) => {
+    const handler = vi.spyOn(auth, "handler");
+    const res = await postSignIn(JSON.stringify({ provider: MP_PROVIDER_ID, callbackURL }));
+    expect(await refusedByUs(res)).toBe(true);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  // The filter decodes the bytes itself now, so pin that it still parses the
+  // way better-call's request.json() does.
+  it.each([
+    ["a leading UTF-8 BOM", "\uFEFF" + JSON.stringify(legit)],
+    ["duplicate keys (last wins, as in JSON.parse)", `{"provider":"google","provider":"${MP_PROVIDER_ID}","callbackURL":"/contacts"}`],
+  ])("parses %s the same way better-auth does", async (_label, body) => {
+    const handler = echoHandler();
+    const res = await postSignIn(body, "application/json; charset=iso-8859-1");
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(await res.json()).toEqual(legit);
+  });
+
+  it("404s duplicate keys whose LAST provider is not ours", async () => {
+    const handler = vi.spyOn(auth, "handler");
+    const res = await postSignIn(`{"provider":"${MP_PROVIDER_ID}","provider":"google"}`);
+    expect(await refusedByUs(res)).toBe(true);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("404s trailing garbage after the JSON object", async () => {
+    const handler = vi.spyOn(auth, "handler");
+    const res = await postSignIn(JSON.stringify(legit) + "x");
+    expect(await refusedByUs(res)).toBe(true);
+    expect(handler).not.toHaveBeenCalled();
+  });
 });
 
 /**

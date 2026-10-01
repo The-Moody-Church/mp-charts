@@ -65,7 +65,7 @@ Better Auth (`better-auth@~1.7`) with Ministry Platform OAuth via the `genericOA
 - **Auth helpers**: `src/lib/auth-helpers.ts` — `getSession()`, `requireSession()`, `getMpUserId()`, `getUserGuid()`
 - **Route handler**: `src/app/api/auth/[...all]/route.ts` — Better Auth API route
 - **Route protection**: `src/proxy.ts` — Next.js 16 proxy with session cookie validation
-- JWT cookie-based sessions; OIDC RP-initiated logout for proper session termination
+- JWT cookie-based sessions, 12 h absolute (no sliding) with a 1 h cookie cache, one `auth` instance per process (`sharedInstance`); OIDC RP-initiated logout (`client_id` + `id_token_hint`) for proper session termination. See `.claude/rules/security.md` § Better Auth Sessions
 
 ### Authorization (RBAC)
 Feature access is controlled via admin-managed User Group mappings:
@@ -222,7 +222,7 @@ Generate a secure secret for Better Auth session encryption:
 openssl rand -base64 32
 ```
 
-Copy the generated secret to your `.env.local` file as `BETTER_AUTH_SECRET`.
+Copy the generated secret to your `.env.local` file as `BETTER_AUTH_SECRET`. It must be at least 32 characters: the app refuses a shorter one, better-auth's built-in default, or any `BETTER_AUTH_SECRETS` value (see `.env.example`).
 
 
 ### 4. Generate Ministry Platform Types
@@ -287,7 +287,7 @@ When deploying to production:
 1. Update `BETTER_AUTH_URL` to your production domain
 2. Add production redirect URIs to Ministry Platform OAuth client
 3. Add production post-logout redirect URIs
-4. Ensure environment variables are set in your hosting provider
+4. Ensure environment variables are set in your hosting provider. If every request reaches the app through Cloudflare, also set `AUTH_IP_ADDRESS_HEADERS=cf-connecting-ip` so better-auth's sign-in rate limit keys on the real client IP (see `.env.example`), then check the log: an invalid value makes every auth request fail with an `[auth] …` line while the container stays up
 5. Enable HTTPS/SSL certificates
 6. Test the complete authentication flow in production environment
 

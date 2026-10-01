@@ -12,18 +12,18 @@ import { redirect } from "next/navigation";
  * end-session request. See `src/lib/auth-endsession.ts` for why that parameter
  * is load-bearing.
  *
- * NEVER THROWS. Sign-out must not depend on this succeeding. Two normal states
- * leave it with nothing to send, and neither is an error:
+ * NEVER THROWS. Sign-out must not depend on this succeeding. Normal states that
+ * leave it with nothing to send, none of them an error:
  *
- *   - a session that predates a container restart: the token store is empty;
- *   - `no-session` once the one-hour JWT cookie cache has lapsed. This server
- *     action can read the session ONLY from that cookie, because its own
- *     in-memory adapter is a different, empty instance from the route
- *     handler's (see `src/lib/id-token-store.ts`). The user menu therefore
- *     calls `GET /api/auth/get-session` first, which runs in the route handler
- *     and re-issues the cookie. `/session-error` posts straight here with no
- *     such refresh, and its session has no `userGuid` to key the store by
- *     anyway, so it signs out without the hint.
+ *   - a session that predates a container restart: the token store and the
+ *     in-memory account row are both gone;
+ *   - `no-session`: the session is gone (expired, or a restart after the
+ *     one-hour cookie cache lapsed). Since the auth instance is shared per
+ *     process (`sharedInstance` in src/lib/auth.ts), this action reads the
+ *     same store as the route handler, so a lapsed cookie cache alone no
+ *     longer causes it;
+ *   - `/session-error`: its session has no `userGuid` to key the store by, and
+ *     usually no MP account row, so it signs out without the hint.
  *
  * Returning null degrades to signing out without the hint: still signed out,
  * just left on MP's page instead of returned here.
@@ -37,18 +37,17 @@ async function findMpIdToken(requestHeaders: Headers): Promise<string | null> {
 
     // PRIMARY: the process-wide store, written at sign-in.
     //
-    // This is not a cache in front of the account record — it is the only
-    // thing that works. The account lookup below was the original
-    // implementation and it returned nothing on a real sign-out, because the
-    // session is a cookie-carried JWT while accounts live in a per-module
-    // in-memory adapter. See src/lib/id-token-store.ts.
+    // The account lookup below was the original implementation and it
+    // returned nothing on a real sign-out while each Next bundle layer had its
+    // own auth instance and in-memory adapter. See src/lib/id-token-store.ts.
     const userGuid = (session.user as { userGuid?: unknown }).userGuid;
     const stored = takeIdToken(typeof userGuid === "string" ? userGuid : null);
     if (stored) return stored;
 
-    // FALLBACK: the account record. Kept because it costs nothing, is correct
-    // when it does work, and would start working on its own if this app ever
-    // gains a real database.
+    // FALLBACK: the account record, in the shared in-memory adapter. It works
+    // now that the auth instance is shared per process, and the row keeps its
+    // idToken (only the access/refresh tokens are stripped before it is
+    // stored — see `stripUserOAuthTokens` in src/lib/auth.ts).
     const userId = session.user.id;
     if (!userId) return warnNoHint("no-session");
 
@@ -96,11 +95,11 @@ function warnNoHint(
 /**
  * Signs the user out of this app and then out of Ministry Platform.
  *
- * Callers: the user menu, which refreshes the session cookie cache through
- * `GET /api/auth/get-session` immediately before calling this (see
- * `refreshSessionCookie` in `user-menu.tsx` — without it, a cache older than
- * an hour costs the `id_token_hint`), and `/session-error`, which cannot
- * benefit from that refresh (see `findMpIdToken`).
+ * Callers: the user menu, which still refreshes the session cookie cache
+ * through `GET /api/auth/get-session` first (`refreshSessionCookie` in
+ * `user-menu.tsx` — a cheap backup, no longer required: this action reads the
+ * shared store once the cache has lapsed), and `/session-error` (see
+ * `findMpIdToken`).
  */
 export async function handleSignOut() {
   const requestHeaders = await headers();
@@ -124,6 +123,7 @@ export async function handleSignOut() {
       baseUrl,
       postLogoutUri: process.env.BETTER_AUTH_URL || 'http://localhost:3000',
       idToken,
+      clientId: process.env.OIDC_CLIENT_ID,
     })
   );
 }

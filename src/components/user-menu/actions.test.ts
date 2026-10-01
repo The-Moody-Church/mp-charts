@@ -50,6 +50,7 @@ describe('handleSignOut', () => {
     process.env = { ...originalEnv };
     process.env.MINISTRY_PLATFORM_BASE_URL = 'https://mp.example.com';
     process.env.BETTER_AUTH_URL = 'https://myapp.example.com';
+    process.env.OIDC_CLIENT_ID = 'TM.Widgets';
     mockGetSession.mockResolvedValue(null);
     mockFindAccountByUserId.mockResolvedValue([]);
     warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -102,18 +103,21 @@ describe('handleSignOut', () => {
       await handleSignOut();
 
       expect(redirectedTo().searchParams.get('id_token_hint')).toBe('id.token.jwt');
+      expect(redirectedTo().searchParams.get('client_id')).toBe('TM.Widgets');
       expect(warn).not.toHaveBeenCalled();
     });
 
     it('still signs out without a session, and says why (no-session)', async () => {
-      // What a lapsed cookie cache looks like from here. The user menu
-      // re-mints the cookie before calling this so it does not happen there.
+      // What an expired session, or a restart after the cookie cache lapsed,
+      // looks like from here.
       mockGetSession.mockResolvedValue(null);
 
       await handleSignOut();
 
       expect(mockSignOut).toHaveBeenCalledTimes(1);
       expect(redirectedTo().searchParams.has('id_token_hint')).toBe(false);
+      // client_id is still sent (on MP it does not replace the hint).
+      expect(redirectedTo().searchParams.get('client_id')).toBe('TM.Widgets');
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('id_token_hint omitted (no-session)'));
     });
 

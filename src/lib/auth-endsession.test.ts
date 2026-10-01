@@ -73,6 +73,31 @@ describe("buildEndSessionUrl", () => {
     expect(params.has("a")).toBe(false);
   });
 
+  describe("client_id", () => {
+    // OIDC RP-Initiated Logout's way for a client to identify itself. Sent with
+    // and without the hint (on MP it does not replace the hint; see the builder).
+    it("is sent alongside id_token_hint", () => {
+      const { params } = parse(
+        buildEndSessionUrl({ baseUrl: BASE, postLogoutUri: APP, idToken: "a.b.c", clientId: "TM.Widgets" })
+      );
+      expect(params.get("client_id")).toBe("TM.Widgets");
+      expect(params.get("id_token_hint")).toBe("a.b.c");
+      expect(params.get("post_logout_redirect_uri")).toBe(APP);
+    });
+
+    it("is sent when there is no id_token_hint", () => {
+      const { params } = parse(buildEndSessionUrl({ baseUrl: BASE, postLogoutUri: APP, clientId: "TM.Widgets" }));
+      expect(params.get("client_id")).toBe("TM.Widgets");
+      expect(params.has("id_token_hint")).toBe(false);
+      expect(params.get("post_logout_redirect_uri")).toBe(APP);
+    });
+
+    it.each([[undefined], [null], [""]])("is omitted, not sent empty, when the client id is %p", (clientId) => {
+      const { params } = parse(buildEndSessionUrl({ baseUrl: BASE, postLogoutUri: APP, clientId }));
+      expect(params.has("client_id")).toBe(false);
+    });
+  });
+
   it("tolerates a trailing slash on the base URL", () => {
     expect(parse(buildEndSessionUrl({ baseUrl: BASE + "/", postLogoutUri: APP })).path).toBe(
       "https://moody.ministryplatform.com/ministryplatformapi/oauth/connect/endsession"

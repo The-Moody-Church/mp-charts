@@ -17,6 +17,8 @@
 | App session cleared on sign-out | ✅ |
 | MP OIDC session terminated on sign-out | ✅ |
 | `id_token_hint` sent on the end-session request | ✅ |
+| `client_id` sent on the end-session request (2026-09-29; not a substitute for the hint) | ✅ |
+| A copied `session_token` dies at sign-out; a copied cookie pair lasts at most the rest of its 1 h cache (2026-09-29, see 5) | ✅ |
 | Post-logout redirect URLs registered on the sign-in client (`TM.Widgets`) | ✅ |
 | User returned to the app after sign-out | ✅ verified on care.moodychurch.app |
 
@@ -47,6 +49,9 @@ instance's memory, read from another's.
 Fixed on 2026-09-22 by capturing the token at sign-in in `getUserInfo` and
 parking it on `globalThis` — see `src/lib/id-token-store.ts`. The same
 chunk-duplication problem this codebase already documents for `serviceCache`.
+The full cause was pinned down on 2026-09-29 (see 5): the whole `auth` instance
+was duplicated per bundle layer. It is now shared, so the account-record lookup
+works too and is the fallback behind the store.
 
 **3. Neither failure surfaced.** Sign-out still worked, so nothing errored and
 nothing logged. Two explanations survived for days and no amount of reasoning
@@ -77,13 +82,33 @@ that cookie, so the lookup succeeds. The refresh is wrapped so it can never
 block sign-out; if it fails, the user signs out without the hint.
 `/get-session` was already on the route allowlist, and nothing else changed.
 
+**Superseded 2026-09-29.** With one shared `auth` instance per process (see 5)
+the server action reads the same store as `/get-session`, so it finds the
+session after the cookie cache lapses. The refresh is kept as a cheap backup and
+is no longer required of new sign-out callers.
+
+**5. Sign-out did not revoke a copied session (found 2026-09-29).** Next loads
+`src/lib/auth.ts` once per bundle layer, and each copy built its own
+`betterAuth()` with its own in-memory store. The callback wrote the session in
+the route handler's store; `handleSignOut` deleted it from the server action's,
+empty one. Measured on a local production build against a fake MP: a
+`session_token` copied before sign-out stayed valid afterwards, its expiry
+moving forward, until the process restarted. Fixed by `sharedInstance` in
+`src/lib/auth.ts` plus the session settings documented in
+`.claude/rules/security.md` (12h absolute, no sliding, `refreshCache: false`).
+Re-measured on the fixed build: the copied `session_token` is dead at sign-out,
+and a copied `session_token` + `session_data` pair lives only for the rest of
+its one-hour cookie cache.
+
 ### Verified rather than assumed
 
 Re-tested 2026-09-22: hitting the end-session endpoint with
 `post_logout_redirect_uri` and NO hint still returns a logout page carrying
 `window.returnUrl = ""`. So the hint is what makes the difference, not a change
 on MP's side. `client_id` is not an accepted substitute here either, despite
-being allowed by the RP-Initiated Logout spec.
+being allowed by the RP-Initiated Logout spec. (It is sent anyway since
+2026-09-29, alongside the hint — spec-conformant and in line with upstream — but
+that is not what makes the redirect work.)
 
 ## Reference: the MP-side registration
 
@@ -181,6 +206,7 @@ gets far enough to consult the list.
 ```
 ${MINISTRY_PLATFORM_BASE_URL}/oauth/connect/endsession
   ?post_logout_redirect_uri=${BETTER_AUTH_URL}
+  &client_id=${OIDC_CLIENT_ID}
   &id_token_hint=${ID_TOKEN}
 ```
 
@@ -191,9 +217,11 @@ discovery document exactly.
 Order matters in the action: the ID token is read **before** `auth.api.signOut`,
 because the session is how the user is identified and signing out destroys it.
 The primary source is `src/lib/id-token-store.ts`, filled at sign-in inside
-`getUserInfo`; the user's MP account record is only a fallback, and in practice
-is empty (see that file). `disableProviderLogout: true` keeps better-auth 1.7's
-own end-session URL out of the way, because it reads that same empty record.
+`getUserInfo`; the user's MP account record, in the shared in-memory store, is
+the fallback (it keeps the idToken; only the access/refresh tokens are stripped).
+`disableProviderLogout: true` keeps better-auth 1.7's own end-session URL out
+of the way: with explicit endpoints there is no `end_session_endpoint` for it,
+and it would normalise `post_logout_redirect_uri` away from the registered value.
 
 ### It degrades rather than fails
 
@@ -202,10 +230,10 @@ so a session predating a container restart has no stored account to read — a
 normal state, not an error. With no hint the URL is still valid: the user is
 still signed out, just left on MP's page.
 
-The session lookup depends on a fresh cookie cache, because the server action
-cannot read the session any other way (see 4 above). The user menu refreshes it
-first. Anything else that calls `handleSignOut` has to do the same, or it signs
-out without the hint once the cache is more than an hour old.
+Since 2026-09-29 the session lookup does not depend on a fresh cookie cache:
+the server action shares the route handler's store (see 5). The user menu still
+refreshes the cache first, as a backup; other callers of `handleSignOut` need
+not.
 
 **Known limitation: `/session-error`.** That page signs out a session that has
 no `userGuid`, through `<form action={handleSignOut}>`. There is no key to find
@@ -247,8 +275,9 @@ Both steps pass as of 2026-09-22.
 DevTools → Application → Cookies, and delete ONLY the better-auth cookie whose
 name contains `session_data` (keep `session_token`). Then sign out from the
 menu. You should land back on the app, and the server log should have no
-`[signout]` line. Without the refresh, this is exactly where the log says
-`id_token_hint omitted (no-session)` and MP strands you.
+`[signout]` line. Before 2026-09-29, without the refresh, this is exactly where
+the log said `id_token_hint omitted (no-session)` and MP stranded you; since the
+auth instance is shared it passes with or without the refresh.
 
 **If it regresses, check the logs first.** A `[signout]` warning means the app
 stopped sending the hint and the reason says why. No warning means the app is

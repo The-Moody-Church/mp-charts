@@ -2,6 +2,11 @@ import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import { genericOAuth, customSession } from "better-auth/plugins";
 import { createAuthMiddleware, APIError } from "better-auth/api";
+// The same module better-auth imports (@better-auth/core is pinned to better-auth's
+// exact version and exports "./utils/*"). Used so our trusted-proxy check cannot
+// accept an entry better-auth would ignore.
+import { findInvalidTrustedProxies } from "@better-auth/core/utils/ip";
+import { isIP } from "node:net";
 import { MPHelper } from "@/lib/providers/ministry-platform";
 import type { MPUserProfile } from "@/lib/providers/ministry-platform/types";
 import { sanitizeGuid } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
@@ -12,22 +17,91 @@ const mpBaseUrl = process.env.MINISTRY_PLATFORM_BASE_URL;
 const mpOauthUrl = `${mpBaseUrl}/oauth`;
 
 /**
- * Fail at boot when the session-signing secret is missing (2026-05-21 audit,
- * finding #17). Defense-in-depth: better-auth 1.6.x does refuse a missing or
- * default secret in production, but only as an un-awaited rejected promise
- * that surfaces as a 500 on the first request — and outside production it
- * silently accepts its built-in default secret. This converts both into a
- * loud failure at container start.
- *
- * The NEXT_PHASE guard keeps `next build` working (Docker builder stage and
- * CI's bare `npm run build` evaluate this module with no secret supplied).
+ * better-auth's built-in fallback secret (`DEFAULT_SECRET`,
+ * node_modules/better-auth/dist/utils/constants.mjs — not exported, so it is
+ * pinned here and src/lib/auth.secret-guard.test.ts reads the library file to
+ * catch drift). It is public: a session signed with it can be forged by anyone.
  */
-const betterAuthSecret = process.env.BETTER_AUTH_SECRET;
-if (!betterAuthSecret && process.env.NEXT_PHASE !== "phase-production-build") {
-  throw new Error(
-    "BETTER_AUTH_SECRET is not set. Refusing to start — sessions cannot be signed securely."
-  );
+export const BETTER_AUTH_DEFAULT_SECRET = "better-auth-secret-12345678901234567890";
+export const MIN_AUTH_SECRET_LENGTH = 32;
+
+/** Mirrors better-auth's `toBoolean` (@better-auth/core env-impl), which its `isTest()` applies to `TEST`. */
+function isTruthyEnvFlag(value: string | undefined): boolean {
+  return value ? value !== "false" : false;
 }
+
+/**
+ * Refuses to boot on an auth configuration that would make sessions forgeable
+ * or silently switch off better-auth's own checks. Throws; never includes the
+ * secret in the message. (Upstream MPNext fd7fc4a, without its
+ * NEXTAUTH_SECRET fallback — this app has never read that variable.)
+ *
+ * Why not rely on better-auth's own `validateSecret`
+ * (node_modules/better-auth/dist/context/create-context.mjs):
+ * - With no secret it falls back to its PUBLIC default and refuses that only
+ *   when `NODE_ENV === "production"`. With no database the signed cookie is
+ *   the only authority, so a known secret lets anyone mint a session for any
+ *   `userGuid`.
+ * - A short secret only produces a warning.
+ * - `isTest()` is `NODE_ENV === "test" || toBoolean(env.TEST)`. A truthy
+ *   `TEST` on a production process skips secret validation entirely, and
+ *   (were `advanced.disableOriginCheck` not pinned below) the Origin and
+ *   callbackURL checks too.
+ * - `BETTER_AUTH_SECRETS` (versioned secrets) silently takes precedence over
+ *   the `secret` option, so a check on `BETTER_AUTH_SECRET` would be checking
+ *   a key that is not the one in use. This app does not use versioned
+ *   secrets; refuse the variable rather than half-validate it.
+ *
+ * This replaces the 2026-05-21 audit's finding #17 check (secret unset), which
+ * it includes. Pure (takes the env as an argument) so it can be tested
+ * directly; the call below is what enforces it.
+ */
+export function assertAuthEnvironment(env: Readonly<Record<string, string | undefined>>): void {
+  const secret = env.BETTER_AUTH_SECRET;
+  if (!secret) {
+    throw new Error(
+      "[auth] BETTER_AUTH_SECRET is not set. Refusing to start: better-auth would sign sessions with its public default secret. Generate one with `openssl rand -base64 32`."
+    );
+  }
+  if (secret === BETTER_AUTH_DEFAULT_SECRET) {
+    throw new Error(
+      "[auth] BETTER_AUTH_SECRET is better-auth's public default secret. Refusing to start: anyone could forge a session. Generate one with `openssl rand -base64 32`."
+    );
+  }
+  if (secret.length < MIN_AUTH_SECRET_LENGTH) {
+    throw new Error(
+      `[auth] BETTER_AUTH_SECRET must be at least ${MIN_AUTH_SECRET_LENGTH} characters. Refusing to start. Generate one with \`openssl rand -base64 32\`.`
+    );
+  }
+  if (env.BETTER_AUTH_SECRETS) {
+    throw new Error(
+      "[auth] BETTER_AUTH_SECRETS is set, but this app signs with BETTER_AUTH_SECRET and does not support versioned secrets. Refusing to start: better-auth would silently prefer BETTER_AUTH_SECRETS over the validated secret. Unset it."
+    );
+  }
+  if (env.NODE_ENV === "production" && isTruthyEnvFlag(env.TEST)) {
+    throw new Error(
+      "[auth] TEST is set on a production process. Refusing to start: better-auth treats a truthy TEST as a test run and skips its secret validation. Unset TEST."
+    );
+  }
+}
+
+/**
+ * Enforced when this module loads. The one exemption is `next build`
+ * (NEXT_PHASE=phase-production-build): the Docker builder stage and CI's bare
+ * `npm run build` evaluate this module with no secret supplied. Vitest is NOT
+ * exempt — src/test-setup.ts supplies a valid secret.
+ *
+ * Next loads route modules lazily, so on a running server a bad configuration
+ * surfaces on the FIRST request that loads this module, not at process start:
+ * that request, and every later one that needs auth, returns 500 and the log
+ * names the reason (`[auth] ...`); the process stays up. Measured 2026-09-29
+ * on a standalone production build. Fail-closed either way: nothing is ever
+ * signed with a bad secret.
+ */
+if (process.env.NEXT_PHASE !== "phase-production-build") {
+  assertAuthEnvironment(process.env);
+}
+const betterAuthSecret = process.env.BETTER_AUTH_SECRET;
 
 /**
  * Fetch the OIDC userinfo from Ministry Platform and enrich it with
@@ -235,7 +309,10 @@ export const userAdditionalFields = {
  * Ministry Platform: this app does no self-service account management and
  * calls none of them. `/set-password` is never mounted without a credential
  * provider, so it 404s either way; it is listed so that adding one later does
- * not silently open it.
+ * not silently open it. `/link-social` links a provider account onto the
+ * signed-in user (and carries its own ID-token branch, which the before-hook
+ * does not cover); with one provider and no account management there is
+ * nothing to link. Listed for parity with upstream MPNext.
  *
  * The deny-by-default allowlist in `src/app/api/auth/[...all]/route.ts` is the
  * PRIMARY control; this list is defense in depth, and is what
@@ -250,6 +327,7 @@ export const disabledAuthPaths = [
   "/set-password",
   "/delete-user",
   "/delete-user/callback",
+  "/link-social",
 ];
 
 /**
@@ -290,220 +368,456 @@ export function mapMpProfileToUser(profile: {
   };
 }
 
-export const auth = betterAuth({
-  baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
-  secret: betterAuthSecret,
+/**
+ * Blanks the user's MP access and refresh tokens (and their expiries) on an
+ * account row before better-auth stores it; everything else, the idToken
+ * included, passes through. Returns a copy. Exported for tests.
+ */
+export function stripUserOAuthTokens<T extends object>(account: T): T {
+  return {
+    ...account,
+    accessToken: null,
+    refreshToken: null,
+    accessTokenExpiresAt: null,
+    refreshTokenExpiresAt: null,
+  };
+}
 
-  disabledPaths: disabledAuthPaths,
+/**
+ * Session lifetime (upstream MPNext fd7fc4a, measured on our build 2026-09-29).
+ *
+ * There is no database: the signed `session_token` + `session_data` cookies
+ * ARE the session, backed only by the in-memory adapter of the one shared
+ * `auth` instance below. Sign-out can delete that row, but it cannot recall a
+ * cookie pair someone already copied, so these settings put a hard ceiling on
+ * how long any session — including a copied pair — can live:
+ *
+ * - `expiresIn: 12h` — `expiresAt` is set once, at sign-in. Both
+ *   `/get-session` paths refuse a session past it, and it is the
+ *   `session_token` cookie's Max-Age. better-auth's default is 7 days. It
+ *   matches `MAX_AGE_MS` in src/lib/id-token-store.ts, so a live session
+ *   always still has its `id_token_hint`.
+ * - `disableSessionRefresh: true` — without it the in-memory path slides
+ *   `expiresAt` forward another `expiresIn` once per `updateAge` (1 day). With
+ *   the 7-day default, a `session_token` replayed once a day lived until the
+ *   container restarted. (`updateAge` is left at its default: with refresh
+ *   disabled nothing reads it.)
+ * - `cookieCache.refreshCache: false` — MUST be explicit. With no database
+ *   better-auth defu-merges `refreshCache: true` UNDER this config
+ *   (node_modules/better-auth/dist/context/create-context.mjs), which re-signs
+ *   `session_data` from the cookie alone — no store lookup — in the last 20%
+ *   of `maxAge`, until `expiresAt`. `false` bounds a pair with no live row
+ *   (copied before sign-out, or minted before a restart) to `maxAge` (1h)
+ *   after it was minted; after that `/get-session` asks the store, which
+ *   re-mints only if the row still exists.
+ *
+ * What users see: a session is re-checked against the store at least hourly
+ * and ends 12h after sign-in however active it is; the next page load then
+ * goes back through MP sign-in, which is silent while their MP session is
+ * alive. After a restart the store is empty, so every session ends within 1h
+ * (when its cookie cache lapses).
+ *
+ * Pinned by src/lib/auth.session-lifetime.test.ts. Emergency "sign everyone
+ * out": rotate BETTER_AUTH_SECRET (or add `cookieCache.version` and bump it).
+ */
+export const SESSION_EXPIRES_IN_SECONDS = 12 * 60 * 60;
+export const SESSION_COOKIE_CACHE_MAX_AGE_SECONDS = 60 * 60;
 
-  // Send OAuth callback failures to our own page rather than better-auth's
-  // built-in /api/auth/error, which the route allowlist no longer exposes.
-  onAPIError: {
-    errorURL: "/auth-error",
-  },
+/**
+ * Client-IP source for better-auth's rate limiter (upstream MPNext 0f61f54).
+ *
+ * The limiter runs in production only and keys each request on
+ * `<client IP>|<path>`. By default better-auth reads ONE header,
+ * `x-forwarded-for`, and trusts it only when it holds a single valid IP.
+ * Anything else — no header, a proxy-appended chain, an `ip:port` value —
+ * resolves to no IP, and then (better-auth 1.7.5,
+ * dist/api/rate-limiter/index.mjs `resolveRateLimitConfig`) the request is
+ * NOT skipped: it is counted in ONE shared per-path bucket,
+ * `no-trusted-ip|<path>`, and the process logs this warning once:
+ *
+ *   Rate limiting could not determine a client IP and is falling back to a
+ *   single shared per-path bucket. ...
+ *
+ * Which header is trustworthy depends on what sits in front of the app, so it
+ * is configuration, not code:
+ *
+ * - `AUTH_IP_ADDRESS_HEADERS` — comma-separated header names, tried in order,
+ *   REPLACING the `x-forwarded-for` default (it is not consulted unless
+ *   listed). Only name a header the edge always OVERWRITES, e.g.
+ *   `cf-connecting-ip` when every request reaches the app through Cloudflare;
+ *   a header clients can set lets them rotate past the limit or lock a
+ *   victim's IP out. A request that lacks every listed header falls into the
+ *   shared bucket above.
+ * - `AUTH_TRUSTED_PROXIES` — comma-separated proxy IPs/CIDRs. A forwarded
+ *   chain is walked right to left past these; the first untrusted hop is the
+ *   client.
+ *
+ * Both blank (the default) returns `{}`, which is today's behaviour. Invalid
+ * entries throw when this module loads (the first auth request — Next loads
+ * route modules lazily, so the container still starts and reports healthy
+ * while every auth request returns 500 with the `[auth] ...` reason logged),
+ * rather than being ignored: better-auth itself only warns about a bad
+ * trusted-proxy entry and drops it, which would silently fall back to the
+ * shared bucket. A trusted-proxy entry is refused if EITHER our check or
+ * better-auth's own parser (`findInvalidTrustedProxies`, the function its
+ * warning comes from) rejects it, so the two cannot disagree — better-auth's
+ * parser alone refuses e.g. a zone id (`fe80::1%lo0`) or an IPv4-mapped
+ * prefix over /32 (`::ffff:10.0.0.0/104`), which ours alone would accept.
+ * Pinned by src/lib/auth.rate-limit.test.ts.
+ */
+export function parseIpAddressOptions(
+  env: Readonly<Record<string, string | undefined>>,
+): { ipAddressHeaders?: string[]; trustedProxies?: string[] } {
+  const list = (value: string | undefined) =>
+    (value ?? "").split(",").map((entry) => entry.trim()).filter(Boolean);
 
-  /**
-   * Refuse better-auth 1.7's direct ID-token sign-in on /sign-in/social.
-   *
-   * That branch (dist/api/routes/sign-in.mjs:153-217) mints a session from a
-   * client-POSTed `idToken` with no state, no code and no redirect, and takes
-   * identity from userinfo called with the CALLER-SUPPLIED access token. With
-   * no discoveryUrl it is already closed (ID_TOKEN_NOT_SUPPORTED); this makes
-   * it stay closed if discovery is ever re-added, and covers in-process
-   * auth.api.signInSocial callers that the route.ts body filter does not see.
-   * Second layer; route.ts is the first. genericOAuth offers no switch for it.
-   */
-  hooks: {
-    before: createAuthMiddleware(async (ctx) => {
-      if (
-        ctx.path === "/sign-in/social" &&
-        ctx.body &&
-        typeof ctx.body === "object" &&
-        "idToken" in ctx.body
-      ) {
-        throw APIError.from("NOT_FOUND", {
-          code: "ID_TOKEN_SIGN_IN_DISABLED",
-          message: "Not Found",
-        });
-      }
-    }),
-  },
+  const ipAddressHeaders = list(env.AUTH_IP_ADDRESS_HEADERS).map((h) => h.toLowerCase());
+  const badHeaders = ipAddressHeaders.filter((h) => !/^[a-z0-9-]+$/.test(h));
+  if (badHeaders.length > 0) {
+    throw new Error(
+      `[auth] AUTH_IP_ADDRESS_HEADERS has invalid header names: ${badHeaders.join(", ")}. Use comma-separated names like "cf-connecting-ip".`,
+    );
+  }
 
-  account: {
-    // better-auth's OAuth callback first matches an account on
-    // (providerId, sub). With no match it falls back to `findUserByEmail` and,
-    // if both the stored user and the incoming profile are `emailVerified`,
-    // links the new provider account onto the EXISTING user and issues a
-    // session for that record. With one provider there is no legitimate
-    // linking case, and MP does not make email unique — so the second person
-    // signing in with a shared household address would have received the
-    // first person's identity. (F2, upstream MPNext 85be4b3.)
-    accountLinking: { enabled: false },
-  },
+  const trustedProxies = list(env.AUTH_TRUSTED_PROXIES);
+  const badProxies = [
+    ...new Set([
+      ...trustedProxies.filter((entry) => !isIpOrCidr(entry)),
+      ...findInvalidTrustedProxies(trustedProxies),
+    ]),
+  ];
+  if (badProxies.length > 0) {
+    throw new Error(
+      `[auth] AUTH_TRUSTED_PROXIES has entries that are not an IP address or CIDR range: ${badProxies.join(", ")}.`,
+    );
+  }
 
-  session: {
-    // With no database, a server action can read the session ONLY from this
-    // cookie cache while it is fresh; this bundle's own in-memory store is
-    // empty. Sign-out depends on it to find the id_token_hint, which is why
-    // the user menu re-mints the cookie through GET /get-session first (see
-    // refreshSessionCookie in src/components/user-menu/user-menu.tsx).
-    cookieCache: {
-      enabled: true,
-      maxAge: 60 * 60, // 1 hour
-      strategy: "jwt",
+  return {
+    ...(ipAddressHeaders.length > 0 && { ipAddressHeaders }),
+    ...(trustedProxies.length > 0 && { trustedProxies }),
+  };
+}
+
+function isIpOrCidr(entry: string): boolean {
+  const slash = entry.indexOf("/");
+  const family = isIP(slash === -1 ? entry : entry.slice(0, slash));
+  if (family === 0) return false;
+  if (slash === -1) return true;
+  const prefix = entry.slice(slash + 1);
+  return /^\d{1,3}$/.test(prefix) && Number(prefix) <= (family === 4 ? 32 : 128);
+}
+
+/**
+ * Per-path rate-limit overrides. better-auth's built-in rule for every
+ * `/sign-in*` path is 3 requests per 10 s per client IP. Staff share an office
+ * IP, and `/sign-in/social` only builds the MP authorize URL (no credential is
+ * checked here — MP does that), so 3 would lock a room of people out when a
+ * deploy sends them all back through sign-in at once. 10 per 10 s per client
+ * IP still bounds how many OAuth state cookies one client can have minted
+ * (each capped in size by the body filter in route.ts). Pinned by
+ * src/lib/auth.rate-limit.test.ts.
+ */
+export const authRateLimitCustomRules = {
+  "/sign-in/social": { window: 10, max: 10 },
+};
+
+function createAuth() {
+  return betterAuth({
+    baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
+    secret: betterAuthSecret,
+
+    disabledPaths: disabledAuthPaths,
+
+    advanced: {
+      // Pinned so no env var can flip it: left undefined, better-auth sets
+      // `skipOriginCheck = isTest()`, so a truthy `TEST` would switch off the
+      // Origin and callbackURL checks (context/create-context.mjs). See
+      // assertAuthEnvironment above.
+      disableOriginCheck: false,
+      // Which header the rate limiter takes the client IP from. See
+      // parseIpAddressOptions above.
+      ipAddress: parseIpAddressOptions(process.env),
     },
-  },
 
-  user: {
-    additionalFields: userAdditionalFields,
-  },
+    rateLimit: {
+      customRules: authRateLimitCustomRules,
+    },
 
-  plugins: [
-    genericOAuth({
-      config: [
-        {
-          providerId: MP_PROVIDER_ID,
-          // NO discoveryUrl — deliberate (1.7 migration, see the 2026-09-24 entry
-          // in .claude/notes/upstream-sync-log.md).
-          // better-auth 1.7 fetches discovery ONCE, eagerly, when this module
-          // loads, with no timeout: a slow MP stalls every auth call on the
-          // container, and a failed fetch drops the provider until restart.
-          // With discovery it would also JWKS-verify the id_token with zero
-          // clock tolerance and open the /sign-in/social idToken branch.
-          // Explicit endpoints give exactly 1.6's posture (1.6 never verified
-          // the id_token); identity comes from /connect/userinfo. Values are
-          // MP's discovery document's, verbatim.
-          authorizationUrl: `${mpOauthUrl}/connect/authorize`,
-          tokenUrl: `${mpOauthUrl}/connect/token`,
-          userInfoUrl: `${mpOauthUrl}/connect/userinfo`,
-          // The sign-in client is OIDC_CLIENT_ID = TM.Widgets in every
-          // environment (NOT MPNext, which is the server-to-server client).
-          clientId: process.env.OIDC_CLIENT_ID!,
-          clientSecret: process.env.OIDC_CLIENT_SECRET!,
-          // NO `offline_access`. It was requested until 2026-09-22 and the
-          // refresh token it bought was never used once.
-          //
-          // What it cost, as read off the `MPNext` client configuration in MP:
-          // refresh token lifetime 43200 minutes — 30 days — with rotation
-          // OFF. So every sign-in minted a static 30-day credential that sat
-          // in memory and was never redeemed. (Sign-in actually runs on the
-          // TM.Widgets client — OIDC_CLIENT_ID — whose refresh-token settings
-          // have not been read. The scope is gone either way.)
-          //
-          // Verified unused on three independent grounds before removing it:
-          //   - zero references to refresh tokens anywhere in src/, all four apps;
-          //   - better-auth only refreshes from `/get-access-token` or
-          //     `/refresh-token`, and neither is on the deny-by-default
-          //     allowlist in src/app/api/auth/[...all]/route.ts, so both 404
-          //     before reaching better-auth;
-          //   - server-to-server MP calls use a SEPARATE client_credentials
-          //     token (src/lib/providers/ministry-platform/auth/), not the
-          //     user's.
-          //
-          // The user's tokens are used once, during sign-in, to read
-          // /connect/userinfo and dp_Users. Nothing needs them afterwards.
-          //
-          // DO NOT re-add this scope to "be safe". If something later genuinely
-          // needs to act as the user after sign-in, add it deliberately, and
-          // note that MP does not rotate these — a leaked one is good for 30
-          // days.
-          scopes: ["openid", "http://www.thinkministry.com/dataplatform/scopes/all"],
-          // PKCE is OFF because MP's TM.Widgets client rejects it at token
-          // exchange (invalid_grant; re-tested 2026-09-22 on the production
-          // music-tools :dev slot). better-auth 1.7 DEFAULTS PKCE ON
-          // (`c.pkce ?? true`, generic-oauth/index.mjs:181,206): deleting this
-          // line as "redundant" breaks sign-in on every app, and on 1.7 the
-          // failure surfaces as /auth-error?error=invalid_code (it was
-          // oauth_code_verification_failed on 1.6). Pinned by auth.test.ts.
-          //
-          // Re-tested 2026-09-22 and the result was a clean negative. Do not
-          // flip this without reading the rest of this comment.
-          //
-          // WHAT WAS RULED OUT, so nobody repeats the investigation:
-          //
-          //   - MP supports PKCE at the server level. Its discovery document
-          //     advertises `code_challenge_methods_supported: ['plain','S256']`.
-          //   - MP's AUTHORIZE endpoint accepts a real S256 challenge. Probed
-          //     directly: it returns the same 302 to the login page as a
-          //     request without one, not an error. The front channel is fine.
-          //   - better-auth carries the verifier correctly. With no database
-          //     (1.6 and 1.7 alike) `generateState` stores it in the encrypted
-          //     `oauth_state` cookie beside the state nonce; the `state` query
-          //     parameter is only that random nonce. It round-trips with the
-          //     browser and is never lost server-side.
-          //
-          // WHAT FAILS: the token exchange, every time.
-          //
-          //     ERROR [Better Auth]: { error: 'invalid_grant', status: 400 }
-          //
-          // Three attempts, three identical failures, and the user landed on
-          // /auth-error with `oauth_code_verification_failed`.
-          //
-          // CONCLUSION, sharper than the 2026-04-20 revert could manage: this
-          // is not "MP may not support PKCE". MP does. The `TM.Widgets` OAuth
-          // client — the sign-in client shared by all four of these apps
-          // (earlier notes said `MPNext`; that is only the server-to-server
-          // client) — is not configured to accept a code challenge, and that
-          // configuration is not reachable through MP's REST API.
-          //
-          // WHEN TO REVISIT: only after an MP administrator enables PKCE on the
-          // `TM.Widgets` client. Until then this flag fails the same way every
-          // time and breaks sign-in for every app at once.
-          //
-          // WORTH KEEPING IN PROPORTION: this client is CONFIDENTIAL and holds
-          // a secret, so the authorization code is already protected. PKCE here
-          // is defence in depth against code interception, not a missing
-          // control. It is not worth a login outage.
-          pkce: false,
-          // MP omits `nonce` from its id_token (upstream MPNext f88a9f1, decoded
-          // from a real token). Inert while there is no discoveryUrl; here so
-          // re-adding discovery cannot silently break sign-in. Pinned by test.
-          disableIdTokenNonceBinding: true,
-          // Sign-out stays hand-built (user-menu/actions.ts + id-token-store):
-          // 1.7's built-in end-session URL reads account.idToken from the
-          // per-module in-memory adapter, which is empty in the server-action
-          // bundle, and it omits post_logout_redirect_uri.
-          disableProviderLogout: true,
-          // Identity is the validated MP User_GUID, independent of whether a
-          // discovery document was ever fetched.
-          accountSubject: ({ profile }) => (typeof profile.sub === "string" ? profile.sub : ""),
-          getUserInfo: async (tokens) => {
-            const profile = await getMpUserInfo(tokens.accessToken);
-            if (!profile) return null;
-            // Bind the ID token to the userinfo identity (OIDC Core §5.3.2).
-            // Refuses a token pair belonging to two different people.
-            if (tokens.idToken) {
-              const idSub = idTokenSubject(tokens.idToken);
-              if (!idSub || idSub.toLowerCase() !== profile.sub.toLowerCase()) {
-                console.error(JSON.stringify({ event: "auth.userinfo.sub_mismatch" }));
-                return null;
+    // Send OAuth callback failures to our own page rather than better-auth's
+    // built-in /api/auth/error, which the route allowlist no longer exposes.
+    onAPIError: {
+      errorURL: "/auth-error",
+    },
+
+    /**
+     * Refuse better-auth 1.7's direct ID-token sign-in on /sign-in/social.
+     *
+     * That branch (dist/api/routes/sign-in.mjs:153-217) mints a session from a
+     * client-POSTed `idToken` with no state, no code and no redirect, and takes
+     * identity from userinfo called with the CALLER-SUPPLIED access token. With
+     * no discoveryUrl it is already closed (ID_TOKEN_NOT_SUPPORTED); this makes
+     * it stay closed if discovery is ever re-added, and covers in-process
+     * auth.api.signInSocial callers that the route.ts body filter does not see.
+     * Second layer; route.ts is the first. genericOAuth offers no switch for it.
+     */
+    hooks: {
+      before: createAuthMiddleware(async (ctx) => {
+        if (
+          ctx.path === "/sign-in/social" &&
+          ctx.body &&
+          typeof ctx.body === "object" &&
+          "idToken" in ctx.body
+        ) {
+          throw APIError.from("NOT_FOUND", {
+            code: "ID_TOKEN_SIGN_IN_DISABLED",
+            message: "Not Found",
+          });
+        }
+      }),
+    },
+
+    account: {
+      // better-auth's OAuth callback first matches an account on
+      // (providerId, sub). With no match it falls back to `findUserByEmail` and,
+      // if both the stored user and the incoming profile are `emailVerified`,
+      // links the new provider account onto the EXISTING user and issues a
+      // session for that record. With one provider there is no legitimate
+      // linking case, and MP does not make email unique — so the second person
+      // signing in with a shared household address would have received the
+      // first person's identity. (F2, upstream MPNext 85be4b3.)
+      accountLinking: { enabled: false },
+      // The user's own MP tokens are never used after sign-in: every MP data
+      // call goes through the client-credentials service account
+      // (src/lib/providers/ministry-platform/auth/), and no caller passes a
+      // user token to a service. better-auth defaults this to `true` when
+      // there is no database, which put the user's MP access and id tokens
+      // into an encrypted `account_data` cookie on every response. Nothing the
+      // route allowlist exposes reads that cookie, so keep them out of the
+      // browser. (Upstream MPNext a424953.)
+      storeAccountCookie: false,
+    },
+
+    // Keep the user's MP access/refresh tokens out of the in-memory adapter
+    // too (plaintext until restart; a heap dump would hand over every
+    // signed-in user's MP API rights). `getUserInfo` has already used the
+    // access token by the time the account row is written. The idToken is
+    // KEPT: it is not an API bearer, and sign-out's account-row fallback
+    // (findMpIdToken in src/components/user-menu/actions.ts) sends it as
+    // `id_token_hint`. (Upstream MPNext a424953.)
+    databaseHooks: {
+      account: {
+        create: { before: async (account) => ({ data: stripUserOAuthTokens(account) }) },
+        update: { before: async (account) => ({ data: stripUserOAuthTokens(account) }) },
+      },
+    },
+
+    session: {
+      // See SESSION_EXPIRES_IN_SECONDS above for why each of these is set.
+      expiresIn: SESSION_EXPIRES_IN_SECONDS,
+      disableSessionRefresh: true,
+      cookieCache: {
+        enabled: true,
+        maxAge: SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
+        strategy: "jwt",
+        refreshCache: false,
+      },
+    },
+
+    user: {
+      additionalFields: userAdditionalFields,
+    },
+
+    plugins: [
+      genericOAuth({
+        config: [
+          {
+            providerId: MP_PROVIDER_ID,
+            // NO discoveryUrl — deliberate (1.7 migration, see the 2026-09-24 entry
+            // in .claude/notes/upstream-sync-log.md).
+            // better-auth 1.7 fetches discovery ONCE, eagerly, when this module
+            // loads, with no timeout: a slow MP stalls every auth call on the
+            // container, and a failed fetch drops the provider until restart.
+            // With discovery it would also JWKS-verify the id_token with zero
+            // clock tolerance and open the /sign-in/social idToken branch.
+            // Explicit endpoints give exactly 1.6's posture (1.6 never verified
+            // the id_token); identity comes from /connect/userinfo. Values are
+            // MP's discovery document's, verbatim.
+            authorizationUrl: `${mpOauthUrl}/connect/authorize`,
+            tokenUrl: `${mpOauthUrl}/connect/token`,
+            userInfoUrl: `${mpOauthUrl}/connect/userinfo`,
+            // The sign-in client is OIDC_CLIENT_ID = TM.Widgets in every
+            // environment (NOT MPNext, which is the server-to-server client).
+            clientId: process.env.OIDC_CLIENT_ID!,
+            clientSecret: process.env.OIDC_CLIENT_SECRET!,
+            // NO `offline_access`. It was requested until 2026-09-22 and the
+            // refresh token it bought was never used once.
+            //
+            // What it cost, as read off the `MPNext` client configuration in MP:
+            // refresh token lifetime 43200 minutes — 30 days — with rotation
+            // OFF. So every sign-in minted a static 30-day credential that sat
+            // in memory and was never redeemed. (Sign-in actually runs on the
+            // TM.Widgets client — OIDC_CLIENT_ID — whose refresh-token settings
+            // have not been read. The scope is gone either way.)
+            //
+            // Verified unused on three independent grounds before removing it:
+            //   - zero references to refresh tokens anywhere in src/, all four apps;
+            //   - better-auth only refreshes from `/get-access-token` or
+            //     `/refresh-token`, and neither is on the deny-by-default
+            //     allowlist in src/app/api/auth/[...all]/route.ts, so both 404
+            //     before reaching better-auth;
+            //   - server-to-server MP calls use a SEPARATE client_credentials
+            //     token (src/lib/providers/ministry-platform/auth/), not the
+            //     user's.
+            //
+            // The user's tokens are used once, during sign-in, to read
+            // /connect/userinfo and dp_Users. Nothing needs them afterwards.
+            //
+            // DO NOT re-add this scope to "be safe". If something later genuinely
+            // needs to act as the user after sign-in, add it deliberately, and
+            // note that MP does not rotate these — a leaked one is good for 30
+            // days.
+            scopes: ["openid", "http://www.thinkministry.com/dataplatform/scopes/all"],
+            // PKCE is OFF because MP's TM.Widgets client rejects it at token
+            // exchange (invalid_grant; re-tested 2026-09-22 on the production
+            // music-tools :dev slot). better-auth 1.7 DEFAULTS PKCE ON
+            // (`c.pkce ?? true`, generic-oauth/index.mjs:181,206): deleting this
+            // line as "redundant" breaks sign-in on every app, and on 1.7 the
+            // failure surfaces as /auth-error?error=invalid_code (it was
+            // oauth_code_verification_failed on 1.6). Pinned by auth.test.ts.
+            //
+            // Re-tested 2026-09-22 and the result was a clean negative. Do not
+            // flip this without reading the rest of this comment.
+            //
+            // WHAT WAS RULED OUT, so nobody repeats the investigation:
+            //
+            //   - MP supports PKCE at the server level. Its discovery document
+            //     advertises `code_challenge_methods_supported: ['plain','S256']`.
+            //   - MP's AUTHORIZE endpoint accepts a real S256 challenge. Probed
+            //     directly: it returns the same 302 to the login page as a
+            //     request without one, not an error. The front channel is fine.
+            //   - better-auth carries the verifier correctly. With no database
+            //     (1.6 and 1.7 alike) `generateState` stores it in the encrypted
+            //     `oauth_state` cookie beside the state nonce; the `state` query
+            //     parameter is only that random nonce. It round-trips with the
+            //     browser and is never lost server-side.
+            //
+            // WHAT FAILS: the token exchange, every time.
+            //
+            //     ERROR [Better Auth]: { error: 'invalid_grant', status: 400 }
+            //
+            // Three attempts, three identical failures, and the user landed on
+            // /auth-error with `oauth_code_verification_failed`.
+            //
+            // CONCLUSION, sharper than the 2026-04-20 revert could manage: this
+            // is not "MP may not support PKCE". MP does. The `TM.Widgets` OAuth
+            // client — the sign-in client shared by all four of these apps
+            // (earlier notes said `MPNext`; that is only the server-to-server
+            // client) — is not configured to accept a code challenge, and that
+            // configuration is not reachable through MP's REST API.
+            //
+            // WHEN TO REVISIT: only after an MP administrator enables PKCE on the
+            // `TM.Widgets` client. Until then this flag fails the same way every
+            // time and breaks sign-in for every app at once.
+            //
+            // WORTH KEEPING IN PROPORTION: this client is CONFIDENTIAL and holds
+            // a secret, so the authorization code is already protected. PKCE here
+            // is defence in depth against code interception, not a missing
+            // control. It is not worth a login outage.
+            pkce: false,
+            // MP omits `nonce` from its id_token (upstream MPNext f88a9f1, decoded
+            // from a real token). Inert while there is no discoveryUrl; here so
+            // re-adding discovery cannot silently break sign-in. Pinned by test.
+            disableIdTokenNonceBinding: true,
+            // Sign-out stays hand-built (user-menu/actions.ts + id-token-store):
+            // with explicit endpoints there is no end_session_endpoint for
+            // better-auth to use, and its URL would normalise
+            // post_logout_redirect_uri away from the value registered in MP.
+            disableProviderLogout: true,
+            // Identity is the validated MP User_GUID, independent of whether a
+            // discovery document was ever fetched.
+            accountSubject: ({ profile }) => (typeof profile.sub === "string" ? profile.sub : ""),
+            getUserInfo: async (tokens) => {
+              const profile = await getMpUserInfo(tokens.accessToken);
+              if (!profile) return null;
+              // Bind the ID token to the userinfo identity (OIDC Core §5.3.2).
+              // Refuses a token pair belonging to two different people.
+              if (tokens.idToken) {
+                const idSub = idTokenSubject(tokens.idToken);
+                if (!idSub || idSub.toLowerCase() !== profile.sub.toLowerCase()) {
+                  console.error(JSON.stringify({ event: "auth.userinfo.sub_mismatch" }));
+                  return null;
+                }
               }
-            }
-            // Keep the ID token for sign-out, which needs it as `id_token_hint`
-            // or MP discards `post_logout_redirect_uri` and strands the user on
-            // its logged-out page. Captured HERE rather than inside
-            // `getMpUserInfo`, which only receives the access token, and rather
-            // than read off the account record at sign-out, which does NOT work
-            // — see src/lib/id-token-store.ts for the measurement that proved it.
-            rememberIdToken(profile.userGuid, tokens.idToken);
-            return profile;
+              // Keep the ID token for sign-out, which needs it as `id_token_hint`
+              // or MP discards `post_logout_redirect_uri` and strands the user on
+              // its logged-out page. Captured HERE rather than inside
+              // `getMpUserInfo`, which only receives the access token. Sign-out
+              // reads this store first and the account record second — see
+              // src/lib/id-token-store.ts for why the account record alone was
+              // not enough before the auth instance was shared.
+              rememberIdToken(profile.userGuid, tokens.idToken);
+              return profile;
+            },
+            mapProfileToUser: (profile) => mapMpProfileToUser(profile),
           },
-          mapProfileToUser: (profile) => mapMpProfileToUser(profile),
-        },
-      ],
-    }),
-    customSession(async ({ user, session }) => {
-      return {
-        user: {
-          ...user,
-          firstName: user.name?.split(" ")[0] || "",
-          lastName: user.name?.split(" ").slice(1).join(" ") || "",
-        },
-        session,
-      };
-    }),
-    nextCookies(),
-  ],
-});
+        ],
+      }),
+      customSession(async ({ user, session }) => {
+        return {
+          user: {
+            ...user,
+            firstName: user.name?.split(" ")[0] || "",
+            lastName: user.name?.split(" ").slice(1).join(" ") || "",
+          },
+          session,
+        };
+      }),
+      nextCookies(),
+    ],
+  });
+}
+
+/**
+ * globalThis key holding the process-wide auth instance. `Symbol.for`, so every
+ * module copy (and every test) resolves the same key. Exported for tests.
+ */
+export const SHARED_AUTH_KEY = Symbol.for("tmc.auth");
+
+/**
+ * Returns the one `auth` for this process, creating it on first use
+ * (upstream MPNext 0e2652e).
+ *
+ * Next loads this module once PER BUNDLE LAYER. Measured 2026-09-29 on a
+ * standalone production build of this app: the `/api/auth` route handler gets
+ * one copy, server components and server actions share a second. Each copy
+ * built its own betterAuth() with its own in-memory store, so the OAuth
+ * callback wrote the session and account rows in the route handler's store
+ * while `handleSignOut` deleted from the other, empty one. Sign-out then
+ * removed nothing `/get-session` reads: a `session_token` copied before
+ * sign-out stayed valid (to the 7-day default, sliding daily) until the
+ * container restarted. It also meant server components and server actions
+ * could see the session ONLY through the one-hour cookie cache.
+ *
+ * Caching on globalThis gives every layer one instance and one store — the
+ * same pattern as `serviceCache` and the id-token store. It is still per
+ * PROCESS: a restart empties it, as before.
+ *
+ * Vitest is exempt (it re-imports the module to rebuild the instance under a
+ * different environment); src/lib/auth.shared-instance.test.ts clears `VITEST`
+ * to exercise the real path. Under `next dev`, edits to the auth options take
+ * effect after a dev-server restart, not on hot reload — the old instance is
+ * still on globalThis.
+ */
+export function sharedInstance<T>(
+  key: symbol,
+  create: () => T,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): T {
+  if (env.VITEST) return create();
+  const store = globalThis as unknown as Record<symbol, T | undefined>;
+  return (store[key] ??= create());
+}
+
+export const auth = sharedInstance(SHARED_AUTH_KEY, createAuth);
 
 export type Session = typeof auth.$Infer.Session;

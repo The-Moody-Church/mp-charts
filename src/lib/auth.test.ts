@@ -280,6 +280,7 @@ describe("disabled account-management endpoints", () => {
       "/set-password",
       "/delete-user",
       "/delete-user/callback",
+      "/link-social",
     ]);
   });
 
@@ -300,6 +301,7 @@ describe("disabled account-management endpoints", () => {
     "/set-password",
     "/delete-user",
     "/delete-user/callback",
+    "/link-social",
   ])("returns 404 for POST %s", async (path) => {
     expect((await call(path)).status).toBe(404);
   });
@@ -506,5 +508,28 @@ describe("/sign-in/social idToken branch", () => {
     }));
     expect(res.status).toBe(404);
     expect((await res.json()).code).toBe("ID_TOKEN_SIGN_IN_DISABLED"); // proves the HOOK refused it
+  });
+
+  it("is refused by the before-hook for an IN-PROCESS auth.api.signInSocial call, before any userinfo request", async () => {
+    // A server action or component calling auth.api directly never passes
+    // through route.ts's body filter; the hook is what covers it.
+    const fetchSpy = vi.fn(async () => {
+      throw new Error("unexpected fetch");
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      const error = await auth.api
+        .signInSocial({
+          body: { provider: MP_PROVIDER_ID, idToken: { token: "a.b.c", accessToken: "x" } },
+        })
+        .then(
+          () => null,
+          (e: unknown) => e
+        );
+      expect(error).toMatchObject({ body: { code: "ID_TOKEN_SIGN_IN_DISABLED" } });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

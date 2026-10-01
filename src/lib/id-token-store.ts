@@ -11,31 +11,26 @@
  * `no-mp-account` on a real sign-out, four days into a container's life, from
  * a user who had signed in minutes earlier.
  *
- * Two configuration choices combine to cause it:
+ * The cause, found in full on 2026-09-29: no `database` is configured, so
+ * better-auth uses its in-memory adapter, and that store lived in whichever
+ * module instance created it. Next loads `src/lib/auth.ts` once per bundle
+ * layer — sign-in runs in the `/api/auth/[...all]` route handler, sign-out in
+ * a server action — so the account was written into one instance's memory and
+ * read from another's, which was empty. Nothing errored; the lookup just found
+ * nothing. (The server action also saw the session only while the one-hour
+ * `session_data` cookie cache was fresh, for the same reason.)
  *
- *   1. `session.cookieCache.strategy: "jwt"` — the session is carried in the
- *      `session_data` cookie, so `auth.api.getSession` answers without
- *      touching any store — but ONLY while that one-hour cache is fresh. The
- *      session therefore looks perfectly healthy. Once the cache lapses,
- *      `getSession` falls through to its own module instance's store, which in
- *      a server action is the empty one described below, and returns null.
- *      So sign-out's session lookup depends on a fresh cookie too, which is
- *      why the user menu re-mints it through `GET /api/auth/get-session` (the
- *      route handler, whose store holds the session) before signing out.
- *   2. No `database` is configured, so better-auth uses its in-memory adapter.
- *      That store lives in whichever module instance created it.
- *
- * Sign-in runs in the `/api/auth/[...all]` route handler; sign-out runs in a
- * server action. Those are separate bundles, and a module imported by both can
- * be instantiated more than once — the same chunk-duplication problem this
- * codebase already documents for `serviceCache`, which is why that one is
- * pinned to `globalThis`. The account is written into one instance's memory and
- * read from another's, which is empty. Nothing errors; the lookup just finds
- * nothing.
+ * `src/lib/auth.ts` now keeps ONE auth instance per process on `globalThis`
+ * (`sharedInstance`, upstream MPNext 0e2652e), so the account lookup in
+ * `findMpIdToken` works too and is the fallback behind this store. This store
+ * stays as the primary source: it is keyed by the validated `userGuid`, costs
+ * nothing, and does not depend on the account row surviving.
  *
  * So the token is captured at sign-in, where it is definitely in hand, and
  * parked on `globalThis` — one object per PROCESS rather than per module
- * instance.
+ * instance. Its 12-hour ceiling (`MAX_AGE_MS`) matches the session lifetime
+ * (`SESSION_EXPIRES_IN_SECONDS` in src/lib/auth.ts), so a live session always
+ * still has its hint.
  *
  * WHAT THIS IS NOT. It is not a session store and must not become one. It
  * holds identity assertions that are already expiring, keyed by a value the
