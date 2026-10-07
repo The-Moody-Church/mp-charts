@@ -78,7 +78,7 @@ If you need `.join()` in a non-filter context and it triggers a false positive, 
 | Job | Secrets? | Runs for Dependabot? | What it does |
 |-----|----------|----------------------|--------------|
 | `security-lint` | no | yes | the `.join()` filter grep above |
-| `verify` | no | **yes** | `npm ci`, `npm audit --audit-level=high`, `npm run lint`, `npm run test:run`, `npm run build`, local Docker build (`push: false`), Trivy scan |
+| `verify` | no | **yes** | `npm ci`, the npm audit gate (`node scripts/audit-gate.mjs`, below), `npm run lint`, `npm run test:run`, `npm run build`, local Docker build (`push: false`), Trivy scan |
 | `build-scan-and-push` | **yes** | no (`if: github.actor != 'dependabot[bot]'`) | registry login, build + push `:${sha}`, Trivy, retag `:dev` / `:latest` / `:main` |
 
 **Keep verification steps in `verify`, not in `build-scan-and-push`.** Dependabot PRs cannot access
@@ -93,10 +93,68 @@ as soon as a new OS CVE lands (CVE-2026-14456, 2026-09-01). The two jobs use dif
 expires), so without the filter they can even disagree — verify green, push job red. Keep the filter
 on **both** steps.
 
-**`npm audit --audit-level=high` is a hard deploy gate.** It runs before any image is built, so an
-unresolved HIGH advisory blocks *all* deploys, not just dependency PRs. This has bitten twice
-(2026-07-10 after #190, and a 27-day production freeze discovered 2026-08-06). Run it locally before
-pushing.
+**The npm audit gate is a hard deploy gate.** It runs before any image is built, so an unresolved
+HIGH advisory blocks *all* deploys, not just dependency PRs. This has bitten twice (2026-07-10 after
+#190, and a 27-day production freeze discovered 2026-08-06). Run `node scripts/audit-gate.mjs`
+locally before pushing. The nightly `audit-nightly.yml` runs the same gate against unchanged code.
+
+### npm audit gate and its allow-list
+
+`scripts/audit-gate.mjs` replaced `npm audit --audit-level=high` in the `verify` job's "Audit npm
+dependencies" step and in `audit-nightly.yml` on 2026-10-07. The rule is the old one — **any HIGH or
+CRITICAL vulnerability fails** — with one narrow way out: an advisory listed in
+`scripts/audit-allowlist.json`. The decision logic is `scripts/audit-gate-lib.mjs`, tested by
+`scripts/audit-gate-lib.test.ts` (part of `npm run test:run`).
+
+How it decides, failing closed at every step:
+
+- Only `high`/`critical` are gated (moderate and below are ignored, as before). An unrecognised
+  severity is a violation.
+- Each vulnerability is resolved to its **root advisories** by walking npm's `via` chain (`micromatch`
+  → `braces` → the advisory). It passes only when it resolves to at least one advisory, nothing on the
+  way is unresolvable, and **every** root advisory is on the allow-list with a matching GHSA id
+  **and** package. A dependency carrying the allow-listed advisory plus any other HIGH one fails.
+- The audit endpoint failing (`audit endpoint returned an error`) is retried, 3 attempts 30 s apart,
+  then the step **fails** (exit 2). Output that is not a valid report, or an invalid allow-list, also
+  fails (exit 2). Violations exit 1. It never passes on an error.
+- npm runs as `npm audit --json --offline=false --include=dev --include=optional --include=peer`.
+  The extra flags are deliberate: with `offline=true` in an `.npmrc` (or `npm_config_offline`) npm
+  prints a *clean* report and exits 0, and `omit=dev` would drop the devDependency tree.
+- Output: each allowed finding is a `::notice::` with the entry's reason; an entry past its
+  `review_by` date, or whose advisory no longer appears in the audit at all, is a `::warning::` (it
+  does not fail); each violation is an `::error::` with the package, severity and advisory URLs.
+
+**The one current exception — GHSA-vfj7-8cjw-p6xm (braces, HIGH).** Published 2026-10-07; it affects
+every braces release (≤ 3.0.3) and no patched version exists. It reaches this repo only through the
+lint toolchain: `eslint-config-next` → `@next/eslint-plugin-next` (16.3.x and 16.4.0 pin
+`fast-glob` 3.3.1) → `fast-glob` → `micromatch` → `braces`, all devDependencies
+(`npm audit --omit=dev` does not report it). The production image ships only `.next/standalone`,
+which contains none of braces, micromatch, fast-glob or eslint. `npm audit fix` was not an option:
+it left five HIGHs and introduced new lint errors in the sibling apps, and `--force` would install
+`eslint-config-next@14`.
+
+**Adding an entry** — only for an advisory with no fix you can take, on a path that does not reach the
+production image. Prefer a fix every time: a patched release, a lockfile update within range, or an
+`overrides` entry. An entry is:
+
+```json
+{ "id": "GHSA-xxxx-xxxx-xxxx", "package": "<the package the advisory is filed against>",
+  "reason": "<why it is safe to ship: the path, why no fix, why not in the image>",
+  "added": "YYYY-MM-DD", "review_by": "YYYY-MM-DD" }
+```
+
+`review_by` must be after `added`; keep it about a month out. The gate refuses the whole file (exit 2)
+if any field is missing or malformed, an id repeats, or an unknown field appears. Put the evidence in
+the PR: the advisory, the dependency path, and proof the package is not in the image.
+
+**Reviewing and removing.** When the nightly run warns that an entry passed `review_by`, check for a
+patched release (or a Next release whose `@next/eslint-plugin-next` no longer pins the vulnerable
+chain). If one exists, take it and delete the entry; if not, re-confirm the reasoning and move
+`review_by` forward in a PR that says so. When the run warns an entry *no longer appears in npm
+audit*, the dependency was fixed or removed — delete the entry. An empty list (`[]`) is valid.
+
+Do **not** add `continue-on-error`, `|| true` or a raw `npm audit` call back to either workflow; the
+"CI wiring" tests in `scripts/audit-gate-lib.test.ts` fail if you do.
 
 ## File Upload Validation
 
