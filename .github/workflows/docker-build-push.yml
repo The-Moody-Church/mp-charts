@@ -84,8 +84,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Fails on any HIGH or CRITICAL advisory, like the `--audit-level=high`
+      # call it replaced, except advisories in scripts/audit-allowlist.json —
+      # and only when EVERY root advisory behind a vulnerability is listed.
+      # Entries are dev-only exceptions: it also fails if an allow-listed
+      # advisory shows up in the production tree (`npm audit --omit=dev`).
+      # Retries an audit-endpoint outage (3 attempts) and fails if it persists;
+      # never passes on an error. See .claude/rules/security.md, "npm audit gate".
       - name: Audit npm dependencies
-        run: npm audit --audit-level=high
+        run: node scripts/audit-gate.mjs
 
       - name: Lint
         run: npm run lint

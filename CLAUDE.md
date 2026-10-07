@@ -33,8 +33,9 @@ Node 24 leaves *active* LTS on 2026-10-20 (Node 26 takes over) but stays securit
 tags, `@types/node`, `engines.node`, and `REQUIRED_NODE_VERSION` in `scripts/setup.ts`.
 
 Note the runner stage runs `npm uninstall -g npm`, so **the production image ships no npm** — the
-npm version that matters is CI's (whatever Node 24 bundles: 11.19.0), which gates
-`npm audit --audit-level=high`.
+npm version that matters is CI's (whatever Node 24 bundles: 11.19.0), which runs the npm audit
+deploy gate (`node scripts/audit-gate.mjs`: any HIGH/CRITICAL fails except advisories in
+`scripts/audit-allowlist.json` — see `.claude/rules/security.md`, "npm audit gate and its allow-list").
 
 ## Architecture
 

@@ -8,6 +8,7 @@ Perform a comprehensive security and update audit of the project's dependencies:
 
 ### 1. Vulnerability Analysis
 - Run `npm audit` to identify known vulnerabilities
+- Run `node scripts/audit-gate.mjs` — the CI deploy gate (HIGH/CRITICAL fail unless allow-listed in `scripts/audit-allowlist.json`); report any allow-list entry past its `review_by` date or no longer needed
 - Search the web for recent CVEs affecting major dependencies (Next.js, React, auth libraries, ORMs)
 - Check Snyk and NVD databases for any critical issues
 - Classify vulnerabilities by severity (Critical, High, Moderate, Low)

@@ -1,8 +1,9 @@
 name: Nightly Audit
 
-# `npm audit --audit-level=high` is a hard deploy gate: it runs in the `verify`
-# job of docker-build-push.yml, and when it exits 1 the `build-scan-and-push`
-# job is skipped, so no image ships.
+# The npm audit gate (`node scripts/audit-gate.mjs`: any HIGH or CRITICAL
+# advisory fails, except those in scripts/audit-allowlist.json) is a hard deploy
+# gate: it runs in the `verify` job of docker-build-push.yml, and when it exits
+# non-zero the `build-scan-and-push` job is skipped, so no image ships.
 #
 # The problem is that a red `verify` on some unrelated push looks like any other
 # CI failure — nobody connects it to "no image was pushed." That has caused
@@ -44,5 +45,7 @@ jobs:
 
       # Identical to the gate in docker-build-push.yml `verify`. If this fails,
       # deploys are already blocked — fix the advisory before merging anything.
+      # It also warns (without failing) when an allow-list entry passes its
+      # review_by date or no longer matches anything in the audit.
       - name: Audit npm dependencies
-        run: npm audit --audit-level=high
+        run: node scripts/audit-gate.mjs

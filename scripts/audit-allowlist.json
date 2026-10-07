@@ -1,0 +1,9 @@
+[
+  {
+    "id": "GHSA-vfj7-8cjw-p6xm",
+    "package": "braces",
+    "reason": "Dev-only lint toolchain path: eslint-config-next -> @next/eslint-plugin-next (16.3.x/16.4.0 pin fast-glob 3.3.1) -> fast-glob -> micromatch -> braces. No patched braces release exists (every version <=3.0.3 is affected). braces is not in the production image: the runner stage ships only .next/standalone, which contains none of braces, micromatch, fast-glob or eslint.",
+    "added": "2026-10-07",
+    "review_by": "2026-11-07"
+  }
+]
