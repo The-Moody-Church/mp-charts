@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
+import { readFileSync, readdirSync } from "fs";
 import { resolve } from "path";
 
 import {
@@ -10,13 +10,17 @@ import {
   EXIT_VIOLATION,
   MAX_ATTEMPTS,
   NPM_AUDIT_ARGS,
+  NPM_AUDIT_PROD_ARGS,
   RETRY_DELAY_MS,
   advisoryGhsaId,
   annotation,
   assertAuditReport,
   evaluateAudit,
+  formatProductionCheck,
   formatResult,
   parseAuditOutput,
+  productionExposedEntries,
+  redactUrlCredentials,
   runGate,
   validateAllowlist,
 } from "./audit-gate-lib.mjs";
@@ -325,6 +329,49 @@ describe("evaluateAudit", () => {
   });
 });
 
+describe("productionExposedEntries (the dev-only premise)", () => {
+  it("returns the entry when the production-only report lists its advisory", () => {
+    // `npm audit --omit=dev` once micromatch -> braces is a production dependency.
+    const prod = report([
+      vuln("braces", "high", [advisory("braces", BRACES)]),
+      vuln("micromatch", "high", ["braces"]),
+    ]);
+    expect(productionExposedEntries(prod, ALLOWLIST)).toEqual([ALLOWLIST[0]]);
+  });
+
+  it("returns nothing when the advisory stays in the dev tree", () => {
+    expect(productionExposedEntries(report([]), ALLOWLIST)).toEqual([]);
+    const prodOther = report([vuln("sharp", "high", [advisory("sharp", SHARP)])]);
+    expect(productionExposedEntries(prodOther, ALLOWLIST)).toEqual([]);
+  });
+
+  it("matches at any severity, and only on GHSA id AND package", () => {
+    const moderate = report([vuln("braces", "moderate", [advisory("braces", BRACES, "moderate")])]);
+    expect(productionExposedEntries(moderate, ALLOWLIST)).toEqual([ALLOWLIST[0]]);
+    const otherPackage = report([vuln("not-braces", "high", [advisory("not-braces", BRACES)])]);
+    expect(productionExposedEntries(otherPackage, ALLOWLIST)).toEqual([]);
+    expect(productionExposedEntries(report([vuln("braces", "high", [advisory("braces", BRACES)])]), [])).toEqual([]);
+  });
+
+  it("refuses a malformed report or allow-list instead of reading it as clean", () => {
+    expect(() => productionExposedEntries({}, ALLOWLIST)).toThrow(/report version/);
+    const lying = report([vuln("braces", "high", [advisory("braces", BRACES)])]);
+    lying.metadata.vulnerabilities.high = 0;
+    expect(() => productionExposedEntries(lying, ALLOWLIST)).toThrow(/inconsistent/);
+    expect(() => productionExposedEntries(report([]), [{ id: BRACES }])).toThrow(/audit allow-list/);
+  });
+
+  it("formats an exposed entry as an error, and none as a plain line", () => {
+    expect(formatProductionCheck([])).toEqual([
+      "npm audit gate: no allow-listed advisory reaches a production dependency (npm audit --omit=dev).",
+    ]);
+    const [line, ...rest] = formatProductionCheck([ALLOWLIST[0]]);
+    expect(rest).toEqual([]);
+    expect(line).toMatch(/^::error::npm audit: allow-listed GHSA-vfj7-8cjw-p6xm \(braces\) now reaches a production dependency/);
+    expect(line).toContain("the dev-only exception no longer holds");
+  });
+});
+
 describe("validateAllowlist", () => {
   it("accepts the empty list and a well-formed entry", () => {
     expect(validateAllowlist([])).toEqual([]);
@@ -394,6 +441,30 @@ describe("parseAuditOutput", () => {
       detail: "could not run npm audit: spawn npm ENOENT",
     });
   });
+
+  it("masks credentials in a registry URL that npm echoes back", () => {
+    const url = "https://ci-user:s3cret-token@registry.example.invalid/-/npm/v1/security/advisories/bulk";
+    const stdout = JSON.stringify({ message: `503 Service Unavailable - POST ${url}`, statusCode: 503 });
+    const down = parseAuditOutput({ status: 1, stdout, stderr: `npm error ${ENDPOINT_ERROR_MARKER}` });
+    expect(down.kind).toBe("endpoint-error");
+    expect(JSON.stringify(down)).not.toContain("s3cret-token");
+    expect(JSON.stringify(down)).toContain("https://***@registry.example.invalid/");
+    const failed = parseAuditOutput({
+      status: 1,
+      stdout: JSON.stringify({ error: { code: "E401", summary: `Unable to authenticate, ${url}` } }),
+    });
+    expect(failed.kind).toBe("invalid");
+    expect(JSON.stringify(failed)).not.toContain("s3cret-token");
+    expect(JSON.stringify(parseAuditOutput({ status: null, error: new Error(`fetch ${url}`) }))).not.toContain(
+      "s3cret-token",
+    );
+  });
+
+  it("redactUrlCredentials leaves URLs without credentials alone", () => {
+    const plain = "POST https://registry.npmjs.org/-/npm/v1/security/advisories/bulk and https://github.com/advisories/x";
+    expect(redactUrlCredentials(plain)).toBe(plain);
+    expect(redactUrlCredentials("https://tok@host/a https://u:p@other/b")).toBe("https://***@host/a https://***@other/b");
+  });
 });
 
 describe("formatResult / annotation", () => {
@@ -434,12 +505,16 @@ describe("runGate", () => {
   const goodRun = (vulns: Vuln[]) => ({ status: 1, stdout: JSON.stringify(report(vulns)), stderr: "" });
   const endpointDown = { status: 1, stdout: "{}", stderr: `npm error ${ENDPOINT_ERROR_MARKER}` };
 
+  /** Each audit call takes the next run; the last one repeats. */
   function harness(runs: Array<Record<string, unknown>>, allowlist: unknown = ALLOWLIST) {
     const lines: string[] = [];
     const sleeps: number[] = [];
-    let calls = 0;
+    const args: string[][] = [];
     const exit = runGate({
-      runAudit: () => runs[Math.min(calls++, runs.length - 1)] as never,
+      runAudit: (a: readonly string[]) => {
+        args.push([...a]);
+        return runs[Math.min(args.length - 1, runs.length - 1)] as never;
+      },
       sleep: async (ms: number) => {
         sleeps.push(ms);
       },
@@ -447,13 +522,55 @@ describe("runGate", () => {
       allowlist,
       today: TODAY,
     });
-    return { exit, lines, sleeps, calls: () => calls };
+    return { exit, lines, sleeps, args, calls: () => args.length };
   }
 
-  it("passes the allow-listed chain (exit 0)", async () => {
-    const h = harness([goodRun(bracesChain())]);
+  /** The real braces chain as `npm audit --omit=dev` lists it once braces is a prod dependency. */
+  const prodBraces = () => goodRun([vuln("braces", "high", [advisory("braces", BRACES)]), vuln("micromatch", "high", ["braces"])]);
+
+  it("passes the allow-listed chain once the production tree is clean (exit 0)", async () => {
+    const h = harness([goodRun(bracesChain()), goodRun([])]);
     expect(await h.exit).toBe(EXIT_PASS);
     expect(h.lines.filter((l) => l.startsWith("::notice::"))).toHaveLength(5);
+    expect(h.args).toEqual([[...NPM_AUDIT_ARGS], [...NPM_AUDIT_PROD_ARGS]]);
+    expect(h.lines.at(-1)).toBe(
+      "npm audit gate: no allow-listed advisory reaches a production dependency (npm audit --omit=dev).",
+    );
+  });
+
+  it("FAILS when an allow-listed advisory reaches a production dependency (exit 1)", async () => {
+    // Every gate passed this before: micromatch@4.0.8 added to dependencies made
+    // braces a production dependency, and the allow-list still matched.
+    const h = harness([goodRun(bracesChain()), prodBraces()]);
+    expect(await h.exit).toBe(EXIT_VIOLATION);
+    expect(h.calls()).toBe(2);
+    const errors = h.lines.filter((l) => l.startsWith("::error::"));
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain(`allow-listed ${BRACES} (braces) now reaches a production dependency`);
+  });
+
+  it("skips the production audit when no allow-list entry is in use", async () => {
+    const clean = harness([goodRun([]), prodBraces()]);
+    expect(await clean.exit).toBe(EXIT_PASS);
+    expect(clean.args).toEqual([[...NPM_AUDIT_ARGS]]);
+
+    const failing = harness([goodRun([...bracesChain(), vuln("sharp", "high", [advisory("sharp", SHARP)])]), goodRun([])]);
+    expect(await failing.exit).toBe(EXIT_VIOLATION);
+    expect(failing.calls()).toBe(1);
+  });
+
+  it(`retries the production audit's endpoint error too, then FAILS — never passes`, async () => {
+    const h = harness([goodRun(bracesChain()), endpointDown]);
+    expect(await h.exit).toBe(EXIT_UNVERIFIED);
+    expect(h.calls()).toBe(1 + MAX_ATTEMPTS);
+    expect(h.args.slice(1)).toEqual(Array(MAX_ATTEMPTS).fill([...NPM_AUDIT_PROD_ARGS]));
+    expect(h.lines.at(-1)).toMatch(/^::error::npm audit --omit=dev endpoint unavailable after 3 attempts/);
+  });
+
+  it("fails when the production audit's output is not a valid report", async () => {
+    const h = harness([goodRun(bracesChain()), { status: 1, stdout: "{}", stderr: "" }]);
+    expect(await h.exit).toBe(EXIT_UNVERIFIED);
+    expect(h.calls()).toBe(2);
   });
 
   it("fails a violation (exit 1)", async () => {
@@ -465,6 +582,7 @@ describe("runGate", () => {
     const h = harness([endpointDown]);
     expect(await h.exit).toBe(EXIT_UNVERIFIED);
     expect(h.calls()).toBe(MAX_ATTEMPTS);
+    expect(h.args).toEqual(Array(MAX_ATTEMPTS).fill([...NPM_AUDIT_ARGS]));
     expect(h.sleeps).toEqual(Array(MAX_ATTEMPTS - 1).fill(RETRY_DELAY_MS));
     expect(h.lines.at(-1)).toMatch(/^::error::npm audit endpoint unavailable after 3 attempts/);
   });
@@ -499,34 +617,59 @@ describe("npm audit invocation", () => {
       "--include=optional",
       "--include=peer",
     ]);
+    // The production-tree check: dev omitted on purpose, everything else pinned.
+    expect(NPM_AUDIT_PROD_ARGS).toEqual([
+      "audit",
+      "--json",
+      "--offline=false",
+      "--omit=dev",
+      "--include=optional",
+      "--include=peer",
+    ]);
+    // The runner passes runGate's args straight to npm, from the repo root.
     const runner = readFileSync(resolve(__dirname, "audit-gate.mjs"), "utf8");
-    expect(runner).toContain('spawnSync("npm", [...NPM_AUDIT_ARGS], {');
+    expect(runner).toContain('spawnSync("npm", [...args], {');
+    expect(runner).toContain("cwd: repoRoot,");
   });
 });
 
 describe("CI wiring", () => {
+  // The same test file runs in mp-charts, event-manager and mp-senior-care, so
+  // it finds the workflows instead of naming them (event-manager has no
+  // nightly audit). docker-build-push.yml is the deploy gate in all three.
+  const WORKFLOWS = resolve(__dirname, "..", ".github/workflows");
+  const read = (workflow: string) => readFileSync(resolve(WORKFLOWS, workflow), "utf8");
+  const workflows = readdirSync(WORKFLOWS).filter((f) => /\.ya?ml$/.test(f)).sort();
+  const AUDIT_STEP = /^\s*- name: Audit npm dependencies\s*$/m;
+  const withAuditStep = workflows.filter((wf) => AUDIT_STEP.test(read(wf)));
+  /** YAML without comment lines: comments may name the old command. */
+  const code = (text: string) =>
+    text
+      .split("\n")
+      .filter((line) => !line.trimStart().startsWith("#"))
+      .join("\n");
+
   /** One step of a workflow, found by its exact `- name:`. */
   function step(workflow: string, name: string): string {
-    const wf = readFileSync(resolve(__dirname, "..", ".github/workflows", workflow), "utf8");
-    const steps = wf.split(/\n(?=\s*- name: )/);
+    const steps = read(workflow).split(/\n(?=\s*- name: )/);
     const matches = steps.filter((s) => s.trimStart().startsWith(`- name: ${name}\n`));
     expect(matches).toHaveLength(1);
     return matches[0];
   }
 
-  it.each(["docker-build-push.yml", "audit-nightly.yml"])(
-    "%s runs the gate in 'Audit npm dependencies', with no way to fail open",
-    (workflow) => {
-      // Comments may name the old command; the step's YAML may not.
-      const audit = step(workflow, "Audit npm dependencies")
-        .split("\n")
-        .filter((line) => !line.trimStart().startsWith("#"))
-        .join("\n");
-      expect(audit).toMatch(/^\s+run: node scripts\/audit-gate\.mjs$/m);
-      expect(audit).not.toMatch(/continue-on-error|\|\| true|npm audit/);
-      const wf = readFileSync(resolve(__dirname, "..", ".github/workflows", workflow), "utf8");
-      // The raw call it replaced must not come back in any other step.
-      expect(wf).not.toMatch(/^\s+run: npm audit\b/m);
-    },
-  );
+  it("the deploy workflow has the 'Audit npm dependencies' step", () => {
+    expect(withAuditStep).toContain("docker-build-push.yml");
+  });
+
+  it.each(withAuditStep)("%s runs the gate in 'Audit npm dependencies', with no way to fail open", (workflow) => {
+    const audit = code(step(workflow, "Audit npm dependencies"));
+    expect(audit).toMatch(/^\s+run: node scripts\/audit-gate\.mjs$/m);
+    expect(audit).not.toMatch(/continue-on-error|\|\| true|npm audit/);
+  });
+
+  it.each(workflows)("%s never calls the raw npm audit it replaced", (workflow) => {
+    const yaml = code(read(workflow));
+    expect(yaml).not.toMatch(/^\s+run: npm audit\b/m);
+    expect(yaml).not.toMatch(/npm audit --audit-level/);
+  });
 });

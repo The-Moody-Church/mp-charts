@@ -24,6 +24,11 @@
  *   nothing on the way is unresolvable, and EVERY root advisory is
  *   allow-listed (GHSA id AND package must both match the entry). Anything
  *   else is a violation.
+ * - An allow-list entry is a DEV-ONLY exception. Whenever one is in use, the
+ *   gate audits the production tree too (`npm audit --omit=dev`); if an
+ *   allow-listed advisory shows up there at any severity, the premise of the
+ *   entry no longer holds and the gate fails. Trivy cannot catch that case: it
+ *   runs with `ignore-unfixed`, and an allow-listed advisory has no fix.
  *
  * Everything here is pure (no I/O, no clock, no process) so it can be unit
  * tested; `audit-gate.mjs` supplies npm, the allow-list file, the date, sleep
@@ -58,6 +63,24 @@ export const NPM_AUDIT_ARGS = Object.freeze([
   "--json",
   "--offline=false",
   "--include=dev",
+  "--include=optional",
+  "--include=peer",
+]);
+
+/**
+ * The production-tree audit: what `npm ci --omit=dev` installs. Only used to
+ * check that allow-listed (dev-only) advisories stay out of it. The same pins
+ * as NPM_AUDIT_ARGS, except that dev is omitted on purpose; `optional` and
+ * `peer` stay included, because an `omit=optional` or `omit=peer` setting
+ * would hide part of the production tree. Measured with npm 11.19: braces made
+ * a production dependency is listed under these flags even with
+ * `offline=true`, `NODE_ENV=production` or `omit=optional` set.
+ */
+export const NPM_AUDIT_PROD_ARGS = Object.freeze([
+  "audit",
+  "--json",
+  "--offline=false",
+  "--omit=dev",
   "--include=optional",
   "--include=peer",
 ]);
@@ -105,6 +128,16 @@ export function normalizeGhsaId(id) {
 /** Today's date (UTC) as YYYY-MM-DD. @param {Date} [now] */
 export function todayUtc(now = new Date()) {
   return now.toISOString().slice(0, 10);
+}
+
+/**
+ * Masks the userinfo of any URL in `text` (`https://user:token@host` ->
+ * `https://***@host`). npm's error messages embed the registry URL, and a
+ * registry configured with credentials in its URL must not reach the CI log.
+ * @param {string} text
+ */
+export function redactUrlCredentials(text) {
+  return text.replace(/(\/\/)[^/\s@]+@/g, "$1***@");
 }
 
 /**
@@ -329,19 +362,49 @@ export function evaluateAudit(auditJson, allowlist, today) {
 
   // An entry is stale once its advisory appears nowhere in the report, at any
   // severity — the dependency was upgraded or removed, so the entry can go.
-  const present = new Set();
+  const present = new Set(reportAdvisories(vulnerabilities).map((a) => a.id));
+  const staleEntries = entries.filter((e) => !present.has(normalizeGhsaId(e.id)));
+  const overdueEntries = entries.filter((e) => e.review_by < todayIso);
+
+  return { violations, allowed, staleEntries, overdueEntries };
+}
+
+/**
+ * Every advisory object in any `via` of the report that has a single GHSA id,
+ * with the package it was filed against.
+ * @param {Record<string, any>} vulnerabilities
+ * @returns {{ id: string, package: string | null }[]}
+ */
+function reportAdvisories(vulnerabilities) {
+  const found = [];
   for (const vuln of Object.values(vulnerabilities)) {
     if (!isPlainObject(vuln) || !Array.isArray(vuln.via)) continue;
     for (const item of vuln.via) {
       if (!isPlainObject(item)) continue;
       const id = advisoryGhsaId(item);
-      if (id !== null) present.add(id);
+      if (id !== null) found.push({ id, package: typeof item.name === "string" ? item.name : null });
     }
   }
-  const staleEntries = entries.filter((e) => !present.has(normalizeGhsaId(e.id)));
-  const overdueEntries = entries.filter((e) => e.review_by < todayIso);
+  return found;
+}
 
-  return { violations, allowed, staleEntries, overdueEntries };
+/**
+ * The allow-list entries whose advisory (GHSA id AND package) appears, at any
+ * severity, in a PRODUCTION-ONLY audit report (`npm audit --omit=dev`). Every
+ * entry is a dev-only exception, so any entry returned here no longer holds
+ * and the gate must fail. Validates the report and the allow-list the same
+ * way `evaluateAudit` does, and throws rather than read a bad report as clean.
+ * @param {unknown} prodAuditJson parsed `npm audit --json --omit=dev` output
+ * @param {unknown} allowlist parsed `scripts/audit-allowlist.json`
+ * @returns {AllowlistEntry[]}
+ */
+export function productionExposedEntries(prodAuditJson, allowlist) {
+  const report = assertAuditReport(prodAuditJson);
+  const entries = validateAllowlist(allowlist);
+  const present = new Set(
+    reportAdvisories(report.vulnerabilities).map((a) => JSON.stringify([a.id, a.package])),
+  );
+  return entries.filter((e) => present.has(JSON.stringify([normalizeGhsaId(e.id), e.package])));
 }
 
 /**
@@ -352,7 +415,7 @@ export function evaluateAudit(auditJson, allowlist, today) {
  */
 export function parseAuditOutput(run) {
   if (run.error) {
-    return { kind: "invalid", detail: `could not run npm audit: ${run.error.message}` };
+    return { kind: "invalid", detail: redactUrlCredentials(`could not run npm audit: ${run.error.message}`) };
   }
   const stdout = run.stdout ?? "";
   const stderr = run.stderr ?? "";
@@ -366,7 +429,7 @@ export function parseAuditOutput(run) {
     } catch {
       // not JSON — the marker alone is enough
     }
-    return { kind: "endpoint-error", detail };
+    return { kind: "endpoint-error", detail: redactUrlCredentials(detail) };
   }
   let parsed;
   try {
@@ -379,7 +442,10 @@ export function parseAuditOutput(run) {
   }
   if (isPlainObject(parsed) && isPlainObject(parsed.error)) {
     const { code, summary } = parsed.error;
-    return { kind: "invalid", detail: `npm audit failed: ${String(code ?? "")} ${String(summary ?? "")}`.trim() };
+    return {
+      kind: "invalid",
+      detail: redactUrlCredentials(`npm audit failed: ${String(code ?? "")} ${String(summary ?? "")}`.trim()),
+    };
   }
   try {
     return { kind: "report", report: assertAuditReport(parsed) };
@@ -475,13 +541,84 @@ export function formatResult(result) {
 }
 
 /**
- * The whole gate with its I/O injected. Retries only the endpoint-error case,
- * up to MAX_ATTEMPTS in total, and never passes on an error: an endpoint that
- * stays down, output that is not a valid report, or an invalid allow-list all
- * return EXIT_UNVERIFIED.
+ * The lines the gate prints for the production-tree check: an error for each
+ * allow-list entry whose advisory reached a production dependency, or one
+ * line saying none did.
+ * @param {AllowlistEntry[]} exposed from `productionExposedEntries`
+ * @returns {string[]}
+ */
+export function formatProductionCheck(exposed) {
+  if (exposed.length === 0) {
+    return [
+      "npm audit gate: no allow-listed advisory reaches a production dependency (npm audit --omit=dev).",
+    ];
+  }
+  return exposed.map((entry) =>
+    annotation(
+      "error",
+      `npm audit: allow-listed ${entry.id} (${entry.package}) now reaches a production dependency (npm audit --omit=dev lists it); the dev-only exception no longer holds. Remove that production path, or treat the advisory as a violation and remove the entry from scripts/audit-allowlist.json.`,
+    ),
+  );
+}
+
+/**
+ * One audit, retrying only the endpoint-error case, up to `maxAttempts` in
+ * total. Returns the report, or null after printing why it could not be
+ * verified — never a report it could not read.
+ * @param {object} io
+ * @param {(args: readonly string[]) => AuditRun} io.runAudit
+ * @param {readonly string[]} io.args
+ * @param {string} io.label how the messages name this audit
+ * @param {(ms: number) => Promise<void>} io.sleep
+ * @param {(line: string) => void} io.print
+ * @param {number} io.maxAttempts
+ * @param {number} io.retryDelayMs
+ * @returns {Promise<Record<string, any> | null>}
+ */
+async function auditWithRetry({ runAudit, args, label, sleep, print, maxAttempts, retryDelayMs }) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const parsed = parseAuditOutput(runAudit(args));
+    if (parsed.kind === "report") return parsed.report;
+    if (parsed.kind === "endpoint-error") {
+      if (attempt < maxAttempts) {
+        print(
+          annotation(
+            "warning",
+            `${label} endpoint unavailable (attempt ${attempt}/${maxAttempts}): ${parsed.detail}; retrying in ${Math.round(retryDelayMs / 1000)}s`,
+          ),
+        );
+        await sleep(retryDelayMs);
+        continue;
+      }
+      print(
+        annotation(
+          "error",
+          `${label} endpoint unavailable after ${maxAttempts} attempts (${parsed.detail}) — could not verify advisories.`,
+        ),
+      );
+      return null;
+    }
+    print(annotation("error", `${parsed.detail} — could not verify advisories.`));
+    return null;
+  }
+  // Unreachable with maxAttempts >= 1; fail closed if it is ever reached.
+  print(annotation("error", `${label} did not run — could not verify advisories.`));
+  return null;
+}
+
+/**
+ * The whole gate with its I/O injected. Never passes on an error: an endpoint
+ * that stays down (after MAX_ATTEMPTS), output that is not a valid report, or
+ * an invalid allow-list all return EXIT_UNVERIFIED.
+ *
+ * 1. `npm audit` over the full tree (NPM_AUDIT_ARGS), decided by
+ *    `evaluateAudit`. Any violation: EXIT_VIOLATION.
+ * 2. Only when that passed with at least one allow-listed finding: `npm audit
+ *    --omit=dev` (NPM_AUDIT_PROD_ARGS). Any allow-listed advisory found in the
+ *    production tree: EXIT_VIOLATION.
  *
  * @param {object} io
- * @param {() => AuditRun} io.runAudit runs `npm audit --json` once
+ * @param {(args: readonly string[]) => AuditRun} io.runAudit runs `npm <args>` once
  * @param {(ms: number) => Promise<void>} io.sleep
  * @param {(line: string) => void} io.print
  * @param {unknown} io.allowlist parsed allow-list file
@@ -505,44 +642,33 @@ export async function runGate({
     print(annotation("error", `${/** @type {Error} */ (error).message} — could not verify advisories.`));
     return EXIT_UNVERIFIED;
   }
+  const retry = { runAudit, sleep, print, maxAttempts, retryDelayMs };
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const parsed = parseAuditOutput(runAudit());
-    if (parsed.kind === "endpoint-error") {
-      if (attempt < maxAttempts) {
-        print(
-          annotation(
-            "warning",
-            `npm audit endpoint unavailable (attempt ${attempt}/${maxAttempts}): ${parsed.detail}; retrying in ${Math.round(retryDelayMs / 1000)}s`,
-          ),
-        );
-        await sleep(retryDelayMs);
-        continue;
-      }
-      print(
-        annotation(
-          "error",
-          `npm audit endpoint unavailable after ${maxAttempts} attempts (${parsed.detail}) — could not verify advisories.`,
-        ),
-      );
-      return EXIT_UNVERIFIED;
-    }
-    if (parsed.kind === "invalid") {
-      print(annotation("error", `${parsed.detail} — could not verify advisories.`));
-      return EXIT_UNVERIFIED;
-    }
-
-    let result;
-    try {
-      result = evaluateAudit(parsed.report, allowlist, today);
-    } catch (error) {
-      print(annotation("error", `${/** @type {Error} */ (error).message} — could not verify advisories.`));
-      return EXIT_UNVERIFIED;
-    }
-    for (const line of formatResult(result)) print(line);
-    return result.violations.length > 0 ? EXIT_VIOLATION : EXIT_PASS;
+  const report = await auditWithRetry({ ...retry, args: NPM_AUDIT_ARGS, label: "npm audit" });
+  if (report === null) return EXIT_UNVERIFIED;
+  let result;
+  try {
+    result = evaluateAudit(report, allowlist, today);
+  } catch (error) {
+    print(annotation("error", `${/** @type {Error} */ (error).message} — could not verify advisories.`));
+    return EXIT_UNVERIFIED;
   }
-  // Unreachable with maxAttempts >= 1; fail closed if it is ever reached.
-  print(annotation("error", "npm audit did not run — could not verify advisories."));
-  return EXIT_UNVERIFIED;
+  for (const line of formatResult(result)) print(line);
+  if (result.violations.length > 0) return EXIT_VIOLATION;
+  // No exception in use, so there is no dev-only premise to check.
+  if (result.allowed.length === 0) return EXIT_PASS;
+
+  const prodReport = await auditWithRetry({ ...retry, args: NPM_AUDIT_PROD_ARGS, label: "npm audit --omit=dev" });
+  if (prodReport === null) return EXIT_UNVERIFIED;
+  let exposed;
+  try {
+    exposed = productionExposedEntries(prodReport, allowlist);
+  } catch (error) {
+    print(
+      annotation("error", `npm audit --omit=dev: ${/** @type {Error} */ (error).message} — could not verify advisories.`),
+    );
+    return EXIT_UNVERIFIED;
+  }
+  for (const line of formatProductionCheck(exposed)) print(line);
+  return exposed.length > 0 ? EXIT_VIOLATION : EXIT_PASS;
 }
