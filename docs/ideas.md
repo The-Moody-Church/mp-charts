@@ -26,7 +26,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Contact-Lookup badges for Member should specify thpe (#85)](#contact-lookup-badges-for-member-should-specify-thpe-85)~~ ✅
 
 ### Improvements
-- [Uploads of 10–20 MB fail: the proxy's 10 MB body clone truncates them](#uploads-of-1020-mb-fail-the-proxys-10-mb-body-clone-truncates-them)
+- [Uploads of 10–20 MB fail: the proxy's 10 MB body clone truncates them (#252)](#uploads-of-1020-mb-fail-the-proxys-10-mb-body-clone-truncates-them-252)
 - [Serving metrics: reconcile adult-only vs all-ages counts (#110)](#serving-metrics-reconcile-adult-only-vs-all-ages-counts-110)
 - ~~[Summer Blast: surface expired BG/cert when a renewal is in progress](#summer-blast-surface-expired-bgcert-when-a-renewal-is-in-progress)~~ ✅
 - ~~[Summer Blast: sort signups by Response_Date (newest first)](#summer-blast-sort-signups-by-response_date-newest-first)~~ ✅
@@ -59,7 +59,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
 
 ### Technical Debt
-- [caching.md misdescribes `expire` and `updateTag`](#cachingmd-misdescribes-expire-and-updatetag)
+- [caching.md misdescribes `expire` and `updateTag` (#253)](#cachingmd-misdescribes-expire-and-updatetag-253)
 - [Upgrade Vitest 4 → 5 (unblocked by better-auth 1.7) (#241)](#upgrade-vitest-4-5-unblocked-by-better-auth-17-241)
 - [Digest-pin the Docker base images (#217)](#digest-pin-the-docker-base-images-217)
 - [cache-handler.js depends on private Next.js internals (#218)](#cache-handlerjs-depends-on-private-nextjs-internals-218)
@@ -183,7 +183,7 @@ Extracted `statusBadgeColor` to shared utility (`src/lib/contact-badge-utils.ts`
 
 ## Improvements
 
-### Uploads of 10–20 MB fail: the proxy's 10 MB body clone truncates them
+### Uploads of 10–20 MB fail: the proxy's 10 MB body clone truncates them ([#252](https://github.com/The-Moody-Church/mp-charts/issues/252))
 Found 2026-10-21 while reviewing the Next 16.4.2 upgrade. The bug predates it: 16.3.8 behaves the same. `src/proxy.ts` matches Server Action POSTs, and Next clones every proxied request body up to `proxyClientMaxBodySize`, which defaults to 10 MB (`next/dist/server/body-streams.js`). Past that it ends the stream, so the action handler receives a body cut short at about 10 MB. Our limits promise 20 MB: `MAX_FILE_SIZE` in `src/lib/processing-utils.ts`, `bodySizeLimit: '20mb'` in `next.config.ts` and "Max 20 MB" in the UI. An upload between 10 and 20 MB therefore fails with a generic parse error instead of "File too large". Two fixes: raise `experimental.proxyClientMaxBodySize` a little above 20 MB, which widens the anonymous pre-auth buffering residual described in CLAUDE.md, or lower the limits and the UI text below 10 MB. Confirm with a real 12 MB upload against a local production build first.
 
 ### Serving metrics: reconcile adult-only vs all-ages counts ([#110](https://github.com/The-Moody-Church/mp-charts/issues/110))
@@ -289,7 +289,7 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 
 ## Technical Debt
 
-### caching.md misdescribes `expire` and `updateTag`
+### caching.md misdescribes `expire` and `updateTag` ([#253](https://github.com/The-Moody-Church/mp-charts/issues/253))
 Found 2026-10-21 while reading the Next 16.3.8 and 16.4.2 dist files. Both points are wrong in both versions.
 1. Our `cacheLife({ revalidate, stale })` calls pass no `expire`, so Next uses the default profile's, `INFINITE_CACHE`. "expire = revalidate + stale = 30h" is not true, and `cache-handler.js`'s expire check never fires. Entries end only on LRU eviction, tag expiry or a restart. `stale` is the client router's staleness. If a 30h hard ceiling is wanted, pass `expire: 108000` explicitly.
 2. `updateTag` is an immediate expiry, so the next read regenerates and waits for it. It is not stale-while-revalidate; that behaviour is `revalidateTag(tag, profile)`. `dashboard/actions.ts` already behaves correctly, because it clears `serviceCache` first.
