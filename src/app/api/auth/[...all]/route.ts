@@ -72,7 +72,8 @@ const MAX_SIGN_IN_SOCIAL_BODY_BYTES = 4096;
  * as soon as more than `limit` bytes arrive, so this filter never parses, and
  * better-auth never receives, more than the cap, whatever Content-Length says.
  * It does NOT bound what the server buffers: src/proxy.ts matches /api/auth,
- * so Next (16.3.4 getCloneableBody, next/dist/server/body-streams.js) has
+ * so Next (getCloneableBody, next/dist/server/body-streams.js; byte-identical
+ * from 16.3.4 through 16.4.2) has
  * already read the whole body, up to its 10 MB proxy clone limit, and waited
  * for it to end before this handler runs (2026-09-29, local standalone build
  * on Node 24: 20 concurrent 9 MB bodies, +130 MB RSS, each then 404; a body
