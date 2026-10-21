@@ -5,12 +5,24 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      # One PR for all action bumps instead of one per action.
+      actions:
+        patterns:
+          - "*"
 
   # Maintain Docker base images (updates node:24-alpine)
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
+    ignore:
+      # A Node major is a deliberate change: .nvmrc, the four FROM tags,
+      # @types/node, engines.node and REQUIRED_NODE_VERSION move together in one
+      # commit (CLAUDE.md, "Node Runtime"). Node 24 is security-supported to
+      # 2028-04-30.
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
 
   # Maintain npm dependencies (updates package.json and package-lock.json)
   - package-ecosystem: "npm"
@@ -41,6 +53,25 @@ updates:
         applies-to: security-updates
         patterns:
           - "*"
+
+      # better-auth patches get their own PR. Groups match in order, so this must
+      # come before prod-minor-patch. Auth changes go to all four apps together,
+      # each with a live sign-in soak (workspace CLAUDE.md, "The Better Auth
+      # family"); bundling one with routine bumps would hide it.
+      better-auth:
+        applies-to: version-updates
+        patterns:
+          - "better-auth"
+          - "@better-auth/*"
+
+      # eslint-config-next 16.4.x fails lint in the sibling apps (react-hooks
+      # rules), so it needs code changes of its own. Kept apart so it cannot block
+      # the rest of the dev group. Also before dev-minor-patch.
+      eslint-config-next:
+        applies-to: version-updates
+        patterns:
+          - "eslint-config-next"
+          - "@next/eslint-plugin-next"
 
       # Routine version updates, split prod vs dev so a runtime bump is never
       # buried in a pile of tooling churn and can be reviewed on its own risk.
