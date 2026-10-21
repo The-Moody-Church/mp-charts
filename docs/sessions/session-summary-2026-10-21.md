@@ -87,6 +87,13 @@ deploy gate, patch Next.js, and start the N1 fix from the 2026-10-10 audit.
     files and milestones logged no `[scope:deny]` and no errors. The PR's CodeQL scan showed #10, #11 and #21
     fixed with no new alerts. Merged as `dc1d092` and deployed as `:latest`.
 
+- **`main` ruleset** (N22): blocks deletion and force pushes only, so docs-direct pushes and the issue-sync
+  bot still work.
+- **Dependabot config, ahead of turning version updates on.** Version updates have never run here because the
+  repo is a fork. Before enabling them: better-auth patches get their own group (auth goes to all four apps
+  with a sign-in soak); `eslint-config-next` / `@next/eslint-plugin-next` get their own group (16.4.x breaks
+  lint in the siblings); docker ignores `node` majors; github-actions bumps are grouped into one PR.
+
 ## Follow-ups found (not in this PR)
 
 - **Pre-existing: uploads of 10–20 MB are truncated.** The proxy's 10 MB body clone (`proxyClientMaxBodySize`)
