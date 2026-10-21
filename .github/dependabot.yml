@@ -41,6 +41,12 @@ updates:
       # half of this hold.)
       - dependency-name: "better-auth"
         update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      # @types/node is held to the container's Node major on purpose: a
+      # newer-Node-only API then fails tsc instead of failing at runtime on the
+      # Node 24 image (CLAUDE.md, "Node Runtime"). It moves with the Node major,
+      # in the same commit as .nvmrc and the FROM tags.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       # Security updates get their OWN group, separate from routine version
       # bumps. Previously a single `patterns: ["*"]` minor-and-patch group
