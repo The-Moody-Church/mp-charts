@@ -7,6 +7,7 @@ import { ComplianceProcessingService } from "@/services/complianceProcessingServ
 import { getComplianceToolBySlug } from "@/lib/compliance-tools-config";
 import type { ComplianceCard, ComplianceDetail, ComplianceMilestoneFileInfo } from "@/lib/dto";
 import { extractValidatedFiles, extractValidatedFilesResult, uploadContactPhoto } from "@/components/shared-actions/processing";
+import { errorForLog } from "@/lib/log-safe";
 
 async function requireComplianceAccess(slug: string) {
   const config = getComplianceToolBySlug(slug);
@@ -176,17 +177,10 @@ export async function getComplianceMilestoneFiles(slug: string, milestoneRecordI
     const service = ComplianceProcessingService.getInstance(slug);
     return await service.getMilestoneFiles(milestoneRecordId);
   } catch (error) {
-    console.error("Error fetching compliance milestone files:", error);
+    console.error("Error fetching compliance milestone files:", errorForLog(error));
     throw new Error("Failed to fetch milestone files");
   }
 }
-
-const requirementTableMap: Record<string, string> = {
-  background_check: 'Background_Checks',
-  certification: 'Participant_Certifications',
-  form: 'Form_Responses',
-  milestone: 'Participant_Milestones',
-};
 
 export async function getComplianceRequirementFiles(
   slug: string,
@@ -195,17 +189,14 @@ export async function getComplianceRequirementFiles(
 ): Promise<ComplianceMilestoneFileInfo[]> {
   try {
     await requireComplianceAccess(slug);
-    // SECURITY: use Object.hasOwn, not a truthiness check. `requirementTableMap` is
-    // a plain object literal, so `type: "constructor"` (or "__proto__") returns an
-    // inherited value that is truthy and slips past `if (!table)`. The message is
-    // static too — echoing `type` back would put client-controlled text, newlines
-    // included, into the console.error below.
-    const table = Object.hasOwn(requirementTableMap, type) ? requirementTableMap[type] : undefined;
-    if (!table) throw new Error("Unknown requirement type");
     const service = ComplianceProcessingService.getInstance(slug);
-    return await service.getRecordFiles(table, recordId);
+    // SECURITY (F2, N1): getRequirementFiles validates `type` against a fixed
+    // allowlist (Object.hasOwn) and asserts that the record's owner AND
+    // requirement type are in this tool's scope before listing any file. Never
+    // call an unscoped file lookup from here.
+    return await service.getRequirementFiles(type, recordId);
   } catch (error) {
-    console.error("Error fetching requirement files:", error);
+    console.error("Error fetching requirement files:", errorForLog(error));
     throw new Error("Failed to fetch requirement files");
   }
 }

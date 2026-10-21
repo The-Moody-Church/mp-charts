@@ -7,6 +7,7 @@ import { JourneyProcessingService } from "@/services/journeyProcessingService";
 import { getJourneyToolBySlug } from "@/lib/journey-tools-config";
 import type { JourneyCard, JourneyDetail, JourneyMilestoneFileInfo } from "@/lib/dto";
 import { extractValidatedFiles, extractValidatedFilesResult, uploadContactPhoto } from "@/components/shared-actions/processing";
+import { errorForLog } from "@/lib/log-safe";
 
 /** Validate slug and check feature access in one step. */
 async function requireJourneyAccess(slug: string) {
@@ -137,7 +138,7 @@ export async function getJourneyMilestoneFiles(slug: string, milestoneRecordId: 
     const service = JourneyProcessingService.getInstance(slug);
     return await service.getMilestoneFiles(milestoneRecordId);
   } catch (error) {
-    console.error("Error fetching journey milestone files:", error);
+    console.error("Error fetching journey milestone files:", errorForLog(error));
     throw new Error("Failed to fetch milestone files");
   }
 }

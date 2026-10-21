@@ -21,15 +21,22 @@ export function getScopeMode(): ScopeMode {
 }
 
 /**
- * Gate an access decision. In enforce mode, throws when `inScope` is false; in
- * report mode, logs the would-be denial and allows it. `context` must contain only
- * non-PII identifiers (e.g. numeric IDs) since it may be logged.
+ * Gate an access decision. In enforce mode, logs the denial and throws when
+ * `inScope` is false; in report mode, logs the would-be denial and allows it.
+ * `context` must contain only non-PII identifiers (e.g. numeric IDs) since it is
+ * logged. The thrown message stays fixed: the context goes to the log only, so an
+ * operator can tell which check denied which record when staff report missing data.
  */
 export function enforceScope(inScope: boolean, context: string): void {
   if (inScope) return;
+  // Contexts are numeric IDs and literals at runtime; the replace is the form
+  // CodeQL recognises, so the log lines below cannot be forged even if a future
+  // caller slips caller text in.
+  context = context.replace(/\n|\r/g, "");
   if (getScopeMode() === "report") {
     console.warn(`[scope:report] would deny out-of-scope access — ${context}`);
     return;
   }
+  console.warn(`[scope:deny] ${context}`);
   throw new Error("Forbidden: record is not in scope for this tool");
 }

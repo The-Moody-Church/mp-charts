@@ -88,14 +88,58 @@ interface CertificationRecord {
 interface FormResponseRecord {
   Form_Response_ID: number;
   Form_ID: number;
-  Contact_ID: number;
+  // Nullable in MP (models/FormResponses.ts): anonymous responses have no contact.
+  Contact_ID: number | null;
   Response_Date: string;
   Expires: string | null;
 }
 
+type RequirementType = ComplianceToolConfig['requirements'][number]['type'];
+
+interface RequirementRecordSpec {
+  table: string;
+  pk: string;
+  ownerField: 'Contact_ID' | 'Participant_ID';
+  /** Column holding the requirement's ID. null for background checks: the
+   *  checklist shows the contact's newest check of ANY type (requirementId 0 is
+   *  the generic "Background Check Required"), so a type match would deny files
+   *  the UI shows. */
+  typeField: 'Certification_Type_ID' | 'Form_ID' | 'Milestone_ID' | null;
+}
+
+/**
+ * The only tables getRequirementFiles can reach, keyed by checklist item type.
+ * SECURITY (N1): look `type` up with Object.hasOwn, never a truthiness check — it
+ * is caller-controlled, and "constructor"/"__proto__" return inherited values.
+ */
+const REQUIREMENT_RECORDS: Readonly<Record<RequirementType, RequirementRecordSpec>> = Object.freeze({
+  background_check: { table: 'Background_Checks', pk: 'Background_Check_ID', ownerField: 'Contact_ID', typeField: null },
+  certification: { table: 'Participant_Certifications', pk: 'Participant_Certification_ID', ownerField: 'Participant_ID', typeField: 'Certification_Type_ID' },
+  form: { table: 'Form_Responses', pk: 'Form_Response_ID', ownerField: 'Contact_ID', typeField: 'Form_ID' },
+  milestone: { table: 'Participant_Milestones', pk: 'Participant_Milestone_ID', ownerField: 'Participant_ID', typeField: 'Milestone_ID' },
+});
+
+function isRequirementType(type: unknown): type is RequirementType {
+  return typeof type === 'string' && Object.hasOwn(REQUIREMENT_RECORDS, type);
+}
+
+/** MP returns these columns as JSON numbers. Anything else (null, a string) is
+ *  treated as absent on purpose: coercing would reopen type confusion. */
+function isPositiveInt(v: unknown): v is number {
+  return typeof v === 'number' && Number.isSafeInteger(v) && v > 0;
+}
+
+/** How long one scope enumeration is shared. The modal fires one file request per
+ *  checklist item and milestone at once; without sharing, each re-reads the whole
+ *  tracking group (or every group-role batch). Scope is per tool, not per user,
+ *  so the per-slug instance is the right place. The cost: a member removed from
+ *  the tool keeps access for at most this long. */
+const SCOPE_CACHE_TTL_MS = 15_000;
+
 export class ComplianceProcessingService {
   private mp: MPHelper;
   private config: ComplianceToolConfig;
+  private scopedIds: { expiresAt: number; promise: Promise<Set<number>> } | null = null;
 
   private constructor(config: ComplianceToolConfig, mp?: MPHelper) {
     this.config = config;
@@ -107,7 +151,9 @@ export class ComplianceProcessingService {
   public static getInstance(slug: string): ComplianceProcessingService {
     const config = getComplianceToolBySlug(slug);
     if (!config || !config.enabled) {
-      throw new Error(`Compliance tool "${slug}" not found or disabled`);
+      // Static message: `slug` is caller-supplied, and this error reaches the
+      // actions' console.error (CodeQL js/log-injection).
+      throw new Error('Compliance tool not found or disabled');
     }
 
     if (!this.instances.has(slug)) {
@@ -134,8 +180,23 @@ export class ComplianceProcessingService {
    * to gate per-record access so a user of one tool cannot read or write another
    * tool's participants by passing a different (valid) ID. Mirrors the discovery
    * filters in getParticipantsForGroup / getParticipantsByGroupRole.
+   *
+   * Concurrent and back-to-back callers share one enumeration for
+   * SCOPE_CACHE_TTL_MS. A failed enumeration is not kept.
    */
-  private async getScopedParticipantIds(): Promise<Set<number>> {
+  private getScopedParticipantIds(): Promise<Set<number>> {
+    const now = Date.now();
+    if (this.scopedIds && this.scopedIds.expiresAt > now) return this.scopedIds.promise;
+    const promise = this.loadScopedParticipantIds();
+    const entry = { expiresAt: now + SCOPE_CACHE_TTL_MS, promise };
+    this.scopedIds = entry;
+    promise.catch(() => {
+      if (this.scopedIds === entry) this.scopedIds = null;
+    });
+    return promise;
+  }
+
+  private async loadScopedParticipantIds(): Promise<Set<number>> {
     const ids = new Set<number>();
     const now = nowCentral();
     const { trackingGroupId, pausedGroupId, supportsPause, groupRoleIds } = this.config;
@@ -209,6 +270,95 @@ export class ComplianceProcessingService {
     await this.assertParticipantInScope(rows[0].Participant_ID);
   }
 
+  /**
+   * SECURITY (F2): the Group_Participants row a pause/resume end-dates is
+   * caller-supplied. It must exist, belong to the (already scoped) participant,
+   * and, when the tool configures it, sit in the group being left: the tracking
+   * group on pause, the paused group on resume. Otherwise any row could be
+   * end-dated. Runs before any write.
+   */
+  private async assertGroupParticipantBelongsTo(
+    groupParticipantId: number,
+    participantId: number,
+    expectedGroupId: number | null,
+  ): Promise<void> {
+    const rows = await this.mp.getTableRecords<{ Participant_ID: number; Group_ID: number }>({
+      table: 'Group_Participants',
+      select: 'Participant_ID,Group_ID',
+      filter: `Group_Participant_ID = ${sanitizeId(groupParticipantId)}`,
+      top: 1,
+    });
+    const row = rows[0];
+    enforceScope(
+      !!row && row.Participant_ID === participantId && (expectedGroupId == null || row.Group_ID === expectedGroupId),
+      `group-participant ${groupParticipantId} is not participant ${participantId}'s row in the expected group`,
+    );
+  }
+
+  /** Assert the participant is the contact's own participant record (one MP read). */
+  private async assertParticipantIsContact(participantId: number, contactId: number): Promise<void> {
+    const rows = await this.mp.getTableRecords<{ Contact_ID: number }>({
+      table: 'Participants',
+      select: 'Contact_ID',
+      filter: `Participant_ID = ${sanitizeId(participantId)}`,
+      top: 1,
+    });
+    enforceScope(rows[0]?.Contact_ID === contactId, `participant ${participantId} does not belong to contact ${contactId}`);
+  }
+
+  /**
+   * SECURITY (F2, N1): authorize a requirement record before listing its files.
+   * The file metadata carries MP's download URL, which needs no token. Three
+   * gates, all through enforceScope (F2_SCOPE_ENFORCEMENT=report logs and allows):
+   *   1. the tool has a visible requirement of this type (no MP call);
+   *   2. the record exists, and its type column is one of those requirementIds
+   *      (background checks: gate 1 only, see REQUIREMENT_RECORDS);
+   *   3. its owner is in this tool's scope; a null owner (an anonymous
+   *      Form_Responses row) is denied.
+   * Together these match what buildChecklistForParticipant can show. A record
+   * can still be denied moments after the UI showed it (membership ended, or an
+   * admin hid the requirement); that is correct, do not loosen the check for it.
+   * Context strings hold the type literal and numeric IDs only.
+   */
+  private async assertRequirementRecordInScope(type: RequirementType, spec: RequirementRecordSpec, recordId: number): Promise<void> {
+    const allowed = new Set(
+      this.config.requirements.filter(r => r.visible && r.type === type).map(r => r.requirementId),
+    );
+    if (allowed.size === 0) {
+      enforceScope(false, `${type} ${recordId}: tool has no visible ${type} requirement`);
+      return;
+    }
+
+    const select = spec.typeField ? `${spec.ownerField},${spec.typeField}` : spec.ownerField;
+    const rows = await this.mp.getTableRecords<Record<string, unknown>>({
+      table: spec.table,
+      select,
+      filter: `${spec.pk} = ${sanitizeId(recordId)}`,
+      top: 1,
+    });
+    const row = rows[0];
+    if (!row) { enforceScope(false, `${type} ${recordId} not found`); return; }
+
+    if (spec.typeField) {
+      const typeId = row[spec.typeField];
+      enforceScope(
+        isPositiveInt(typeId) && allowed.has(typeId),
+        `${type} ${recordId} type ${isPositiveInt(typeId) ? typeId : 'missing'} is not a visible requirement`,
+      );
+    }
+
+    const ownerId = row[spec.ownerField];
+    // Before assertContactInScope: its sanitizeId throws on null, which would
+    // turn a report-mode allow into a hard error.
+    if (!isPositiveInt(ownerId)) { enforceScope(false, `${type} ${recordId} has no owner`); return; }
+
+    if (spec.ownerField === 'Participant_ID') {
+      await this.assertParticipantInScope(ownerId);
+    } else {
+      await this.assertContactInScope(ownerId);
+    }
+  }
+
   // ---------------------------------------------------------------
   // Discontinue / Complete badge logic
   // ---------------------------------------------------------------
@@ -277,6 +427,13 @@ export class ComplianceProcessingService {
     // user may use this compliance tool, not that this participant belongs to it —
     // verify scope before returning any PII (incl. background-check/compliance data).
     await this.assertParticipantInScope(participantId);
+    // SECURITY (F2): the contact and group-participant IDs are caller-supplied too.
+    // Every read below by contactId (name, email, phone, background check incl.
+    // Report_Url, form responses) must be for this participant's own contact, or
+    // an in-scope participantId would unlock any contact's record. The UI always
+    // sends the card's own pair (Participants.Contact_ID), so this cannot deny a
+    // legitimate request.
+    await this.assertParticipantIsContact(participantId, contactId);
     const contacts = await this.mp.getTableRecords<ContactRecord>({
       table: 'Contacts',
       select: 'Contact_ID,First_Name,Nickname,Last_Name,dp_fileUniqueId AS Image_GUID,Email_Address,Mobile_Phone',
@@ -328,12 +485,20 @@ export class ComplianceProcessingService {
 
     const writeBackConfig = this.getWriteBackConfig();
 
-    const gpRecords = await this.mp.getTableRecords<{ End_Date: string | null }>({
+    const gpRecords = await this.mp.getTableRecords<{ End_Date: string | null; Participant_ID: number }>({
       table: 'Group_Participants',
-      select: 'End_Date',
+      select: 'End_Date,Participant_ID',
       filter: `Group_Participant_ID = ${groupParticipantId}`,
       top: 1
     });
+    // A missing row keeps its old meaning (no end date). A row for someone else
+    // must not lend its End_Date to this participant.
+    if (gpRecords[0]) {
+      enforceScope(
+        gpRecords[0].Participant_ID === participantId,
+        `group-participant ${groupParticipantId} does not belong to participant ${participantId}`,
+      );
+    }
     const endDate = gpRecords[0]?.End_Date ?? null;
 
     const pauseMilestoneId = this.config.pauseMilestoneId;
@@ -477,7 +642,7 @@ export class ComplianceProcessingService {
     const now = nowCentral();
     await this.mp.updateTableRecords(
       'Group_Participants',
-      [{ Group_Participant_ID: currentGroupParticipantId, End_Date: now }],
+      [{ Group_Participant_ID: sanitizeId(currentGroupParticipantId), End_Date: now }],
       { $userId: userId }
     );
   }
@@ -499,6 +664,7 @@ export class ComplianceProcessingService {
     const { participantId, currentGroupParticipantId, notes, userId } = params;
     // SECURITY (F2): only pause participants this tool manages.
     await this.assertParticipantInScope(participantId);
+    await this.assertGroupParticipantBelongsTo(currentGroupParticipantId, participantId, this.config.trackingGroupId ?? null);
     const { pausedGroupId, pauseMilestoneId, programId, defaultGroupRoleId } = this.config;
 
     if (!pausedGroupId || !pauseMilestoneId || !programId || !defaultGroupRoleId) {
@@ -515,7 +681,7 @@ export class ComplianceProcessingService {
     const now = nowCentral();
     await this.mp.updateTableRecords(
       'Group_Participants',
-      [{ Group_Participant_ID: currentGroupParticipantId, End_Date: now }],
+      [{ Group_Participant_ID: sanitizeId(currentGroupParticipantId), End_Date: now }],
       { $userId: userId }
     );
 
@@ -543,6 +709,7 @@ export class ComplianceProcessingService {
     const { participantId, currentGroupParticipantId, userId } = params;
     // SECURITY (F2): only resume participants this tool manages.
     await this.assertParticipantInScope(participantId);
+    await this.assertGroupParticipantBelongsTo(currentGroupParticipantId, participantId, this.config.pausedGroupId ?? null);
     const { trackingGroupId, defaultGroupRoleId } = this.config;
 
     if (!trackingGroupId || !defaultGroupRoleId) {
@@ -552,7 +719,7 @@ export class ComplianceProcessingService {
     const now = nowCentral();
     await this.mp.updateTableRecords(
       'Group_Participants',
-      [{ Group_Participant_ID: currentGroupParticipantId, End_Date: now }],
+      [{ Group_Participant_ID: sanitizeId(currentGroupParticipantId), End_Date: now }],
       { $userId: userId }
     );
 
@@ -572,11 +739,14 @@ export class ComplianceProcessingService {
   // File Operations
   // ---------------------------------------------------------------
 
-  public async getRecordFiles(table: string, recordId: number): Promise<ComplianceMilestoneFileInfo[]> {
-    // SECURITY: `recordId` arrives from a "use server" action as a type-erased
-    // React Flight argument — the `number` annotation is compile-time only. Coerce
-    // it before it reaches the MP file path. `table` is safe: callers resolve it
-    // from a fixed allowlist, never from raw client input.
+  /**
+   * UNSCOPED: lists a record's files with no authorization. Private on purpose
+   * (N1): every public entry point asserts scope first. Do not make this public
+   * or call it from an action.
+   */
+  private async getRecordFiles(table: string, recordId: number): Promise<ComplianceMilestoneFileInfo[]> {
+    // `recordId` is coerced again because this is the MP file-path sink. `table`
+    // comes only from REQUIREMENT_RECORDS or a literal, never from client input.
     const safeRecordId = sanitizeId(recordId);
 
     const fileBaseUrl = process.env.NEXT_PUBLIC_MINISTRY_PLATFORM_FILE_URL;
@@ -598,9 +768,56 @@ export class ComplianceProcessingService {
     // SECURITY: assert the milestone belongs to a participant this tool can see,
     // so a user of tool A cannot enumerate tool B's file metadata — which carries
     // the MP download URL (`${fileBaseUrl}/${UniqueFileId}`), not just a filename.
+    // The milestone must also be one this tool shows: exactly the set behind
+    // detail.milestones (fetchRequirementMilestones + fetchJourneyMilestones),
+    // which is the only source of the IDs the modal sends here. One lookup reads
+    // both the owner and the Milestone_ID.
     const recordId = sanitizeId(milestoneRecordId);
-    await this.assertMilestoneRecordInScope(recordId);
+    const rows = await this.mp.getTableRecords<{ Participant_ID: number; Milestone_ID: number }>({
+      table: 'Participant_Milestones',
+      select: 'Participant_ID,Milestone_ID',
+      filter: `Participant_Milestone_ID = ${recordId}`,
+      top: 1,
+    });
+    const row = rows[0];
+    if (!row) {
+      enforceScope(false, `milestone ${recordId} not found`);
+    } else {
+      enforceScope(
+        this.getVisibleMilestoneIds().has(row.Milestone_ID),
+        `milestone ${recordId} type ${isPositiveInt(row.Milestone_ID) ? row.Milestone_ID : 'missing'} is not shown by this tool`,
+      );
+      await this.assertParticipantInScope(row.Participant_ID);
+    }
     return this.getRecordFiles('Participant_Milestones', recordId);
+  }
+
+  /**
+   * Files on a checklist requirement record (background check, certification,
+   * form response, requirement milestone). `type` and `recordId` arrive from a
+   * "use server" action as type-erased React Flight args, so both are validated
+   * before any MP call. See assertRequirementRecordInScope for the rule.
+   */
+  public async getRequirementFiles(type: string, recordId: number): Promise<ComplianceMilestoneFileInfo[]> {
+    const safeRecordId = sanitizeId(recordId);
+    // Static message: never echo `type` (caller-controlled, may hold newlines).
+    if (!isRequirementType(type)) throw new Error('Unknown requirement type');
+    const spec = REQUIREMENT_RECORDS[type];
+    await this.assertRequirementRecordInScope(type, spec, safeRecordId);
+    return this.getRecordFiles(spec.table, safeRecordId);
+  }
+
+  /** Milestone_IDs behind detail.milestones: visible requirement milestones, the
+   *  pause milestone, and (when the tool has a journey) visible journey milestones. */
+  private getVisibleMilestoneIds(): Set<number> {
+    const ids = new Set<number>(
+      this.config.requirements.filter(r => r.visible && r.type === 'milestone').map(r => r.requirementId),
+    );
+    if (this.config.pauseMilestoneId) ids.add(this.config.pauseMilestoneId);
+    if (this.config.journeyId) {
+      for (const m of this.config.journeyMilestones) if (m.visible) ids.add(m.milestoneId);
+    }
+    return ids;
   }
 
   public async uploadDocument(
