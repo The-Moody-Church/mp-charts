@@ -5,7 +5,7 @@
 Work out where the repo stands on updates and security, then act on the top of the list: clear the red
 deploy gate, patch Next.js, and start the N1 fix from the 2026-10-10 audit.
 
-## Status: IN PROGRESS (#249, #250 merged; #251 open)
+## Status: COMPLETED (#249, #250, #251 merged and deployed; follow-ups under Pending)
 
 ## Findings (state of the repo)
 
@@ -83,6 +83,9 @@ deploy gate, patch Next.js, and start the N1 fix from the 2026-10-10 audit.
   - `errorForLog` is used at the file-action catch sites.
   - Tests: 1157 (+58). 14 mutants were all caught. An independent review found no regression for legitimate
     use, and its two MEDIUM findings were fixed before the PR.
+  - Soaked on production pinned by SHA (`4ef4fda`, on top of 16.4.2). A human test of compliance and journey
+    files and milestones logged no `[scope:deny]` and no errors. The PR's CodeQL scan showed #10, #11 and #21
+    fixed with no new alerts. Merged as `dc1d092` and deployed as `:latest`.
 
 ## Follow-ups found (not in this PR)
 
@@ -102,7 +105,6 @@ deploy gate, patch Next.js, and start the N1 fix from the 2026-10-10 audit.
 
 ## Pending
 
-- Soak #251 (N1) on production pinned by SHA, then merge and deploy.
 - Port next 16.4.2 to mp-senior-care, event-manager and music-tools (all on 16.3.x; same advisories).
 - Port the N23 binding checks (contact and group-participant) to mp-senior-care and event-manager where the
   same processing services exist.
