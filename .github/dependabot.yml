@@ -54,8 +54,8 @@ updates:
         patterns:
           - "*"
 
-      # better-auth patches get their own PR. Groups match in order, so this must
-      # come before prod-minor-patch. Auth changes go to all four apps together,
+      # better-auth patches get their own PR. prod-minor-patch also excludes it
+      # explicitly (group order alone did not hold on a refresh). Auth changes go to all four apps together,
       # each with a live sign-in soak (workspace CLAUDE.md, "The Better Auth
       # family"); bundling one with routine bumps would hide it.
       better-auth:
@@ -66,7 +66,7 @@ updates:
 
       # eslint-config-next 16.4.x fails lint in the sibling apps (react-hooks
       # rules), so it needs code changes of its own. Kept apart so it cannot block
-      # the rest of the dev group. Also before dev-minor-patch.
+      # the rest of the dev group. dev-minor-patch excludes it explicitly.
       eslint-config-next:
         applies-to: version-updates
         patterns:
@@ -78,12 +78,25 @@ updates:
       prod-minor-patch:
         applies-to: version-updates
         dependency-type: "production"
+        patterns:
+          - "*"
+        # Explicit, not just group order: on 2026-10-21 a group refresh folded
+        # better-auth into this group and closed its own PR (#255 "Superseded by
+        # #264").
+        exclude-patterns:
+          - "better-auth"
+          - "@better-auth/*"
         update-types:
           - "minor"
           - "patch"
       dev-minor-patch:
         applies-to: version-updates
         dependency-type: "development"
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "eslint-config-next"
+          - "@next/eslint-plugin-next"
         update-types:
           - "minor"
           - "patch"
