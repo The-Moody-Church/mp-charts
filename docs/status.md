@@ -21,7 +21,7 @@ Quick-reference snapshot of current project state. Read this first at session st
 ## Open Security Findings
 
 - The 2026-10-10 audit (`.claude/notes/security-audit-2026-10-10.md`) has **N1** and the new **N23** fixed in #251; **N2–N7** still open: per-record scope checks missing on member milestone files, the shared photo upload and the Summer Blast writes; feedback issues and internal hostnames in the public repo. 
-- Owner steps: turn on Dependabot **version** updates (this repo is a GitHub fork, so only security jobs have ever run); remove the better-auth 1.6 redirect URIs from TM.Widgets (due from 2026-10-02); point `GITHUB_FEEDBACK_REPO` at a private repo; add a `main` ruleset.
+- Owner steps: turn on Dependabot **version** updates (this repo is a GitHub fork, so only security jobs have ever run); remove the better-auth 1.6 redirect URIs from TM.Widgets (due from 2026-10-02); point `GITHUB_FEEDBACK_REPO` at a private repo. (`main` ruleset added 2026-10-21: no deletion, no force push.)
 - The braces allow-list entry has `review_by` 2026-11-07; there is still no patched release.
 
 ## Planned

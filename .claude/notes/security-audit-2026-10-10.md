@@ -65,7 +65,7 @@ repo visibility, protection, scanning status, open alerts and advisory data.
 | N19 | `BETTER_AUTH_URL` / MP URL not validated at boot; localhost fallback | LOW | Open |
 | N20 | Local checkout 8 commits behind; stale `node_modules`; tests not run | INFO | Operational |
 | N21 | `$ignorePermissions` still declared (unused) | INFO | Open |
-| N22 | `main` has no branch protection; `.claude/settings.local.json` tracked (benign) | INFO | Open |
+| N22 | `main` has no branch protection; `.claude/settings.local.json` tracked (benign) | INFO | Branch part fixed 2026-10-21: ruleset `main` (id 25566298) blocks deletion and force pushes; no PR or status-check requirement, so docs-direct pushes and the Issues ↔ Ideas sync still work |
 | N23 | (added 2026-10-21) `getParticipantDetail` never tied `contactId` / `groupParticipantId` to the scoped `participantId`, in both the compliance and journey services | **HIGH** | Fixed on `security/n1-requirement-file-scope` (2026-10-21) |
 
 ### N1 — Compliance requirement files have no scope check (HIGH)
