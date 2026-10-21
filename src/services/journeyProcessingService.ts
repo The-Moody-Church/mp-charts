@@ -64,7 +64,9 @@ export class JourneyProcessingService {
   public static getInstance(slug: string): JourneyProcessingService {
     const config = getJourneyToolBySlug(slug);
     if (!config || !config.enabled) {
-      throw new Error(`Journey tool "${slug}" not found or disabled`);
+      // Static message: `slug` is caller-supplied, and this error reaches the
+      // actions' console.error (CodeQL js/log-injection).
+      throw new Error('Journey tool not found or disabled');
     }
 
     if (!this.instances.has(slug)) {
@@ -158,6 +160,42 @@ export class JourneyProcessingService {
   }
 
   /**
+   * SECURITY (F2): the Group_Participants row a pause/resume end-dates is
+   * caller-supplied. It must exist, belong to the (already scoped) participant,
+   * and, when the tool configures it, sit in the group being left: the tracking
+   * group on pause, the paused group on resume. Otherwise any row could be
+   * end-dated. Runs before any write.
+   */
+  private async assertGroupParticipantBelongsTo(
+    groupParticipantId: number,
+    participantId: number,
+    expectedGroupId: number | null,
+  ): Promise<void> {
+    const rows = await this.mp.getTableRecords<{ Participant_ID: number; Group_ID: number }>({
+      table: 'Group_Participants',
+      select: 'Participant_ID,Group_ID',
+      filter: `Group_Participant_ID = ${sanitizeId(groupParticipantId)}`,
+      top: 1,
+    });
+    const row = rows[0];
+    enforceScope(
+      !!row && row.Participant_ID === participantId && (expectedGroupId == null || row.Group_ID === expectedGroupId),
+      `group-participant ${groupParticipantId} is not participant ${participantId}'s row in the expected group`,
+    );
+  }
+
+  /** Assert the participant is the contact's own participant record (one MP read). */
+  private async assertParticipantIsContact(participantId: number, contactId: number): Promise<void> {
+    const rows = await this.mp.getTableRecords<{ Contact_ID: number }>({
+      table: 'Participants',
+      select: 'Contact_ID',
+      filter: `Participant_ID = ${sanitizeId(participantId)}`,
+      top: 1,
+    });
+    enforceScope(rows[0]?.Contact_ID === contactId, `participant ${participantId} does not belong to contact ${contactId}`);
+  }
+
+  /**
    * Determine badge flags for a participant based on their accomplished milestones
    * and the admin config's discontinuesJourney + completionBadge settings.
    */
@@ -241,6 +279,10 @@ export class JourneyProcessingService {
     // user may use this journey tool, not that this participant belongs to it — so
     // verify the participant is in this tool's scope before returning any PII.
     await this.assertParticipantInScope(participantId);
+    // The contact and group-participant IDs are caller-supplied too: the contact
+    // read below (name, email, phone) must be this participant's own contact. The
+    // UI always sends the card's own pair, so this cannot deny a legitimate request.
+    await this.assertParticipantIsContact(participantId, contactId);
     const contacts = await this.mp.getTableRecords<ContactRecord>({
       table: 'Contacts',
       select: 'Contact_ID,First_Name,Nickname,Last_Name,dp_fileUniqueId AS Image_GUID,Email_Address,Mobile_Phone',
@@ -298,12 +340,19 @@ export class JourneyProcessingService {
     // Check if group participant record has a future End_Date (group mode only)
     let endDate: string | null = null;
     if (groupParticipantId) {
-      const gpRecords = await this.mp.getTableRecords<{ End_Date: string | null }>({
+      const gpRecords = await this.mp.getTableRecords<{ End_Date: string | null; Participant_ID: number }>({
         table: 'Group_Participants',
-        select: 'End_Date',
+        select: 'End_Date,Participant_ID',
         filter: `Group_Participant_ID = ${groupParticipantId}`,
         top: 1
       });
+      // A row for someone else must not lend its End_Date to this participant.
+      if (gpRecords[0]) {
+        enforceScope(
+          gpRecords[0].Participant_ID === participantId,
+          `group-participant ${groupParticipantId} does not belong to participant ${participantId}`,
+        );
+      }
       endDate = gpRecords[0]?.End_Date ?? null;
     }
 
@@ -341,7 +390,7 @@ export class JourneyProcessingService {
     const now = nowCentral();
     await this.mp.updateTableRecords(
       'Group_Participants',
-      [{ Group_Participant_ID: currentGroupParticipantId, End_Date: now }],
+      [{ Group_Participant_ID: sanitizeId(currentGroupParticipantId), End_Date: now }],
       { $userId: userId }
     );
   }
@@ -426,6 +475,7 @@ export class JourneyProcessingService {
     const { participantId, currentGroupParticipantId, notes, userId } = params;
     // SECURITY (F2): only pause participants this tool manages.
     await this.assertParticipantInScope(participantId);
+    await this.assertGroupParticipantBelongsTo(currentGroupParticipantId, participantId, this.config.trackingGroupId ?? null);
     const { pausedGroupId, pauseMilestoneId, programId, defaultGroupRoleId } = this.config;
 
     if (!pausedGroupId || !pauseMilestoneId || !programId || !defaultGroupRoleId) {
@@ -444,7 +494,7 @@ export class JourneyProcessingService {
     const now = nowCentral();
     await this.mp.updateTableRecords(
       'Group_Participants',
-      [{ Group_Participant_ID: currentGroupParticipantId, End_Date: now }],
+      [{ Group_Participant_ID: sanitizeId(currentGroupParticipantId), End_Date: now }],
       { $userId: userId }
     );
 
@@ -472,6 +522,7 @@ export class JourneyProcessingService {
     const { participantId, currentGroupParticipantId, userId } = params;
     // SECURITY (F2): only resume participants this tool manages.
     await this.assertParticipantInScope(participantId);
+    await this.assertGroupParticipantBelongsTo(currentGroupParticipantId, participantId, this.config.pausedGroupId ?? null);
     const { trackingGroupId, defaultGroupRoleId } = this.config;
 
     if (!trackingGroupId || !defaultGroupRoleId) {
@@ -481,7 +532,7 @@ export class JourneyProcessingService {
     const now = nowCentral();
     await this.mp.updateTableRecords(
       'Group_Participants',
-      [{ Group_Participant_ID: currentGroupParticipantId, End_Date: now }],
+      [{ Group_Participant_ID: sanitizeId(currentGroupParticipantId), End_Date: now }],
       { $userId: userId }
     );
 
@@ -509,7 +560,25 @@ export class JourneyProcessingService {
     // (which includes the MP download URL). Every other ID-taking read in this
     // service already does both.
     const recordId = sanitizeId(milestoneRecordId);
-    await this.assertMilestoneRecordInScope(recordId);
+    // The milestone must also be one this tool shows (getAllMilestoneIds, the set
+    // fetchMilestones reads, which is the only source of the IDs the modal sends).
+    // Without this, any Participant_Milestones row of an in-scope participant,
+    // another tool's requirement milestones included, would list its files.
+    const rows = await this.mp.getTableRecords<{ Participant_ID: number; Milestone_ID: number }>({
+      table: 'Participant_Milestones',
+      select: 'Participant_ID,Milestone_ID',
+      filter: `Participant_Milestone_ID = ${recordId}`,
+      top: 1,
+    });
+    if (!rows[0]) {
+      enforceScope(false, `milestone ${recordId} not found`);
+    } else {
+      enforceScope(
+        this.getAllMilestoneIds().includes(rows[0].Milestone_ID),
+        `milestone ${recordId} is not shown by this tool`,
+      );
+      await this.assertParticipantInScope(rows[0].Participant_ID);
+    }
 
     const fileBaseUrl = process.env.NEXT_PUBLIC_MINISTRY_PLATFORM_FILE_URL;
     const files = await this.mp.getFilesByRecord({

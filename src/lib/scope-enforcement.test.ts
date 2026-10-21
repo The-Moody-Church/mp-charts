@@ -32,7 +32,22 @@ describe('scope-enforcement', () => {
 
   it('throws "Forbidden" on out-of-scope in enforce mode', () => {
     delete process.env.F2_SCOPE_ENFORCEMENT;
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     expect(() => enforceScope(false, 'participant 5')).toThrow(/Forbidden/);
+  });
+
+  it('logs the context of an enforce-mode denial, but keeps it out of the thrown message', () => {
+    delete process.env.F2_SCOPE_ENFORCEMENT;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(() => enforceScope(false, 'participant 5')).toThrow(/^Forbidden: record is not in scope for this tool$/);
+    expect(warn).toHaveBeenCalledWith('[scope:deny] participant 5');
+  });
+
+  it('does not log an in-scope decision', () => {
+    delete process.env.F2_SCOPE_ENFORCEMENT;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    enforceScope(true, 'participant 5');
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it('warns but allows out-of-scope in report mode', () => {

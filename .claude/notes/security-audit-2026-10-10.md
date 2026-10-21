@@ -44,7 +44,7 @@ repo visibility, protection, scanning status, open alerts and advisory data.
 
 | # | Finding | Severity | Status |
 |---|---------|----------|--------|
-| N1 | Compliance requirement files: no scope check → church-wide file enumeration + unauthenticated download URLs | **HIGH** | Open |
+| N1 | Compliance requirement files: no scope check → church-wide file enumeration + unauthenticated download URLs | **HIGH** | Fixed on `security/n1-requirement-file-scope` (2026-10-21) |
 | N2 | Manage-members milestone files: no scope check | MEDIUM | Open |
 | N3 | Shared contact-photo upload replaces any contact's default photo | MEDIUM | Open |
 | N4 | Summer Blast add/remove write to arbitrary Group_Participants / Responses rows | MEDIUM | Open |
@@ -58,7 +58,7 @@ repo visibility, protection, scanning status, open alerts and advisory data.
 | N12 | Outbound fetches without timeout/redirect refusal; token refresh not single-flight; token body unvalidated | LOW | Open |
 | N13 | `originOf` allows env-controlled CSP directive injection | LOW | Open |
 | N14 | `X-Powered-By`, live `/_next/image`, dev action-arg logging | LOW | Open |
-| N15 | Three CodeQL `js/log-injection` alerts open since 2026-08-07 | LOW | Open |
+| N15 | Three CodeQL `js/log-injection` alerts open since 2026-08-07 | LOW | Fixed on `security/n1-requirement-file-scope` (2026-10-21); confirm the alerts close on that PR's CodeQL run |
 | N16 | Cookie cache `jwt` (signed, readable) and `/get-session` returns token/IP/UA | LOW | Open |
 | N17 | id_token not signature-verified; no `exp`/`azp` check | LOW (accepted posture) | Open |
 | N18 | CI actions pinned by tag; no workflow-level `permissions`; `persist-credentials` default | LOW | Open |
@@ -66,8 +66,13 @@ repo visibility, protection, scanning status, open alerts and advisory data.
 | N20 | Local checkout 8 commits behind; stale `node_modules`; tests not run | INFO | Operational |
 | N21 | `$ignorePermissions` still declared (unused) | INFO | Open |
 | N22 | `main` has no branch protection; `.claude/settings.local.json` tracked (benign) | INFO | Open |
+| N23 | (added 2026-10-21) `getParticipantDetail` never tied `contactId` / `groupParticipantId` to the scoped `participantId`, in both the compliance and journey services | **HIGH** | Fixed on `security/n1-requirement-file-scope` (2026-10-21) |
 
 ### N1 — Compliance requirement files have no scope check (HIGH)
+
+> **Fixed 2026-10-21** on `security/n1-requirement-file-scope`, together with N15 and the new N23 (see the
+> 2026-10-21 addendum at the end of this report). The finding was wider than written below: `type: 'milestone'`
+> also skipped the check, so all four tables were exposed, not three.
 
 **Files:** `src/components/compliance-processing/actions.ts` (`getComplianceRequirementFiles`),
 `src/services/complianceProcessingService.ts:575-595` (`getRecordFiles`),
@@ -291,7 +296,9 @@ deliberate exception. Writes carry `enforceRateLimit("write")`; uploads add `"up
 contact-lookup-details use `"search"`. Journey/compliance detail reads, milestone create/update, certification,
 form-response, complete/pause/resume and journey milestone files all go through `assertParticipantInScope` /
 `assertGroupParticipantInScope` / `assertMilestoneRecordInScope` / `assertContactInScope` under
-`F2_SCOPE_ENFORCEMENT=enforce`. Contact-log update/delete check `Made_By === getMpUserId(session)`; the service
+`F2_SCOPE_ENFORCEMENT=enforce`. *(Correction, 2026-10-21: those helpers covered the participant, not every
+ID sent with it. `getParticipantDetail` and pause/resume trusted a second caller-supplied ID; see N23 in the
+addendum.)* Contact-log update/delete check `Made_By === getMpUserId(session)`; the service
 `.omit()`s `Made_By`/`Contact_ID` on update. Admin actions validate feature keys with `Object.hasOwn` +
 forbidden-key set and group IDs with Zod; config slugs match `^[a-z0-9]+(?:-[a-z0-9]+)*$` and file paths are
 constants. Uploads check MIME allowlist, 20 MB, and magic bytes (`fileMagicMatchesType`). `bulkAddToSummerBlast`
@@ -376,3 +383,45 @@ no linking, `sanitizeId` everywhere, `Made_By` ownership, open-redirect dot-segm
 
 Previous audits: [2026-06-23](./security-audit-2026-06-23.md), [2026-05-21](./security-audit-2026-05-21.md),
 [2026-02-24](./security-audit-2026-02-24.md).
+
+---
+
+## Addendum — 2026-10-21: fix for N1, N15 and N23
+
+**N23 (HIGH, new).** In both processing services, `getParticipantDetail(contactId, participantId, groupParticipantId)` and pause/resume checked scope only
+on the participant, and trusted the other IDs sent with it. In detail: `getParticipantDetail` checked scope only
+on `participantId`. `contactId` drove the Contacts read (name, email, phone), the background-check read
+(including `Report_Url`) and the form-response read, and `groupParticipantId` drove an End_Date read; neither
+was tied to the participant. The journey service had the same gap for the contact read. Both now require
+`Participants.Contact_ID === contactId` (one top-1 read), and a Group_Participants row that exists must belong
+to the participant. Pause and resume now require the Group_Participants row they end-date to be the
+participant's own row, in the group being left (the tracking group on pause, the paused group on resume),
+checked before any write. The UI always sends the card's own IDs, which both services derive from
+`Participants.Contact_ID` and the participant's own membership row, so a legitimate request cannot be denied.
+
+**N1 fix shape.** A new `getRequirementFiles(type, recordId)` owns the type → table allowlist
+(`REQUIREMENT_RECORDS`, `Object.hasOwn`) and runs three gates through `enforceScope`, mirroring what
+`buildChecklistForParticipant` can show:
+1. the tool has a visible requirement of that type (no MP call);
+2. the record exists and its type column is one of those requirement IDs (background checks: gate 1 only,
+   because the checklist shows the newest check of any type);
+3. the owner is in scope; a null owner (anonymous `Form_Responses`) is denied.
+
+`getRecordFiles` is now private. `getMilestoneFiles`, in both services, also checks `Milestone_ID` against exactly
+the set the tool's modal can send: for compliance, the set behind `detail.milestones` (visible requirement
+milestones, the pause milestone, and visible journey milestones when the tool has a journey); for journey
+tools, `getAllMilestoneIds()`. Without that, the milestone type gate could be bypassed through either
+milestone-files action. **N2** (manage-members milestone files, still open) remains a separate path.
+
+**Supporting changes.** The scope enumeration is shared per tool for 15 s; the modal's parallel fan-out
+otherwise re-read the tracking group once per item, past the 6-connection guidance. `enforceScope` now logs
+`[scope:deny] <context>` in enforce mode, so a false denial can be diagnosed; it strips CR/LF from the context
+first. The 15 s window works both ways: a member removed in MP keeps access, and a member added in MP is denied,
+for at most that long. The journey service does not share its enumeration yet (follow-up). `errorForLog`
+(`src/lib/log-safe.ts`) replaces raw Error logging at the three file-action catch sites (CodeQL #10, #11, #21),
+and both services' `getInstance` messages are static.
+
+**Not changed:** a Background_Checks record of any type owned by an in-scope contact stays listable. Limiting
+it to the newest check would need a second, tie-breaker-free query that could deny the record the UI showed.
+**Still open from this report:** N2, N3, N4, N5, N6, N7 and the rest.
+

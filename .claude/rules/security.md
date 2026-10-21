@@ -237,6 +237,11 @@ console.log("Contact:", JSON.stringify(record));         // leaks email, phone
 console.log("HTTP PUT:", JSON.stringify(body, null, 2)); // leaks request payloads
 ```
 
+**Log caught errors with `errorForLog(error)`** (`src/lib/log-safe.ts`), not the raw Error, wherever the error
+can carry caller-shaped text (CodeQL `js/log-injection`). It returns one `name: message` line with control
+characters stripped. Keep its first `.replace(/\n|\r/g, "")` verbatim: that is the form CodeQL recognises.
+Error messages the app throws must be static, never echoing a slug, type or other argument.
+
 ## Better Auth Endpoint Exposure — MANDATORY
 
 The better-auth catch-all route mounts far more HTTP endpoints than this app uses. Two controls keep that surface closed, and **both must stay**:
@@ -305,6 +310,7 @@ All three writes pass `{ $userId }` so MP's audit trail names the staff member r
 - Use `getMpUserId(session)` for audit attribution on write operations
 - The proxy (`src/proxy.ts`) protects routes but only checks session presence — it does not check roles
 - IDOR risk: server actions accept record IDs from clients without per-record authorization. When adding new endpoints that access sensitive data, consider whether the requesting user should have access to that specific record
+- **Several IDs in one call must be bound to each other.** Checking scope on one ID (e.g. `participantId`) authorizes nothing about the others the caller sends with it (`contactId`, `groupParticipantId`). Either derive the related IDs on the server, or check that they belong together (N23, 2026-10-21: `assertParticipantIsContact` and `assertGroupParticipantBelongsTo` in both processing services). Likewise, re-derive a record's owner and type from the record itself before listing its files (`getRequirementFiles`). Every `enforceScope` denial is logged (`[scope:deny] <context>` in enforce mode, `[scope:report]` in report mode), so `context` must hold only numeric IDs and fixed literals
 
 ## Security Headers
 
