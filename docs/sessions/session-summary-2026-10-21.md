@@ -20,7 +20,7 @@ deploy gate, patch Next.js, and start the N1 fix from the 2026-10-10 audit.
   - The DoS applies: the app uses Server Actions.
   - The `use cache` RCE most likely does not: no `use cache` function in `src/` returns typed arrays.
   - The image RCE is mitigated twice: the runner is Alpine (musl), and sharp ≥ 0.35.5 is the workaround.
-- **Production two PRs behind main.** TMC1 runs `28a7071` (#247), started 2026-10-03, so the stable Server
+- **Production two PRs behind main.** Production runs `28a7071` (#247), started 2026-10-03, so the stable Server
   Actions key is live. #248 never deployed, which leaves production on sharp 0.35.4 (GHSA-wq5f-xc86-pv6w).
 - **Dependabot version updates have never run.** mp-charts is a GitHub fork, and GitHub leaves version updates
   off on forks. Every Dependabot job so far was a security job, so `.github/dependabot.yml` (groups, the
