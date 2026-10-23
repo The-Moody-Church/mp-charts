@@ -2,7 +2,7 @@
 
 Quick-reference snapshot of current project state. Read this first at session start. For full details on any item, see the relevant session summary in `docs/sessions/`.
 
-**Last updated**: 2026-10-21
+**Last updated**: 2026-10-23
 
 ## Recently Completed
 
@@ -12,6 +12,7 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
+| 2026-10-23 | **In-app feedback feature removed (N5).** It filed GitHub issues, with the staff member's name and the page URL (a contact's GUID on contact pages), in this **public** repo. Switched off first in all four apps by removing `GITHUB_FEEDBACK_TOKEN` from each production `.env`, then deleted here: the button, `/admin/feedback`, `FeedbackService`, `feedback-config*`, and the `feedbackEnabled` plumbing in `user.ts` and the user context. The `Feedback_*` MP models are unrelated and stay. Also on 2026-10-23: next 16.4.2 adopted by mp-senior-care #222, event-manager #67, music-tools #177; Dependabot prod group #272 (react 19.3.1, Radix minors) soaked and deployed | — | this PR, #272 |
 | 2026-10-21 | **N1 + N23 fix: per-record scope on compliance requirement files, related IDs bound to the scoped participant.** Requirement files now check owner scope and requirement type before listing (`getRequirementFiles`; `getRecordFiles` private). Milestone files in both services are limited to the milestones the tool shows. `getParticipantDetail` (both services) requires the contact and group-participant IDs to belong to the scoped participant (N23, new HIGH), and pause/resume require the end-dated row to be the participant's own in the group being left. The scope enumeration is shared per tool for 15 s, `enforceScope` logs `[scope:deny]` in enforce mode, and `errorForLog` closes CodeQL #10/#11/#21. 1157 tests (+58), 14 mutants caught, independent review clean | — | #251 |
 | 2026-10-21 | **Next.js 16.3.8 → 16.4.2 (security), and the deploy gate unblocked.** On 2026-10-14 vercel/next.js published GHSA-2464-fhr4-w9xw (Critical, image optimizer + sharp on glibc), GHSA-673q-mjm6-r5xr (Critical, `use cache` returning typed arrays) and GHSA-p3m5-59mp-jv5r (High, Server Actions DoS), all covering ≤ 16.4.0 and fixed in 16.4.1. They existed only as repo advisories, so npm audit, the gate and Dependabot could not see them, and the nightly stayed green 10-14 → 10-20. The DoS applies here; the `use cache` RCE most likely does not (no typed arrays); the image RCE needs glibc (our runner is Alpine). `next` only: `eslint-config-next` stays on 16.3.4, because 16.4.x breaks lint in the siblings. A read-only compatibility review against the 16.3.8 and 16.4.2 dist files found no code change needed (cache handler, Server Actions key, proxy body clone, CSP nonce, better-auth); DOCKER.md updated for the stale-action 404 → 409. Also merged Dependabot #249 (vite 8.3.4), which cleared the red Nightly Audit (GHSA-587h-7wmj-h5pm, dev-only). Production had been on `28a7071` (#247) since 10-03, so this deploy also ships #248's sharp 0.35.5. tsc, lint, 1099 tests, the audit gate, build and check:shells pass. Follow-ups in ideas.md: 10–20 MB uploads truncated by the proxy's 10 MB clone; caching.md errors | — | #249, #250 |
 | 2026-06-24 | **Security review + top-3 fixes**: 15-dimension adversarial audit (report: `.claude/notes/security-audit-2026-06-23.md`; 23 confirmed / 27 refuted). Fixed: new `sanitizeId()` routed through every single-value numeric `$filter` sink (contact-log/journey/compliance/summer-blast) closing OData filter injection (F1) + added missing `top` cap; `deleteContactLog` ownership check (F3); user-profile actions bound to session GUID (F4); open-redirect backslash bypass in `signin` + `security.md` snippet (F5); F2 (cross-participant scope) since completed — the per-record scope check shipped and now runs in `enforce` mode in production (`F2_SCOPE_ENFORCEMENT=enforce`). 517 tests pass, lint clean. | — | #190, #191, #192 |
@@ -21,7 +22,7 @@ Quick-reference snapshot of current project state. Read this first at session st
 ## Open Security Findings
 
 - The 2026-10-10 audit (`.claude/notes/security-audit-2026-10-10.md`) has **N1** and the new **N23** fixed in #251; **N2–N7** still open: per-record scope checks missing on member milestone files, the shared photo upload and the Summer Blast writes; feedback issues and internal hostnames in the public repo. 
-- Owner steps: turn on Dependabot **version** updates (this repo is a GitHub fork, so only security jobs have ever run); remove the better-auth 1.6 redirect URIs from TM.Widgets (due from 2026-10-02); point `GITHUB_FEEDBACK_REPO` at a private repo. (`main` ruleset added 2026-10-21: no deletion, no force push.)
+- Owner steps: turn on Dependabot **version** updates (this repo is a GitHub fork, so only security jobs have ever run); remove the better-auth 1.6 redirect URIs from TM.Widgets (due from 2026-10-02); (`main` ruleset added 2026-10-21; the feedback feature was removed 2026-10-23, so N5's private-repo step is moot.)
 - The braces allow-list entry has `review_by` 2026-11-07; there is still no patched release.
 
 ## Planned

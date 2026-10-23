@@ -12,7 +12,6 @@ interface UserContextValue {
   journeyTools: JourneyToolMeta[];
   complianceTools: ComplianceToolMeta[];
   isSuperAdmin: boolean;
-  feedbackEnabled: boolean;
   isLoading: boolean;
   error: Error | null;
   refreshUserProfile: () => Promise<void>;
@@ -25,7 +24,6 @@ interface UserBootstrap {
   journeyTools: JourneyToolMeta[];
   complianceTools: ComplianceToolMeta[];
   isSuperAdmin: boolean;
-  feedbackEnabled: boolean;
 }
 
 /** What the context serves when nothing loaded belongs to the current session. */
@@ -35,7 +33,6 @@ const EMPTY_BOOTSTRAP: UserBootstrap = {
   journeyTools: [],
   complianceTools: [],
   isSuperAdmin: false,
-  feedbackEnabled: false,
 };
 
 /**
@@ -80,7 +77,6 @@ export function UserProvider({ children }: UserProviderProps) {
       journeyTools: auth.journeyTools,
       complianceTools: auth.complianceTools,
       isSuperAdmin: auth.isSuperAdmin,
-      feedbackEnabled: auth.feedbackEnabled,
     };
   }, []);
 

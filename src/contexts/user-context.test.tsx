@@ -26,7 +26,6 @@ const mockAuthResult = {
   isSuperAdmin: false,
   journeyTools: [],
   complianceTools: [],
-  feedbackEnabled: false,
 };
 
 function createWrapper() {
@@ -176,7 +175,6 @@ describe('UserContext', () => {
       expect(result.current.journeyTools).toEqual([]);
       expect(result.current.complianceTools).toEqual([]);
       expect(result.current.isSuperAdmin).toBe(false);
-      expect(result.current.feedbackEnabled).toBe(false);
     });
 
     // ---------------------------------------------------------------------

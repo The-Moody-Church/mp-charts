@@ -417,7 +417,6 @@ FodyWeavers.xsd
 data/feature-access.json
 data/journey-tools.json
 data/compliance-tools.json
-data/feedback-config.json
 
 # nextJS
 .next/*
