@@ -9,13 +9,12 @@ src/components/
 ├── shared-actions/             # Shared server actions
 ├── ui/                         # shadcn/ui components (20 components)
 ├── processing/                 # Shared processing UI components (9 components)
-├── admin/                      # Admin settings (journey tools, compliance tools, permissions, feedback)
+├── admin/                      # Admin settings (journey tools, compliance tools, permissions)
 ├── compliance-processing/      # Compliance applicant workflow (background checks, certifications)
 ├── contact-logs/               # Contact log CRUD feature
 ├── contact-lookup/             # Contact search feature
 ├── contact-lookup-details/     # Contact details view
 ├── dashboard/                  # Executive dashboard feature
-├── feedback/                   # In-app feedback button and wrapper
 ├── home/                       # Home page feature cards
 ├── journey-processing/         # Journey applicant milestone workflow
 ├── manage-members/             # Member management with status transitions
@@ -45,13 +44,12 @@ src/components/
 
 | Folder | Purpose | Has Actions |
 |--------|---------|-------------|
-| `admin/` | Admin settings page with sub-pages for journey tools, compliance tools, permissions, feedback | Yes |
+| `admin/` | Admin settings page with sub-pages for journey tools, compliance tools, permissions | Yes |
 | `compliance-processing/` | Compliance applicant tracking with background checks, certifications, group assignment | Yes |
 | `contact-logs/` | Contact log CRUD with modal forms | Yes |
 | `contact-lookup/` | Contact search with results display | Yes |
 | `contact-lookup-details/` | Contact profile and logs view | Yes |
 | `dashboard/` | Executive dashboard with charts and filters | Yes |
-| `feedback/` | In-app feedback button with modal form | Yes |
 | `home/` | Home page feature cards (RBAC-filtered) | No |
 | `journey-processing/` | Journey applicant milestone tracking with pause/resume | Yes |
 | `manage-members/` | Member management with tabs, status transitions, detail modals | Yes |
@@ -133,7 +131,6 @@ Actions are co-located with their feature components:
 | contact-lookup | `contact-lookup/actions.ts` | `searchContacts` |
 | contact-lookup-details | `contact-lookup-details/actions.ts` | `getContactDetails`, `getContactLogsByContactId` |
 | dashboard | `dashboard/actions.ts` | `getDashboardMetrics`, `getFullRangeDashboardMetrics`, `refreshDashboardCache` |
-| feedback | `feedback/actions.ts` | Feedback submission |
 | journey-processing | `journey-processing/actions.ts` | Journey applicant CRUD, milestone operations, pause/resume |
 | manage-members | `manage-members/actions.ts` | Member listing, status transitions, detail operations |
 | user-menu | `user-menu/actions.ts` | `handleSignOut` |
@@ -196,7 +193,6 @@ Components interact with these service classes:
 | ContactService | `@/services/contactService` | contact-lookup, contact-lookup-details |
 | ContactLogService | `@/services/contactLogService` | contact-logs |
 | DashboardService | `@/services/dashboardService` | dashboard |
-| FeedbackService | `@/services/feedbackService` | feedback |
 | JourneyProcessingService | `@/services/journeyProcessingService` | journey-processing |
 | MemberService | `@/services/memberService` | manage-members |
 | UserService | `@/services/userService` | user-menu |

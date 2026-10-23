@@ -4,7 +4,6 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { Providers } from "@/app/providers";
 import { AuthWrapper, Header, DynamicBreadcrumb, BreadcrumbOverrideProvider } from "@/components/layout";
-import { FeedbackWrapper } from "@/components/feedback";
 import { InstallPrompt } from "@/components/pwa";
 import type { RuntimeConfig } from "@/contexts";
 
@@ -66,7 +65,6 @@ export default function WebLayout({
               </main>
             </div>
           </BreadcrumbOverrideProvider>
-          <FeedbackWrapper />
           <InstallPrompt />
         </Providers>
       </AuthWrapper>

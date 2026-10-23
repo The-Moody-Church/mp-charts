@@ -48,7 +48,7 @@ repo visibility, protection, scanning status, open alerts and advisory data.
 | N2 | Manage-members milestone files: no scope check | MEDIUM | Open |
 | N3 | Shared contact-photo upload replaces any contact's default photo | MEDIUM | Open |
 | N4 | Summer Blast add/remove write to arbitrary Group_Participants / Responses rows | MEDIUM | Open |
-| N5 | Public repo: feedback issues publish staff names + contact GUIDs | MEDIUM | Open |
+| N5 | Public repo: feedback issues publish staff names + contact GUIDs | MEDIUM | Feature removed 2026-10-23 (token pulled from all four apps, code deleted). The 22 existing public issues are an open owner decision |
 | N6 | Public repo: internal IPs/hosts in tracked docs (checklist violation) | MEDIUM (policy) / LOW (exploit) | Open |
 | N7 | `transitionMember` writes any participant's Member_Status_ID | LOW | Open |
 | N8 | Upstream 2026-09-28 wave unreviewed (see §3) | LOW–MEDIUM aggregate | Open |

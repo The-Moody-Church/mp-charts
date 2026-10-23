@@ -331,7 +331,6 @@ mp-charts/
 │   │   ├── contact-lookup-details/      # Detailed contact view
 │   │   ├── dashboard/                   # Executive dashboard charts & metrics
 │   │   ├── manage-members/             # Membership status management
-│   │   ├── feedback/                    # User feedback feature
 │   │   ├── home/                        # Home page cards
 │   │   ├── journey-processing/          # Journey processing feature
 │   │   ├── layout/                      # Layout components (header, sidebar, breadcrumb)
@@ -370,7 +369,6 @@ mp-charts/
 │   │   ├── contactLogService.ts         # Contact log CRUD
 │   │   ├── complianceProcessingService.ts # Compliance workflow processing
 │   │   ├── dashboardService.ts          # Executive dashboard metrics
-│   │   ├── feedbackService.ts           # User feedback
 │   │   ├── journeyProcessingService.ts  # Journey workflow processing
 │   │   └── userService.ts               # User profile retrieval
 │   │
@@ -494,7 +492,6 @@ Built with Radix UI primitives and styled with Tailwind CSS. Located in `src/com
 - **manage-members**: Membership status management with card grid, tab filtering, detail modal (expandable milestones with notes/files, deep links, contact actions), optimistic status transitions with cache invalidation
 - **compliance-processing**: Configurable compliance tracking workflows (e.g., membership)
 - **admin**: Admin tool editors for journey and compliance tool configuration
-- **feedback**: User feedback submission (creates GitHub issues)
 - **processing**: Shared processing components (PersonAvatar, ProcessingGrid, MilestoneEditForm)
 - **pwa**: Progressive Web App install prompt
 - **user-menu**: User profile dropdown with sign-out
@@ -513,10 +510,9 @@ Application services provide business logic abstraction over the Ministry Platfo
 | **JourneyProcessingService** | `journeyProcessingService.ts` | Journey workflow step processing |
 | **ComplianceProcessingService** | `complianceProcessingService.ts` | Compliance workflow processing |
 | **MemberService** | `memberService.ts` | Membership status management, milestones, transitions |
-| **FeedbackService** | `feedbackService.ts` | User feedback (creates GitHub issues) |
 | **UserService** | `userService.ts` | User profile and roles retrieval |
 
-Most services follow the singleton pattern and use `MPHelper` for API communication. `FeedbackService` uses the GitHub REST API instead.
+Most services follow the singleton pattern and use `MPHelper` for API communication.
 
 ## Testing
 

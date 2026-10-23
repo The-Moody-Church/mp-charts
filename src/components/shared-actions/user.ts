@@ -6,7 +6,6 @@ import { MPUserProfile } from "@/lib/providers/ministry-platform/types";
 import { UserService } from '@/services/userService';
 import { getEnabledJourneyTools } from "@/lib/journey-tools-config";
 import { getEnabledComplianceTools } from "@/lib/compliance-tools-config";
-import { isFeedbackEnabled } from "@/lib/feedback-config";
 
 export interface JourneyToolMeta {
   slug: string;
@@ -47,18 +46,17 @@ export async function getUserAuthorization(_requestedId?: string): Promise<{
   isSuperAdmin: boolean;
   journeyTools: JourneyToolMeta[];
   complianceTools: ComplianceToolMeta[];
-  feedbackEnabled: boolean;
 }> {
   // SECURITY (F4): derive the user GUID from the session, never from the client.
   const session = await requireSession();
   const id = getUserGuid(session);
   if (!id) {
-    return { accessibleFeatures: [], isSuperAdmin: false, journeyTools: [], complianceTools: [], feedbackEnabled: false };
+    return { accessibleFeatures: [], isSuperAdmin: false, journeyTools: [], complianceTools: [] };
   }
   const userService = await UserService.getInstance();
   const profile = await userService.getUserProfile(id);
   if (!profile) {
-    return { accessibleFeatures: [], isSuperAdmin: false, journeyTools: [], complianceTools: [], feedbackEnabled: false };
+    return { accessibleFeatures: [], isSuperAdmin: false, journeyTools: [], complianceTools: [] };
   }
 
   const enabledJourneys = getEnabledJourneyTools();
@@ -80,6 +78,5 @@ export async function getUserAuthorization(_requestedId?: string): Promise<{
     isSuperAdmin: isSuperAdmin(profile.userGroupIds),
     journeyTools,
     complianceTools,
-    feedbackEnabled: isFeedbackEnabled(),
   };
 }
