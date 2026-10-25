@@ -395,9 +395,8 @@ describe("validateAllowlist", () => {
   it("the committed scripts/audit-allowlist.json is valid", () => {
     const file = JSON.parse(readFileSync(resolve(__dirname, "audit-allowlist.json"), "utf8"));
     expect(validateAllowlist(file)).toEqual(file);
-    expect(file).toContainEqual(
-      expect.objectContaining({ id: BRACES, package: "braces", added: "2026-10-07", review_by: "2026-11-07" }),
-    );
+    // GHSA-vfj7-8cjw-p6xm (braces) was withdrawn by GitHub; its entry was removed on 2026-10-24.
+    expect(file.map((e: { id: string }) => e.id)).not.toContain(BRACES);
   });
 });
 
