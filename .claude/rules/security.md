@@ -139,14 +139,10 @@ How it decides, failing closed at every step:
   the production-tree check ends with one line saying no allow-listed advisory reaches it, or an
   `::error::` per entry that does.
 
-**The one current exception — GHSA-vfj7-8cjw-p6xm (braces, HIGH).** Published 2026-10-07; it affects
-every braces release (≤ 3.0.3) and no patched version exists. It reaches this repo only through the
-lint toolchain: `eslint-config-next` → `@next/eslint-plugin-next` (16.3.x and 16.4.0 pin
-`fast-glob` 3.3.1) → `fast-glob` → `micromatch` → `braces`, all devDependencies
-(`npm audit --omit=dev` does not report it). The production image ships only `.next/standalone`,
-which contains none of braces, micromatch, fast-glob or eslint. `npm audit fix` was not an option:
-it left five HIGHs and introduced new lint errors in the sibling apps, and `--force` would install
-`eslint-config-next@14`.
+**Current entries: none** (`[]`, since 2026-10-24). The first and only entry so far was GHSA-vfj7-8cjw-p6xm (braces, HIGH),
+added 2026-10-07 for a lint-toolchain-only path (`eslint-config-next` → `@next/eslint-plugin-next` → `fast-glob` →
+`micromatch` → `braces`) with no patched release. GitHub **withdrew** the advisory by 2026-10-24. The gate then
+warned that the entry no longer appeared in `npm audit`, as designed, and it was removed.
 
 **Adding an entry** — only for an advisory with no fix you can take, on a path that does not reach the
 production image. Prefer a fix every time: a patched release, a lockfile update within range, or an
