@@ -200,7 +200,7 @@ http://localhost:3000/api/auth/callback/ministryplatform
 https://yourdomain.com/api/auth/callback/ministryplatform
 ```
 
-> **better-auth 1.7 path.** 1.6 used `/api/auth/oauth2/callback/ministryplatform`; 1.7 builds `/api/auth/callback/<providerId>`. Our providerId is `ministryplatform` with **no hyphen** — upstream MPNext's is `ministry-platform`, so do not copy its URI. Keep the old entry registered until no deployment can roll back to a 1.6 build.
+> **better-auth 1.7 path.** 1.6 used `/api/auth/oauth2/callback/ministryplatform`; 1.7 builds `/api/auth/callback/<providerId>`. Our providerId is `ministryplatform` with **no hyphen** — upstream MPNext's is `ministry-platform`, so do not copy its URI. The old 1.6 entries were removed from TM.Widgets on 2026-10-27, so a 1.6 build can no longer sign in.
 
 > **Important**: The redirect URI must match exactly (including protocol, domain, port, and path). Ministry Platform will reject any OAuth requests with mismatched redirect URIs.
 

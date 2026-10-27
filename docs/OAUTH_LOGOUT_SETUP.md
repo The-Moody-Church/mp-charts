@@ -148,9 +148,10 @@ https://musictools.moodychurch.org/api/auth/callback/ministryplatform
 http://localhost:3000/api/auth/callback/ministryplatform
 ```
 
-Keep the 1.6 entries (`…/api/auth/oauth2/callback/ministryplatform`) until no
-deployment can roll back to a 1.6 build: a rolled-back image sends the old
-path. The post-logout list above does not change.
+The 1.6 entries (`…/api/auth/oauth2/callback/ministryplatform`) were removed
+on 2026-10-27, after every app had run 1.7 for a month. A 1.6 image sends that
+old path, so no deployment can roll back to 1.6 any more. The post-logout list
+above does not change.
 
 #### Verify the registration (before any soak)
 
@@ -168,8 +169,8 @@ curl -s -o /tmp/p.html -w '%{http_code} %{redirect_url}\n' \
 
 Run it for all four hosts and localhost, on **both** the new
 `/api/auth/callback/ministryplatform` path (must be `302` before that app's
-first 1.7 soak) and the old `/api/auth/oauth2/callback/ministryplatform` path
-(must stay `302` while any rollback to 1.6 is possible).
+first 1.7 soak). The old `/api/auth/oauth2/callback/ministryplatform` path has
+returned `200` (refused) on all five since its removal on 2026-10-27.
 
 **Where.** Not through the MP REST API. Confirmed on 2026-09-18: there is no
 OAuth client table in the data dictionary, the OIDC discovery document

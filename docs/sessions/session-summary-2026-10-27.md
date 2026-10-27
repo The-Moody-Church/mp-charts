@@ -46,10 +46,19 @@ All four apps run their main build: mp-charts `f7a37e8`, mp-senior-care `072962f
   - Editing the issues ran `sync-issues-to-ideas`, which succeeded and changed nothing.
 - The 2026-10-10 audit report now marks N5 closed.
 
+## 2026-10-27 — TM.Widgets 1.6 redirect URIs removed — COMPLETED
+
+The owner removed the five `…/api/auth/oauth2/callback/ministryplatform` redirect URIs (mptools, care,
+events, musictools, localhost:3000). A probe of MP's authorize endpoint now returns `200` (refused) for all
+five old URIs, and `302` (registered) for the five `/api/auth/callback/ministryplatform` ones. Before the
+change all ten returned `302`, and an unregistered control URI returned `200`. README.md and
+`docs/OAUTH_LOGOUT_SETUP.md` no longer say to keep the old entries.
+
 ## Pending
 
-- Owner / MP admin: remove the five TM.Widgets 1.6 redirect URIs, then retire the `rollback-1.6` pins.
-- better-auth 1.7.x patch (1.7.12) across the four apps, with a sign-in soak.
+- Delete the obsolete `docker-compose.rollback-1.6.yml` pins on the four apps' hosts. No 1.6 build can sign
+  in now. The deletion was blocked by the session's permission classifier and needs the owner's go-ahead.
+- better-auth 1.7.x patch (1.7.14) across the four apps, with a sign-in soak.
 - N23 binding checks: port to the siblings where they have the processing services.
 - Open Dependabot majors (vitest 5 / coverage-v8 / jsdom 30, eslint 10, TypeScript 7, dotenv 18,
   chalk 6, jest-dom 7, lucide-react 1.x).
@@ -57,6 +66,7 @@ All four apps run their main build: mp-charts `f7a37e8`, mp-senior-care `072962f
 
 ## Files
 
-- **Modified:** `docs/status.md`, `.claude/notes/security-audit-2026-10-10.md`
+- **Modified:** `docs/status.md`, `.claude/notes/security-audit-2026-10-10.md`, `README.md`,
+  `docs/OAUTH_LOGOUT_SETUP.md`
 - **Created:** `docs/sessions/session-summary-2026-10-27.md`
 - The #275 code changes are recorded in that PR.
