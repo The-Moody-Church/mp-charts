@@ -57,7 +57,7 @@ change all ten returned `302`, and an unregistered control URI returned `200`. R
 The owner then deleted the four obsolete `docker-compose.rollback-1.6.yml` pins, since no 1.6 build can
 sign in now. Each `docker-compose.rollback.yml` still holds the build from before the last soak.
 
-## 2026-10-27 — better-auth 1.7.14 + vitest 4.1.12 — IN PROGRESS (branch `chore/better-auth-1.7.14`)
+## 2026-10-27 — better-auth 1.7.14 + vitest 4.1.12 — COMPLETED (#276)
 
 - **better-auth** 1.7.5 → 1.7.14, together with `@better-auth/core`, the adapters, `better-call` 1.4.4 and
   `@better-auth/utils` 0.5.1. The range stays bounded: `npm install` wrote `^1.7.14`, which was put back
@@ -79,8 +79,14 @@ sign in now. Each `docker-compose.rollback.yml` still holds the build from befor
   GHSA-xp26-3454-mjgp. Both are medium and dev-only.
 - **Checks:** `npm audit signatures`: all five updated packages have verified provenance, none missing or
   invalid. tsc, lint, 1157 tests, the audit gate and `npm run build` pass.
-- **Next:** soak on `:dev` with a human sign-in and sign-out, then merge, deploy, and port to the three
-  siblings.
+- **Soak:** `:dev` (`985208c`) ran in production, with the rollback pin on `f7a37e8`.
+  - Cache warming finished on the first attempt. `/` returned 307, `/signin` 200, and
+    `/api/auth/update-user` 404.
+  - `/sign-in/social` built the MP authorize URL with TM.Widgets, the 1.7 callback and no
+    `code_challenge`.
+  - The owner signed in, browsed and signed out without problems. The log had no `[auth]` errors and no
+    `id_token_hint omitted` line.
+- **Next:** port to the three siblings.
 
 ## Pending
 
