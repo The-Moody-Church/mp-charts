@@ -86,7 +86,11 @@ sign in now. Each `docker-compose.rollback.yml` still holds the build from befor
     `code_challenge`.
   - The owner signed in, browsed and signed out without problems. The log had no `[auth]` errors and no
     `id_token_hint omitted` line.
-- **Next:** port to the three siblings.
+- **Deployed:** merged as `3dc78dd`; production runs it. Cache warming finished on the first attempt, `/` returns
+  307 and `/signin` 200. The rollback pin still holds `f7a37e8`.
+- **Siblings:** mp-senior-care #227 (with vitest 4.1.12), event-manager #72 and music-tools #180. The
+  same checks were re-run in each, including the `oauth_state` measurement (556 + 2 × length in all three).
+  Each needs a `:dev` soak.
 
 ## Pending
 
