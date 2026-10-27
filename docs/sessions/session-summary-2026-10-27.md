@@ -54,10 +54,11 @@ five old URIs, and `302` (registered) for the five `/api/auth/callback/ministryp
 change all ten returned `302`, and an unregistered control URI returned `200`. README.md and
 `docs/OAUTH_LOGOUT_SETUP.md` no longer say to keep the old entries.
 
+The owner then deleted the four obsolete `docker-compose.rollback-1.6.yml` pins, since no 1.6 build can
+sign in now. Each `docker-compose.rollback.yml` still holds the build from before the last soak.
+
 ## Pending
 
-- Delete the obsolete `docker-compose.rollback-1.6.yml` pins on the four apps' hosts. No 1.6 build can sign
-  in now. The deletion was blocked by the session's permission classifier and needs the owner's go-ahead.
 - better-auth 1.7.x patch (1.7.14) across the four apps, with a sign-in soak.
 - N23 binding checks: port to the siblings where they have the processing services.
 - Open Dependabot majors (vitest 5 / coverage-v8 / jsdom 30, eslint 10, TypeScript 7, dotenv 18,

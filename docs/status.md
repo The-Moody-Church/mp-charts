@@ -24,7 +24,7 @@ Quick-reference snapshot of current project state. Read this first at session st
 ## Open Security Findings
 
 - The 2026-10-10 audit (`.claude/notes/security-audit-2026-10-10.md`): **N1** and **N23** fixed in #251, **N5** closed 2026-10-27; **N2–N4, N6, N7** still open (per-record scope on member milestone files, the shared photo upload and the Summer Blast writes; internal hostnames in old session summaries).
-- The better-auth 1.6 redirect URIs were removed from TM.Widgets on 2026-10-27 (probe: old five refused, new five accepted). Still to do: delete the obsolete `docker-compose.rollback-1.6.yml` pins on the server.
+- The better-auth 1.6 redirect URIs were removed from TM.Widgets on 2026-10-27 (probe: old five refused, new five accepted). The obsolete `docker-compose.rollback-1.6.yml` pins were deleted the same day.
 - The audit allow-list is empty (`[]`) since 2026-10-24.
 
 ## Planned
