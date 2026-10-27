@@ -112,7 +112,7 @@ const betterAuthSecret = process.env.BETTER_AUTH_SECRET;
  * minting a session whose raw `sub` bypassed the GUID validation the MP
  * lookup already required.
  *
- * NEVER THROWS. better-auth 1.7.5 still calls `getUserInfo` without a
+ * NEVER THROWS. better-auth 1.7.14 still calls `getUserInfo` without a
  * try/catch (dist/api/routes/callback.mjs:122), so a throw becomes a bare
  * HTTP 500 on the callback. A null return becomes the clean
  * /auth-error?error=unable_to_get_user_info redirect instead.
@@ -430,7 +430,7 @@ export const SESSION_COOKIE_CACHE_MAX_AGE_SECONDS = 60 * 60;
  * `<client IP>|<path>`. By default better-auth reads ONE header,
  * `x-forwarded-for`, and trusts it only when it holds a single valid IP.
  * Anything else — no header, a proxy-appended chain, an `ip:port` value —
- * resolves to no IP, and then (better-auth 1.7.5,
+ * resolves to no IP, and then (better-auth 1.7.14,
  * dist/api/rate-limiter/index.mjs `resolveRateLimitConfig`) the request is
  * NOT skipped: it is counted in ONE shared per-path bucket,
  * `no-trusted-ip|<path>`, and the process logs this warning once:

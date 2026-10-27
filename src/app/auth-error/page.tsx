@@ -16,7 +16,7 @@ import Link from "next/link";
  */
 
 /**
- * Error codes better-auth 1.7.5's core OAuth callback emits
+ * Error codes better-auth 1.7.14's core OAuth callback emits
  * (dist/oauth2/errors.mjs, api/routes/callback.mjs, oauth2/state.mjs,
  * oauth2/link-account.mjs), plus `sign_in_start_failed`, which is OURS
  * (src/components/sign-in/sign-in.tsx, when the flow cannot even start).

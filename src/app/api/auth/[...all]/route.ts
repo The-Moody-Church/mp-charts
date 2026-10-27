@@ -9,7 +9,7 @@ const { GET: betterAuthGET, POST: betterAuthPOST } = toNextJsHandler(auth);
 /**
  * Deny-by-default allowlist of better-auth endpoints reachable over HTTP.
  *
- * better-auth 1.7.5 mounts 30 endpoints under this catch-all. This app's
+ * better-auth 1.7.14 mounts 30 endpoints under this catch-all. This app's
  * browser client calls exactly three:
  *
  * | Method | Path                        | Caller                                               |

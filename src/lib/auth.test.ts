@@ -130,7 +130,7 @@ describe("getMpUserInfo", () => {
   });
 
   it("returns null (not throws) for a malformed sub, before any MP lookup", async () => {
-    // better-auth 1.7.5 still does NOT wrap getUserInfo in a try/catch
+    // better-auth 1.7.14 still does NOT wrap getUserInfo in a try/catch
     // (dist/api/routes/callback.mjs:122), so a throw becomes a bare 500 instead
     // of the clean unable_to_get_user_info redirect a null return produces.
     // Regression guard for that distinction.

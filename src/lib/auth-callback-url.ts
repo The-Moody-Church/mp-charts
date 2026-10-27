@@ -20,7 +20,7 @@ export const MAX_CALLBACK_URL_LENGTH = 2048;
  * It sits BELOW the server cap because the server cap does not fit in a
  * cookie. better-auth stores `callbackURL` in the encrypted, hex-encoded
  * `oauth_state` cookie, whose value is about 556 + 2 × length bytes (measured
- * on better-auth 1.7.5; the callback is ASCII once URL-normalized). Browsers
+ * on better-auth 1.7.14; the callback is ASCII once URL-normalized). Browsers
  * drop a cookie whose name + value exceeds 4096 bytes, and in production the
  * name is `__Secure-better-auth.oauth_state` (32 bytes) — so a callback over
  * 1754 characters is silently not stored, and the MP callback then ends on
