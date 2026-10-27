@@ -90,7 +90,11 @@ sign in now. Each `docker-compose.rollback.yml` still holds the build from befor
   307 and `/signin` 200. The rollback pin still holds `f7a37e8`.
 - **Siblings:** mp-senior-care #227 (with vitest 4.1.12), event-manager #72 and music-tools #180. The
   same checks were re-run in each, including the `oauth_state` measurement (556 + 2 × length in all three).
-  Each needs a `:dev` soak.
+  All three soaked on `:dev` together; the owner signed in and out on each. Merged and deployed:
+  mp-senior-care `3d97b4f`, event-manager `981c700`, music-tools `0ec62da`. Cache warming finished on the
+  first attempt (the two apps that have it), `/` returns 307 and `/signin` 200, and neon-backup kept running.
+  One `ETIMEDOUT` on a music-tools `choir_members` query to Neon at 17:18 during the soak. Prisma and the
+  driver were untouched by the PR, and it fits Neon waking a suspended compute.
 
 ## Pending
 
