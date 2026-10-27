@@ -12,7 +12,7 @@
 
 ### Deployment orientation
 - TMC1 was running `:main` = `81df972` (PR #207, file-read sanitization), pulled ~4 minutes after #207 merged on 2026-08-21. PR #208 (`security/admin-feature-access-hardening`, commits `c7769b5` + `ce87334`) was open, green on all five CI checks, and running nowhere.
-- Ironside (192.168.4.81) was network-unreachable from the session's network; only TMC1 (192.168.5.222) was reachable.
+- The dev server was unreachable from the session's network; only TMC1 was reachable.
 
 ### `/deploy-dev` — PR #208 soak on TMC1
 - Confirmed the most recent non-main `:dev` build was from `security/admin-feature-access-hardening` tip `ce87334`, CI success.

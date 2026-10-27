@@ -30,13 +30,13 @@
 
 ### TMC1 Migration ✅ COMPLETED
 
-- Deployed latest image to TMC1 (192.168.5.222) — cache warming successful
-- Copied data files from ironside to TMC1 via `docker cp` + alpine container for ownership fix:
+- Deployed latest image to TMC1 — cache warming successful
+- Copied data files from the old dev server to TMC1, fixing file ownership on the way:
   - `compliance-tools.json`
   - `feature-access.json`
   - `feedback-config.json`
   - `journey-tools.json`
-- Updated `/deploy` command to target TMC1 (context `tmc1`, IP `192.168.5.222`)
+- Updated `/deploy` command to target TMC1
 
 ## Files Changed
 

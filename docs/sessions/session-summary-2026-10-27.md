@@ -96,12 +96,21 @@ sign in now. Each `docker-compose.rollback.yml` still holds the build from befor
   One `ETIMEDOUT` on a music-tools `choir_members` query to Neon at 17:18 during the soak. Prisma and the
   driver were untouched by the PR, and it fits Neon waking a suspended compute.
 
+## 2026-10-27 — N6 internal IPs in public docs — COMPLETED
+
+`git grep` over tracked files found server IPs only in `docs/sessions/session-summary-2026-04-04.md` (with
+the dev server's SSH user name) and `-2026-09-01.md`. Both were reworded to name the servers without
+addresses. The `10.x` values in `auth.rate-limit.test.ts` are RFC 1918 test fixtures, not ours.
+`.claude/commands/deploy*.md` contain the IP, but they are gitignored and so were never public. The same
+scan of the other public repos found one line in mp-n8n (`c2bd2d5`, fixed) and none in mp-mcp. The
+three sibling app repos are private. Git history keeps the old text; it was not rewritten.
+
 ## Pending
 
 - N23 binding checks: port to the siblings where they have the processing services.
 - Open Dependabot majors (vitest 5 / coverage-v8 / jsdom 30, eslint 10, TypeScript 7, dotenv 18,
   chalk 6, jest-dom 7, lucide-react 1.x).
-- Audit N2, N3, N4, N6, N7. Upstream sync log for `75d249d..aa1bc64`.
+- Audit N2, N3, N4, N7. Upstream sync log for `75d249d..aa1bc64`.
 
 ## Files
 
