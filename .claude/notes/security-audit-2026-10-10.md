@@ -48,7 +48,7 @@ repo visibility, protection, scanning status, open alerts and advisory data.
 | N2 | Manage-members milestone files: no scope check | MEDIUM | Open |
 | N3 | Shared contact-photo upload replaces any contact's default photo | MEDIUM | Open |
 | N4 | Summer Blast add/remove write to arbitrary Group_Participants / Responses rows | MEDIUM | Open |
-| N5 | Public repo: feedback issues publish staff names + contact GUIDs | MEDIUM | Feature removed 2026-10-23 (token pulled from all four apps, code deleted). The 22 existing public issues are an open owner decision |
+| N5 | Public repo: feedback issues publish staff names + contact GUIDs | MEDIUM | **Closed 2026-10-27.** Feature removed 2026-10-23 (token pulled from all four apps, code deleted); tokens revoked and `.env` backups deleted; the contact GUID links cut from the 5 issues that had them, and those revisions deleted from edit history. Staff names in the 22 issues kept by owner decision |
 | N6 | Public repo: internal IPs/hosts in tracked docs (checklist violation) | MEDIUM (policy) / LOW (exploit) | Open |
 | N7 | `transitionMember` writes any participant's Member_Status_ID | LOW | Open |
 | N8 | Upstream 2026-09-28 wave unreviewed (see §3) | LOW–MEDIUM aggregate | Open |
@@ -423,5 +423,5 @@ and both services' `getInstance` messages are static.
 
 **Not changed:** a Background_Checks record of any type owned by an in-scope contact stays listable. Limiting
 it to the newest check would need a second, tie-breaker-free query that could deny the record the UI showed.
-**Still open from this report:** N2, N3, N4, N5, N6, N7 and the rest.
+**Still open from this report:** N2, N3, N4, N6, N7 and the rest.
 
