@@ -389,7 +389,7 @@ describe("POST /sign-in/social size and type limits", () => {
 /**
  * F7 — deny-by-default on the better-auth catch-all.
  *
- * better-auth 1.7.5 mounts 30 endpoints here; the browser uses three. These
+ * better-auth 1.7.14 mounts 30 endpoints here; the browser uses three. These
  * tests drive the REAL exported handlers with real NextRequest objects, so
  * they fail if the allowlist is widened, bypassed, or removed.
  */

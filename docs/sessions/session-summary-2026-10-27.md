@@ -57,9 +57,33 @@ change all ten returned `302`, and an unregistered control URI returned `200`. R
 The owner then deleted the four obsolete `docker-compose.rollback-1.6.yml` pins, since no 1.6 build can
 sign in now. Each `docker-compose.rollback.yml` still holds the build from before the last soak.
 
+## 2026-10-27 — better-auth 1.7.14 + vitest 4.1.12 — IN PROGRESS (branch `chore/better-auth-1.7.14`)
+
+- **better-auth** 1.7.5 → 1.7.14, together with `@better-auth/core`, the adapters, `better-call` 1.4.4 and
+  `@better-auth/utils` 0.5.1. The range stays bounded: `npm install` wrote `^1.7.14`, which was put back
+  to `>=1.7.14 <1.8.0`.
+- **Release notes 1.7.6–1.7.14:** nothing we use. The changes cover magic link, the JWT plugin, OAuth proxy,
+  ID-token sign-in (we refuse it three ways) and password routes (closed by the allowlist). The generic
+  OAuth discovery retry only runs for a provider whose discovery failed, and we set no `discoveryUrl`.
+- **Dist diff, 1.7.5 vs 1.7.14,** of every auth-relevant file:
+  - `routes/callback` moved into a shared `exchangeOAuthCallback` with the same checks.
+  - `generic-oauth` was restructured. `getUserInfo` now strips `expectedIdTokenNonce` before calling ours.
+  - The rate limiter adds a JSON `Content-Type` to the 429.
+  - The cookie and session changes are build-output churn.
+- **Re-verified on 1.7.14:**
+  - 30 mounted endpoints, the same list (runtime count).
+  - `oauth2/errors.mjs` is byte-identical.
+  - The `oauth_state` value is still exactly 556 + 2 × length (1536 → 3628 bytes, 2048 → 4652).
+  - Every "1.7.5" claim in the code comments, CLAUDE.md and security.md was updated to 1.7.14 or annotated.
+- **vitest** 4.1.11 → 4.1.12 (with `@vitest/coverage-v8`) clears GHSA-qxg6-89mg-rqv8 and
+  GHSA-xp26-3454-mjgp. Both are medium and dev-only.
+- **Checks:** `npm audit signatures`: all five updated packages have verified provenance, none missing or
+  invalid. tsc, lint, 1157 tests, the audit gate and `npm run build` pass.
+- **Next:** soak on `:dev` with a human sign-in and sign-out, then merge, deploy, and port to the three
+  siblings.
+
 ## Pending
 
-- better-auth 1.7.x patch (1.7.14) across the four apps, with a sign-in soak.
 - N23 binding checks: port to the siblings where they have the processing services.
 - Open Dependabot majors (vitest 5 / coverage-v8 / jsdom 30, eslint 10, TypeScript 7, dotenv 18,
   chalk 6, jest-dom 7, lucide-react 1.x).
@@ -69,5 +93,9 @@ sign in now. Each `docker-compose.rollback.yml` still holds the build from befor
 
 - **Modified:** `docs/status.md`, `.claude/notes/security-audit-2026-10-10.md`, `README.md`,
   `docs/OAUTH_LOGOUT_SETUP.md`
+- **Modified (branch `chore/better-auth-1.7.14`):** `package.json`, `package-lock.json`, `CLAUDE.md`,
+  `.claude/rules/security.md`, `src/lib/auth.ts`, `src/lib/auth.test.ts`, `src/lib/auth-callback-url.ts`,
+  `src/app/auth-error/page.tsx`, `src/app/api/auth/[...all]/route.ts`, `src/app/api/auth/[...all]/route.test.ts`,
+  `docs/status.md`, this summary
 - **Created:** `docs/sessions/session-summary-2026-10-27.md`
 - The #275 code changes are recorded in that PR.
