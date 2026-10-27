@@ -925,12 +925,13 @@ describe("SummerBlastService.addToSummerBlast", () => {
 
   // N4: each refusal happens before any write.
   it.each([
-    ["the response does not exist", [], [{ Participant_ID: 50, Contact_ID: 99 }], 48],
-    ["the response is for another opportunity", [{ Opportunity_ID: 86 }], [{ Participant_ID: 50, Contact_ID: 99 }], 48],
-    ["the response's participant is another contact's", [{}], [{ Participant_ID: 50, Contact_ID: 12345 }], 48],
-    ["the response's participant record is missing", [{}], [], 48],
-    ["the group role is not configured", [{}], [{ Participant_ID: 50, Contact_ID: 99 }], 7],
-  ])("refuses, with no write, when %s", async (_case, responses, participants, groupRoleId) => {
+    ["the response does not exist", [], [{ Participant_ID: 50, Contact_ID: 99 }], 48, "is not an open intake response"],
+    ["the response is for another opportunity", [{ Opportunity_ID: 86 }], [{ Participant_ID: 50, Contact_ID: 99 }], 48, "is not an open intake response"],
+    ["the response is already closed", [{ Closed: true }], [{ Participant_ID: 50, Contact_ID: 99 }], 48, "is not an open intake response"],
+    ["the response's participant is another contact's", [{}], [{ Participant_ID: 50, Contact_ID: 12345 }], 48, "does not belong to contact 99"],
+    ["the response's participant record is missing", [{}], [], 48, "does not belong to contact 99"],
+    ["the group role is not configured", [{}], [{ Participant_ID: 50, Contact_ID: 99 }], 7, "group role 7 is not configured"],
+  ])("refuses, with no write, when %s", async (_case, responses, participants, groupRoleId, denial) => {
     mockGetTableRecords.mockImplementation((params: { table: string }) => {
       if (params.table === "Responses") {
         return Promise.resolve((responses as Partial<Record<string, unknown>>[]).map((r) => intakeResponse(r)));
@@ -942,7 +943,9 @@ describe("SummerBlastService.addToSummerBlast", () => {
 
     await expect(
       SummerBlastService.getInstance().addToSummerBlast({ contactId: 99, responseId: 444, groupRoleId }),
-    ).rejects.toThrow(/Forbidden|Response not found/);
+    ).rejects.toThrow(/Forbidden/);
+    // The intended check fired, not an earlier one.
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(denial as string));
     expect(mockCreateTableRecords).not.toHaveBeenCalled();
     expect(mockUpdateTableRecords).not.toHaveBeenCalled();
     warn.mockRestore();
@@ -996,7 +999,11 @@ describe("SummerBlastService.removeFromSummerBlast", () => {
     await service.removeFromSummerBlast({ groupParticipantId: 888 });
 
     expect(mockGetTableRecords).toHaveBeenCalledWith(
-      expect.objectContaining({ table: "Group_Participants", filter: "Group_Participant_ID = 888", top: 1 }),
+      expect.objectContaining({
+        table: "Group_Participants",
+        filter: expect.stringMatching(/^Group_Participant_ID = 888 AND \(End_Date IS NULL OR End_Date >= '[^']+'\)$/),
+        top: 1,
+      }),
     );
     expect(mockUpdateTableRecords).toHaveBeenCalledTimes(1);
     expect(mockUpdateTableRecords).toHaveBeenCalledWith(
@@ -1014,7 +1021,7 @@ describe("SummerBlastService.removeFromSummerBlast", () => {
   // N4: any other group's row, or no row, is refused before the write.
   it.each([
     ["another group's row", [{ Group_ID: 964 }]],
-    ["a row that does not exist", []],
+    ["a row that does not exist or has already ended", []],
   ])("refuses %s, with no write", async (_case, rows) => {
     mockGetTableRecords.mockResolvedValueOnce(rows);
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});

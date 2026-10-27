@@ -407,7 +407,8 @@ export class SummerBlastService {
    * once the participant exists for this person).
    *
    * SECURITY (N4): all three IDs are bound before any write. The response must exist and
-   * belong to this tool's intake opportunity (otherwise any Response_ID could be closed),
+   * belong to this tool's intake opportunity and still be open (otherwise any Response_ID
+   * could be closed, or a processed one replayed to re-enroll someone),
    * and the contact must own the response's participant. The participant enrolled is the
    * response's own, derived on the server, never a lookup from the caller's contact ID.
    * Intake cards are built from exactly these responses, so a UI request always passes.
@@ -435,8 +436,8 @@ export class SummerBlastService {
     });
     const response = responses[0];
     enforceScope(
-      !!response && response.Opportunity_ID === this.config.intakeOpportunityId,
-      `summer-blast response ${responseId} is not an intake response`,
+      !!response && response.Opportunity_ID === this.config.intakeOpportunityId && !response.Closed,
+      `summer-blast response ${responseId} is not an open intake response`,
     );
     // Report mode lets a wrong-opportunity response through; a missing one cannot proceed.
     if (!response) throw new Error("Response not found");
@@ -491,8 +492,8 @@ export class SummerBlastService {
   /**
    * End-date a Group_Participants row (does not touch Responses).
    *
-   * SECURITY (N4): the row is caller-supplied, so it must be a row in this tool's
-   * tracking group; otherwise any membership in any group could be ended. Checked
+   * SECURITY (N4): the row is caller-supplied, so it must be an active row in this
+   * tool's tracking group; otherwise any membership in any group could be ended. Checked
    * before the write.
    */
   public async removeFromSummerBlast(params: {
@@ -501,17 +502,19 @@ export class SummerBlastService {
   }): Promise<void> {
     const { userId } = params;
     const groupParticipantId = sanitizeId(params.groupParticipantId);
+    const now = nowCentral();
+    // Same active-row condition as the volunteer cards: re-ending an old row
+    // would rewrite its history to "ended today".
     const rows = await this.mp.getTableRecords<{ Group_ID: number }>({
       table: "Group_Participants",
       select: "Group_ID",
-      filter: `Group_Participant_ID = ${groupParticipantId}`,
+      filter: `Group_Participant_ID = ${groupParticipantId} AND (End_Date IS NULL OR End_Date >= '${now}')`,
       top: 1,
     });
     enforceScope(
       rows[0]?.Group_ID === this.config.trackingGroupId,
-      `group-participant ${groupParticipantId} is not in the summer-blast tracking group`,
+      `group-participant ${groupParticipantId} is not an active summer-blast tracking-group row`,
     );
-    const now = nowCentral();
     await this.mp.updateTableRecords(
       "Group_Participants",
       [{ Group_Participant_ID: groupParticipantId, End_Date: now }],

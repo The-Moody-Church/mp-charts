@@ -1,4 +1,7 @@
-"use server";
+// Deliberately NOT a "use server" module: everything here is a helper that
+// feature actions call. As "use server", each export was its own endpoint, and
+// `uploadContactPhoto` checks only the session, leaving scope to the caller's
+// service (N3 follow-up, 2026-10-27).
 
 import { requireSession, getMpUserId } from "@/lib/auth-helpers";
 import { enforceRateLimit } from "@/lib/rate-limit";

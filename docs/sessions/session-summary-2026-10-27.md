@@ -133,6 +133,18 @@ three sibling app repos are private. Git history keeps the old text; it was not 
   gained cases. Mutation check: 13 of 13 mutants caught.
 - **MP:** the membership query was checked read-only. Its `Participant_Milestone_ID` returns the owner
   with journey 7 and nothing with journey 8.
+- **Independent review:** no bypasses and no false denials. Its points were taken:
+  - `addToSummerBlast` refuses a response that is already closed, which stops a replayed `Response_ID`
+    re-enrolling someone and stops double-submit duplicates.
+  - `removeFromSummerBlast` refuses a row that has already ended, using the same active-row filter as the
+    volunteer cards.
+  - Each refusal test now asserts which check fired.
+  - `shared-actions/processing.ts` is no longer a `"use server"` module. Its helpers, including
+    `uploadContactPhoto`, which checks only the session, had each been a callable endpoint. Only server
+    modules import it.
+  - Follow-up, not done here: journey and compliance `assertGroupParticipantBelongsTo` also ignore
+    `End_Date`.
+- **Final tests:** 1192 pass, and all 15 mutants are caught.
 - **Not needed in the siblings:** N23's processing services exist only in mp-charts.
 - **Sibling side work:** music-tools #185 (prisma 7.10.1 + undici/zod/fast-uri) clears all 7 npm audit
   findings, including zod HIGH in production.
