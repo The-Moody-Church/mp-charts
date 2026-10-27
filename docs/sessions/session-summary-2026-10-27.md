@@ -105,12 +105,43 @@ addresses. The `10.x` values in `auth.rate-limit.test.ts` are RFC 1918 test fixt
 scan of the other public repos found one line in mp-n8n (`c2bd2d5`, fixed) and none in mp-mcp. The
 three sibling app repos are private. Git history keeps the old text; it was not rewritten.
 
+## 2026-10-27 — N2, N3, N4, N7 per-record scope — IN PROGRESS (branch `security/n2-n3-n4-n7-scope`)
+
+- **N2:** `fetchMilestoneFiles` lists a milestone's files only when it is a membership-journey milestone
+  (`MemberService.getMembershipMilestoneParticipant`) owned by a member. Before, any manage-members user
+  could list any Participant_Milestones row, including journey and compliance rows.
+- **N7:** `transitionMember` requires the participant to be a member and the contact to be that member's
+  own. It runs before the milestone write and the status update.
+- **N3:**
+  - The shared `uploadContactPhoto` now `sanitizeId`s `Contact_ID`.
+  - Journey (new `assertContactInScope`) and compliance check the contact against the tool's participants
+    before uploading.
+  - manage-members wraps the contact service with the member check.
+  - Contact lookup stays church-wide by design.
+- **N4:**
+  - `addToSummerBlast` requires the response to exist and belong to the intake opportunity, and the
+    contact to own the response's participant.
+  - It now enrolls that participant, where it used to look up the contact's first participant.
+  - The group role must be the temp role or a `roleConfigs` role. The audit missed this one: the role
+    came straight from the form.
+  - `removeFromSummerBlast` requires the row to be in the tracking group.
+- **False-deny check:** every check mirrors what the UI sends. Member cards come from the member set;
+  intake cards are built from those responses; the role picker lists `roleConfigs`; journey and compliance
+  cards are the tool's participants.
+- **Tests:** 1191 (+34): `manage-members/actions.test.ts`, `memberService.test.ts` and
+  `shared-actions/processing.test.ts` are new, and the Summer Blast, journey and compliance service tests
+  gained cases. Mutation check: 13 of 13 mutants caught.
+- **MP:** the membership query was checked read-only. Its `Participant_Milestone_ID` returns the owner
+  with journey 7 and nothing with journey 8.
+- **Not needed in the siblings:** N23's processing services exist only in mp-charts.
+- **Sibling side work:** music-tools #185 (prisma 7.10.1 + undici/zod/fast-uri) clears all 7 npm audit
+  findings, including zod HIGH in production.
+
 ## Pending
 
-- N23 binding checks: port to the siblings where they have the processing services.
 - Open Dependabot majors (vitest 5 / coverage-v8 / jsdom 30, eslint 10, TypeScript 7, dotenv 18,
   chalk 6, jest-dom 7, lucide-react 1.x).
-- Audit N2, N3, N4, N7. Upstream sync log for `75d249d..aa1bc64`.
+- Audit LOW items N9–N19. Upstream sync log for `75d249d..aa1bc64`.
 
 ## Files
 

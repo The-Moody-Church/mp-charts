@@ -872,28 +872,6 @@ describe("SummerBlastService.addToSummerBlast", () => {
     );
   });
 
-  it("omits Notes when the Response has no comments and no record is found", async () => {
-    mockGetTableRecords.mockImplementation((params: { table: string }) => {
-      if (params.table === "Participants") {
-        return Promise.resolve([{ Participant_ID: 51, Contact_ID: 101 }]);
-      }
-      // Response not found
-      return Promise.resolve([]);
-    });
-    mockCreateTableRecords.mockResolvedValueOnce([{ Group_Participant_ID: 1235 }]);
-    mockUpdateTableRecords.mockResolvedValueOnce(undefined);
-
-    const service = SummerBlastService.getInstance();
-    await service.addToSummerBlast({
-      contactId: 101,
-      responseId: 445,
-      groupRoleId: 48,
-    });
-
-    const created = mockCreateTableRecords.mock.calls[0][1][0];
-    expect(created).not.toHaveProperty("Notes");
-  });
-
   it("falls back to tempGroupRoleId when no role provided", async () => {
     mockGetTableRecords.mockImplementation((params: { table: string }) => {
       if (params.table === "Participants") {
@@ -929,14 +907,59 @@ describe("SummerBlastService.addToSummerBlast", () => {
     );
   });
 
-  it("throws if Contact has no Participant", async () => {
-    mockGetTableRecords.mockImplementation(() => Promise.resolve([]));
-    const service = SummerBlastService.getInstance();
+  it("enrolls the response's own participant, looked up by Participant_ID", async () => {
+    mockGetTableRecords.mockImplementation((params: { table: string }) => {
+      if (params.table === "Responses") return Promise.resolve([intakeResponse({ Participant_ID: 70 })]);
+      if (params.table === "Participants") return Promise.resolve([{ Participant_ID: 70, Contact_ID: 99 }]);
+      return Promise.resolve([]);
+    });
+    mockCreateTableRecords.mockResolvedValueOnce([{ Group_Participant_ID: 5 }]);
+    mockUpdateTableRecords.mockResolvedValueOnce(undefined);
+
+    await SummerBlastService.getInstance().addToSummerBlast({ contactId: 99, responseId: 444, groupRoleId: 42 });
+
+    const participantsCall = mockGetTableRecords.mock.calls.find((c) => c[0].table === "Participants");
+    expect(participantsCall![0].filter).toBe("Participant_ID = 70");
+    expect(mockCreateTableRecords.mock.calls[0][1][0]).toMatchObject({ Participant_ID: 70, Group_Role_ID: 42 });
+  });
+
+  // N4: each refusal happens before any write.
+  it.each([
+    ["the response does not exist", [], [{ Participant_ID: 50, Contact_ID: 99 }], 48],
+    ["the response is for another opportunity", [{ Opportunity_ID: 86 }], [{ Participant_ID: 50, Contact_ID: 99 }], 48],
+    ["the response's participant is another contact's", [{}], [{ Participant_ID: 50, Contact_ID: 12345 }], 48],
+    ["the response's participant record is missing", [{}], [], 48],
+    ["the group role is not configured", [{}], [{ Participant_ID: 50, Contact_ID: 99 }], 7],
+  ])("refuses, with no write, when %s", async (_case, responses, participants, groupRoleId) => {
+    mockGetTableRecords.mockImplementation((params: { table: string }) => {
+      if (params.table === "Responses") {
+        return Promise.resolve((responses as Partial<Record<string, unknown>>[]).map((r) => intakeResponse(r)));
+      }
+      if (params.table === "Participants") return Promise.resolve(participants);
+      return Promise.resolve([]);
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
     await expect(
-      service.addToSummerBlast({ contactId: 999, responseId: 1, groupRoleId: 42 }),
-    ).rejects.toThrow(/No Participant record/);
+      SummerBlastService.getInstance().addToSummerBlast({ contactId: 99, responseId: 444, groupRoleId }),
+    ).rejects.toThrow(/Forbidden|Response not found/);
+    expect(mockCreateTableRecords).not.toHaveBeenCalled();
+    expect(mockUpdateTableRecords).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });
+
+function intakeResponse(overrides: Record<string, unknown> = {}) {
+  return {
+    Response_ID: 444,
+    Response_Date: "2026-04-10T10:00:00",
+    Opportunity_ID: 85,
+    Participant_ID: 50,
+    Closed: false,
+    Comments: null,
+    ...overrides,
+  };
+}
 
 describe("buildEnrollmentNotes", () => {
   it("returns null when no response", () => {
@@ -966,11 +989,15 @@ describe("buildEnrollmentNotes", () => {
 });
 
 describe("SummerBlastService.removeFromSummerBlast", () => {
-  it("sets End_Date and does NOT update Responses", async () => {
+  it("sets End_Date on a tracking-group row and does NOT update Responses", async () => {
+    mockGetTableRecords.mockResolvedValueOnce([{ Group_ID: 1031 }]);
     mockUpdateTableRecords.mockResolvedValueOnce(undefined);
     const service = SummerBlastService.getInstance();
     await service.removeFromSummerBlast({ groupParticipantId: 888 });
 
+    expect(mockGetTableRecords).toHaveBeenCalledWith(
+      expect.objectContaining({ table: "Group_Participants", filter: "Group_Participant_ID = 888", top: 1 }),
+    );
     expect(mockUpdateTableRecords).toHaveBeenCalledTimes(1);
     expect(mockUpdateTableRecords).toHaveBeenCalledWith(
       "Group_Participants",
@@ -982,6 +1009,27 @@ describe("SummerBlastService.removeFromSummerBlast", () => {
       (call) => call[0] === "Responses",
     );
     expect(responseUpdates).toHaveLength(0);
+  });
+
+  // N4: any other group's row, or no row, is refused before the write.
+  it.each([
+    ["another group's row", [{ Group_ID: 964 }]],
+    ["a row that does not exist", []],
+  ])("refuses %s, with no write", async (_case, rows) => {
+    mockGetTableRecords.mockResolvedValueOnce(rows);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await expect(
+      SummerBlastService.getInstance().removeFromSummerBlast({ groupParticipantId: 888 }),
+    ).rejects.toThrow(/Forbidden/);
+    expect(mockUpdateTableRecords).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("refuses a non-integer row ID before any read", async () => {
+    await expect(
+      SummerBlastService.getInstance().removeFromSummerBlast({ groupParticipantId: "1 OR 1=1" as unknown as number }),
+    ).rejects.toThrow(/Invalid ID/);
+    expect(mockGetTableRecords).not.toHaveBeenCalled();
   });
 });
 

@@ -135,6 +135,17 @@ export class JourneyProcessingService {
     enforceScope(scoped.has(participantId), `participant ${participantId} outside this journey tool`);
   }
 
+  /** Assert scope for a contact by resolving its participant record(s). */
+  private async assertContactInScope(contactId: number): Promise<void> {
+    const parts = await this.mp.getTableRecords<{ Participant_ID: number }>({
+      table: 'Participants',
+      select: 'Participant_ID',
+      filter: `Contact_ID = ${sanitizeId(contactId)}`,
+    });
+    const scoped = await this.getScopedParticipantIds();
+    enforceScope(parts.some(p => scoped.has(p.Participant_ID)), `contact ${contactId} outside this journey tool`);
+  }
+
   /** Resolve a Group_Participant record to its Participant_ID, then assert scope. */
   private async assertGroupParticipantInScope(groupParticipantId: number): Promise<void> {
     const rows = await this.mp.getTableRecords<{ Participant_ID: number }>({
@@ -620,6 +631,10 @@ export class JourneyProcessingService {
     file: File,
     userId?: number
   ): Promise<void> {
+    // SECURITY (N3): this replaces the contact's default photo, so the contact
+    // must be one of this tool's participants. Checked before the upload.
+    contactId = sanitizeId(contactId);
+    await this.assertContactInScope(contactId);
     await this.mp.uploadFiles({
       table: 'Contacts',
       recordId: contactId,

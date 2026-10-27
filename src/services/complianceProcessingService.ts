@@ -842,6 +842,10 @@ export class ComplianceProcessingService {
     file: File,
     userId?: number
   ): Promise<void> {
+    // SECURITY (N3): this replaces the contact's default photo, so the contact
+    // must be one of this tool's participants. Checked before the upload.
+    contactId = sanitizeId(contactId);
+    await this.assertContactInScope(contactId);
     await this.mp.uploadFiles({
       table: 'Contacts',
       recordId: contactId,

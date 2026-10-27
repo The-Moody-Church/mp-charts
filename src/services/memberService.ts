@@ -73,15 +73,34 @@ export class MemberService {
   }
 
   // ---------------------------------------------------------------
+  // Read: Owner of a membership milestone record
+  // ---------------------------------------------------------------
+
+  /**
+   * The Participant_ID that owns a Participant_Milestones row, or null when the row
+   * does not exist or is not a membership-journey milestone. Lets the action bind a
+   * caller-supplied record ID to the member set before listing its files (N2): the
+   * journey and compliance tools write Participant_Milestones rows too.
+   */
+  public async getMembershipMilestoneParticipant(milestoneRecordId: number): Promise<number | null> {
+    const rows = await this.mp!.getTableRecords<{ Participant_ID: number }>({
+      table: "Participant_Milestones",
+      select: "Participant_Milestones.[Participant_ID]",
+      filter: `Participant_Milestones.[Participant_Milestone_ID] = ${sanitizeId(milestoneRecordId)} AND Milestone_ID_Table.[Journey_ID] = ${MEMBERSHIP_JOURNEY_ID}`,
+      top: 1,
+    });
+    return rows[0]?.Participant_ID ?? null;
+  }
+
+  // ---------------------------------------------------------------
   // Read: Files attached to a milestone record
   // ---------------------------------------------------------------
 
   public async getMilestoneFiles(milestoneRecordId: number): Promise<BaseFileInfo[]> {
     // SECURITY: `milestoneRecordId` arrives from a "use server" action as a
     // type-erased React Flight argument — the `number` annotation is compile-time
-    // only. Coerce it before it reaches the MP file path. (This feature is gated by
-    // requireFeatureAccess("manage-members") rather than a per-record scope model,
-    // so there is no per-record assert to add here.)
+    // only. Coerce it before it reaches the MP file path. The caller must first bind
+    // the record to the member set (getMembershipMilestoneParticipant, N2).
     const recordId = sanitizeId(milestoneRecordId);
 
     const fileBaseUrl = process.env.NEXT_PUBLIC_MINISTRY_PLATFORM_FILE_URL;

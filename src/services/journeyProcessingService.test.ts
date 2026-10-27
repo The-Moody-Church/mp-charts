@@ -5,6 +5,7 @@ const mockGetTableRecords = vi.fn();
 const mockGetFilesByRecord = vi.fn();
 const mockCreateTableRecords = vi.fn();
 const mockUpdateTableRecords = vi.fn();
+const mockUploadFiles = vi.fn();
 
 vi.mock('@/lib/providers/ministry-platform', () => ({
   MPHelper: class {
@@ -12,7 +13,7 @@ vi.mock('@/lib/providers/ministry-platform', () => ({
     getFilesByRecord = mockGetFilesByRecord;
     createTableRecords = mockCreateTableRecords;
     updateTableRecords = mockUpdateTableRecords;
-    uploadFiles = vi.fn();
+    uploadFiles = mockUploadFiles;
   },
 }));
 
@@ -165,3 +166,35 @@ describe('JourneyProcessingService pause/resume group-participant binding', () =
   });
 });
 
+
+describe('JourneyProcessingService.uploadContactPhoto scope (N3)', () => {
+  const photo = new File(['x'], 'p.png', { type: 'image/png' });
+  beforeEach(() => {
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Group_Participants') return Promise.resolve([{ Participant_ID: IN_PARTICIPANT }]);
+      if (p.table === 'Participants') {
+        return Promise.resolve([{ Participant_ID: p.filter === `Contact_ID = ${IN_CONTACT}` ? IN_PARTICIPANT : 55 }]);
+      }
+      return Promise.resolve([]);
+    });
+  });
+
+  it("uploads the photo of one of this tool's participants", async () => {
+    await JourneyProcessingService.getInstance('journey-a').uploadContactPhoto(IN_CONTACT, photo, 3);
+    expect(mockUploadFiles).toHaveBeenCalledWith(expect.objectContaining({ table: 'Contacts', recordId: IN_CONTACT }));
+  });
+
+  it('refuses a contact outside the tool, before the upload', async () => {
+    await expect(
+      JourneyProcessingService.getInstance('journey-a').uploadContactPhoto(OTHER_CONTACT, photo, 3),
+    ).rejects.toThrow(/Forbidden/);
+    expect(mockUploadFiles).not.toHaveBeenCalled();
+  });
+
+  it('refuses a non-integer contact ID before any read', async () => {
+    await expect(
+      JourneyProcessingService.getInstance('journey-a').uploadContactPhoto('1 OR 1=1' as unknown as number, photo, 3),
+    ).rejects.toThrow(/Invalid ID/);
+    expect(mockGetTableRecords).not.toHaveBeenCalled();
+  });
+});
