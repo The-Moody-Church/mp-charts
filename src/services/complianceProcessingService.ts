@@ -246,15 +246,21 @@ export class ComplianceProcessingService {
     enforceScope(parts.some(p => scoped.has(p.Participant_ID)), `contact ${contactId} outside this compliance tool`);
   }
 
-  /** Resolve a Group_Participant record to its Participant_ID, then assert scope. */
-  private async assertGroupParticipantInScope(groupParticipantId: number): Promise<void> {
+  /**
+   * Resolve an active Group_Participant row in `groupId` to its Participant_ID, then
+   * assert scope. Complete end-dates this row, so it must be the tool's own tracking
+   * group row and still active: any row of an in-scope participant (their other
+   * groups) or one already ended (its End_Date rewritten) is refused. Current-tab
+   * cards come from exactly these rows (getParticipantsForGroup).
+   */
+  private async assertGroupParticipantInScope(groupParticipantId: number, groupId: number): Promise<void> {
     const rows = await this.mp.getTableRecords<{ Participant_ID: number }>({
       table: 'Group_Participants',
       select: 'Participant_ID',
-      filter: `Group_Participant_ID = ${sanitizeId(groupParticipantId)}`,
+      filter: `Group_Participant_ID = ${sanitizeId(groupParticipantId)} AND Group_ID = ${sanitizeId(groupId)} AND (End_Date IS NULL OR End_Date >= '${nowCentral()}')`,
       top: 1,
     });
-    if (!rows[0]) { enforceScope(false, `group-participant ${groupParticipantId} not found`); return; }
+    if (!rows[0]) { enforceScope(false, `group-participant ${groupParticipantId} is not an active row in group ${groupId}`); return; }
     await this.assertParticipantInScope(rows[0].Participant_ID);
   }
 
@@ -275,7 +281,8 @@ export class ComplianceProcessingService {
    * caller-supplied. It must exist, belong to the (already scoped) participant,
    * and, when the tool configures it, sit in the group being left: the tracking
    * group on pause, the paused group on resume. Otherwise any row could be
-   * end-dated. Runs before any write.
+   * end-dated. It must also still be active (the same filter the cards use), so
+   * an ended row's End_Date is never rewritten. Runs before any write.
    */
   private async assertGroupParticipantBelongsTo(
     groupParticipantId: number,
@@ -285,13 +292,13 @@ export class ComplianceProcessingService {
     const rows = await this.mp.getTableRecords<{ Participant_ID: number; Group_ID: number }>({
       table: 'Group_Participants',
       select: 'Participant_ID,Group_ID',
-      filter: `Group_Participant_ID = ${sanitizeId(groupParticipantId)}`,
+      filter: `Group_Participant_ID = ${sanitizeId(groupParticipantId)} AND (End_Date IS NULL OR End_Date >= '${nowCentral()}')`,
       top: 1,
     });
     const row = rows[0];
     enforceScope(
       !!row && row.Participant_ID === participantId && (expectedGroupId == null || row.Group_ID === expectedGroupId),
-      `group-participant ${groupParticipantId} is not participant ${participantId}'s row in the expected group`,
+      `group-participant ${groupParticipantId} is not participant ${participantId}'s active row in the expected group`,
     );
   }
 
@@ -636,8 +643,9 @@ export class ComplianceProcessingService {
       throw new Error('Complete requires a tracking group');
     }
 
-    // SECURITY (F2): the group-participant record must belong to this tool.
-    await this.assertGroupParticipantInScope(currentGroupParticipantId);
+    // SECURITY (F2): the group-participant record must be an active tracking-group
+    // row of a participant this tool manages.
+    await this.assertGroupParticipantInScope(currentGroupParticipantId, this.config.trackingGroupId);
 
     const now = nowCentral();
     await this.mp.updateTableRecords(

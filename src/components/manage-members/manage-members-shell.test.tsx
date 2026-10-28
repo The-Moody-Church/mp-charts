@@ -178,6 +178,32 @@ describe("ManageMembersShell", () => {
     expect(mockFetchMemberDetail).toHaveBeenCalledTimes(1);
   });
 
+  const choosePhoto = async (file: File) => {
+    renderShell();
+    fireEvent.click(screen.getByText("Alice Tester"));
+    await waitFor(() => expect(screen.getByRole("dialog").textContent).toContain("Alice Tester"));
+    mockFetchMembersAndCounts.mockClear();
+    const input = screen
+      .getByRole("dialog")
+      .querySelector('input[type="file"][accept^="image"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+  };
+
+  it("shows a refused photo upload instead of dropping it", async () => {
+    mockUploadPhoto.mockResolvedValue({ success: false, error: "Failed to upload photo" });
+    await choosePhoto(new File(["x"], "photo.png", { type: "image/png" }));
+
+    expect((await screen.findByRole("alert")).textContent).toBe("Failed to upload photo");
+    expect(mockFetchMembersAndCounts).not.toHaveBeenCalled();
+  });
+
+  it("shows a rejected file type without calling the server", async () => {
+    await choosePhoto(new File(["x"], "photo.svg", { type: "image/svg+xml" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain("Invalid photo type: image/svg+xml");
+    expect(mockUploadPhoto).not.toHaveBeenCalled();
+  });
+
   it("leaves the modal closed when there is no deep link", async () => {
     renderShell();
 

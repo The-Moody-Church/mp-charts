@@ -38,6 +38,7 @@ export function MemberDetailModal({
   // starts a fetch. While it is mounted-and-closed the value renders nothing.
   const [loading, setLoading] = useState(true);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
@@ -95,18 +96,30 @@ export function MemberDetailModal({
     const file = e.target.files?.[0];
     if (!file || !member) return;
 
-    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) return;
-    if (file.size > MAX_FILE_SIZE) return;
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setPhotoError(`Invalid photo type: ${file.type || "unknown"}. Use JPEG, PNG, GIF, BMP or WebP.`);
+      return;
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      setPhotoError(`Photo is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum 20 MB.`);
+      return;
+    }
 
     setPhotoUploading(true);
+    setPhotoError(null);
     try {
       const formData = new FormData();
       formData.set("Contact_ID", String(member.contactId));
       formData.set("photo", file);
-      await uploadMemberPhoto(formData);
+      const result = await uploadMemberPhoto(formData);
+      if (!result.success) {
+        setPhotoError(result.error || "Failed to upload photo");
+        return;
+      }
       onUpdate();
-    } catch {
-      // Silently fail — photo upload is non-critical
+    } catch (err) {
+      console.error("Photo upload failed:", err);
+      setPhotoError("Failed to upload photo");
     } finally {
       setPhotoUploading(false);
       if (photoInputRef.current) photoInputRef.current.value = "";
@@ -179,6 +192,12 @@ export function MemberDetailModal({
                 </div>
               </div>
             </div>
+
+            {photoError && (
+              <div role="alert" className="text-sm text-red-600 bg-red-50 rounded-md p-2">
+                {photoError}
+              </div>
+            )}
 
             {/* Contact links */}
             <ContactLinks email={m.email} phone={m.mobilePhone} showSms />
