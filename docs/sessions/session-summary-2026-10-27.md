@@ -105,7 +105,7 @@ addresses. The `10.x` values in `auth.rate-limit.test.ts` are RFC 1918 test fixt
 scan of the other public repos found one line in mp-n8n (`c2bd2d5`, fixed) and none in mp-mcp. The
 three sibling app repos are private. Git history keeps the old text; it was not rewritten.
 
-## 2026-10-27 — N2, N3, N4, N7 per-record scope — IN PROGRESS (branch `security/n2-n3-n4-n7-scope`)
+## 2026-10-27 — N2, N3, N4, N7 per-record scope — COMPLETED (#277)
 
 - **N2:** `fetchMilestoneFiles` lists a milestone's files only when it is a membership-journey milestone
   (`MemberService.getMembershipMilestoneParticipant`) owned by a member. Before, any manage-members user
@@ -146,6 +146,9 @@ three sibling app repos are private. Git history keeps the old text; it was not 
     `End_Date`.
 - **Final tests:** 1192 pass, and all 15 mutants are caught.
 - **Not needed in the siblings:** N23's processing services exist only in mp-charts.
+- **Soak (2026-10-28):** `:dev` (ee5fa67) on mptools. The owner tested member detail and milestone
+  files, Summer Blast intake/volunteer tabs, and a photo upload. The log showed no errors and no
+  `[scope:deny]` lines. Merged and deployed to `:latest`.
 - **Sibling side work:** music-tools #185 (prisma 7.10.1 + undici/zod/fast-uri) clears all 7 npm audit
   findings, including zod HIGH in production.
 
