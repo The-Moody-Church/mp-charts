@@ -1,8 +1,12 @@
-"use server";
+// Deliberately NOT a "use server" module: everything here is a helper that
+// feature actions call. As "use server", each export was its own endpoint, and
+// `uploadContactPhoto` checks only the session, leaving scope to the caller's
+// service (N3 follow-up, 2026-10-27).
 
 import { requireSession, getMpUserId } from "@/lib/auth-helpers";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { ALLOWED_IMAGE_TYPES, ALLOWED_DOCUMENT_TYPES, MAX_FILE_SIZE, fileMagicMatchesType } from "@/lib/processing-utils";
+import { sanitizeId } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
 
 /**
  * Extract and validate files from FormData.
@@ -66,6 +70,10 @@ interface PhotoUploadService {
 /**
  * Generic photo upload for any service that exposes uploadContactPhoto().
  * Each feature passes its own service factory to avoid tight coupling.
+ *
+ * SECURITY (N3): the upload replaces the contact's default photo, so the service's
+ * uploadContactPhoto must check the contact is in its tool's scope. Journey,
+ * compliance and manage-members do; contact lookup is church-wide by design.
  */
 export async function uploadContactPhoto(
   formData: FormData,
@@ -75,8 +83,10 @@ export async function uploadContactPhoto(
     const session = await requireSession();
     enforceRateLimit(session.user.id, "upload");
 
-    const contactId = Number(formData.get("Contact_ID"));
-    if (!contactId || isNaN(contactId)) {
+    let contactId: number;
+    try {
+      contactId = sanitizeId(formData.get("Contact_ID"));
+    } catch {
       return { success: false, error: "Invalid Contact_ID" };
     }
 

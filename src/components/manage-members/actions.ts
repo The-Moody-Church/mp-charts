@@ -4,6 +4,8 @@ import { updateTag } from "next/cache";
 import { requireFeatureAccess } from "@/lib/authorization";
 import { getMpUserId } from "@/lib/auth-helpers";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { enforceScope } from "@/lib/scope-enforcement";
+import { sanitizeId } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
 import { MemberService } from "@/services/memberService";
 import { ALLOWED_DOCUMENT_TYPES, MAX_FILE_SIZE, searchByNameFlat } from "@/lib/processing-utils";
 import { getCachedAllContacts } from "@/components/contact-lookup/cached-contacts";
@@ -36,6 +38,25 @@ async function getAllMembers(): Promise<ContactSearch[]> {
   const allContacts = await getCachedAllContacts();
   return allContacts.filter(
     (c) => c.Participant_ID != null && c.Member_Status_ID != null,
+  );
+}
+
+/**
+ * SECURITY (N3/N7): the member set is this feature's scope. A write that names a
+ * contact or participant must name a member, and a contact and participant sent
+ * together must be the same member. The UI only sends a member card's own IDs.
+ */
+async function assertMember(
+  ids: { contactId?: number; participantId?: number },
+  context: string,
+): Promise<void> {
+  const members = await getAllMembers();
+  const member = ids.participantId !== undefined
+    ? members.find((c) => c.Participant_ID === ids.participantId)
+    : members.find((c) => c.Contact_ID === ids.contactId);
+  enforceScope(
+    !!member && (ids.contactId === undefined || member.Contact_ID === ids.contactId),
+    context,
   );
 }
 
@@ -144,6 +165,10 @@ export async function transitionMember(
     if (!milestoneDate) {
       return { success: false, error: "Milestone date is required" };
     }
+    await assertMember(
+      { contactId: sanitizeId(contactId), participantId: sanitizeId(participantId) },
+      `manage-members participant ${participantId} is not member contact ${contactId}`,
+    );
 
     // Validate file if provided
     const file = formData.get("attachment");
@@ -210,15 +235,30 @@ export async function fetchMilestoneFiles(
   const session = await requireFeatureAccess("manage-members");
   enforceRateLimit(session.user.id, "search");
 
+  // SECURITY (N2): only a membership milestone of a member. Other tools write
+  // Participant_Milestones rows too, and their files are theirs to list.
+  const recordId = sanitizeId(milestoneRecordId);
   const service = await MemberService.getInstance();
-  return service.getMilestoneFiles(milestoneRecordId);
+  const owner = await service.getMembershipMilestoneParticipant(recordId);
+  if (owner === null) {
+    enforceScope(false, `manage-members milestone ${recordId} is not a membership milestone`);
+  } else {
+    await assertMember({ participantId: owner }, `manage-members milestone ${recordId} is not a member's`);
+  }
+  return service.getMilestoneFiles(recordId);
 }
 
 export async function uploadMemberPhoto(
   formData: FormData,
 ): Promise<{ success: boolean; error?: string }> {
   await requireFeatureAccess("manage-members");
-  return uploadContactPhoto(formData, () => ContactService.getInstance());
+  return uploadContactPhoto(formData, async () => ({
+    uploadContactPhoto: async (contactId, file, userId) => {
+      await assertMember({ contactId }, `manage-members contact ${contactId} is not a member`);
+      const contacts = await ContactService.getInstance();
+      return contacts.uploadContactPhoto(contactId, file, userId);
+    },
+  }));
 }
 
 /** Force-refresh the contacts cache. Rate-limited to 5/hour. */

@@ -5,6 +5,7 @@ const mockGetTableRecords = vi.fn();
 const mockGetFilesByRecord = vi.fn();
 const mockCreateTableRecords = vi.fn();
 const mockUpdateTableRecords = vi.fn();
+const mockUploadFiles = vi.fn();
 
 vi.mock('@/lib/providers/ministry-platform', () => ({
   MPHelper: class {
@@ -12,7 +13,7 @@ vi.mock('@/lib/providers/ministry-platform', () => ({
     getFilesByRecord = mockGetFilesByRecord;
     createTableRecords = mockCreateTableRecords;
     updateTableRecords = mockUpdateTableRecords;
-    uploadFiles = vi.fn();
+    uploadFiles = mockUploadFiles;
   },
 }));
 
@@ -508,5 +509,28 @@ describe('getRecordFiles stays private (N1)', () => {
     const s = svc();
     // @ts-expect-error getRecordFiles must stay private: it lists files with no scope check
     expect(typeof s.getRecordFiles).toBe('function');
+  });
+});
+
+describe('ComplianceProcessingService.uploadContactPhoto scope (N3)', () => {
+  const photo = new File(['x'], 'p.png', { type: 'image/png' });
+
+  it("uploads the photo of one of this tool's participants", async () => {
+    mpData();
+    await svc().uploadContactPhoto(IN_CONTACT, photo, 3);
+    expect(mockUploadFiles).toHaveBeenCalledWith(expect.objectContaining({ table: 'Contacts', recordId: IN_CONTACT }));
+  });
+
+  it('refuses a contact outside the tool, before the upload', async () => {
+    mpData();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await expect(svc().uploadContactPhoto(OUT_CONTACT, photo, 3)).rejects.toThrow(/Forbidden/);
+    expect(mockUploadFiles).not.toHaveBeenCalled();
+  });
+
+  it('refuses a non-integer contact ID before any read', async () => {
+    mpData();
+    await expect(svc().uploadContactPhoto('1 OR 1=1' as unknown as number, photo, 3)).rejects.toThrow(/Invalid ID/);
+    expect(mockGetTableRecords).not.toHaveBeenCalled();
   });
 });

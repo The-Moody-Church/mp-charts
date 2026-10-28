@@ -1,6 +1,7 @@
 import { MPHelper } from "@/lib/providers/ministry-platform";
 import { sanitizeIds, sanitizeId } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
 import { nowCentral, getAge } from "@/lib/processing-utils";
+import { enforceScope } from "@/lib/scope-enforcement";
 import {
   getSummerBlastConfig,
   getRequirementsForRole,
@@ -404,6 +405,14 @@ export class SummerBlastService {
    * close the response, so a failure mid-way leaves a participant + an open response
    * (a re-try just re-runs both, and the de-duplicating client will hide the duplicate
    * once the participant exists for this person).
+   *
+   * SECURITY (N4): all three IDs are bound before any write. The response must exist and
+   * belong to this tool's intake opportunity and still be open (otherwise any Response_ID
+   * could be closed, or a processed one replayed to re-enroll someone),
+   * and the contact must own the response's participant. The participant enrolled is the
+   * response's own, derived on the server, never a lookup from the caller's contact ID.
+   * Intake cards are built from exactly these responses, so a UI request always passes.
+   * The group role must be the temp role or one of `roleConfigs`, the picker's options.
    */
   public async addToSummerBlast(params: {
     contactId: number;
@@ -417,31 +426,41 @@ export class SummerBlastService {
     const contactId = sanitizeId(params.contactId);
     const responseId = sanitizeId(params.responseId);
 
-    // Fetch the response so we can carry its Comments + signup date into the
-    // Group_Participants.Notes field. Done in parallel with the Participants lookup.
-    const [responses, participants] = await Promise.all([
-      this.mp.getTableRecords<ResponseRecord>({
-        table: "Responses",
-        select: "Response_ID,Response_Date,Opportunity_ID,Participant_ID,Closed,Comments",
-        filter: `Response_ID = ${responseId}`,
-        top: 1,
-      }),
-      this.mp.getTableRecords<ParticipantRecord>({
-        table: "Participants",
-        select: "Participant_ID,Contact_ID",
-        filter: `Contact_ID = ${contactId}`,
-        top: 1,
-      }),
-    ]);
+    // The response also supplies its Comments + signup date for the
+    // Group_Participants.Notes field.
+    const responses = await this.mp.getTableRecords<ResponseRecord>({
+      table: "Responses",
+      select: "Response_ID,Response_Date,Opportunity_ID,Participant_ID,Closed,Comments",
+      filter: `Response_ID = ${responseId}`,
+      top: 1,
+    });
+    const response = responses[0];
+    enforceScope(
+      !!response && response.Opportunity_ID === this.config.intakeOpportunityId && !response.Closed,
+      `summer-blast response ${responseId} is not an open intake response`,
+    );
+    // Report mode lets a wrong-opportunity response through; a missing one cannot proceed.
+    if (!response) throw new Error("Response not found");
+    const participantId = sanitizeId(response.Participant_ID);
+    const participants = await this.mp.getTableRecords<ParticipantRecord>({
+      table: "Participants",
+      select: "Participant_ID,Contact_ID",
+      filter: `Participant_ID = ${participantId}`,
+      top: 1,
+    });
+    enforceScope(
+      participants[0]?.Contact_ID === contactId,
+      `summer-blast response ${responseId} does not belong to contact ${contactId}`,
+    );
 
-    if (participants.length === 0) {
-      throw new Error(`No Participant record for Contact_ID ${contactId}`);
-    }
-    const participantId = participants[0].Participant_ID;
-    const response = responses[0] ?? null;
+    const roleId = groupRoleId ?? this.config.tempGroupRoleId;
+    // The role picker offers only the configured roles (or none, for the temp role).
+    enforceScope(
+      roleId === this.config.tempGroupRoleId || this.config.roleConfigs.some((r) => r.groupRoleId === roleId),
+      `summer-blast group role ${sanitizeId(roleId)} is not configured`,
+    );
 
     const now = nowCentral();
-    const roleId = groupRoleId ?? this.config.tempGroupRoleId;
     const notes = buildEnrollmentNotes(response);
 
     const created = (await this.mp.createTableRecords(
@@ -470,13 +489,32 @@ export class SummerBlastService {
     return { groupParticipantId };
   }
 
-  /** End-date a Group_Participants row (does not touch Responses). */
+  /**
+   * End-date a Group_Participants row (does not touch Responses).
+   *
+   * SECURITY (N4): the row is caller-supplied, so it must be an active row in this
+   * tool's tracking group; otherwise any membership in any group could be ended. Checked
+   * before the write.
+   */
   public async removeFromSummerBlast(params: {
     groupParticipantId: number;
     userId?: number;
   }): Promise<void> {
-    const { groupParticipantId, userId } = params;
+    const { userId } = params;
+    const groupParticipantId = sanitizeId(params.groupParticipantId);
     const now = nowCentral();
+    // Same active-row condition as the volunteer cards: re-ending an old row
+    // would rewrite its history to "ended today".
+    const rows = await this.mp.getTableRecords<{ Group_ID: number }>({
+      table: "Group_Participants",
+      select: "Group_ID",
+      filter: `Group_Participant_ID = ${groupParticipantId} AND (End_Date IS NULL OR End_Date >= '${now}')`,
+      top: 1,
+    });
+    enforceScope(
+      rows[0]?.Group_ID === this.config.trackingGroupId,
+      `group-participant ${groupParticipantId} is not an active summer-blast tracking-group row`,
+    );
     await this.mp.updateTableRecords(
       "Group_Participants",
       [{ Group_Participant_ID: groupParticipantId, End_Date: now }],
