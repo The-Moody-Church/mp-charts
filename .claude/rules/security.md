@@ -105,7 +105,7 @@ dependencies" step and in `audit-nightly.yml` on 2026-10-07. The rule is the old
 CRITICAL vulnerability fails** — with one narrow way out: an advisory listed in
 `scripts/audit-allowlist.json`. The decision logic is `scripts/audit-gate-lib.mjs`, tested by
 `scripts/audit-gate-lib.test.ts` (part of `npm run test:run`). Those three files are meant to be
-byte-identical in mp-charts, event-manager and mp-senior-care: change them in all three, and `diff`
+byte-identical in mp-charts, event-manager, mp-senior-care and music-tools (since music-tools #187): change them in all four, and `diff`
 them after.
 
 How it decides, failing closed at every step:
