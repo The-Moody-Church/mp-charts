@@ -167,6 +167,76 @@ describe('JourneyProcessingService pause/resume group-participant binding', () =
 });
 
 
+// A Group_Participants table that honours the row read's own filter: the ID, an
+// optional Group_ID, and the active-row clause. Dropping either clause from the
+// service lets an ended or wrong-group row through, and these tests fail.
+interface GpRow { Group_Participant_ID: number; Participant_ID: number; Group_ID: number; ended: boolean }
+function gpTable(rows: GpRow[], inScope: number) {
+  mockGetTableRecords.mockImplementation((p: Call) => {
+    const id = p.filter?.match(/^Group_Participant_ID = (\d+)/);
+    if (p.table === 'Group_Participants' && id) {
+      const group = p.filter!.match(/ AND Group_ID = (\d+)/);
+      const activeOnly = p.filter!.includes("(End_Date IS NULL OR End_Date >= '");
+      return Promise.resolve(rows.filter(r =>
+        r.Group_Participant_ID === Number(id[1]) &&
+        (!group || r.Group_ID === Number(group[1])) &&
+        (!activeOnly || !r.ended)));
+    }
+    if (p.table === 'Group_Participants') return Promise.resolve([{ Participant_ID: inScope }]);
+    if (p.table === 'Participants') return Promise.resolve([{ Contact_ID: 0 }]);
+    return Promise.resolve([]);
+  });
+}
+
+describe('JourneyProcessingService ended rows and complete binding (#277 follow-up)', () => {
+  const svc = () => JourneyProcessingService.getInstance('journey-a');
+  const row = (Group_Participant_ID: number, Group_ID: number, ended: boolean, Participant_ID = IN_PARTICIPANT): GpRow =>
+    ({ Group_Participant_ID, Participant_ID, Group_ID, ended });
+
+  beforeEach(() => {
+    TOOL = {
+      ...BASE_TOOL,
+      supportsPause: true,
+      pausedGroupId: 600,
+      pauseMilestoneId: 30,
+      defaultGroupRoleId: 16,
+    } as unknown as JourneyToolConfig;
+  });
+
+  it('pause and resume refuse an ended row before any write', async () => {
+    gpTable([row(77, 500, true), row(78, 600, true)], IN_PARTICIPANT);
+    await expect(svc().pauseParticipant({ participantId: IN_PARTICIPANT, currentGroupParticipantId: 77 })).rejects.toThrow(/Forbidden/);
+    await expect(svc().resumeParticipant({ participantId: IN_PARTICIPANT, currentGroupParticipantId: 78 })).rejects.toThrow(/Forbidden/);
+    expect(mockCreateTableRecords).not.toHaveBeenCalled();
+    expect(mockUpdateTableRecords).not.toHaveBeenCalled();
+  });
+
+  it('pause and resume still accept the active row', async () => {
+    gpTable([row(77, 500, false), row(78, 600, false)], IN_PARTICIPANT);
+    await svc().pauseParticipant({ participantId: IN_PARTICIPANT, currentGroupParticipantId: 77 });
+    await svc().resumeParticipant({ participantId: IN_PARTICIPANT, currentGroupParticipantId: 78 });
+    expect(mockUpdateTableRecords).toHaveBeenCalledTimes(2);
+  });
+
+  it("completes the participant's active tracking-group row", async () => {
+    gpTable([row(77, 500, false)], IN_PARTICIPANT);
+    await svc().completeParticipant({ currentGroupParticipantId: 77 });
+    expect(mockUpdateTableRecords).toHaveBeenCalledWith(
+      'Group_Participants', [expect.objectContaining({ Group_Participant_ID: 77 })], expect.anything(),
+    );
+  });
+
+  it.each([
+    ['an ended tracking-group row', row(77, 500, true)],
+    ["the participant's row in another group", row(77, 999, false)],
+    ['a row of a participant outside the tool', row(77, 500, false, 55)],
+  ])('complete refuses %s before any write', async (_case, r) => {
+    gpTable([r], IN_PARTICIPANT);
+    await expect(svc().completeParticipant({ currentGroupParticipantId: 77 })).rejects.toThrow(/Forbidden/);
+    expect(mockUpdateTableRecords).not.toHaveBeenCalled();
+  });
+});
+
 describe('JourneyProcessingService.uploadContactPhoto scope (N3)', () => {
   const photo = new File(['x'], 'p.png', { type: 'image/png' });
   beforeEach(() => {
