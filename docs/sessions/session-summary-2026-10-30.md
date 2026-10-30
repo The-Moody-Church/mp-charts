@@ -25,6 +25,15 @@ mp-senior-care #232 `49da211`. All four apps now gate at HIGH with the same allo
 files `cmp`-identical against mp-charts after the merges), run it nightly at 07:00 Central and have
 Dependabot alerts on. CI/docs only, so no deploy.
 
+## Unused typography plugin removed (postcss-selector-parser alert) — IN PROGRESS
+
+Dependabot alert #77 (GHSA-rj75-hqrm-r3gf, moderate, dev) was open in mp-charts, event-manager and
+mp-senior-care, all through `@tailwindcss/typography` 0.5.20, which pins `postcss-selector-parser` to exactly
+6.0.10 and has no newer release. None of the three uses the plugin (no `@plugin` line, no `prose` class), so it
+is removed rather than overridden. mp-charts: the two built CSS files are byte-identical before and after;
+`npm audit` is zero at every severity. The mp-charts PR also takes Dependabot #278 (eslint-config-next 16.4.3).
+event-manager and mp-senior-care stay on their `eslint-config-next` (16.4.x breaks their lint).
+
 ## Pending
 
 - Dependabot majors (vitest 5 group #263/#265/#271 first), audit LOW items N9–N19, upstream sync log
