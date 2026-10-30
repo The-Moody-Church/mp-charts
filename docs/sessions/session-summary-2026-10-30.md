@@ -6,7 +6,7 @@ The #277 follow-up (end-dating writes need an active row; complete bound to the 
 member photo errors shown) soaked on `:dev` from 2026-10-28, merged as `1e4f79a` and is on `:latest`.
 Caches warmed, and the log has no errors or `[scope:deny]` lines. See `session-summary-2026-10-28.md`.
 
-## npm audit gate parity across the four apps — IN PROGRESS (PRs open)
+## npm audit gate parity across the four apps — COMPLETED
 
 - **music-tools #187** (`ci/audit-gate-high`): the audit step was `npm audit --audit-level=critical`,
   under which zod GHSA-mrhx-c7xc-m3w5 (HIGH, production) went unnoticed for days. It is now
@@ -20,8 +20,10 @@ Caches warmed, and the log has no errors or `[scope:deny]` lines. See `session-s
 - **mp-charts** (`main`, docs): `.claude/rules/security.md` now says the gate files are byte-identical
   in four repos.
 
-After these merge, all four apps gate at HIGH with the same allow-list gate, run it nightly and have
-Dependabot alerts on.
+Merged 2026-10-30 (owner approved): music-tools #187 `a5f5818`, event-manager #74 `142e8f6`,
+mp-senior-care #232 `49da211`. All four apps now gate at HIGH with the same allow-list gate (the three
+files `cmp`-identical against mp-charts after the merges), run it nightly at 07:00 Central and have
+Dependabot alerts on. CI/docs only, so no deploy.
 
 ## Pending
 
