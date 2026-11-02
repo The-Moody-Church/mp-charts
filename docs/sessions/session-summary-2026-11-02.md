@@ -1,6 +1,6 @@
 # Session Summary — 2026-11-02
 
-## Vitest 5 upgrade (#241) — IN PROGRESS (PR open)
+## Vitest 5 upgrade (#241) — COMPLETED
 
 Dependabot opened vitest 5.0.5 (#263), @vitest/coverage-v8 5.0.5 (#265) and jsdom 30.1.3 (#271) as
 separate PRs. The two vitest ones each fail `npm ci` (ERESOLVE): the coverage plugin pins its vitest
@@ -24,6 +24,27 @@ major, so they can only move together. One branch, `chore/vitest-5`, takes all t
   top-level `vi.mock`, awaited `.resolves`, the jest-dom type stopgap, `/**` coverage globs).
   ideas.md #241 marked completed; #212 notes the new pattern semantics.
 
+Merged as `beb6ffe` (#283); Dependabot #263, #265 and #271 closed as superseded. Test toolchain only, no deploy.
+
+## Sibling ports — COMPLETED
+
+All merged 2026-11-02: mp-senior-care #234 `221b38c`, event-manager #77 `f13fb8b`, music-tools #188 `9769048`
+(Dependabot #167 closed as superseded). All CI green. Test tooling only, no deploys.
+
+
+- **mp-senior-care #234**: vitest 4.1.12 → 5.0.5 + coverage-v8 5.0.5 + jsdom 30.1.3. Locked to 5.0.5: vitest
+  **5.1.0 was published the same day** (16:12 UTC) and `npm install vitest@^5.0.5` picked it up, so it was
+  reinstalled at the tested version. jest-dom types via `import '@testing-library/jest-dom/vitest'` in
+  `src/test-setup.ts` (event-manager's fix from 2026-10-01; one line, no `.d.ts`). Coverage file set
+  identical to vitest 4's (77). 1309 tests.
+- **event-manager #77**: already on vitest 5 since 2026-10-01, and its bare `models/` exclude had been
+  counting all 284 generated models since then (401 files). Now 117, exactly the previous set minus models.
+- **music-tools #188**: already on vitest 5; no `models/` directory, so the exclude is moot. jsdom 30.1.3
+  on a fresh branch, replacing Dependabot #167, whose branch predated the audit gate (#187) and failed it
+  with a missing script. (A `@dependabot rebase` comment was blocked by auto mode.) 415 tests.
+- **Simpler jest-dom fix exists**: event-manager's one-line `/vitest` import does what mp-charts'
+  `src/vitest-jest-dom.d.ts` does (probe-verified in both). mp-charts could swap to it and drop the file.
+
 ## Noticed, not in this PR
 
 - **New moderate advisory GHSA-g3hv-75wg-m249** (minimatch < 11.0.1, DoS via globparts), already on
@@ -35,6 +56,5 @@ major, so they can only move together. One branch, `chore/vitest-5`, takes all t
 
 ## Pending
 
-- Port to event-manager, mp-senior-care, music-tools after merge.
 - Remaining Dependabot majors: TypeScript 7 (#269), eslint 10 (#262), lucide-react 1.x (#279),
   dotenv 18 (#280), chalk 6 (#261), jest-dom 7 (#266).
