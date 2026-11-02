@@ -60,7 +60,6 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 
 ### Technical Debt
 - [caching.md misdescribes `expire` and `updateTag` (#253)](#cachingmd-misdescribes-expire-and-updatetag-253)
-- [Upgrade Vitest 4 → 5 (unblocked by better-auth 1.7) (#241)](#upgrade-vitest-4-5-unblocked-by-better-auth-17-241)
 - [Digest-pin the Docker base images (#217)](#digest-pin-the-docker-base-images-217)
 - [cache-handler.js depends on private Next.js internals (#218)](#cache-handlerjs-depends-on-private-nextjs-internals-218)
 - [Vitest coverage config has an under-count blind spot (#212)](#vitest-coverage-config-has-an-under-count-blind-spot-212)
@@ -71,6 +70,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - [Compliance tool editor silently drops orphaned journey config (#204)](#compliance-tool-editor-silently-drops-orphaned-journey-config-204)
 - [Blank journey selection reads as ID 0, not null (#205)](#blank-journey-selection-reads-as-id-0-not-null-205)
 - [Upgrade TypeScript 5.9 to 6.0 (#136)](#upgrade-typescript-59-to-60-136)
+- ~~[Upgrade Vitest 4 → 5 (unblocked by better-auth 1.7) (#241)](#upgrade-vitest-4-5-unblocked-by-better-auth-17-241)~~ ✅
 - ~~[CommunicationType union is wrong: 'Text'/'Letter' are invalid — MP's enum is Unknown|Email|SMS|RssFeed|GlobalMFA (SMS sends 500) (#220)](#communicationtype-union-is-wrong-textletter-are-invalid-mps-enum-is-unknownemailsmsrssfeedglobalmfa-sms-sends-500-220)~~ ✅
 - ~~[Adopt React Compiler lint rules from eslint-plugin-react-hooks 7.1 (#197)](#adopt-react-compiler-lint-rules-from-eslint-plugin-react-hooks-71-197)~~ ✅
 - ~~[Dependency security remediation — August 2026](#dependency-security-remediation-august-2026)~~ ✅
@@ -296,9 +296,6 @@ Found 2026-10-21 while reading the Next 16.3.8 and 16.4.2 dist files. Both point
 
 Fix `.claude/rules/caching.md` and the header comment of `cache-handler.js`. The 16.4 handler contract also says a handler must not keep the value stream after `set()` (Next's default handler now stores a Buffer). That belongs with #218.
 
-### Upgrade Vitest 4 → 5 (unblocked by better-auth 1.7) ([#241](https://github.com/The-Moody-Church/mp-charts/issues/241))
-better-auth 1.6 declared `vitest ^2 || ^3 || ^4` as a peer, which was the only thing holding Vitest 5. 1.7.4+ adds `^5`. Now that the 1.7 migration is in, bump `vitest` and `@vitest/coverage-v8` together in their own PR (the coverage plugin pins its vitest major). Keep it separate from any auth change so a test-runner regression can't be confused with a sign-in one.
-
 ### Digest-pin the Docker base images ([#217](https://github.com/The-Moody-Church/mp-charts/issues/217))
 All four `FROM` lines use the mutable tag `node:24-alpine` (`Dockerfile` deps/builder/runner +
 `Dockerfile.dev`), so the exact Node patch level in a shipped image is whatever Docker Hub resolved
@@ -317,7 +314,7 @@ degraded caching rather than a build error. Worth either a guard test that asser
 the SWR contract still behave, or a migration to a supported API if one lands.
 
 ### Vitest coverage config has an under-count blind spot ([#212](https://github.com/The-Moody-Church/mp-charts/issues/212))
-`vitest.config.ts` uses v8 coverage with excludes only — no `coverage.include` and no thresholds. With that shape, files nothing imports never enter the denominator, so the reported percentage silently overstates true statement coverage (upstream MPNext measured 71.6% reported vs 32.7% actual under the same config shape). Fix is fork-specific: write an explicit `include` glob for `src/**` plus thresholds calibrated against our current suite.
+`vitest.config.ts` uses v8 coverage with excludes only — no `coverage.include` and no thresholds. With that shape, files nothing imports never enter the denominator, so the reported percentage silently overstates true statement coverage (upstream MPNext measured 71.6% reported vs 32.7% actual under the same config shape). Fix is fork-specific: write an explicit `include` glob for `src/**` plus thresholds calibrated against our current suite. Note that since Vitest 5 (#241) `include`/`exclude` match paths relative to the root, and a pattern with no wildcard is a directory; write globs (`src/**`) and compare the covered file list before and after.
 
 ### Micro-robustness in getContactLogsByContactId ([#213](https://github.com/The-Moody-Church/mp-charts/issues/213))
 `src/components/contact-lookup-details/actions.ts` fetches the `Contact_Log_Types` lookup unconditionally; a contact with zero (or only untyped) logs makes one avoidable MP request, and if that request throws, the catch collapses the whole action even though the logs themselves were already retrieved. Guard with `logs.some(log => log.Contact_Log_Type_ID)` before the lookup (pattern from upstream MPNext #76).
@@ -351,6 +348,9 @@ Two related cases in `src/components/admin/compliance-tools/compliance-tool-edit
 
 ### Upgrade TypeScript 5.9 to 6.0 ([#136](https://github.com/The-Moody-Church/mp-charts/issues/136))
 Upgrade from TypeScript 5.9.3 to 6.0.x. TS 6.0 is a transition release (last JS-based compiler before TS 7.0 in Go). Main required change: add `"types": ["node"]` to tsconfig.json (default changed from `["*"]` to `[]`). Also simplify lib array, verify `noUncheckedSideEffectImports`. Wait until mid-April 2026 for ecosystem stability across Next.js 16, Zod v4, Vitest, and typescript-eslint.
+
+### ~~Upgrade Vitest 4 → 5 (unblocked by better-auth 1.7) ([#241](https://github.com/The-Moody-Church/mp-charts/issues/241))~~ ✅ COMPLETED
+Done 2026-11-02 together with jsdom 30 (Dependabot #263, #265, #271; the two vitest PRs failed `npm ci` alone because `@vitest/coverage-v8` pins its vitest major). All 1206 tests passed unchanged. Two fixes were needed: jest-dom's `Assertion<T>` type augmentation no longer merges with Vitest 5's `Assertion<R, T>` (testing-library/jest-dom#738, unchanged in jest-dom 7.0.1), so `src/vitest-jest-dom.d.ts` augments `Matchers<R, T>` until upstream ships PR #742; and Vitest 5 matches coverage excludes relative to the root, so the bare `models/` exclude stopped working (128 → 408 files). The excludes are now `/**` globs and the covered file set is identical to Vitest 4's.
 
 ### ~~CommunicationType union is wrong: 'Text'/'Letter' are invalid — MP's enum is Unknown|Email|SMS|RssFeed|GlobalMFA (SMS sends 500) ([#220](https://github.com/The-Moody-Church/mp-charts/issues/220))~~ ✅ COMPLETED
 

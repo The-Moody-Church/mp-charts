@@ -14,12 +14,14 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
+      // Explicit `/**` globs: since Vitest 5 these match paths relative to the
+      // root, and a bare `models/` no longer excluded the generated models.
       exclude: [
-        'node_modules/',
-        '.next/',
+        'node_modules/**',
+        '.next/**',
         'src/test-setup.ts',
         '**/*.d.ts',
-        'src/lib/providers/ministry-platform/models/', // Auto-generated files
+        'src/lib/providers/ministry-platform/models/**', // Auto-generated files
       ],
     },
   },

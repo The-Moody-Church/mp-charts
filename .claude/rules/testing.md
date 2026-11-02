@@ -26,6 +26,14 @@
 - Use `@/` path alias for imports in test files
 - Name test files with `.test.ts` or `.test.tsx` suffix
 
+## Vitest 5 Behaviour
+
+- **Mock call history is cleared before every test** (`clearMocks` defaults to `true` since Vitest 5). Implementations set with `mockResolvedValue`/`mockImplementation` survive; recorded calls do not. Never assert on calls made in a setup file, at module top level or in `beforeAll`. Existing `beforeEach(() => vi.clearAllMocks())` lines are now redundant but harmless.
+- **`vi.mock`/`vi.hoisted` must be at the top level of the file** — Vitest 5 throws on a nested call. `vi.doMock` may go anywhere.
+- **Await every `.resolves`/`.rejects` assertion** — an unawaited one fails the test.
+- **jest-dom matchers** (`toBeInTheDocument`, …) are registered at runtime by `src/test-setup.ts` and typed by `src/vitest-jest-dom.d.ts`, a stopgap until jest-dom supports Vitest 5's `Assertion<R, T>` (testing-library/jest-dom#738). Delete that file when a jest-dom release fixes it and `tsc` stays clean without it.
+- **Coverage `exclude` patterns are matched relative to the root**: write directories as `dir/**`. A bare `dir/` silently stopped excluding the generated models on the upgrade.
+
 ## Mocking Patterns
 
 ### Service singletons
