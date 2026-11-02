@@ -60,8 +60,11 @@ minimatch 10.2.6 (so it does not clear GHSA-g3hv-75wg-m249), and #269's verify f
 - **lucide-react 0.577.0 → 1.61.0** (Dependabot's version; 1.66.0 is two days old): renders of all 13
   imported icons compared in both versions: identical paths and classes, plus `aria-hidden`.
 - CI on #284 green (verify, build-scan-and-push, security-lint, CodeQL); merged, Dependabot #261, #266,
-  #279 and #280 closed as superseded. Sibling follow-up: dotenv 18 in event-manager, mp-senior-care and
-  music-tools, jest-dom 7 in music-tools.
+  #279 and #280 closed as superseded.
+- **Sibling follow-up — COMPLETED**: dotenv 18.0.9 in event-manager #78 (`60fa98e`), mp-senior-care #236
+  (`f3bde2c`) and music-tools #190 (`b7bf2e9`, also jest-dom 7.0.1 with the `/vitest` setup import).
+  Env files parse identically under 17 and 18 in all three; the `dotenv/config`, default and namespace
+  import forms were probe-checked. Dependabot event-manager #62, mp-senior-care #208, music-tools #169 closed.
 
 ## Noticed, not in this PR
 
