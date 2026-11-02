@@ -45,6 +45,24 @@ All merged 2026-11-02: mp-senior-care #234 `221b38c`, event-manager #77 `f13fb8b
 - **Simpler jest-dom fix exists**: event-manager's one-line `/vitest` import does what mp-charts'
   `src/vitest-jest-dom.d.ts` does (probe-verified in both). mp-charts could swap to it and drop the file.
 
+## Four dependency majors (#266, #261, #279, #280) — COMPLETED (#284)
+
+Branch `chore/deps-majors-batch`. eslint 10 (#262) and TypeScript 7 (#269) held: Next's lint plugins
+(`eslint-plugin-react`, `-import`, `-jsx-a11y`) declare eslint only up to ^9, eslint 10 still ships
+minimatch 10.2.6 (so it does not clear GHSA-g3hv-75wg-m249), and #269's verify fails.
+
+- **jest-dom 7.0.1**: switched `src/test-setup.ts` to `@testing-library/jest-dom/vitest` and deleted
+  `src/vitest-jest-dom.d.ts`; probe-verified. testing.md updated to match the siblings' wording.
+- **dotenv 18.0.9** (runtime dependency, scripts only): breaking changes are the CLI, stderr logging, and
+  removal of preloading and `.env.vault`; none used. 17 vs 18 parse the three env files identically
+  (sha256 over sorted keys and values).
+- **chalk 6.0.1**: only `scripts/setup.ts`; Node 22+ required; all 9 styles checked.
+- **lucide-react 0.577.0 → 1.61.0** (Dependabot's version; 1.66.0 is two days old): renders of all 13
+  imported icons compared in both versions: identical paths and classes, plus `aria-hidden`.
+- CI on #284 green (verify, build-scan-and-push, security-lint, CodeQL); merged, Dependabot #261, #266,
+  #279 and #280 closed as superseded. Sibling follow-up: dotenv 18 in event-manager, mp-senior-care and
+  music-tools, jest-dom 7 in music-tools.
+
 ## Noticed, not in this PR
 
 - **New moderate advisory GHSA-g3hv-75wg-m249** (minimatch < 11.0.1, DoS via globparts), already on
@@ -56,5 +74,4 @@ All merged 2026-11-02: mp-senior-care #234 `221b38c`, event-manager #77 `f13fb8b
 
 ## Pending
 
-- Remaining Dependabot majors: TypeScript 7 (#269), eslint 10 (#262), lucide-react 1.x (#279),
-  dotenv 18 (#280), chalk 6 (#261), jest-dom 7 (#266).
+- Remaining Dependabot majors: TypeScript 7 (#269), eslint 10 (#262), both held (see above).
