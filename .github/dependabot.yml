@@ -47,6 +47,14 @@ updates:
       # in the same commit as .nvmrc and the FROM tags.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
+      # TypeScript 7 is on hold upstream, not here. 7.0 ships no JS API, so
+      # typescript-eslint (via eslint-config-next) refuses to load under it ("does
+      # not support TS 7.0") and lint crashes; its peer range is ">=4.8.4 <6.1.0".
+      # Its support targets TS 7.1 (typescript-eslint#10940, PR #12803). Lift this
+      # when typescript-eslint's peer range admits 7 and Next's build type-check
+      # runs on it. Same hold as event-manager and mp-senior-care.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
     groups:
       # Security updates get their OWN group, separate from routine version
       # bumps. Previously a single `patterns: ["*"]` minor-and-patch group

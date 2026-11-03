@@ -59,6 +59,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
 
 ### Technical Debt
+- [Adopt TypeScript 7 once typescript-eslint supports it](#adopt-typescript-7-once-typescript-eslint-supports-it)
 - [caching.md misdescribes `expire` and `updateTag` (#253)](#cachingmd-misdescribes-expire-and-updatetag-253)
 - [Digest-pin the Docker base images (#217)](#digest-pin-the-docker-base-images-217)
 - [cache-handler.js depends on private Next.js internals (#218)](#cache-handlerjs-depends-on-private-nextjs-internals-218)
@@ -69,7 +70,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - [Member detail modal shows the old photo after upload (#203)](#member-detail-modal-shows-the-old-photo-after-upload-203)
 - [Compliance tool editor silently drops orphaned journey config (#204)](#compliance-tool-editor-silently-drops-orphaned-journey-config-204)
 - [Blank journey selection reads as ID 0, not null (#205)](#blank-journey-selection-reads-as-id-0-not-null-205)
-- [Upgrade TypeScript 5.9 to 6.0 (#136)](#upgrade-typescript-59-to-60-136)
+- ~~[Upgrade TypeScript 5.9 to 6.0 (#136)](#upgrade-typescript-59-to-60-136)~~ ✅
 - ~~[Upgrade Vitest 4 → 5 (unblocked by better-auth 1.7) (#241)](#upgrade-vitest-4-5-unblocked-by-better-auth-17-241)~~ ✅
 - ~~[CommunicationType union is wrong: 'Text'/'Letter' are invalid — MP's enum is Unknown|Email|SMS|RssFeed|GlobalMFA (SMS sends 500) (#220)](#communicationtype-union-is-wrong-textletter-are-invalid-mps-enum-is-unknownemailsmsrssfeedglobalmfa-sms-sends-500-220)~~ ✅
 - ~~[Adopt React Compiler lint rules from eslint-plugin-react-hooks 7.1 (#197)](#adopt-react-compiler-lint-rules-from-eslint-plugin-react-hooks-71-197)~~ ✅
@@ -289,6 +290,9 @@ Optimized the Activity_Log query for the engagement venn diagram. Replaced singl
 
 ## Technical Debt
 
+### Adopt TypeScript 7 once typescript-eslint supports it
+TypeScript 7.0 (the Go compiler) ships no JS API, so typescript-eslint, loaded through eslint-config-next, refuses to run under it ("typescript-eslint does not support TS 7.0") and `npm run lint` crashes; its peer range is `>=4.8.4 <6.1.0`. That is why Dependabot #269 failed `verify`. typescript-eslint's support targets TS 7.1 (typescript-eslint#10940; PR #12803 was in review on 2026-09-29), and 7.1 was in beta on 2026-11-03. Next's build-time type check also goes through the TypeScript JS API. `.github/dependabot.yml` now ignores TypeScript majors, the same hold as event-manager and mp-senior-care (music-tools gets it too). Lift it when typescript-eslint's peer range admits 7.x and `next build` type-checks with it; then do all four apps together. A side-by-side setup (tsgo for `tsc --noEmit`, TS 6 for lint and build) is possible today but not worth the complexity.
+
 ### caching.md misdescribes `expire` and `updateTag` ([#253](https://github.com/The-Moody-Church/mp-charts/issues/253))
 Found 2026-10-21 while reading the Next 16.3.8 and 16.4.2 dist files. Both points are wrong in both versions.
 1. Our `cacheLife({ revalidate, stale })` calls pass no `expire`, so Next uses the default profile's, `INFINITE_CACHE`. "expire = revalidate + stale = 30h" is not true, and `cache-handler.js`'s expire check never fires. Entries end only on LRU eviction, tag expiry or a restart. `stale` is the client router's staleness. If a 30h hard ceiling is wanted, pass `expire: 108000` explicitly.
@@ -346,8 +350,8 @@ Two related cases in `src/components/admin/compliance-tools/compliance-tool-edit
 ### Blank journey selection reads as ID 0, not null ([#205](https://github.com/The-Moody-Church/mp-charts/issues/205))
 `src/components/admin/journey-tools/journey-tool-editor.tsx:309` does `handleJourneySelect(Number(e.target.value))` with no empty-string guard, so choosing the `<option value="">Select a journey...</option>` placeholder sets `selectedJourneyId` to `Number("") === 0` rather than `null`. Every downstream check is falsy-based so nothing breaks today, but the `<select>`'s `value` then matches no option, and any future `!== null` / `??` check on that field would read `0` as a real selection. The compliance editor's equivalent select already guards this correctly (`e.target.value ? Number(...) : null`).
 
-### Upgrade TypeScript 5.9 to 6.0 ([#136](https://github.com/The-Moody-Church/mp-charts/issues/136))
-Upgrade from TypeScript 5.9.3 to 6.0.x. TS 6.0 is a transition release (last JS-based compiler before TS 7.0 in Go). Main required change: add `"types": ["node"]` to tsconfig.json (default changed from `["*"]` to `[]`). Also simplify lib array, verify `noUncheckedSideEffectImports`. Wait until mid-April 2026 for ecosystem stability across Next.js 16, Zod v4, Vitest, and typescript-eslint.
+### ~~Upgrade TypeScript 5.9 to 6.0 ([#136](https://github.com/The-Moody-Church/mp-charts/issues/136))~~ ✅ COMPLETED
+Done 2026-11-03: 5.9.3 → 6.0.3, the version event-manager, mp-senior-care and music-tools already ran. No tsconfig change was needed. The planned `"types": ["node"]` turned out unnecessary: `tsc --noEmit` reports 0 errors on both 5.9.3 and 6.0.3 with the config unchanged, as mp-senior-care found with the same tsconfig. typescript-eslint stays at 8.66.0, whose peer range (`>=4.8.4 <6.1.0`) admits 6.0. TS 7 is a separate item, held upstream (see "Adopt TypeScript 7").
 
 ### ~~Upgrade Vitest 4 → 5 (unblocked by better-auth 1.7) ([#241](https://github.com/The-Moody-Church/mp-charts/issues/241))~~ ✅ COMPLETED
 Done 2026-11-02 together with jsdom 30 (Dependabot #263, #265, #271; the two vitest PRs failed `npm ci` alone because `@vitest/coverage-v8` pins its vitest major). All 1206 tests passed unchanged. Two fixes were needed: jest-dom's `Assertion<T>` type augmentation no longer merges with Vitest 5's `Assertion<R, T>` (testing-library/jest-dom#738, unchanged in jest-dom 7.0.1), so `src/vitest-jest-dom.d.ts` augments `Matchers<R, T>` until upstream ships PR #742; and Vitest 5 matches coverage excludes relative to the root, so the bare `models/` exclude stopped working (128 → 408 files). The excludes are now `/**` globs and the covered file set is identical to Vitest 4's.

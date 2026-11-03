@@ -31,7 +31,17 @@ section. CI resolved `.nvmrc` to 24 (v24.22.1); production runs v24.22.2, `/sign
 #170 (@types/node 26) closed. All four Better Auth apps are now on Node 24. Follow-up PR #193 adds
 mp-charts' Dependabot holds on `node` and `@types/node` majors.
 
+## TypeScript 6 now, TypeScript 7 held — IN PROGRESS (PR open)
+
+Branch `chore/typescript-6`. Dependabot #269 (TS 5.9.3 → 7.0.2) failed `verify` because lint crashed:
+"typescript-eslint does not support TS 7.0". TS 7.0 ships no JS API; typescript-eslint's support targets
+7.1 (typescript-eslint#10940, PR #12803 in review 2026-09-29; TS 7.1 in beta). So: TS 5.9.3 → 6.0.3
+(the version the other three already run; tsc 0 errors before and after, no tsconfig change, lint,
+1206 tests, audit gate and build pass), a Dependabot hold on TypeScript majors (as event-manager and
+mp-senior-care have), #136 marked COMPLETED, and a new ideas.md entry "Adopt TypeScript 7 once
+typescript-eslint supports it". music-tools gets the same hold; its #168 closes.
+
 ## Follow-ups
 - event-manager and music-tools carry UI behaviour changes and were not soaked: a quick click-through
   is worthwhile (checklists in #79, #191).
-- TypeScript 7 (#269, music-tools #168) research; eslint 10 (#262) still blocked on plugin peers.
+- eslint 10 (#262) still blocked on plugin peers.
