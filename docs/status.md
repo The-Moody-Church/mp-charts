@@ -12,6 +12,7 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
+| 2026-11-03 | **TypeScript 5.9.3 → 6.0.3** (#136), matching the other three apps; tsc 0 errors before and after, no tsconfig change. **TypeScript 7 held upstream**: 7.0 ships no JS API, so typescript-eslint refuses to load and lint crashes (Dependabot #269 closed); `dependabot.yml` now ignores TypeScript majors. Tracked in ideas.md "Adopt TypeScript 7" | — | this PR |
 | 2026-11-02 | **Four majors: jest-dom 7.0.1, chalk 6.0.1, lucide-react 1.61.0, dotenv 18.0.9.** jest-dom: `src/test-setup.ts` now imports `@testing-library/jest-dom/vitest` (as event-manager and mp-senior-care do), and the `src/vitest-jest-dom.d.ts` stopgap from #283 is deleted; a probe confirms matchers type-check and wrong arguments fail. dotenv 18 (only `config({ path })`, used by `scripts/` including the MP-writing `add-missing-*` scripts): parses `.env.local`, `.env copy.local` and `.env.example` identically to 17 (keys and values hashed, none printed); no preload or `.env.vault` use. chalk 6 (Node 22+): all 9 styles `scripts/setup.ts` uses work. lucide-react 1.x: all 13 icons we import render the same SVG and classes, now with `aria-hidden` (they had no accessible name before either). tsc, lint, 1206 tests, the audit gate and the build pass | — | #284 |
 | 2026-11-02 | **Vitest 4.1.12 → 5.0.5, @vitest/coverage-v8 5.0.5, jsdom 29 → 30.1.3.** Dependabot #263/#265 each failed `npm ci` alone (coverage-v8 pins its vitest major), so all three go in one PR; #271 (jsdom) rides along. All 1206 tests passed unchanged. Two fixes: jest-dom's matcher types no longer merge with Vitest 5's `Assertion<R, T>` (testing-library/jest-dom#738, unfixed in 7.0.1), so `src/vitest-jest-dom.d.ts` augments `Matchers<R, T>` (a probe confirms matchers type-check and a wrong argument fails); and the bare `models/` coverage exclude stopped matching (128 → 408 files), now `/**` globs, with the covered file set identical to Vitest 4's. Vitest 5 behaviour notes in `.claude/rules/testing.md`. tsc, lint, 1206 tests, the audit gate and the build pass | #241 | #283 |
 | 2026-10-30 | **Unused `@tailwindcss/typography` removed; `eslint-config-next` 16.4.3.** The plugin was a devDependency that nothing loads: Tailwind 4 needs an `@plugin` line, and there is none, nor any `prose` class. It pinned `postcss-selector-parser` to exactly 6.0.10 (0.5.20 is its latest release), which carries GHSA-rj75-hqrm-r3gf (moderate, dev; Dependabot alert #77) with no update path short of an override. Removed instead; the two generated CSS files are byte-identical before and after. `npm audit` is now zero at every severity. Also takes Dependabot #278 (eslint-config-next 16.4.2 → 16.4.3). tsc, lint, 1206 tests, the audit gate and the build pass. Same removal in event-manager and mp-senior-care | — | #278 |
@@ -31,14 +32,13 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 ## Planned
 
-- [**#136** — Upgrade TypeScript 5.9 → 6.0](ideas.md#upgrade-typescript-59-to-60-136) — TS 6.0.2 available (on 5.9.3). Transition release before TS 7.0 (Go rewrite). Main change: add `"types": ["node"]` to tsconfig. Out of date: TS 7.0 (Go compiler) is now GA, so re-plan between 6.0.3 and 7.x.
+- Nothing scheduled.
 
 ## Open Issues
 
 - [**#110** — Serving metrics: reconcile adult-only vs all-ages counts](ideas.md#serving-metrics-reconcile-adult-only-vs-all-ages-counts-110)
 - [**#72** — Dashboard subpages per journey step](ideas.md#and-more-specific-dashboard-subpages-72)
 - [**#161** — student leaders](https://github.com/The-Moody-Church/mp-charts/issues/161)
-- [**#136** — Upgrade TypeScript 5.9 → 6.0](ideas.md#upgrade-typescript-59-to-60-136)
 
 ## Key Architecture Notes
 
