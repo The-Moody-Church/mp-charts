@@ -1,14 +1,19 @@
 /**
  * Custom cache handler that properly supports stale-while-revalidate.
  *
- * The default Next.js in-memory handler expires entries at `revalidate` time
- * (6h in our case), completely ignoring the `stale` parameter. After 6 hours,
- * the cache returns undefined — a full miss — causing 30+ second cold fetches.
+ * In production, the default Next.js in-memory handler drops an entry once it
+ * is past `revalidate` (6h in our case) and returns undefined — a full miss —
+ * causing 30+ second cold fetches.
  *
- * This handler uses `expire` (revalidate + stale = 30h) as the true expiry.
- * Between revalidate (6h) and expire (30h), it returns the cached entry with
- * revalidate: -1, which tells the framework to serve stale data instantly
- * while revalidating in the background.
+ * This handler keeps serving an entry past `revalidate`, returning it with
+ * revalidate: -1, which tells the framework to serve it instantly while
+ * revalidating in the background.
+ *
+ * There is no 30h ceiling. Our cacheLife() calls pass no `expire`, so Next
+ * fills in the default profile's (INFINITE_CACHE), and an entry ends only on
+ * LRU eviction, tag expiry or a restart. `stale` is the client router's
+ * staleness, not a server window. Pass `expire` explicitly if a hard ceiling
+ * is ever wanted; the check in get() honours it.
  *
  * Configured via next.config.ts → cacheHandlers.default
  */
@@ -60,9 +65,9 @@ module.exports = {
     const entry = privateEntry.entry;
     const now = performance.timeOrigin + performance.now();
 
-    // Truly expired: past revalidate + stale window — no data to serve.
-    // Defensive: if entry.expire is missing, fall back to 5× revalidate
-    // so entries don't become immortal if the framework omits expire.
+    // Honour an explicit `expire`. Ours set none, so Next supplies
+    // INFINITE_CACHE and this never fires. The 5× revalidate fallback only
+    // applies if the framework ever omits the field.
     const expireSeconds = entry.expire ?? (entry.revalidate * 5);
     if (expireSeconds && now > entry.timestamp + expireSeconds * 1000) {
       debug?.('get', cacheKey, 'expired (past expire window)');

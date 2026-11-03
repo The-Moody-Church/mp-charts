@@ -33,9 +33,10 @@ export async function getCachedDashboardData(ministryYear: number): Promise<Dash
 
 /**
  * Cached full-range dashboard data for 5 ministry years.
- * Revalidates every 6 hours; serves stale for up to 24 hours (stale-while-revalidate).
+ * Revalidates every 6 hours, serving the old value while it regenerates. No hard
+ * expiry: `stale` is the client router's (see .claude/rules/caching.md).
  * Cache key uses end-of-ministry-year (Aug 31) — stable within a ministry year,
- * so stale data survives container restarts and midnight rollovers.
+ * so stale data survives midnight rollovers.
  * The service methods cap month iteration at today internally.
  */
 export async function getCachedFullRangeData(earliestYear: number, endDateIso: string): Promise<DashboardData> {
@@ -56,7 +57,8 @@ export async function getCachedFullRangeData(earliestYear: number, endDateIso: s
 
 /**
  * Cached extended dashboard data (heavy queries) loaded separately.
- * Revalidates every 6 hours; serves stale for up to 24 hours (stale-while-revalidate).
+ * Revalidates every 6 hours, serving the old value while it regenerates. No hard
+ * expiry: `stale` is the client router's (see .claude/rules/caching.md).
  * Cache key is the full-range start/end dates (stable within a ministry year),
  * so stale data survives container restarts until the next revalidation.
  * Date-filterable data (event participants, roster/attendance) uses the full
@@ -85,7 +87,8 @@ export async function getCachedExtendedData(
 
 /**
  * Cached engagement venn data (Activity_Log query — slowest query) loaded last.
- * Revalidates every 6 hours; serves stale for up to 24 hours (stale-while-revalidate).
+ * Revalidates every 6 hours, serving the old value while it regenerates. No hard
+ * expiry: `stale` is the client router's (see .claude/rules/caching.md).
  * Separated from extended data so serving/roster/EP charts can render first.
  * Cache key is the full-range start/end dates (stable within a ministry year).
  */

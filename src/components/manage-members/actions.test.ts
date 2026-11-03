@@ -10,6 +10,8 @@ const {
   mockUpdateMemberStatus,
   mockContactUploadPhoto,
   mockUploadContactPhoto,
+  mockUpdateTag,
+  mockEnforceRateLimit,
 } = vi.hoisted(() => ({
   mockRequireFeatureAccess: vi.fn(),
   mockGetCachedAllContacts: vi.fn(),
@@ -20,12 +22,14 @@ const {
   mockUpdateMemberStatus: vi.fn(),
   mockContactUploadPhoto: vi.fn(),
   mockUploadContactPhoto: vi.fn(),
+  mockUpdateTag: vi.fn(),
+  mockEnforceRateLimit: vi.fn(),
 }));
 
-vi.mock('next/cache', () => ({ updateTag: vi.fn() }));
+vi.mock('next/cache', () => ({ updateTag: mockUpdateTag }));
 vi.mock('@/lib/authorization', () => ({ requireFeatureAccess: mockRequireFeatureAccess }));
 vi.mock('@/lib/auth-helpers', () => ({ getMpUserId: () => 7 }));
-vi.mock('@/lib/rate-limit', () => ({ enforceRateLimit: vi.fn() }));
+vi.mock('@/lib/rate-limit', () => ({ enforceRateLimit: mockEnforceRateLimit }));
 vi.mock('@/components/contact-lookup/cached-contacts', () => ({
   getCachedAllContacts: mockGetCachedAllContacts,
 }));
@@ -50,7 +54,8 @@ vi.mock('@/components/shared-actions/processing', () => ({
   uploadContactPhoto: mockUploadContactPhoto,
 }));
 
-import { fetchMilestoneFiles, transitionMember, uploadMemberPhoto } from './actions';
+import { fetchMilestoneFiles, refreshMemberCache, transitionMember, uploadMemberPhoto } from './actions';
+import { serviceCache } from '@/lib/service-cache';
 
 const contact = (Contact_ID: number, Participant_ID: number | null, Member_Status_ID: number | null) => ({
   Contact_ID, Participant_ID, Member_Status_ID, Member_Status: Member_Status_ID ? 'Member' : null,
@@ -148,5 +153,31 @@ describe('uploadMemberPhoto (N3)', () => {
   it("refuses a contact outside the member set, before the upload", async () => {
     await expect(uploadMemberPhoto(photoForm('20'))).rejects.toThrow(/Forbidden/);
     expect(mockContactUploadPhoto).not.toHaveBeenCalled();
+  });
+});
+
+describe('refreshMemberCache', () => {
+  const peek = () => serviceCache.get('contacts-search', Infinity, async () => []);
+
+  afterEach(() => serviceCache.deleteByPrefix('contacts-search'));
+
+  // updateTag only re-runs getCachedAllContacts; without the purge its
+  // serviceCache entry returned the same list and Refresh changed nothing.
+  it('purges the service-cache contacts before expiring the tag', async () => {
+    serviceCache.set('contacts-search', [contact(10, 100, 1)]);
+    mockUpdateTag.mockImplementation(() => expect(peek()).toBeUndefined());
+
+    await expect(refreshMemberCache()).resolves.toEqual({ success: true });
+    expect(mockUpdateTag).toHaveBeenCalledWith('contacts-search');
+  });
+
+  it('leaves the cache alone when rate-limited', async () => {
+    serviceCache.set('contacts-search', [contact(10, 100, 1)]);
+    mockEnforceRateLimit.mockImplementationOnce(() => { throw new Error('Rate limit exceeded'); });
+
+    const result = await refreshMemberCache();
+    expect(result.success).toBe(false);
+    expect(peek()).toHaveLength(1);
+    expect(mockUpdateTag).not.toHaveBeenCalled();
   });
 });

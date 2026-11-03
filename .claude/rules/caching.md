@@ -4,9 +4,11 @@ The project uses **Cache Components** (`cacheComponents: true`) with **Partial P
 
 ## Custom Cache Handler
 
-**IMPORTANT**: The default Next.js in-memory cache handler **ignores `cacheLife({ stale })` entirely**. It expires entries at `revalidate` time (6h) and returns `undefined` — a full cache miss — instead of serving stale data. This caused 30+ second cold cache fetches every 6 hours.
+**IMPORTANT**: In production, the default Next.js in-memory cache handler drops an entry once it is past `revalidate` (6h) and returns `undefined` — a full cache miss — instead of serving stale data. This caused 30+ second cold cache fetches every 6 hours.
 
-A custom handler at `cache-handler.js` (configured via `cacheHandlers.default` in `next.config.ts`) fixes this by using the `expire` field (revalidate + stale = 30h) as the true expiry. Between 6h and 30h, it returns cached data with `revalidate: -1`, which tells the framework to serve stale data instantly while revalidating in the background.
+A custom handler at `cache-handler.js` (configured via `cacheHandlers.default` in `next.config.ts`) fixes this: past `revalidate` it still returns the entry, with `revalidate: -1`, which tells the framework to serve it instantly while revalidating in the background.
+
+**There is no hard expiry (#253).** Our `cacheLife({ revalidate, stale })` calls pass no `expire`, so Next fills in the default profile's, `INFINITE_CACHE` (verified in Next 16.4.2). The handler's expire check therefore never fires: an entry ends only on LRU eviction, tag expiry or a container restart. An older version of this file said "expire = revalidate + stale = 30h"; that was never true. **`stale` is not a server-side window at all** — it is how long the client router may reuse the value without asking the server. If a hard ceiling is ever wanted, pass `expire` explicitly (e.g. `expire: 108000` for 30h); the handler honours it.
 
 **CRITICAL — `get()` must check `memoryCache` before `pendingSets`.** When the framework triggers a background revalidation, it calls `set(key, pendingEntry)` which adds the key to `pendingSets` for the full duration of the data fetch (20-40 seconds). If `get()` awaits `pendingSets` first, ALL requests during revalidation are blocked — completely defeating stale-while-revalidate. The handler checks `memoryCache` first and returns stale data immediately; it only awaits `pendingSets` when there is no cached data at all (e.g., initial cache warm).
 
@@ -53,11 +55,12 @@ async function getCachedData(key: string) {
 **Rules for `'use cache'` functions:**
 - `new Date()` and other non-deterministic expressions must stay OUTSIDE the function — pass as serializable parameters
 - Function arguments automatically become the cache key
-- Invalidate with `updateTag('my-tag')` from server actions (serves stale data while revalidating in background; use `revalidateTag('my-tag', { expire: 0 })` only when stale data must NOT be served)
+- Invalidate with `updateTag('my-tag')` from server actions. It **expires the tag immediately**: the next read of a tagged entry is a miss and regenerates in the foreground, and the caller waits for it. It is **not** stale-while-revalidate. That behaviour is `revalidateTag('my-tag', 'max')`, which marks the tag stale: the old value is served once more while it regenerates in the background (and, unlike `updateTag`, it also works in route handlers)
+- **A refresh action must purge `serviceCache` before `updateTag`** (`serviceCache.deleteByPrefix(...)`). `updateTag` only makes the `'use cache'` function run again, and its `getOrFetch` then returns its own cached value, so nothing changes. `refreshDashboardCache` (`src/components/dashboard/actions.ts`) is the reference; `refreshMemberCache` lacked the purge until 2026-11-03, so the Manage Members Refresh button reloaded the same contacts for up to 6h. With the purge, the regeneration really does hit MP, so a refresh takes as long as a cold fetch
 - **NEVER use `revalidatePath()` alongside `updateTag()`** — `revalidatePath` hard-purges the page's PPR shell, forcing a full re-render (10+ seconds). `updateTag` alone is sufficient for data invalidation.
 
 **Current cached functions:**
-| Function | Revalidate | Stale | Tags | File |
+| Function | Revalidate | Stale (client router) | Tags | File |
 |---|---|---|---|---|
 | `getCachedDashboardData(year)` | 6h | 24h | `dashboard-data`, `year-N` | `src/components/dashboard/cached-data.ts` |
 | `getCachedFullRangeData(year, endDate)` | 6h | 24h | `dashboard-data`, `dashboard-full-range` | `src/components/dashboard/cached-data.ts` |
@@ -66,7 +69,7 @@ async function getCachedData(key: string) {
 | `getCachedGroupTypes(ids)` | 24h | 48h | `group-types` | `src/services/dashboardService.ts` |
 | `getCachedAllContacts()` | 6h | 24h | `contacts-search` | `src/components/contact-lookup/cached-contacts.ts` |
 
-All cached functions use **stale-while-revalidate**: after the revalidate TTL expires, stale data continues to be served instantly while fresh data is computed in the background. This prevents users from ever hitting a cold cache during normal operation.
+All cached functions use **stale-while-revalidate**: after the revalidate TTL passes, the old value is still served instantly while fresh data is computed in the background, at both layers (the custom handler, and `serviceCache` inside the function). This prevents users from ever hitting a cold cache during normal operation. The exception is an explicit refresh (`updateTag` plus a `serviceCache` purge), which regenerates in the foreground by design.
 
 **IMPORTANT — Cache keys must be stable.** Dashboard cache keys use end-of-ministry-year (Aug 31) instead of today's date, so they change only once per year (at ministry year rollover in September). If a cache key changes daily, stale-while-revalidate can't serve stale data after midnight because the new key has no stale entry — causing cold cache misses. Service methods that iterate over months (e.g., `getMonthlyAttendanceTrends`, `getEngagementRawData`) cap their iteration at `new Date()` internally to avoid wasting API calls on future months.
 

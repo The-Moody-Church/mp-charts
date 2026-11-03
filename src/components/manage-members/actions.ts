@@ -9,6 +9,7 @@ import { sanitizeId } from "@/lib/providers/ministry-platform/utils/filter-sanit
 import { MemberService } from "@/services/memberService";
 import { ALLOWED_DOCUMENT_TYPES, MAX_FILE_SIZE, searchByNameFlat } from "@/lib/processing-utils";
 import { getCachedAllContacts } from "@/components/contact-lookup/cached-contacts";
+import { serviceCache } from "@/lib/service-cache";
 import { MEMBERS_PAGE_SIZE } from "@/lib/dto";
 import { ContactService } from "@/services/contactService";
 import { uploadContactPhoto } from "@/components/shared-actions/processing";
@@ -266,6 +267,10 @@ export async function refreshMemberCache(): Promise<{ success: boolean; error?: 
   try {
     const session = await requireFeatureAccess("manage-members");
     enforceRateLimit(session.user.id, "cacheRefresh");
+    // updateTag alone only re-runs getCachedAllContacts, whose serviceCache
+    // entry would hand back the same list. Purge it so the re-run fetches
+    // from MP (same as refreshDashboardCache).
+    serviceCache.deleteByPrefix('contacts-search');
     updateTag('contacts-search');
     return { success: true };
   } catch (error) {
