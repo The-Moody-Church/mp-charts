@@ -20,10 +20,11 @@ pinned to `error` in all four apps.
 - music-tools: the paged lists now drop stale responses (an old race), and the seasonal report's
   default ministry year is computed in Central time (it used the server's UTC clock).
 - New tests mutation-checked: series-preview, contact-combobox, choir-members, seasonal-calendar-report.
-- Merged without a `:dev` soak (owner's call). Not deployed yet.
+- Merged without a `:dev` soak (owner's call). **Deployed to TMC1 2026-11-03 ~16:05–16:09 UTC**: music-tools
+  `6ca108b`, mp-senior-care `9d73faa`, event-manager `748a780`; cache warming complete, `/signin` 200 on all three.
 
 ## Follow-ups
-- Deploy the three siblings when convenient (`/deploy` in each); event-manager and music-tools carry
-  UI behaviour changes, so a quick click-through after deploy is worthwhile (checklists in #79, #191).
+- event-manager and music-tools carry UI behaviour changes and were not soaked: a quick click-through
+  is worthwhile (checklists in #79, #191).
 - music-tools #170 (@types/node 26) vs its Node 22 runtime: move to Node 24 + `@types/node` ^24.
 - TypeScript 7 (#269, music-tools #168) research; eslint 10 (#262) still blocked on plugin peers.
