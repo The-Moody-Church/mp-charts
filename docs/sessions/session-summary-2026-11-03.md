@@ -23,8 +23,15 @@ pinned to `error` in all four apps.
 - Merged without a `:dev` soak (owner's call). **Deployed to TMC1 2026-11-03 ~16:05–16:09 UTC**: music-tools
   `6ca108b`, mp-senior-care `9d73faa`, event-manager `748a780`; cache warming complete, `/signin` 200 on all three.
 
+## music-tools Node 22 → 24 — COMPLETED
+
+music-tools #192 (`ad10817`), deployed 2026-11-03: `.nvmrc` (new, read by both workflows), three
+`node:24-alpine` stages, `engines.node >=24.0.0`, `@types/node` ^24.19.2; new CLAUDE.md "Node Runtime"
+section. CI resolved `.nvmrc` to 24 (v24.22.1); production runs v24.22.2, `/signin` 200. Dependabot
+#170 (@types/node 26) closed. All four Better Auth apps are now on Node 24. Follow-up PR #193 adds
+mp-charts' Dependabot holds on `node` and `@types/node` majors.
+
 ## Follow-ups
 - event-manager and music-tools carry UI behaviour changes and were not soaked: a quick click-through
   is worthwhile (checklists in #79, #191).
-- music-tools #170 (@types/node 26) vs its Node 22 runtime: move to Node 24 + `@types/node` ^24.
 - TypeScript 7 (#269, music-tools #168) research; eslint 10 (#262) still blocked on plugin peers.
