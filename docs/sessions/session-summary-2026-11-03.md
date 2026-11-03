@@ -31,7 +31,7 @@ section. CI resolved `.nvmrc` to 24 (v24.22.1); production runs v24.22.2, `/sign
 #170 (@types/node 26) closed. All four Better Auth apps are now on Node 24. Follow-up PR #193 adds
 mp-charts' Dependabot holds on `node` and `@types/node` majors.
 
-## TypeScript 6 now, TypeScript 7 held — IN PROGRESS (PR open)
+## TypeScript 6 now, TypeScript 7 held — COMPLETED (#285)
 
 Branch `chore/typescript-6`. Dependabot #269 (TS 5.9.3 → 7.0.2) failed `verify` because lint crashed:
 "typescript-eslint does not support TS 7.0". TS 7.0 ships no JS API; typescript-eslint's support targets
@@ -40,6 +40,30 @@ Branch `chore/typescript-6`. Dependabot #269 (TS 5.9.3 → 7.0.2) failed `verify
 1206 tests, audit gate and build pass), a Dependabot hold on TypeScript majors (as event-manager and
 mp-senior-care have), #136 marked COMPLETED, and a new ideas.md entry "Adopt TypeScript 7 once
 typescript-eslint supports it". music-tools gets the same hold; its #168 closes.
+
+## music-tools Dependabot triage — COMPLETED
+
+music-tools #198 (`198514d`): removed `react-hook-form` and `@hookform/resolvers` (never imported) and
+added an ESLint-major Dependabot hold. #196 (resolvers 7) closed as superseded; #195 (ESLint 10) closed,
+since eslint-config-next's plugins still cap peer eslint at 9 and its CI passed only via an npm peer
+override. #194 (lucide-react 1.66) rebased onto the new main, passed CI, merged (`119dca8`). Not deployed.
+
+## caching.md `expire` / `updateTag` (#253) — IN PROGRESS (PR open)
+
+Branch `fix/caching-docs-member-refresh`. Re-checked both claims in the Next 16.4.2 dist:
+- `cacheLife({ revalidate, stale })` without `expire` takes the default profile's `INFINITE_CACHE`
+  (`use-cache-wrapper.js`: `explicitExpire ?? innerCacheStore.expire`), so the handler's expire check
+  never fires. No 30h ceiling; `stale` is the client router's. Behaviour left as is, docs corrected.
+- `updateTag` calls `revalidate(..., undefined)`, which the handler records as `expired: now`: the next read
+  is a miss and regenerates in the foreground. `revalidateTag(tag, 'max')` is the stale-marking form.
+- Found while tracing: `refreshMemberCache` (manage-members) called `updateTag('contacts-search')` without
+  purging `serviceCache`, so the regenerated function got the same cached list back; the shell then cleared
+  its local status overrides, so a just-moved member could show the old status. Now purges first, as
+  `refreshDashboardCache` does. Two tests; removing the purge fails one.
+- Files: `.claude/rules/caching.md`, `cache-handler.js` (comments), `cached-data.ts` and `cached-contacts.ts`
+  (comments; also dropped "survives container restarts", which an in-memory cache cannot), `dashboard/actions.ts`
+  (comment), `manage-members/actions.ts` + test.
+- tsc, lint, 1208 tests pass.
 
 ## Follow-ups
 - event-manager and music-tools carry UI behaviour changes and were not soaked: a quick click-through

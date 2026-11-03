@@ -137,8 +137,8 @@ export async function refreshDashboardCache(): Promise<{
     serviceCache.deleteByPrefix('group-types');
 
     // NOTE: Do NOT use revalidatePath here — it hard-purges the page's PPR
-    // shell, forcing a full re-render (10+ seconds). updateTag marks the
-    // framework cache as stale so the next 'use cache' call re-executes
+    // shell, forcing a full re-render (10+ seconds). updateTag expires the
+    // tags, so the next 'use cache' call re-executes in the foreground
     // the function body (which now hits a cold service-cache miss).
     updateTag('dashboard-data');
     updateTag('group-types');
