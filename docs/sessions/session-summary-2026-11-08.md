@@ -67,6 +67,25 @@ Branch `chore/better-auth-1.7.18`.
 - The first attempt to swap the three ports onto `:dev` was refused by the auto-mode classifier; it went
   ahead after the owner asked for it explicitly.
 
+## Next 16.4.5 + minor/patch updates in all four apps — IN PROGRESS (PRs open)
+
+Next published seven medium advisories on 2026-11-03, all fixed in 16.4.5; Dependabot's groups only went to
+16.4.3/16.4.4. Checked against all four apps: none uses `generateStaticParams` (GHSA-vvgp), root params
+(GHSA-mfr8, GHSA-vc7v), Edge-runtime routes (GHSA-f3mh), binary `'use cache'` arguments (GHSA-rhh4) or a
+route handler that returns a fetched response unchanged (GHSA-pc58). mp-senior-care's one `unstable_cache`
+cannot reach GHSA-mfr8 without root params. GHSA-7qx7 (SVG past `/_next/image`) is the only plausible one, and
+low: mp-charts, mp-senior-care and music-tools use `next/image`, music-tools with remote patterns;
+event-manager is `unoptimized: true`.
+- Branch `chore/deps-minor-2026-11-08` in each repo: `npm update` within ranges, then `next` and
+  `eslint-config-next` floors raised to `^16.4.5`. better-auth's bounded range survived `npm update`.
+- @hookform/resolvers 5.9 → 7.0.5 in mp-charts, mp-senior-care and event-manager: 6.0 and 7.0 broke only the
+  Effect and TypeBox resolvers, all peers are optional, and `zod/dist` and the core `dist` are byte-identical
+  between 5.9.2 and 7.0.5 (packed and diffed).
+- mp-charts gets the ESLint-major hold the other three already had; Dependabot #289 (ESLint 10) to close.
+- Held majors unchanged: TypeScript 7, ESLint 10, jsdom 31, @types/node 26, Prisma 8.
+- tsc, lint (existing warnings only), tests (1208 / 1332 / 1425 / 431), the audit gate, signatures and the
+  build pass in all four.
+
 ## Files
 - **Modified (branch):** `package.json`, `package-lock.json`, `CLAUDE.md`, `.claude/rules/security.md`,
   `src/lib/auth.ts`, `src/lib/auth.test.ts`, `src/lib/auth-callback-url.ts`, `src/app/auth-error/page.tsx`,

@@ -55,6 +55,13 @@ updates:
       # runs on it. Same hold as event-manager and mp-senior-care.
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
+      # ESLint 10 is blocked upstream, not here: eslint-plugin-react caps peer
+      # eslint at ^9.7, and eslint-plugin-jsx-a11y / eslint-plugin-import at ^9,
+      # all three via eslint-config-next. Dependabot #289's CI passed only
+      # because npm overrode those peers. Revisit when the plugins ship ^10
+      # peers. Same hold as the other three apps.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
     groups:
       # Security updates get their OWN group, separate from routine version
       # bumps. Previously a single `patterns: ["*"]` minor-and-patch group
