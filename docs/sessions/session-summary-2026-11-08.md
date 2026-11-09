@@ -67,7 +67,7 @@ Branch `chore/better-auth-1.7.18`.
 - The first attempt to swap the three ports onto `:dev` was refused by the auto-mode classifier; it went
   ahead after the owner asked for it explicitly.
 
-## Next 16.4.5 + minor/patch updates in all four apps — IN PROGRESS (PRs open)
+## Next 16.4.5 + minor/patch updates in all four apps — COMPLETED
 
 Next published seven medium advisories on 2026-11-03, all fixed in 16.4.5; Dependabot's groups only went to
 16.4.3/16.4.4. Checked against all four apps: none uses `generateStaticParams` (GHSA-vvgp), root params
@@ -85,6 +85,11 @@ event-manager is `unoptimized: true`.
 - Held majors unchanged: TypeScript 7, ESLint 10, jsdom 31, @types/node 26, Prisma 8.
 - tsc, lint (existing warnings only), tests (1208 / 1332 / 1425 / 431), the audit gate, signatures and the
   build pass in all four.
+- Merged without a `:dev` soak (owner's call, as for earlier minor groups): mp-charts #294 `7e68c0f`,
+  mp-senior-care #243 `bfb6803`, event-manager #84 `68abe10`, music-tools #200 `a094602`. Deployed
+  2026-11-09 ~02:03 UTC; cache warming finished on the first attempt in the three apps that have it, `/signin`
+  200 on all four, neon-backup kept running. Superseded Dependabot PRs closed: mp-charts #287, #288, #290 (and
+  #289, ESLint 10, declined); mp-senior-care #239, #240, #242; event-manager #81, #83.
 
 ## Files
 - **Modified (branch):** `package.json`, `package-lock.json`, `CLAUDE.md`, `.claude/rules/security.md`,
