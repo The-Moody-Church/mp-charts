@@ -20,7 +20,7 @@ better-auth published 12 advisories on 2026-11-03, all fixed in 1.7.16 (npm `lat
 - The nightly audit passed in all four repos through 2026-11-08: these are repo advisories that npm audit
   does not report, so the deploy gate was never at risk.
 
-## mp-charts: better-auth 1.7.18 — IN PROGRESS (PR open)
+## mp-charts: better-auth 1.7.18 — SOAKED, ready to merge (#293)
 
 Branch `chore/better-auth-1.7.18`.
 - **Packages:** better-auth, `@better-auth/core` and the adapters/telemetry 1.7.14 → 1.7.18, `better-call`
@@ -48,8 +48,16 @@ Branch `chore/better-auth-1.7.18`.
   security.md updated after its check.
 - **Checks:** `npm audit signatures`: 0 invalid, 0 missing; the five updated packages carry SLSA provenance.
   tsc, lint, 1208 tests, the audit gate and `npm run build` pass.
-- **Next:** soak on `:dev` with an owner sign-in and sign-out, then merge and deploy; then port to
-  mp-senior-care, event-manager and music-tools.
+- **Soak:** `:dev` (`b578f7a`) ran in production from 2026-11-09 00:08 UTC, rollback pin on the previous
+  build's digest (`sha256:6ee605f7…`). Cache warming finished on the first attempt; `/` 307 → `/signin`,
+  `/signin` 200, `POST /api/auth/update-user` 404; `/sign-in/social` built the MP authorize URL with
+  TM.Widgets, the 1.7 callback and no `code_challenge`, and set `__Secure-better-auth.oauth_state`. The owner
+  signed in, browsed and signed out without problems; the log had no `[auth]` errors and no
+  `id_token_hint omitted` line.
+- **Ports (opened the same day, all checks green):** mp-senior-care #241 (1332 tests), event-manager #82
+  (1425), music-tools #199 (431). In each: 30 endpoints with the same list as mp-charts, `oauth_state`
+  1536 → 3628 and 2048 → 4652, tsc, lint (existing warnings only), the audit gate, signatures and the build
+  pass. Each repo's `mp-charts-sync-log.md` and `docs/status.md` record it.
 
 ## Files
 - **Modified (branch):** `package.json`, `package-lock.json`, `CLAUDE.md`, `.claude/rules/security.md`,
