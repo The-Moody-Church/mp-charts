@@ -20,7 +20,7 @@ better-auth published 12 advisories on 2026-11-03, all fixed in 1.7.16 (npm `lat
 - The nightly audit passed in all four repos through 2026-11-08: these are repo advisories that npm audit
   does not report, so the deploy gate was never at risk.
 
-## mp-charts: better-auth 1.7.18 — SOAKED, ready to merge (#293)
+## better-auth 1.7.18 in all four apps — COMPLETED
 
 Branch `chore/better-auth-1.7.18`.
 - **Packages:** better-auth, `@better-auth/core` and the adapters/telemetry 1.7.14 → 1.7.18, `better-call`
@@ -58,6 +58,14 @@ Branch `chore/better-auth-1.7.18`.
   (1425), music-tools #199 (431). In each: 30 endpoints with the same list as mp-charts, `oauth_state`
   1536 → 3628 and 2048 → 4652, tsc, lint (existing warnings only), the audit gate, signatures and the build
   pass. Each repo's `mp-charts-sync-log.md` and `docs/status.md` record it.
+
+- **Deployed:** mp-charts #293 merged as `017fa40`, on production 2026-11-09 00:25 UTC; #292 (1.7.15) closed
+  as superseded. The three ports soaked on `:dev` together (each with a fresh rollback pin; the old pins
+  dated from earlier soaks), the owner signed in and out on each, then merged and deployed 01:12 UTC:
+  mp-senior-care `4e6e82d`, event-manager `692e9ef`, music-tools `ff7d6c1`. Cache warming finished on the
+  first attempt (mp-senior-care, event-manager), `/signin` 200 on all three, neon-backup kept running.
+- The first attempt to swap the three ports onto `:dev` was refused by the auto-mode classifier; it went
+  ahead after the owner asked for it explicitly.
 
 ## Files
 - **Modified (branch):** `package.json`, `package-lock.json`, `CLAUDE.md`, `.claude/rules/security.md`,
