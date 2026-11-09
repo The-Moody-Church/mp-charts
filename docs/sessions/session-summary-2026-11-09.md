@@ -7,7 +7,7 @@ Close the "proxy body-size item": the residual recorded since 2026-09-29 in CLAU
 route's 4096-byte filter and better-auth's rate limiter could refuse it. Then port to event-manager,
 mp-senior-care and music-tools.
 
-## mp-charts — IN PROGRESS (branch `fix/auth-route-skips-proxy-body-clone`)
+## mp-charts — PR #295 open, CI green (branch `fix/auth-route-skips-proxy-body-clone`)
 
 ### What Next does (16.4.5 source)
 
@@ -60,7 +60,26 @@ responses (from `next.config.ts`).
 - A body declaring a size within 4096 bytes and then stalling holds its connection until Node's 300 s
   request timeout, at a few KB of memory.
 
+## Ports — PRs open (same branch name in each)
+
+All three had the same proxy shape (`/api` a public early return, no auth exclusion; music-tools'
+matcher is the older one without `manifest.json`/`sw.js`/`offline.html`, left as is). Same matcher
+change, `proxy.test.ts` matcher block (music-tools had none; its static-asset cases follow its own
+matcher), `route.ts` comments, residual sentence in CLAUDE.md/`security.md`, status and sync-log rows.
+The remaining-residual pointer goes to mp-charts' `docs/ideas.md` in all three.
+
+| Repo | PR | Tests | 9 MB body → 404 |
+|---|---|---|---|
+| event-manager | #85 | 1443 | 34 ms |
+| mp-senior-care | #244 | 1350 | 35 ms |
+| music-tools | #201 | 448 | 40 ms |
+
+tsc, lint, the audit gate and `next build` pass in each; a normal sign-in POST returns 200 and `/`
+still redirects (307). On event-manager and mp-senior-care the chunked test's RSS stepped up ~190 MB
+in round 3; a ten-round rerun on event-manager (1.8 GB pushed over 20 connections) plateaued at
+~400 MB, so it is heap sizing, not retention.
+
 ## Follow-ups
 
-- Port to event-manager, mp-senior-care, music-tools (check each `proxy.ts` matcher first).
-- `:dev` soak with a human sign-in before merge (the change sits on the sign-in path).
+- `:dev` soak with a human sign-in and sign-out before merge (the change sits on the sign-in path).
+- Page-path / Server Action residual: ideas.md entry, not started.
