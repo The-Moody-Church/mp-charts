@@ -16,9 +16,9 @@ import Link from "next/link";
  */
 
 /**
- * Error codes better-auth 1.7.14's core OAuth callback emits
- * (dist/oauth2/errors.mjs, api/routes/callback.mjs, oauth2/state.mjs,
- * oauth2/link-account.mjs), plus `sign_in_start_failed`, which is OURS
+ * Error codes better-auth 1.7.18's core OAuth callback emits
+ * (dist/oauth2/errors.mjs, api/routes/callback.mjs, oauth2/callback.mjs,
+ * oauth2/state.mjs, oauth2/link-account.mjs), plus `sign_in_start_failed`, which is OURS
  * (src/components/sign-in/sign-in.tsx, when the flow cannot even start).
  * NOTE: `unable_to_get_user_info` covers several causes — getMpUserInfo
  * returning null (userinfo down, bad sub, id_token/userinfo sub mismatch) and

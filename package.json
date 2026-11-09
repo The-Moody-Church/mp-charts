@@ -35,7 +35,7 @@
     "@radix-ui/react-tabs": "^1.2.1",
     "@radix-ui/react-tooltip": "^1.4.1",
     "@types/js-cookie": "^3.0.6",
-    "better-auth": ">=1.7.14 <1.8.0",
+    "better-auth": ">=1.7.18 <1.8.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dotenv": "^18.0.9",
