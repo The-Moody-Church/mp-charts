@@ -79,8 +79,21 @@ export async function proxy(request: NextRequest) {
   }
 }
 
+// `/api/auth` is deliberately NOT matched. For every request the proxy runs
+// on, Next copies the body (getCloneableBody, next/dist/server/body-streams.js)
+// up to `proxyClientMaxBodySize` (10 MB) and waits for the whole body to end
+// before anything answers, even if the proxy has already returned. Measured on
+// a local 16.4.5 production build: 20 anonymous 9 MB POSTs to
+// /api/auth/sign-in/social held about 10 MB each with no response until the
+// client gave up. Unmatched, the route's own 4096-byte filter (route.ts) is the
+// first thing to touch the body: the same requests got their 404 in under
+// 40 ms, and 900 MB pushed over 20 connections left memory flat. The proxy
+// did nothing there anyway: `/api` was already a public early return, and a
+// CSP nonce means nothing on JSON and redirect responses. The static headers
+// in next.config.ts still apply. Page paths and Server Actions still go
+// through the proxy and keep the 10 MB copy; see docs/ideas.md.
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|assets/|manifest\\.json|sw\\.js|offline\\.html).*)',
+    '/((?!api/auth(?:/|$)|_next/static|_next/image|favicon.ico|assets/|manifest\\.json|sw\\.js|offline\\.html).*)',
   ],
 };
