@@ -81,5 +81,7 @@ in round 3; a ten-round rerun on event-manager (1.8 GB pushed over 20 connection
 
 ## Follow-ups
 
-- `:dev` soak with a human sign-in and sign-out before merge (the change sits on the sign-in path).
+- COMPLETED: `:dev` soak of all four (17:14 UTC, rollback pins by digest in each `/srv/<app>/`). Through
+  Cloudflare: `/` 307 to `/signin`, `/signin` 200, `get-session` 200, and a 6 KB `/sign-in/social` body
+  404 in 70–120 ms. Human sign-in and sign-out passed in all four apps.
 - Page-path / Server Action residual: ideas.md entry, not started.
