@@ -7,7 +7,7 @@ Close the "proxy body-size item": the residual recorded since 2026-09-29 in CLAU
 route's 4096-byte filter and better-auth's rate limiter could refuse it. Then port to event-manager,
 mp-senior-care and music-tools.
 
-## mp-charts — PR #295 open, CI green (branch `fix/auth-route-skips-proxy-body-clone`)
+## mp-charts — PR #295 merged (branch `fix/auth-route-skips-proxy-body-clone`)
 
 ### What Next does (16.4.5 source)
 
@@ -60,7 +60,7 @@ responses (from `next.config.ts`).
 - A body declaring a size within 4096 bytes and then stalling holds its connection until Node's 300 s
   request timeout, at a few KB of memory.
 
-## Ports — PRs open (same branch name in each)
+## Ports — PRs merged (same branch name in each)
 
 All three had the same proxy shape (`/api` a public early return, no auth exclusion; music-tools'
 matcher is the older one without `manifest.json`/`sw.js`/`offline.html`, left as is). Same matcher
@@ -78,6 +78,15 @@ tsc, lint, the audit gate and `next build` pass in each; a normal sign-in POST r
 still redirects (307). On event-manager and mp-senior-care the chunked test's RSS stepped up ~190 MB
 in round 3; a ten-round rerun on event-manager (1.8 GB pushed over 20 connections) plateaued at
 ~400 MB, so it is heap sizing, not retention.
+
+## Merged and deployed — COMPLETED
+
+- Merged after the `:dev` soak: mp-charts #295 `619760a`, event-manager #85 `12a3792`, mp-senior-care #244
+  `24c2159`, music-tools #201 `fd37adf`. The three `main` builds for mp-charts, event-manager and mp-senior-care
+  first failed with no jobs started (a GitHub incident affecting Actions and the Checks API, open at the time); reruns
+  passed (mp-senior-care needed two). Deployed 18:27–18:39 UTC, each `:latest` label matching its merge commit.
+  Cache warming finished on the first attempt in the three apps that have it; through Cloudflare, `/` 307,
+  `/signin` 200, `get-session` 200 and a 6 KB `/sign-in/social` body 404 in 0.2–0.4 s on all four.
 
 ## Follow-ups
 
