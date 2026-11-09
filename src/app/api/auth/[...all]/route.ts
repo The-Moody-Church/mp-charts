@@ -71,15 +71,15 @@ const MAX_SIGN_IN_SOCIAL_BODY_BYTES = 4096;
  * Read a request body with a hard byte cap. Returns `null` (and stops reading)
  * as soon as more than `limit` bytes arrive, so this filter never parses, and
  * better-auth never receives, more than the cap, whatever Content-Length says.
- * It does NOT bound what the server buffers: src/proxy.ts matches /api/auth,
- * so Next (getCloneableBody, next/dist/server/body-streams.js; byte-identical
- * from 16.3.4 through 16.4.2) has
- * already read the whole body, up to its 10 MB proxy clone limit, and waited
- * for it to end before this handler runs (2026-09-29, local standalone build
- * on Node 24: 20 concurrent 9 MB bodies, +130 MB RSS, each then 404; a body
- * that stalls short of its Content-Length got no response in 4 s, over the cap
- * or under it, and Next leaves Node's 300 s request timeout as it is). That is
- * the separate proxy body-size item.
+ * This is also the first read of the body: src/proxy.ts does not match
+ * /api/auth (since 2026-11-09), so Next no longer copies up to 10 MB of it and
+ * waits for it to end before this handler runs (getCloneableBody,
+ * next/dist/server/body-streams.js). Measured on a local 16.4.5 standalone
+ * build: 20 concurrent 9 MB bodies now get their 404 in under 40 ms, where
+ * they previously held about 10 MB each with no response. Whatever the client
+ * sends after the 404 is discarded by Node, not kept. One residual: a body
+ * that declares a size within the cap and then stalls holds its connection
+ * until Node's 300 s request timeout, at a few KB of memory.
  */
 async function readBodyWithLimit(
   body: ReadableStream<Uint8Array>,
@@ -121,9 +121,9 @@ async function readBodyWithLimit(
  *
  * Size is capped twice: a declared Content-Length over
  * `MAX_SIGN_IN_SOCIAL_BODY_BYTES` (or a malformed one) is refused before this
- * filter clones or reads anything (Next's proxy layer has already buffered the
- * body; see readBodyWithLimit), and the clone is then read with the same hard
- * cap (a chunked body carries no Content-Length). The capped bytes are parsed
+ * filter clones or reads anything (see readBodyWithLimit), and the clone is
+ * then read with the same hard cap (a chunked body carries no Content-Length).
+ * The capped bytes are parsed
  * the way better-call's `request.json()` parses them — the Fetch spec's "parse
  * JSON from bytes": UTF-8 decode with a leading BOM stripped and invalid
  * sequences replaced (what `new TextDecoder()` does with its defaults), then

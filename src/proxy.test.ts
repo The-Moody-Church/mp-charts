@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+import { unstable_doesMiddlewareMatch } from 'next/experimental/testing/server';
 
 /**
  * Proxy Tests
@@ -152,36 +153,52 @@ describe('Proxy', () => {
     });
   });
 
-  describe('Route Matcher', () => {
-    it('should match protected routes', () => {
-      const protectedPaths = [
-        '/dashboard',
-        '/settings',
-        '/contacts',
-        '/contacts/123',
-        '/',
-      ];
+  // Drives the REAL exported `config` through Next's own matcher (the code the
+  // build uses), not a hand-copied regex that could drift from src/proxy.ts.
+  describe('Route Matcher (real config)', () => {
+    const matches = async (url: string) => {
+      const { config } = await import('./proxy');
+      return unstable_doesMiddlewareMatch({ config, url });
+    };
 
-      const matcher = /^\/((?!_next\/static|_next\/image|favicon\.ico|assets\/).*)$/;
-
-      protectedPaths.forEach((path) => {
-        expect(matcher.test(path)).toBe(true);
-      });
+    it.each([
+      '/',
+      '/dashboard',
+      '/contacts/123',
+      '/signin',
+      '/auth-error',
+      '/api/cache-warm',
+      // Only the /api/auth segment is excluded, not every path that starts with it.
+      '/api/authority',
+      '/api/auth-extra',
+    ])('runs the proxy on %s', async (path) => {
+      expect(await matches(path)).toBe(true);
     });
 
-    it('should not match static assets', () => {
-      const staticPaths = [
-        '/_next/static/chunks/main.js',
-        '/_next/image?url=...',
-        '/favicon.ico',
-        '/assets/logo.png',
-      ];
+    it.each([
+      '/_next/static/chunks/main.js',
+      '/_next/image?url=x',
+      '/favicon.ico',
+      '/assets/logo.png',
+      '/manifest.json',
+      '/sw.js',
+      '/offline.html',
+    ])('skips static asset %s', async (path) => {
+      expect(await matches(path)).toBe(false);
+    });
 
-      const matcher = /^\/((?!_next\/static|_next\/image|favicon\.ico|assets\/).*)$/;
-
-      staticPaths.forEach((path) => {
-        expect(matcher.test(path)).toBe(false);
-      });
+    // Every better-auth request must skip the proxy: a matched request has its
+    // body copied (up to 10 MB) and awaited by Next before the route's
+    // 4096-byte filter can refuse it. See the comment above `config`.
+    it.each([
+      '/api/auth',
+      '/api/auth/',
+      '/api/auth/sign-in/social',
+      '/api/auth/get-session',
+      '/api/auth/callback/ministryplatform?code=x&state=y',
+      '/api/auth/update-user',
+    ])('skips the auth route %s', async (path) => {
+      expect(await matches(path)).toBe(false);
     });
   });
 
