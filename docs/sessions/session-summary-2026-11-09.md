@@ -133,5 +133,7 @@ in round 3; a ten-round rerun on event-manager (1.8 GB pushed over 20 connection
   response. An expired session ends in an action error before and after (before: 307 → client "unexpected response").
 - 5 new matcher tests; 4 fail on the old matcher. 1239 tests, tsc and lint pass. CLAUDE.md, security.md (also: the proxy no longer runs on
   actions, so `requireSession()` is their only gate), ideas.md (#252 completed, #297 narrowed to page paths), status.
-- Ports: event-manager and mp-senior-care (20 MB `bodySizeLimit`, same bug). music-tools uses Next's 1 MB default.
+- mp-charts PR #299. Ports (20 MB `bodySizeLimit`, same bug; same matcher, comment and tests, 3 of 4 new tests
+  fail on the old matcher): event-manager #88 (1454 tests), mp-senior-care #248 (1361 tests). music-tools uses
+  Next's 1 MB default and is unaffected, so it is not changed.
 
