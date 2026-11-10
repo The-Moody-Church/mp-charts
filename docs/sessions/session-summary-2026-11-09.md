@@ -117,7 +117,7 @@ in round 3; a ten-round rerun on event-manager (1.8 GB pushed over 20 connection
   `:latest` label matches its merge commit, all four run Node v24.22.2 on Alpine 3.24.4, cache warming finished on the
   first attempt where it exists, and `/` 307, `/signin` 200 and `get-session` 200 through Cloudflare.
 
-## #252 Uploads of 10–20 MB — IN PROGRESS (branch `fix/server-actions-skip-proxy-body-clone`)
+## #252 Uploads of 10–20 MB — COMPLETED (branch `fix/server-actions-skip-proxy-body-clone`)
 
 - Reproduced on a local production build of `main` (`a886945`) with a real `uploadMemberPhoto` multipart request
   (fake session cookie, so the proxy passes and the action stops at `requireSession()`): 1 and 9 MB reach the
@@ -136,4 +136,19 @@ in round 3; a ten-round rerun on event-manager (1.8 GB pushed over 20 connection
 - mp-charts PR #299. Ports (20 MB `bodySizeLimit`, same bug; same matcher, comment and tests, 3 of 4 new tests
   fail on the old matcher): event-manager #88 (1454 tests), mp-senior-care #248 (1361 tests). music-tools uses
   Next's 1 MB default and is unaffected, so it is not changed.
+- `:dev` soak, 2026-11-10 15:12 UTC (rollback pins by digest to the #217 builds in each `/srv/<app>/`). Through
+  Cloudflare, 1, 9 and 15 MB action probes (curl over HTTP/1.1 and HTTP/2, and Playwright Chromium over HTTP/3) all
+  reached the action. Owner, signed in, in Edge: a 14.3 MB PDF and a 14.3 MB PNG attached to a volunteer-processing
+  compliance milestone; over 20 MB refused client-side with a message. Sign-in and sign-out passed on events and care.
+  A first PNG failed with `net::ERR_TIMED_OUT` before leaving the browser (nothing reached Cloudflare or the app): the
+  file sat in a sync folder. Unrelated to this change.
+- Merged: mp-charts #299 `5fb52c7`, event-manager #88 `65fdd19`, mp-senior-care #248 `902c562`. Main builds passed
+  first time. Deployed 2026-11-10 ~18:00 UTC: each `:latest` label matches its merge commit, cache warming finished on
+  attempt 1, `/` 307, `/signin` 200, `get-session` 200 through Cloudflare, and a 14.3 MB action probe on mptools reached
+  the action (`Authentication required` for the fake session).
 
+### Follow-up found during the soak
+
+- The compliance "Mark Complete" panel (`handleQuickActionSubmit`, `compliance-detail-modal.tsx`) only
+  `console.error`s a failure, so a failed upload looks like nothing happened and the form resets. Show the error, and
+  check the journey tools' equivalent. Not started.
