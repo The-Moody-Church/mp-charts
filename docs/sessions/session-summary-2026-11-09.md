@@ -116,3 +116,22 @@ in round 3; a ten-round rerun on event-manager (1.8 GB pushed over 20 connection
   `2ba412e`. No `:dev` soak (same Node version and image family as before). Deployed 2026-11-10 ~01:50 UTC: each
   `:latest` label matches its merge commit, all four run Node v24.22.2 on Alpine 3.24.4, cache warming finished on the
   first attempt where it exists, and `/` 307, `/signin` 200 and `get-session` 200 through Cloudflare.
+
+## #252 Uploads of 10–20 MB — IN PROGRESS (branch `fix/server-actions-skip-proxy-body-clone`)
+
+- Reproduced on a local production build of `main` (`a886945`) with a real `uploadMemberPhoto` multipart request
+  (fake session cookie, so the proxy passes and the action stops at `requireSession()`): 1 and 9 MB reach the
+  action; 12, 19 and 21 MB log "Request body exceeded 10MB" and fail with "Unexpected end of form".
+- Fix: the proxy matcher becomes `{ source, missing: [{ type: 'header', key: 'next-action' }] }`. Same probe: 12 and
+  19 MB reach the action; 21 MB gets "Body exceeded 20mb limit". `/` still 307s without a cookie, CSP still set,
+  sign-in POST 200.
+- Memory, 20 concurrent 19 MB actions × 7 rounds, fresh servers: old build settles ~610 MB, new ~930 MB. Per
+  concurrent upload ~26 MB vs ~15 MB, because the action now decodes the full body. Bounded by the 20 MB
+  `bodySizeLimit`; no container has a memory limit (host 62 GB).
+- A GET with a forged `next-action` header skips the proxy: same static shell + in-stream redirect to `/signin`
+  as a fake cookie already got (92.6% identical bodies, differences are nonces), minus the CSP header on that
+  response. An expired session ends in an action error before and after (before: 307 → client "unexpected response").
+- 5 new matcher tests; 4 fail on the old matcher. 1239 tests, tsc and lint pass. CLAUDE.md, security.md (also: the proxy no longer runs on
+  actions, so `requireSession()` is their only gate), ideas.md (#252 completed, #297 narrowed to page paths), status.
+- Ports: event-manager and mp-senior-care (20 MB `bodySizeLimit`, same bug). music-tools uses Next's 1 MB default.
+

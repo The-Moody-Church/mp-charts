@@ -156,9 +156,9 @@ describe('Proxy', () => {
   // Drives the REAL exported `config` through Next's own matcher (the code the
   // build uses), not a hand-copied regex that could drift from src/proxy.ts.
   describe('Route Matcher (real config)', () => {
-    const matches = async (url: string) => {
+    const matches = async (url: string, headers?: Record<string, string>) => {
       const { config } = await import('./proxy');
-      return unstable_doesMiddlewareMatch({ config, url });
+      return unstable_doesMiddlewareMatch({ config, url, headers });
     };
 
     it.each([
@@ -199,6 +199,22 @@ describe('Proxy', () => {
       '/api/auth/update-user',
     ])('skips the auth route %s', async (path) => {
       expect(await matches(path)).toBe(false);
+    });
+
+    // Server Action requests (they carry a `next-action` header) skip the
+    // proxy too. A matched request is cut to the proxy's 10 MB copy, so an
+    // upload over 10 MB reached the action truncated and failed with
+    // "Unexpected end of form" (#252). Every action calls requireSession().
+    it.each(['/', '/manage-members', '/contact-lookup/abc', '/signin'])(
+      'skips a Server Action request to %s',
+      async (path) => {
+        expect(await matches(path, { 'next-action': '40c20364d45bf5ed6af8abccc2994112' })).toBe(false);
+      },
+    );
+
+    it('still runs on a page request without the next-action header', async () => {
+      expect(await matches('/manage-members', { accept: 'text/html' })).toBe(true);
+      expect(await matches('/manage-members', { 'next-router-state-tree': 'x', rsc: '1' })).toBe(true);
     });
   });
 
