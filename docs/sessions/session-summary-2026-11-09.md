@@ -109,4 +109,6 @@ in round 3; a ten-round rerun on event-manager (1.8 GB pushed over 20 connection
   already ran 24.22.2 on Alpine 3.24.4). CLAUDE.md "Node Runtime", DOCKER.md and the `dependabot.yml` comment updated.
 - New `scripts/node-base-image.test.ts`: four FROM lines, each `node:X.Y.Z-alpine`, all identical, major matching
   `.nvmrc`. Putting one stage back on `node:24-alpine` fails 2 of its 7 tests.
-- Ports to event-manager, mp-senior-care and music-tools next.
+- mp-charts PR #296. Ports (same branch name, same test, which also reads the workflows' `node-version:` since
+  event-manager and mp-senior-care have no `.nvmrc`): event-manager #86 (4 lines, 1450 tests), mp-senior-care #245
+  (4 lines, 1357 tests), music-tools #202 (3 lines, 454 tests). In each, a floating runner fails 2 of the new tests.
