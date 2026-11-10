@@ -99,6 +99,11 @@ in round 3; a ten-round rerun on event-manager (1.8 GB pushed over 20 connection
   (mp-charts #79, event-manager #3, mp-senior-care #24, music-tools #155). typescript-eslint moved typescript-estree
   to `^11.0.1` on 2026-11-10 (PR 13145), after 8.72.2; their weekly release should ship it as 8.72.3 on
   2026-11-16. Then a lockfile-only `npm update` in all four (eslint-config-next takes `^8.56.0`). No override.
+- Cleanup for the owner (not touched, needs approval): the soak's test milestone records in MP, and the two test
+  files in `~/Downloads` (`upload-test-15MB.pdf`, `upload-test-15MB.png`).
+- Still open: #212 (Vitest coverage blind spot), the audit-gate "three repos" comment, audit items N9–N19, #297
+  (page-path residual), and the upstream MPNext review (deferred by the owner).
+- Session ended 2026-11-10 ~20:40 UTC. All four apps on their merged `:latest` builds; no soak running.
 
 ## #217 Node base image pin — COMPLETED (branch `chore/pin-node-base-image`)
 
