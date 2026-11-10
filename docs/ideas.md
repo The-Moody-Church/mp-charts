@@ -26,7 +26,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Contact-Lookup badges for Member should specify thpe (#85)](#contact-lookup-badges-for-member-should-specify-thpe-85)~~ ✅
 
 ### Improvements
-- [Anonymous POSTs to page paths still make Next buffer up to 10 MB each](#anonymous-posts-to-page-paths-still-make-next-buffer-up-to-10-mb-each)
+- [Anonymous POSTs to page paths still make Next buffer up to 10 MB each (#297)](#anonymous-posts-to-page-paths-still-make-next-buffer-up-to-10-mb-each-297)
 - [Uploads of 10–20 MB fail: the proxy's 10 MB body clone truncates them (#252)](#uploads-of-1020-mb-fail-the-proxys-10-mb-body-clone-truncates-them-252)
 - [Serving metrics: reconcile adult-only vs all-ages counts (#110)](#serving-metrics-reconcile-adult-only-vs-all-ages-counts-110)
 - ~~[Summer Blast: surface expired BG/cert when a renewal is in progress](#summer-blast-surface-expired-bgcert-when-a-renewal-is-in-progress)~~ ✅
@@ -185,7 +185,7 @@ Extracted `statusBadgeColor` to shared utility (`src/lib/contact-badge-utils.ts`
 
 ## Improvements
 
-### Anonymous POSTs to page paths still make Next buffer up to 10 MB each
+### Anonymous POSTs to page paths still make Next buffer up to 10 MB each ([#297](https://github.com/The-Moody-Church/mp-charts/issues/297))
 What is left of the proxy body-size item after 2026-11-09, when `src/proxy.ts` stopped matching `/api/auth`. For every request the proxy runs on, Next copies the body up to `proxyClientMaxBodySize` (10 MB; `getCloneableBody` in `next/dist/server/body-streams.js`) and waits for the whole body before anything answers, even when the proxy has already returned. Measured on a local 16.4.5 production build: 20 anonymous POSTs to `/`, each sending 45 MB of a declared 500 MB, got no response while their bodies were open and held about 10 MB each (+180 MB RSS). No session is needed, since the proxy only redirects after the copy. The auth route no longer has this problem. Server Actions also read their body, up to their own 20 MB `bodySizeLimit`, before the action's `requireSession()` runs (that is how Next decodes action arguments; not measured here), so a fix in the proxy alone would not close it.
 
 Options, none tried yet: a matcher `missing` condition so requests carrying a body skip the proxy (this loses the proxy's CSP header on a no-JS form POST that renders a page); a Cloudflare rule capping body size per path; or accepting it, since Cloudflare's 100 MB upload limit and our own bandwidth bound it, as for any server that reads request bodies. Excluding Server Actions alone (`missing: [{ type: 'header', key: 'next-action' }]`) would not close this, but might fix #252 below without raising the 10 MB copy; that would need a real 12 MB upload to confirm.
