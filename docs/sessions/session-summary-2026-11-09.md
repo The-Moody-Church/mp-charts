@@ -147,7 +147,7 @@ in round 3; a ten-round rerun on event-manager (1.8 GB pushed over 20 connection
   attempt 1, `/` 307, `/signin` 200, `get-session` 200 through Cloudflare, and a 14.3 MB action probe on mptools reached
   the action (`Authentication required` for the fake session).
 
-## Quick Action "Mark Complete" shows failures — IN PROGRESS (branch `fix/quick-action-panel-shows-errors`)
+## Quick Action "Mark Complete" shows failures — COMPLETED (#300)
 
 Found during the #252 soak: a PNG in a synced folder failed in the browser (`net::ERR_TIMED_OUT`) and the panel showed
 nothing, because both detail modals (`handleQuickActionSubmit` in compliance, `handleMarkMilestoneComplete` in journey)
@@ -168,3 +168,5 @@ only `console.error`ed the failure, then reset.
   old order. tsc, lint, 1265 tests and the audit gate pass.
 - event-manager and mp-senior-care carry `quick-actions-panel.tsx` as unused template code (no modal renders it, no
   create actions), so nothing to port.
+- Soaked on `:dev` (2026-11-10, `b76a885`): the synced-folder PNG through compliance Mark Complete showed the new
+  message, and a normal upload saved (user-confirmed).
