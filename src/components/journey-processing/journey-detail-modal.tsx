@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { JourneyCard as JourneyCardData, JourneyDetail, JourneyChecklistItem, JourneyMilestoneFileInfo, JourneyMilestoneDetail } from "@/lib/dto";
 import { getDisplayName, formatDate, MAX_FILE_SIZE } from "@/lib/processing-utils";
+import { quickActionErrorMessage } from "@/components/processing/quick-action-error";
 import {
   DetailModalPhotoUpload,
   ContactLinks,
@@ -82,6 +83,7 @@ export function JourneyDetailModal({
   const [recordFiles, setRecordFiles] = useState<Record<number, JourneyMilestoneFileInfo[]>>({});
   const [filesLoading, setFilesLoading] = useState<number | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [quickActionError, setQuickActionError] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -172,6 +174,8 @@ export function JourneyDetailModal({
     const programId = detail.writeBackConfig.programId;
     if (!milestoneId || !programId) return;
 
+    const hadAttachments = (fileInputRef.current?.files?.length ?? 0) > 0;
+    setQuickActionError(null);
     setActionLoading(`milestone-${milestoneId}`);
     try {
       const formData = new FormData();
@@ -203,6 +207,22 @@ export function JourneyDetailModal({
       setDetail(updated);
     } catch (err) {
       console.error("Failed to create milestone:", err);
+      setQuickActionError(quickActionErrorMessage(err, hadAttachments));
+      // The server may have saved the milestone before an attachment failed:
+      // reload so the checklist shows it rather than inviting a duplicate.
+      if (!(err instanceof TypeError)) {
+        try {
+          setDetail(await getJourneyParticipantDetail(
+            slug,
+            participant.info.Contact_ID,
+            participant.info.Participant_ID,
+            participant.info.Group_Participant_ID
+          ));
+          onUpdate();
+        } catch {
+          // Best effort: the message already tells the user to check the list.
+        }
+      }
     } finally {
       setActionLoading(null);
     }
@@ -597,7 +617,7 @@ export function JourneyDetailModal({
             <QuickActionsPanel
               availableItems={availableMilestones}
               selectedKey={selectedMilestoneKey}
-              onSelectedKeyChange={setSelectedMilestoneKey}
+              onSelectedKeyChange={(key) => { setSelectedMilestoneKey(key); setQuickActionError(null); }}
               date={milestoneDate}
               onDateChange={setMilestoneDate}
               notes={milestoneNotes}
@@ -608,6 +628,8 @@ export function JourneyDetailModal({
               canSubmit={!!selectedMilestoneKey && !!detail?.writeBackConfig.milestoneIds[selectedMilestoneKey] && !!detail?.writeBackConfig.programId}
               submitting={!!actionLoading}
               onSubmit={handleMarkMilestoneComplete}
+              submitError={quickActionError}
+              onSubmitErrorChange={setQuickActionError}
               expanded={quickActionExpanded}
               onExpandedChange={setQuickActionExpanded}
             />

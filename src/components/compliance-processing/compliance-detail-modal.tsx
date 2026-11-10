@@ -19,6 +19,7 @@ import {
   ComplianceMilestoneDetail,
 } from "@/lib/dto";
 import { getDisplayName, formatDate, MAX_FILE_SIZE } from "@/lib/processing-utils";
+import { quickActionErrorMessage } from "@/components/processing/quick-action-error";
 import {
   DetailModalPhotoUpload,
   ContactLinks,
@@ -209,6 +210,7 @@ export function ComplianceDetailModal({
   const [filesLoading, setFilesLoading] = useState<number | null>(null);
   const [reqFilesLoading, setReqFilesLoading] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [quickActionError, setQuickActionError] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -331,6 +333,8 @@ export function ComplianceDetailModal({
     const selectedItem = checklist.find(i => i.key === selectedMilestoneKey);
     if (!selectedItem) return;
 
+    const hadAttachments = (fileInputRef.current?.files?.length ?? 0) > 0;
+    setQuickActionError(null);
     setActionLoading(`quick-action`);
     try {
       const formData = new FormData();
@@ -389,6 +393,22 @@ export function ComplianceDetailModal({
       setDetail(updated);
     } catch (err) {
       console.error("Failed to create record:", err);
+      setQuickActionError(quickActionErrorMessage(err, hadAttachments));
+      // The server may have saved the record before an attachment failed:
+      // reload so the checklist shows it rather than inviting a duplicate.
+      if (!(err instanceof TypeError)) {
+        try {
+          setDetail(await getComplianceParticipantDetail(
+            slug,
+            participant.info.Contact_ID,
+            participant.info.Participant_ID,
+            participant.info.Group_Participant_ID!
+          ));
+          onUpdate();
+        } catch {
+          // Best effort: the message already tells the user to check the list.
+        }
+      }
     } finally {
       setActionLoading(null);
     }
@@ -804,7 +824,7 @@ export function ComplianceDetailModal({
             <QuickActionsPanel
               availableItems={availableQuickActionItems}
               selectedKey={selectedMilestoneKey}
-              onSelectedKeyChange={setSelectedMilestoneKey}
+              onSelectedKeyChange={(key) => { setSelectedMilestoneKey(key); setQuickActionError(null); }}
               date={milestoneDate}
               onDateChange={setMilestoneDate}
               notes={milestoneNotes}
@@ -828,6 +848,8 @@ export function ComplianceDetailModal({
               })()}
               submitting={!!actionLoading}
               onSubmit={handleQuickActionSubmit}
+              submitError={quickActionError}
+              onSubmitErrorChange={setQuickActionError}
               showNotes={quickActionShowNotes}
               itemLabel="Item"
               notesMaxLength={500}
