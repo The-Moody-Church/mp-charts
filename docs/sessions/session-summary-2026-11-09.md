@@ -94,3 +94,8 @@ in round 3; a ten-round rerun on event-manager (1.8 GB pushed over 20 connection
   Cloudflare: `/` 307 to `/signin`, `/signin` 200, `get-session` 200, and a 6 KB `/sign-in/social` body
   404 in 70–120 ms. Human sign-in and sign-out passed in all four apps.
 - Page-path / Server Action residual: ideas.md entry, not started.
+- minimatch GHSA-g3hv-75wg-m249 (moderate, dev-only: `eslint-config-next` → `typescript-eslint` →
+  `@typescript-eslint/typescript-estree` → `minimatch@10.2.6`; fixed only in 11.0.1+). Open in all four repos
+  (mp-charts #79, event-manager #3, mp-senior-care #24, music-tools #155). typescript-eslint moved typescript-estree
+  to `^11.0.1` on 2026-11-10 (PR 13145), after 8.72.2; their weekly release should ship it as 8.72.3 on
+  2026-11-16. Then a lockfile-only `npm update` in all four (eslint-config-next takes `^8.56.0`). No override.
