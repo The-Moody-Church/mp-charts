@@ -90,10 +90,25 @@ export async function proxy(request: NextRequest) {
 // 40 ms, and 900 MB pushed over 20 connections left memory flat. The proxy
 // did nothing there anyway: `/api` was already a public early return, and a
 // CSP nonce means nothing on JSON and redirect responses. The static headers
-// in next.config.ts still apply. Page paths and Server Actions still go
-// through the proxy and keep the 10 MB copy; see docs/ideas.md.
+// in next.config.ts still apply. Page paths still go through the proxy and
+// keep the 10 MB copy (#297, docs/ideas.md).
+//
+// Server Action requests (`next-action` header) are NOT matched either (#252).
+// The 10 MB copy is all a matched request's handler gets: a 12 MB upload
+// reached the action cut short and failed with "Unexpected end of form",
+// although every upload limit says 20 MB. Unmatched, the action reads the full
+// body up to `serverActions.bodySizeLimit` (20 MB; past it Next answers "Body
+// exceeded 20mb limit"). The proxy guarded nothing there: its cookie check is
+// presence-only, and every action calls requireSession() itself. A GET with a
+// forged `next-action` header also skips the proxy, and gets the same static
+// shell plus an in-stream redirect to /signin that a fake cookie already got,
+// only without the CSP header on that one response.
 export const config = {
   matcher: [
-    '/((?!api/auth(?:/|$)|_next/static|_next/image|favicon.ico|assets/|manifest\\.json|sw\\.js|offline\\.html).*)',
+    {
+      source:
+        '/((?!api/auth(?:/|$)|_next/static|_next/image|favicon.ico|assets/|manifest\\.json|sw\\.js|offline\\.html).*)',
+      missing: [{ type: 'header', key: 'next-action' }],
+    },
   ],
 };
