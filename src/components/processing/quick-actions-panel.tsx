@@ -26,6 +26,10 @@ interface QuickActionsPanelProps {
   canSubmit: boolean;
   submitting: boolean;
   onSubmit: () => void;
+  /** Why the last "Mark Complete" failed; shown beside the button. */
+  submitError?: string | null;
+  /** Called with null when the panel is closed, so a stale error does not reappear. */
+  onSubmitErrorChange?: (error: string | null) => void;
   allCompleteMessage?: string;
   /** Hide the notes textarea (e.g., for form responses that have no notes field) */
   showNotes?: boolean;
@@ -75,6 +79,8 @@ export function QuickActionsPanel({
   canSubmit,
   submitting,
   onSubmit,
+  submitError = null,
+  onSubmitErrorChange,
   showNotes = true,
   itemLabel = "Milestone",
   notesMaxLength,
@@ -86,6 +92,7 @@ export function QuickActionsPanel({
     onSelectedKeyChange("");
     onNotesChange("");
     onFileError(null);
+    onSubmitErrorChange?.(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -185,6 +192,11 @@ export function QuickActionsPanel({
               {submitting ? "Saving..." : "Mark Complete"}
             </Button>
           </div>
+          {submitError && (
+            <p role="alert" className="text-xs text-red-600 bg-red-50 rounded-md p-2">
+              {submitError}
+            </p>
+          )}
         </>
       )}
     </div>

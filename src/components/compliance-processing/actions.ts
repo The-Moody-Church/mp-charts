@@ -63,6 +63,14 @@ export async function createComplianceMilestone(slug: string, formData: FormData
     enforceRateLimit(session.user.id, "write");
     const userId = getMpUserId(session);
 
+    // Validate attachments and the upload limit BEFORE writing the record, so a
+    // rejected file leaves nothing behind (it used to leave a record without its file).
+    const files = await extractValidatedFiles(formData);
+    if (files.length > 0) {
+      // F7: file uploads are bounded by the dedicated, stricter 'upload' tier
+      enforceRateLimit(session.user.id, "upload");
+    }
+
     const service = ComplianceProcessingService.getInstance(slug);
     const newMilestoneId = await service.createMilestone({
       Participant_ID: Number(formData.get("Participant_ID")),
@@ -72,11 +80,7 @@ export async function createComplianceMilestone(slug: string, formData: FormData
       Notes: formData.get("Notes") as string || undefined,
     }, userId);
 
-    const files = await extractValidatedFiles(formData);
-
     if (files.length > 0) {
-      // F7: file uploads are bounded by the dedicated, stricter 'upload' tier
-      enforceRateLimit(session.user.id, "upload");
       await service.uploadDocument('Participant_Milestones', newMilestoneId, files, userId);
     }
   } catch (error) {
@@ -91,6 +95,14 @@ export async function createComplianceCertification(slug: string, formData: Form
     enforceRateLimit(session.user.id, "write");
     const userId = getMpUserId(session);
 
+    // Validate attachments and the upload limit BEFORE writing the record, so a
+    // rejected file leaves nothing behind (it used to leave a record without its file).
+    const files = await extractValidatedFiles(formData);
+    if (files.length > 0) {
+      // F7: file uploads are bounded by the dedicated, stricter 'upload' tier
+      enforceRateLimit(session.user.id, "upload");
+    }
+
     const service = ComplianceProcessingService.getInstance(slug);
     const newCertId = await service.createCertification({
       Participant_ID: Number(formData.get("Participant_ID")),
@@ -99,10 +111,7 @@ export async function createComplianceCertification(slug: string, formData: Form
       Notes: formData.get("Notes") as string || undefined,
     }, userId);
 
-    const files = await extractValidatedFiles(formData);
     if (files.length > 0) {
-      // F7: file uploads are bounded by the dedicated, stricter 'upload' tier
-      enforceRateLimit(session.user.id, "upload");
       await service.uploadDocument('Participant_Certifications', newCertId, files, userId);
     }
   } catch (error) {
@@ -117,6 +126,14 @@ export async function createComplianceFormResponse(slug: string, formData: FormD
     enforceRateLimit(session.user.id, "write");
     const userId = getMpUserId(session);
 
+    // Validate attachments and the upload limit BEFORE writing the record, so a
+    // rejected file leaves nothing behind (it used to leave a record without its file).
+    const files = await extractValidatedFiles(formData);
+    if (files.length > 0) {
+      // F7: file uploads are bounded by the dedicated, stricter 'upload' tier
+      enforceRateLimit(session.user.id, "upload");
+    }
+
     const service = ComplianceProcessingService.getInstance(slug);
     const newFormResponseId = await service.createFormResponse({
       Form_ID: Number(formData.get("Form_ID")),
@@ -124,10 +141,7 @@ export async function createComplianceFormResponse(slug: string, formData: FormD
       Response_Date: formData.get("Response_Date") as string || new Date().toISOString(),
     }, userId);
 
-    const files = await extractValidatedFiles(formData);
     if (files.length > 0) {
-      // F7: file uploads are bounded by the dedicated, stricter 'upload' tier
-      enforceRateLimit(session.user.id, "upload");
       await service.uploadDocument('Form_Responses', newFormResponseId, files, userId);
     }
   } catch (error) {

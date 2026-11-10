@@ -71,6 +71,7 @@ processing/
 ├── file-type-icon.tsx            # PDF/image/generic file icon
 ├── milestone-expanded-view.tsx   # Read-only milestone detail (notes + file list)
 ├── milestone-edit-form.tsx       # Edit mode: date, notes, file input, save/cancel
+├── quick-action-error.ts        # Failure message for the panel (network vs server, partial save)
 └── quick-actions-panel.tsx       # Milestone dropdown + date/notes/file/submit
 ```
 
@@ -84,7 +85,7 @@ processing/
 | `FileTypeIcon` | PDF/image/generic file icon | Milestone expanded view, milestone edit form |
 | `MilestoneExpandedView` | Read-only milestone detail: notes + downloadable file list | Processing detail modals |
 | `MilestoneEditForm` | Edit mode: date picker, notes textarea, file input, save/cancel | Processing detail modals |
-| `QuickActionsPanel` | Milestone dropdown + date/notes/file/submit for quick creation | Processing detail modals |
+| `QuickActionsPanel` | Milestone dropdown + date/notes/file/submit for quick creation; `submitError` shows why the last submit failed (message from `quick-action-error.ts`) | Processing detail modals |
 
 **Import**: `import { PersonAvatar, ProcessingGrid, MilestoneEditForm } from '@/components/processing';`
 

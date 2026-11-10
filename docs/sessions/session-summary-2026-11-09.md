@@ -147,8 +147,26 @@ in round 3; a ten-round rerun on event-manager (1.8 GB pushed over 20 connection
   attempt 1, `/` 307, `/signin` 200, `get-session` 200 through Cloudflare, and a 14.3 MB action probe on mptools reached
   the action (`Authentication required` for the fake session).
 
-### Follow-up found during the soak
+## Quick Action "Mark Complete" shows failures — COMPLETED (#300)
 
-- The compliance "Mark Complete" panel (`handleQuickActionSubmit`, `compliance-detail-modal.tsx`) only
-  `console.error`s a failure, so a failed upload looks like nothing happened and the form resets. Show the error, and
-  check the journey tools' equivalent. Not started.
+Found during the #252 soak: a PNG in a synced folder failed in the browser (`net::ERR_TIMED_OUT`) and the panel showed
+nothing, because both detail modals (`handleQuickActionSubmit` in compliance, `handleMarkMilestoneComplete` in journey)
+only `console.error`ed the failure, then reset.
+
+- New `src/components/processing/quick-action-error.ts`: a `TypeError` (fetch never reached the server: "Failed to
+  fetch" / "Load failed" / "NetworkError…") says nothing was saved, with a synced-folder hint. A server error with
+  attachments says to check the list before retrying, because the record may exist without its file; without
+  attachments, a plain retry. Never echoes the error text.
+- `QuickActionsPanel` gets `submitError` (a `role="alert"` line under the button; the button stays usable, unlike a
+  file error) and `onSubmitErrorChange` (cleared on close). Both modals set it, clear it on submit and on item change,
+  and on a server error reload the participant detail so a partial save shows in the checklist.
+- Server side: `createJourneyMilestone`, `createComplianceMilestone`, `createComplianceCertification` and
+  `createComplianceFormResponse` validated attachments (type, size, header) and the upload rate limit **after** writing
+  the record, so a rejected file left a record behind and a retry made a duplicate. Both now run first. MP upload
+  failures can still leave a record without its file; the client message covers that case.
+- Tests: helper 7, panel 3, compliance actions 12, journey actions 4 (new file). 12 of the 16 action tests fail on the
+  old order. tsc, lint, 1265 tests and the audit gate pass.
+- event-manager and mp-senior-care carry `quick-actions-panel.tsx` as unused template code (no modal renders it, no
+  create actions), so nothing to port.
+- Soaked on `:dev` (2026-11-10, `b76a885`): the synced-folder PNG through compliance Mark Complete showed the new
+  message, and a normal upload saved (user-confirmed).

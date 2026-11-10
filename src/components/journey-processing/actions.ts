@@ -75,6 +75,14 @@ export async function createJourneyMilestone(slug: string, formData: FormData): 
     enforceRateLimit(session.user.id, "write");
     const userId = getMpUserId(session);
 
+    // Validate attachments and the upload limit BEFORE writing the record, so a
+    // rejected file leaves nothing behind (it used to leave a record without its file).
+    const files = await extractValidatedFiles(formData);
+    if (files.length > 0) {
+      // F7: file uploads are bounded by the dedicated, stricter 'upload' tier
+      enforceRateLimit(session.user.id, "upload");
+    }
+
     const service = JourneyProcessingService.getInstance(slug);
     const newMilestoneId = await service.createMilestone({
       Participant_ID: Number(formData.get("Participant_ID")),
@@ -84,11 +92,7 @@ export async function createJourneyMilestone(slug: string, formData: FormData): 
       Notes: formData.get("Notes") as string || undefined,
     }, userId);
 
-    const files = await extractValidatedFiles(formData);
-
     if (files.length > 0) {
-      // F7: file uploads are bounded by the dedicated, stricter 'upload' tier
-      enforceRateLimit(session.user.id, "upload");
       await service.uploadDocument('Participant_Milestones', newMilestoneId, files, userId);
     }
   } catch (error) {
