@@ -100,7 +100,7 @@ in round 3; a ten-round rerun on event-manager (1.8 GB pushed over 20 connection
   to `^11.0.1` on 2026-11-10 (PR 13145), after 8.72.2; their weekly release should ship it as 8.72.3 on
   2026-11-16. Then a lockfile-only `npm update` in all four (eslint-config-next takes `^8.56.0`). No override.
 
-## #217 Node base image pin — IN PROGRESS (branch `chore/pin-node-base-image`)
+## #217 Node base image pin — COMPLETED (branch `chore/pin-node-base-image`)
 
 - Owner chose a Node version pin over a digest pin. Data: Node 24 patch releases about twice a month (10 since
   May, 3 security); `24.22.2-alpine` was rebuilt 2026-11-05, nine days after the release, for Alpine alone; the
@@ -112,3 +112,7 @@ in round 3; a ten-round rerun on event-manager (1.8 GB pushed over 20 connection
 - mp-charts PR #296. Ports (same branch name, same test, which also reads the workflows' `node-version:` since
   event-manager and mp-senior-care have no `.nvmrc`): event-manager #86 (4 lines, 1450 tests), mp-senior-care #245
   (4 lines, 1357 tests), music-tools #202 (3 lines, 454 tests). In each, a floating runner fails 2 of the new tests.
+- Merged: mp-charts #296 `f025dea`, event-manager #86 `81f2eff`, mp-senior-care #245 `76e22a9`, music-tools #202
+  `2ba412e`. No `:dev` soak (same Node version and image family as before). Deployed 2026-11-10 ~01:50 UTC: each
+  `:latest` label matches its merge commit, all four run Node v24.22.2 on Alpine 3.24.4, cache warming finished on the
+  first attempt where it exists, and `/` 307, `/signin` 200 and `get-session` 200 through Cloudflare.
