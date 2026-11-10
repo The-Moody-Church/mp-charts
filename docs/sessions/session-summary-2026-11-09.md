@@ -170,3 +170,4 @@ only `console.error`ed the failure, then reset.
   create actions), so nothing to port.
 - Soaked on `:dev` (2026-11-10, `b76a885`): the synced-folder PNG through compliance Mark Complete showed the new
   message, and a normal upload saved (user-confirmed).
+- Merged (`f4679a6`) and deployed to production 2026-11-10 ~20:34 UTC; `:latest` labels confirm `main` @ `f4679a6`.
