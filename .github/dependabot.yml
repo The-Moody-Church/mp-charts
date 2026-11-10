@@ -11,7 +11,8 @@ updates:
         patterns:
           - "*"
 
-  # Maintain Docker base images (updates node:24-alpine)
+  # Maintain Docker base images: bumps the pinned node:24.x.y-alpine tag in all
+  # four FROM lines, one PR per Node 24 patch release (#217).
   - package-ecosystem: "docker"
     directory: "/"
     schedule:

@@ -22,7 +22,13 @@ exactly **two** places, and they must move together:
 
 - **`.nvmrc`** (`24`) — read by CI via `node-version-file` in both workflows
   (`docker-build-push.yml`, `audit-nightly.yml`), and by any local version manager
-- **the four `FROM node:24-alpine` lines** — `Dockerfile` (deps/builder/runner) + `Dockerfile.dev`
+- **the four `FROM node:24.x.y-alpine` lines** — `Dockerfile` (deps/builder/runner) + `Dockerfile.dev`.
+  Pinned to a Node patch release (`node:24.22.2-alpine`), not the floating `node:24-alpine`, since
+  2026-11-09 (#217): the floating tag left the shipped Node patch level to whatever Docker Hub served at
+  build time, and gave Dependabot nothing to propose. Dependabot's `docker` updates now open a PR for each
+  Node 24 patch release (about two a month). Not digest-pinned on purpose: the runner stage's
+  `apk upgrade` patches Alpine on every build anyway, and a digest would add a PR per Alpine rebuild.
+  `scripts/node-base-image.test.ts` checks the four lines agree, stay pinned, and match `.nvmrc`'s major
 
 `engines.node` in `package.json` is a **floor** (`>=24.0.0`), not a pin — local dev may legitimately
 run newer. The precise guardrail is `@types/node`, deliberately held to the **same major as the
@@ -30,7 +36,7 @@ container** (`^24`): a newer-Node-only API then fails `tsc` instead of surfacing
 
 Node 24 leaves *active* LTS on 2026-10-20 (Node 26 takes over) but stays security-supported to
 2028-04-30. **When bumping the major**, change all of these in one commit: `.nvmrc`, the four `FROM`
-tags, `@types/node`, `engines.node`, and `REQUIRED_NODE_VERSION` in `scripts/setup.ts`.
+tags (to that major's newest `X.Y.Z-alpine`), `@types/node`, `engines.node`, and `REQUIRED_NODE_VERSION` in `scripts/setup.ts`.
 
 Note the runner stage runs `npm uninstall -g npm`, so **the production image ships no npm** — the
 npm version that matters is CI's (whatever Node 24 bundles: 11.19.0), which runs the npm audit

@@ -283,8 +283,8 @@ The configuration (`.github/dependabot.yml`) monitors three areas:
    - Ensures CI/CD pipeline uses latest secure versions
 
 2. **Docker Base Images** (weekly)
-   - Updates `node:24-alpine` in Dockerfiles
-   - Keeps container base images patched
+   - Updates the pinned `node:24.x.y-alpine` tag in Dockerfiles, one PR per Node 24 patch release
+   - Never proposes a new Node major (ignored in `dependabot.yml`; a major is a deliberate change)
 
 3. **npm Dependencies** (weekly)
    - Updates packages in `package.json` and `package-lock.json`

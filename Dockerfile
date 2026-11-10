@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Stage 1: Dependencies
-FROM node:24-alpine AS deps
+FROM node:24.22.2-alpine AS deps
 WORKDIR /app
 
 # Install dependencies based on package-lock.json
@@ -9,7 +9,7 @@ COPY package.json package-lock.json* ./
 RUN npm ci
 
 # Stage 2: Builder
-FROM node:24-alpine AS builder
+FROM node:24.22.2-alpine AS builder
 WORKDIR /app
 
 # Copy dependencies from deps stage
@@ -44,7 +44,7 @@ RUN --mount=type=secret,id=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY \
     npm run build
 
 # Stage 3: Runner
-FROM node:24-alpine AS runner
+FROM node:24.22.2-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
