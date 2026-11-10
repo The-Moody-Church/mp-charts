@@ -99,3 +99,14 @@ in round 3; a ten-round rerun on event-manager (1.8 GB pushed over 20 connection
   (mp-charts #79, event-manager #3, mp-senior-care #24, music-tools #155). typescript-eslint moved typescript-estree
   to `^11.0.1` on 2026-11-10 (PR 13145), after 8.72.2; their weekly release should ship it as 8.72.3 on
   2026-11-16. Then a lockfile-only `npm update` in all four (eslint-config-next takes `^8.56.0`). No override.
+
+## #217 Node base image pin — IN PROGRESS (branch `chore/pin-node-base-image`)
+
+- Owner chose a Node version pin over a digest pin. Data: Node 24 patch releases about twice a month (10 since
+  May, 3 security); `24.22.2-alpine` was rebuilt 2026-11-05, nine days after the release, for Alpine alone; the
+  runner's `apk upgrade` patches Alpine on every build regardless of base digest.
+- `Dockerfile` (deps/builder/runner) and `Dockerfile.dev`: `node:24-alpine` → `node:24.22.2-alpine` (production
+  already ran 24.22.2 on Alpine 3.24.4). CLAUDE.md "Node Runtime", DOCKER.md and the `dependabot.yml` comment updated.
+- New `scripts/node-base-image.test.ts`: four FROM lines, each `node:X.Y.Z-alpine`, all identical, major matching
+  `.nvmrc`. Putting one stage back on `node:24-alpine` fails 2 of its 7 tests.
+- Ports to event-manager, mp-senior-care and music-tools next.
