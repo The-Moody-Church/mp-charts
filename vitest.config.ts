@@ -14,6 +14,13 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
+      // #212: without `include`, v8 coverage counts only the files a test happens
+      // to import, so a file with no test at all never enters the denominator and
+      // the percentage overstates real coverage. List the source explicitly.
+      include: ['src/**/*.{ts,tsx}', 'scripts/audit-gate-lib.mjs'],
+      // Floors at the measured totals (2026-11-17: 45.27 / 40.25 / 38.92 / 46.64),
+      // so `npm run test:coverage` fails if coverage drops. Raise them as tests land.
+      thresholds: { statements: 45, branches: 40, functions: 38, lines: 46 },
       // Explicit `/**` globs: since Vitest 5 these match paths relative to the
       // root, and a bare `models/` no longer excluded the generated models.
       exclude: [
@@ -22,6 +29,7 @@ export default defineConfig({
         'src/test-setup.ts',
         '**/*.d.ts',
         'src/lib/providers/ministry-platform/models/**', // Auto-generated files
+        'src/lib/providers/ministry-platform/scripts/**', // mp:generate:models CLI, not app code
       ],
     },
   },
