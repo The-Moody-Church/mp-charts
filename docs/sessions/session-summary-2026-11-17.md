@@ -45,7 +45,30 @@ In each of mp-charts, event-manager, mp-senior-care and music-tools: branch, `np
 packages and picomatch (lockfile only, `package.json` unchanged), `node scripts/audit-gate.mjs`, tsc, lint, tests,
 then a PR with a Security Review section. No `:dev` soak needed (dev tooling only).
 
+## #212 Coverage measures the whole project — COMPLETED (#301)
+
+- Picked next because it needs no deploy (the audit gate blocks deploys until picomatch ships).
+- `vitest.config.ts`: `coverage.include: ['src/**/*.{ts,tsx}', 'scripts/audit-gate-lib.mjs']`; also excludes
+  `src/lib/providers/ministry-platform/scripts/**` (the `mp:generate:models` CLI, 315 statements, not app code).
+- Measured with the same 1265 tests: before, 60.56% statements over 130 files (only files a test imported); after,
+  **45.27%** statements, 40.25% branches, 38.92% functions, 46.64% lines over 217 files. No test, `.d.ts` or
+  generated-model files enter the count.
+- `coverage.thresholds` { statements 45, branches 40, functions 38, lines 46 }: passes now; `--coverage.thresholds.statements=46`
+  fails with exit 1. CI runs `test:run`, not coverage, so the floors are local only (CI enforcement not proposed: it
+  would slow `verify`).
+- The 88 newly counted files are mostly components and pages, plus 18 type-only files with no statements. Real
+  gaps: `dashboardService.ts` (550, no test), `admin/journey-tools/actions.ts` (91), `admin/compliance-tools/actions.ts`
+  (81), `dashboard/actions.ts` (40), cache warming. New ideas.md entry for them.
+- Docs: `.claude/rules/testing.md` (the old "65%+" floor replaced), README test configuration, ideas.md (#212
+  completed), status.md (row added; rows before 2026-11-10 pruned, June rows kept).
+- Siblings (event-manager, mp-senior-care, music-tools) have no `coverage.include` either. Not ported; #212 is
+  mp-charts-specific.
+- Merged as #301 on 2026-11-17 with owner approval over the known picomatch audit failure (`verify` stopped at
+  the audit step; lint, tsc and 1265 tests pass locally). Test config only, so no deploy.
+
 ## Files changed
 
 - `docs/status.md` — open-findings line for the picomatch block; last-updated date.
 - `docs/sessions/session-summary-2026-11-17.md` — this file.
+- Branch `fix/coverage-include-212`: `vitest.config.ts`, `.claude/rules/testing.md`, `README.md`, `docs/ideas.md`,
+  `docs/status.md`.

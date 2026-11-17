@@ -550,7 +550,9 @@ npm run test:coverage
 
 Tests are configured in `vitest.config.ts`:
 - Environment variables stubbed in `src/test-setup.ts`
-- Auto-generated models excluded from coverage
+- Coverage measures all of `src/` (`coverage.include`), so untested files count as 0%; auto-generated models and the
+  model-generator CLI are excluded
+- `coverage.thresholds` fail `npm run test:coverage` if coverage drops below the current floors
 - Supports TypeScript path aliases
 
 ## Development

@@ -89,7 +89,17 @@ vi.unstubAllGlobals();
 
 - New services and utilities: aim for **100% statement coverage**
 - Server actions: aim for **90%+** (error paths may be hard to reach)
-- Overall project floor: **65%+** (dashboard/UI components bring this down)
+- **The whole project is measured** (#212, 2026-11-17): `coverage.include` lists `src/**/*.{ts,tsx}` plus
+  `scripts/audit-gate-lib.mjs`, so a file with no test counts as 0% instead of disappearing. Before this,
+  only files a test imported were counted, and the report said 60.6% statements when the real figure was 45.3%.
+  Do not remove `include`.
+- **Thresholds are floors, not targets**: `coverage.thresholds` in `vitest.config.ts` (statements 45, branches 40,
+  functions 38, lines 46) sit just under the measured totals, so `npm run test:coverage` fails if coverage drops.
+  Raise them when tests land; never lower them to get a change through. CI runs `test:run`, not coverage, so
+  they are enforced locally only
+- Biggest untested code (2026-11-17): `src/services/dashboardService.ts` (550 statements, no test), the admin
+  tool actions (`admin/journey-tools/actions.ts`, `admin/compliance-tools/actions.ts`) and
+  `dashboard/actions.ts`. React components and pages make up most of the rest
 - Run `npm run test:coverage` to check before committing
 
 ## Running Tests
