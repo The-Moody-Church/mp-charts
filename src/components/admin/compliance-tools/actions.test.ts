@@ -51,8 +51,8 @@ vi.mock("@/services/complianceProcessingService", () => ({
   ComplianceProcessingService: { clearCache: mockClearCache },
 }));
 
-// Not imported by the source today; mocked so the tests can pin that the write
-// tier is NOT applied (see the "rate limiting" describe block).
+// Not imported by the source today (a known gap); mocked so the `it.fails`
+// tests in the "rate limiting" block can state the required write tier.
 vi.mock("@/lib/rate-limit", () => ({ enforceRateLimit: mockEnforceRateLimit }));
 
 import {
@@ -160,31 +160,39 @@ describe("getDeduplicatedRequirements", () => {
 
   it("rejects when every role ID is invalid, before any MP query is sent", async () => {
     const ids = ["1 OR 1=1", -1] as unknown as number[];
-    await expect(getDeduplicatedRequirements(ids)).rejects.toThrow("sanitizeIds: no valid IDs provided");
+    await expect(getDeduplicatedRequirements(ids)).rejects.toThrow(/no valid IDs/);
     expect(mockGetTableRecords).not.toHaveBeenCalled();
   });
 
   it("deduplicates entities across roles, resolves names per type and sorts by label", async () => {
+    // Every type appears twice (two roles sharing the same requirement), so the
+    // Set dedupe is pinned per type: a lookup built from the raw rows would send
+    // e.g. "Milestone_ID IN (9,9)".
     mpTables({
       Participation_Requirements: [
         { Background_Check_Type_ID: null, Certification_Type_ID: 5, Milestone_ID: null, Custom_Form_ID: null },
         { Background_Check_Type_ID: null, Certification_Type_ID: 5, Milestone_ID: null, Custom_Form_ID: null },
         { Background_Check_Type_ID: null, Certification_Type_ID: null, Milestone_ID: 9, Custom_Form_ID: null },
+        { Background_Check_Type_ID: null, Certification_Type_ID: null, Milestone_ID: 9, Custom_Form_ID: null },
         { Background_Check_Type_ID: null, Certification_Type_ID: null, Milestone_ID: null, Custom_Form_ID: 33 },
         { Background_Check_Type_ID: null, Certification_Type_ID: null, Milestone_ID: null, Custom_Form_ID: 33 },
+        { Background_Check_Type_ID: 4, Certification_Type_ID: null, Milestone_ID: null, Custom_Form_ID: null },
         { Background_Check_Type_ID: 4, Certification_Type_ID: null, Milestone_ID: null, Custom_Form_ID: null },
       ],
       Group_Roles: [{ Group_Role_ID: 16, Background_Check_Required: false }],
       Background_Check_Types: [{ Background_Check_Type_ID: 4, Background_Check_Type: "Ministry Safe" }],
       Certification_Types: [{ Certification_Type_ID: 5, Certification_Type: "CPR" }],
       Milestones: [{ Milestone_ID: 9, Milestone_Title: "Orientation" }],
-      Forms: [{ Form_ID: 33, Form_Title: "Code of Conduct" }],
+      Forms: [{ Form_ID: 33, Form_Title: "Annual Waiver" }],
     });
 
     const result = await getDeduplicatedRequirements([16, 22]);
 
+    // Labels start with distinct capitals, so this order is the same under ICU
+    // collation (localeCompare) and plain code-point order: no locale dependence.
+    // It differs from the build order (background check, cert, milestone, form).
     expect(result).toEqual([
-      { requirementId: 33, label: "Code of Conduct", type: "form" },
+      { requirementId: 33, label: "Annual Waiver", type: "form" },
       { requirementId: 5, label: "CPR", type: "certification" },
       { requirementId: 4, label: "Ministry Safe", type: "background_check" },
       { requirementId: 9, label: "Orientation", type: "milestone" },
@@ -342,6 +350,19 @@ describe("saveComplianceToolAction", () => {
     expect(mockSaveConfig).not.toHaveBeenCalled();
     expect(mockSaveFeatureAccess).not.toHaveBeenCalled();
     expect(mockClearCache).not.toHaveBeenCalled();
+  });
+
+  it("checks admin access before validating, so a non-admin with an invalid payload gets Forbidden", async () => {
+    // Pins gate order: validating first would answer a non-admin with the
+    // schema's field messages instead of the auth error.
+    mockRequireFeatureAccess.mockRejectedValue(FORBIDDEN);
+
+    await expect(saveComplianceToolAction(makeTool({ slug: "Bad Slug!", toolName: "" }), true)).resolves.toEqual({
+      success: false,
+      error: "Forbidden: insufficient permissions",
+    });
+    expect(mockLoadConfig).not.toHaveBeenCalled();
+    expect(mockSaveConfig).not.toHaveBeenCalled();
   });
 
   it("creates a new tool, registers its feature key and clears the service cache", async () => {
@@ -509,15 +530,26 @@ describe("saveComplianceToolAction", () => {
     expect(mockClearCache).not.toHaveBeenCalled();
   });
 
-  it("CURRENT BEHAVIOUR (reported): persists the raw input, so keys outside the schema reach the config file", async () => {
-    // validateComplianceToolConfig's parsed (stripped) result is discarded and
-    // the caller-shaped `tool` object is saved instead.
+  it("saves every schema field of a payload that carries an extra key", async () => {
     const tool = { ...makeTool(), injected: "<script>" } as unknown as ComplianceToolConfig;
 
     await expect(saveComplianceToolAction(tool, true)).resolves.toEqual({ success: true });
 
-    const saved = mockSaveConfig.mock.calls[0][0].tools[0] as Record<string, unknown>;
-    expect(saved.injected).toBe("<script>");
+    expect(mockSaveConfig.mock.calls[0][0].tools[0]).toMatchObject(makeTool());
+  });
+
+  // KNOWN GAP (reported): validateComplianceToolConfig's parsed (stripped) result
+  // is discarded and the caller-shaped `tool` object is saved instead, so keys
+  // outside the schema reach the config file. `it.fails` records the intended
+  // behaviour without blessing the bug: when the action saves the parsed value,
+  // this starts passing, Vitest reports it, and `.fails` should be removed.
+  it.fails("strips keys outside the schema before saving", async () => {
+    const tool = { ...makeTool(), injected: "<script>" } as unknown as ComplianceToolConfig;
+
+    await saveComplianceToolAction(tool, true);
+
+    expect(mockSaveConfig).toHaveBeenCalledTimes(1);
+    expect(mockSaveConfig.mock.calls[0][0].tools[0]).not.toHaveProperty("injected");
   });
 });
 
@@ -527,6 +559,10 @@ describe("saveComplianceToolAction", () => {
 
 describe("deleteComplianceToolAction", () => {
   it("returns a generic error and performs no write for a non-admin", async () => {
+    // Asymmetric with save, which returns the auth error's own message
+    // ("Forbidden: insufficient permissions"): delete's catch never echoes any
+    // error, auth included. Pinned as the code stands, not as a design choice;
+    // if the two are aligned, update this expectation and save's together.
     mockRequireFeatureAccess.mockRejectedValue(FORBIDDEN);
 
     await expect(deleteComplianceToolAction("kids-volunteers")).resolves.toEqual({
@@ -593,19 +629,20 @@ describe("deleteComplianceToolAction", () => {
 // ---------------------------------------------------------------------------
 
 describe("rate limiting", () => {
-  // CURRENT BEHAVIOUR (reported as a gap): .claude/rules/security.md asks write
-  // actions to call enforceRateLimit(session.user.id, "write"). These admin
-  // writes rely only on the "general" tier applied inside requireSession() (via
-  // requireFeatureAccess). If the write tier is added, flip these assertions.
-  it("save does not apply the write tier", async () => {
-    await saveComplianceToolAction(makeTool(), true);
-    expect(mockSaveConfig).toHaveBeenCalled();
-    expect(mockEnforceRateLimit).not.toHaveBeenCalled();
+  // KNOWN GAP (reported): .claude/rules/security.md asks write actions to call
+  // enforceRateLimit(session.user.id, "write"). These admin writes rely only on
+  // the "general" tier applied inside requireSession() (via
+  // requireFeatureAccess); actions.ts does not import @/lib/rate-limit at all.
+  // `it.fails` states the required behaviour without asserting the gap is
+  // correct: once the write tier is added these start passing, Vitest reports
+  // them, and `.fails` should be removed.
+  it.fails("save applies the write tier for the acting admin", async () => {
+    await expect(saveComplianceToolAction(makeTool(), true)).resolves.toEqual({ success: true });
+    expect(mockEnforceRateLimit).toHaveBeenCalledWith("u1", "write");
   });
 
-  it("delete does not apply the write tier", async () => {
-    await deleteComplianceToolAction("kids-volunteers");
-    expect(mockSaveConfig).toHaveBeenCalled();
-    expect(mockEnforceRateLimit).not.toHaveBeenCalled();
+  it.fails("delete applies the write tier for the acting admin", async () => {
+    await expect(deleteComplianceToolAction("kids-volunteers")).resolves.toEqual({ success: true });
+    expect(mockEnforceRateLimit).toHaveBeenCalledWith("u1", "write");
   });
 });

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "fs";
-import { join } from "path";
+import { fileURLToPath } from "url";
 
 const {
   mockRequireFeatureAccess,
@@ -63,6 +63,19 @@ function setLocalNow(year: number, monthIndex: number, day: number) {
   vi.setSystemTime(new Date(year, monthIndex, day, 12, 0, 0));
 }
 
+// Source files are read relative to this test file, not process.cwd(), so the
+// source-inspection tests still work when vitest runs from another directory.
+function readRepoFile(relativeToThisFile: string): string {
+  return readFileSync(fileURLToPath(new URL(relativeToThisFile, import.meta.url)), "utf8");
+}
+
+// Node re-reads process.env.TZ on assignment, so a test can pin the server's
+// local zone. Restored in afterEach; `delete` restores the system default.
+const ORIGINAL_TZ = process.env.TZ;
+function setServerTimeZone(tz: string) {
+  process.env.TZ = tz;
+}
+
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   setLocalNow(2026, 10, 17); // 17 Nov 2026 -> ministry year 2026
@@ -79,6 +92,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+  else process.env.TZ = ORIGINAL_TZ;
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
@@ -116,6 +131,36 @@ describe("getDashboardMetrics", () => {
     setLocalNow(2026, 8, 1); // 1 Sep 2026
     await getDashboardMetrics();
     expect(mockGetCachedDashboardData).toHaveBeenCalledWith(2026);
+  });
+
+  // The ministry year follows the SERVER's local calendar, not UTC and not Central.
+  // Production runs in Docker with TZ unset (UTC), so there the rollover — and with
+  // it every dashboard cache key — happens at Aug 31 19:00 CDT. These pin the
+  // local-time reading: a getUTCMonth()/getUTCFullYear() version would disagree.
+  it("reads the ministry year in server-local time: still August in Chicago when UTC is already September", async () => {
+    setServerTimeZone("America/Chicago");
+    vi.setSystemTime(new Date("2026-09-01T03:00:00Z")); // Aug 31 22:00 CDT
+    await getDashboardMetrics();
+    expect(mockGetCachedDashboardData).toHaveBeenLastCalledWith(2025);
+    await getFullRangeDashboardMetrics();
+    expect(mockGetCachedFullRangeData).toHaveBeenLastCalledWith(2021, "2026-08-31");
+  });
+
+  it("reads the ministry year in server-local time: already September in Tokyo when UTC is still August", async () => {
+    setServerTimeZone("Asia/Tokyo");
+    vi.setSystemTime(new Date("2026-08-31T20:00:00Z")); // Sep 1 05:00 JST
+    await getDashboardMetrics();
+    expect(mockGetCachedDashboardData).toHaveBeenLastCalledWith(2026);
+  });
+
+  it("rolls over at local midnight under UTC (the production container's zone)", async () => {
+    setServerTimeZone("UTC");
+    vi.setSystemTime(new Date("2026-08-31T23:59:59Z"));
+    await getDashboardMetrics();
+    expect(mockGetCachedDashboardData).toHaveBeenLastCalledWith(2025);
+    vi.setSystemTime(new Date("2026-09-01T00:00:00Z"));
+    await getDashboardMetrics();
+    expect(mockGetCachedDashboardData).toHaveBeenLastCalledWith(2026);
   });
 
   it("passes through valid years at both ends of the window (current-10 .. current+1)", async () => {
@@ -287,9 +332,11 @@ describe("refreshDashboardCache", () => {
   });
 
   it("does not import or call revalidatePath in source (it hard-purges the PPR shell)", () => {
-    const src = readFileSync(join(process.cwd(), "src/components/dashboard/actions.ts"), "utf8");
-    // Strip comments: the source explains why revalidatePath is NOT used.
-    const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+    const src = readRepoFile("./actions.ts");
+    // Strip comments: the source explains why revalidatePath is NOT used. Line
+    // comments must start a line or follow whitespace, so a "//" inside a string
+    // literal such as a URL is left alone.
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "$1");
     expect(code).not.toMatch(/revalidatePath/);
   });
 
@@ -297,17 +344,36 @@ describe("refreshDashboardCache", () => {
     await refreshDashboardCache();
     const purged = mockDeleteByPrefix.mock.calls.map((c) => c[0] as string);
 
-    // Keys are template literals in the 'use cache' sources; take each prefix
-    // before the first interpolation. A new cached function whose key starts
-    // with something else would otherwise survive the Refresh button.
+    // Every serviceCache.getOrFetch() call in the 'use cache' sources must have a
+    // key we can resolve to a literal prefix: an inline string/template literal, or
+    // an identifier bound to one in the same file. A key we cannot resolve fails the
+    // test instead of being skipped, so a refactor of the key style is caught here
+    // rather than silently narrowing coverage. A new cached function whose key
+    // starts with something else would otherwise survive the Refresh button.
     const keyPrefixes = [
-      "src/components/dashboard/cached-data.ts",
-      "src/services/dashboardService.ts",
+      "./cached-data.ts",
+      "../../services/dashboardService.ts",
     ].flatMap((file) => {
-      const src = readFileSync(join(process.cwd(), file), "utf8");
-      const fromConst = [...src.matchAll(/const key = `([^`$]*)\$\{/g)].map((m) => m[1]);
-      const inline = [...src.matchAll(/getOrFetch\(\s*`([^`$]*)\$\{/g)].map((m) => m[1]);
-      return file.endsWith("cached-data.ts") ? fromConst : inline;
+      const src = readRepoFile(file);
+      return [...src.matchAll(/getOrFetch\(\s*([^,]+?)\s*,/g)].map((call) => {
+        const arg = call[1];
+        let literal = arg;
+        if (/^[A-Za-z_$][\w$]*$/.test(arg)) {
+          // The nearest binding of that name before this call (each cached
+          // function declares its own `const key`).
+          const bindings = [
+            ...src
+              .slice(0, call.index)
+              .matchAll(new RegExp(`(?:const|let)\\s+${arg}\\s*=\\s*([\`'"][^\`'"]*)`, "g")),
+          ];
+          const binding = bindings.at(-1);
+          if (!binding) throw new Error(`${file}: cannot resolve getOrFetch key "${arg}"`);
+          literal = binding[1];
+        }
+        const m = literal.match(/^[`'"]([^`'"$]*)/);
+        if (!m || m[1] === "") throw new Error(`${file}: getOrFetch key "${arg}" has no literal prefix`);
+        return m[1];
+      });
     });
 
     expect(keyPrefixes.length).toBeGreaterThanOrEqual(5);
@@ -323,6 +389,8 @@ describe("refreshDashboardCache", () => {
 
     expect(result.success).toBe(false);
     expect(result.timestamp).toBeInstanceOf(Date);
+    // The failure timestamp is "now" too, not a sentinel such as the epoch.
+    expect(result.timestamp.getTime()).toBe(Date.now());
     expect(mockEnforceRateLimit).not.toHaveBeenCalled();
     expect(mockDeleteByPrefix).not.toHaveBeenCalled();
     expect(mockUpdateTag).not.toHaveBeenCalled();
@@ -337,6 +405,7 @@ describe("refreshDashboardCache", () => {
     const result = await refreshDashboardCache();
 
     expect(result.success).toBe(false);
+    expect(result.timestamp.getTime()).toBe(Date.now());
     expect(mockEnforceRateLimit).toHaveBeenCalledWith("user-1", "cacheRefresh");
     expect(mockDeleteByPrefix).not.toHaveBeenCalled();
     expect(mockUpdateTag).not.toHaveBeenCalled();
@@ -350,6 +419,7 @@ describe("refreshDashboardCache", () => {
     const result = await refreshDashboardCache();
 
     expect(result.success).toBe(false);
+    expect(result.timestamp.getTime()).toBe(Date.now());
     expect(mockUpdateTag).not.toHaveBeenCalled();
   });
 
@@ -361,6 +431,7 @@ describe("refreshDashboardCache", () => {
     const result = await refreshDashboardCache();
 
     expect(result.success).toBe(false);
+    expect(result.timestamp.getTime()).toBe(Date.now());
     // The purge already ran: serviceCache is cold even though the tag expiry failed.
     expect(mockDeleteByPrefix).toHaveBeenCalledTimes(2);
   });

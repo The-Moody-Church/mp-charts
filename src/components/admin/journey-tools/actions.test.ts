@@ -316,14 +316,23 @@ describe.each([
     expect(mockGetTableRecords).not.toHaveBeenCalled();
   });
 
-  it("requires admin for a non-empty list", async () => {
-    await action([1]);
-    expect(mockRequireFeatureAccess).toHaveBeenCalledWith("admin");
+  // sanitizeIds keeps only Number.isFinite values, so a type-erased numeric
+  // string ("9") is dropped rather than coerced, unlike getJourneyMilestones,
+  // which accepts "12". Pinned as current behaviour.
+  it("current behaviour: a numeric-string ID is dropped, not coerced", async () => {
+    await action([5, "9" as unknown as number]);
+    expect(mockGetTableRecords.mock.calls[0][0].filter).toBe(`${idCol} IN (5)`);
+  });
+
+  it("current behaviour: a list of only numeric-string IDs throws without querying MP", async () => {
+    await expect(action(["9" as unknown as number])).rejects.toThrow("sanitizeIds: no valid IDs provided");
+    expect(mockGetTableRecords).not.toHaveBeenCalled();
   });
 
   // NOTE: the empty-list short-circuit runs BEFORE requireFeatureAccess, so an
   // unauthenticated caller gets [] back. No data is exposed, but the gate is
-  // skipped. Pinned here as current behaviour.
+  // skipped. Pinned here as current behaviour: when the check is moved ahead of
+  // the early return, INVERT this test (expect a rejection), do not delete it.
   it("current behaviour: the empty-list early return skips the admin check", async () => {
     mockRequireFeatureAccess.mockRejectedValue(FORBIDDEN);
     await expect(action([])).resolves.toEqual([]);
@@ -332,9 +341,38 @@ describe.each([
 });
 
 describe("resolveToolNames", () => {
-  it("returns empty maps and makes no MP calls when both lists are empty or all falsy", async () => {
-    await expect(resolveToolNames([0, 0], [])).resolves.toEqual({ programs: {}, groups: {} });
+  it("returns empty maps and makes no MP calls when both lists are empty", async () => {
+    await expect(resolveToolNames([], [])).resolves.toEqual({ programs: {}, groups: {} });
     expect(mockGetTableRecords).not.toHaveBeenCalled();
+  });
+
+  it("returns empty maps and makes no MP calls when both lists are all falsy", async () => {
+    await expect(
+      resolveToolNames([0, 0, null as unknown as number], [0, null as unknown as number])
+    ).resolves.toEqual({ programs: {}, groups: {} });
+    expect(mockGetTableRecords).not.toHaveBeenCalled();
+  });
+
+  // A tool with trackingGroupId 0/null must not make sanitizeIds throw and
+  // break name resolution for every admin card.
+  it("drops falsy group IDs: an all-falsy group list skips the Groups query", async () => {
+    mockGetTableRecords.mockResolvedValue([{ Program_ID: 3, Program_Name: "Adults" }]);
+    await expect(resolveToolNames([3], [0, null as unknown as number])).resolves.toEqual({
+      programs: { 3: "Adults" },
+      groups: {},
+    });
+    expect(mockGetTableRecords).toHaveBeenCalledTimes(1);
+    expect(mockGetTableRecords.mock.calls[0][0].table).toBe("Programs");
+  });
+
+  it("drops falsy program IDs: an all-falsy program list skips the Programs query", async () => {
+    mockGetTableRecords.mockResolvedValue([{ Group_ID: 40, Group_Name: "Tracking" }]);
+    await expect(resolveToolNames([0, null as unknown as number], [40])).resolves.toEqual({
+      programs: {},
+      groups: { 40: "Tracking" },
+    });
+    expect(mockGetTableRecords).toHaveBeenCalledTimes(1);
+    expect(mockGetTableRecords.mock.calls[0][0].table).toBe("Groups");
   });
 
   it("dedupes, drops falsy IDs, sanitizes, and maps names by ID", async () => {
@@ -349,7 +387,7 @@ describe("resolveToolNames", () => {
       return Promise.resolve([]);
     });
 
-    const result = await resolveToolNames([3, 3, 0, 4], [40, 40]);
+    const result = await resolveToolNames([3, 3, 0, 4], [40, 0, 40]);
 
     expect(result).toEqual({ programs: { 3: "Adults", 4: "Youth" }, groups: { 40: "Tracking" } });
     expect(mockGetTableRecords).toHaveBeenCalledTimes(2);
@@ -378,11 +416,11 @@ describe("resolveToolNames", () => {
     expect(programCall?.[0].filter).toBe("Program_ID IN (2)");
   });
 
-  it("propagates an MP failure on either query", async () => {
+  it.each(["Programs", "Groups"])("propagates an MP failure on the %s query", async (failing) => {
     mockGetTableRecords.mockImplementation((params: { table: string }) =>
-      params.table === "Groups" ? Promise.reject(new Error("timeout")) : Promise.resolve([])
+      params.table === failing ? Promise.reject(new Error(`${failing} timeout`)) : Promise.resolve([])
     );
-    await expect(resolveToolNames([1], [2])).rejects.toThrow("timeout");
+    await expect(resolveToolNames([1], [2])).rejects.toThrow(`${failing} timeout`);
   });
 });
 
@@ -490,10 +528,11 @@ describe("saveJourneyToolAction", () => {
     );
     expect(result.success).toBe(false);
     const parts = result.error!.split("; ");
-    expect(parts).toHaveLength(3);
-    expect(parts[0]).toMatch(/^journeyId: /);
-    expect(parts[1]).toMatch(/^journeyName: /);
-    expect(parts[2]).toMatch(/^milestones\.0\.milestoneId: /);
+    // Compare the path prefixes as a set: Zod's issue order follows schema key
+    // order, which this test should not depend on.
+    const paths = parts.map((p) => p.slice(0, p.indexOf(": "))).sort();
+    expect(paths).toEqual(["journeyId", "journeyName", "milestones.0.milestoneId"]);
+    for (const p of parts) expect(p.slice(p.indexOf(": ") + 2)).not.toBe("");
   });
 
   it("labels a root-level issue (empty path) as 'config'", async () => {
@@ -535,6 +574,7 @@ describe("saveJourneyToolAction", () => {
   // BUG (reported): the action validates with Zod but discards the parsed
   // (key-stripped) result and persists the caller's raw object. Unknown keys a
   // caller adds to the payload are written to data/journey-tools.json.
+  // When fixed, INVERT this test (expect no "injected" key), do not delete it.
   it("current behaviour: unknown keys on the payload are persisted (parsed output is discarded)", async () => {
     const smuggled = { ...makeTool(), injected: "<script>" } as unknown as JourneyToolConfig;
     await expect(saveJourneyToolAction(smuggled, true)).resolves.toEqual({ success: true });

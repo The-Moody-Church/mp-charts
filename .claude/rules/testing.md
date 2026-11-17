@@ -93,13 +93,17 @@ vi.unstubAllGlobals();
   `scripts/audit-gate-lib.mjs`, so a file with no test counts as 0% instead of disappearing. Before this,
   only files a test imported were counted, and the report said 60.6% statements when the real figure was 45.3%.
   Do not remove `include`.
-- **Thresholds are floors, not targets**: `coverage.thresholds` in `vitest.config.ts` (statements 45, branches 40,
-  functions 38, lines 46) sit just under the measured totals, so `npm run test:coverage` fails if coverage drops.
+- **Thresholds are floors, not targets**: `coverage.thresholds` in `vitest.config.ts` (statements 54, branches 45,
+  functions 44, lines 55; raised from 45/40/38/46 by #302) sit just under the measured totals, so `npm run test:coverage` fails if coverage drops.
   Raise them when tests land; never lower them to get a change through. CI runs `test:run`, not coverage, so
   they are enforced locally only
-- Biggest untested code (2026-11-17): `src/services/dashboardService.ts` (550 statements, no test), the admin
-  tool actions (`admin/journey-tools/actions.ts`, `admin/compliance-tools/actions.ts`) and
-  `dashboard/actions.ts`. React components and pages make up most of the rest
+- Biggest untested `.ts` code (2026-11-17, after #302 brought `dashboardService.ts` and the dashboard/admin actions to
+  ~100%): `complianceProcessingService.ts` and `journeyProcessingService.ts` (~250 and ~220 uncovered statements),
+  `dashboard/filter-dashboard-data.ts`, the journey/compliance processing actions and `instrumentation.ts`. React
+  components and pages make up most of the rest
+- **`it.fails` marks a known, reported gap**, written as the behaviour we want: it passes while the source is wrong
+  and fails (loudly) once someone fixes it, at which point drop `.fails`. Use it only with a comment naming the gap
+  and an ideas.md entry; never to hide a test you could not get passing
 - Run `npm run test:coverage` to check before committing
 
 ## Running Tests

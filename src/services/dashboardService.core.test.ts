@@ -221,13 +221,26 @@ describe('getGroupTypesWithCache / getCachedGroupTypes', () => {
     expect(new Set(keys).size).toBe(1);
   });
 
-  it('serves the service-cache value without touching MP when the cache already holds it', async () => {
+  it('leaves the MP fetch to getOrFetch: no query happens unless the cache runs the fetcher', async () => {
+    // Pins only our side of the contract (the fetch lives inside the fetcher,
+    // and getOrFetch's value is returned untouched). ServiceCache's own hit/miss
+    // behaviour is tested in service-cache.test.ts, not here.
     const cached = [{ Group_Type_ID: 1, Group_Type: 'From cache' }];
-    mockGetOrFetch.mockResolvedValueOnce(cached);
+    let fetcher: (() => Promise<unknown>) | undefined;
+    mockGetOrFetch.mockImplementationOnce((_key: string, _ttl: number, f: () => Promise<unknown>) => {
+      fetcher = f;
+      return Promise.resolve(cached);
+    });
     const service = await getPrivates();
 
     await expect(service.getGroupTypesWithCache(new Set([1]))).resolves.toBe(cached);
     expect(mockGetTableRecords).not.toHaveBeenCalled();
+
+    // The fetcher handed to the cache is the one that queries MP.
+    await fetcher!();
+    expect(callsFor('Group_Types')).toEqual([
+      { table: 'Group_Types', select: 'Group_Type_ID,Group_Type', filter: 'Group_Type_ID IN (1)' },
+    ]);
   });
 
   it('drops non-positive IDs through sanitizeIds before they reach the filter', async () => {
@@ -330,7 +343,26 @@ describe('getPeriodMetrics', () => {
     });
   });
 
-  it('rounds averages to whole people', async () => {
+  it('rounds averages to the nearest whole person, halves up', async () => {
+    withEventsAndMetrics(
+      [{ Event_ID: 1 }, { Event_ID: 2 }, { Event_ID: 3 }],
+      [
+        { Event_ID: 1, Metric_ID: 2, Numerical_Value: 10 },
+        { Event_ID: 2, Metric_ID: 2, Numerical_Value: 10 },
+        { Event_ID: 3, Metric_ID: 2, Numerical_Value: 12 },
+        { Event_ID: 1, Metric_ID: 3, Numerical_Value: 10 },
+        { Event_ID: 2, Metric_ID: 3, Numerical_Value: 10 },
+        { Event_ID: 3, Metric_ID: 3, Numerical_Value: 12.5 },
+      ],
+    );
+    const service = await getPrivates();
+    const result = await service.getPeriodMetrics(start, end);
+    expect(result.averageInPersonAttendance).toBe(11); // 32 / 3 = 10.67: round up (floor/trunc give 10)
+    expect(result.averageOnlineAttendance).toBe(11); // 32.5 / 3 = 10.83
+    expect(result.averageAttendance).toBe(22); // 64.5 / 3 = 21.5: round half up (floor gives 21)
+  });
+
+  it('rounds a .33 average down, not up', async () => {
     withEventsAndMetrics(
       [{ Event_ID: 1 }, { Event_ID: 2 }, { Event_ID: 3 }],
       [
@@ -341,7 +373,7 @@ describe('getPeriodMetrics', () => {
     );
     const service = await getPrivates();
     const result = await service.getPeriodMetrics(start, end);
-    expect(result.averageInPersonAttendance).toBe(10); // 31 / 3 = 10.33
+    expect(result.averageInPersonAttendance).toBe(10); // 31 / 3 = 10.33 (ceil gives 11)
     expect(result.averageAttendance).toBe(10);
     expect(result.averageOnlineAttendance).toBe(0);
   });
@@ -383,6 +415,33 @@ describe('getPeriodMetrics', () => {
     }
     expect(result.totalEvents).toBe(250);
     expect(result.averageInPersonAttendance).toBe(Math.round((250 * 251) / 2 / 250)); // 125.5 → 126
+  });
+
+  it('sends no extra empty batch when the event count is an exact multiple of 100', async () => {
+    // An off-by-one in the batch loop would send a 3rd, empty batch; sanitizeIds([])
+    // throws, and the catch would silently zero the whole period.
+    const events = Array.from({ length: 200 }, (_, i) => ({ Event_ID: i + 1 }));
+    const metrics = events.map((e) => ({ Event_ID: e.Event_ID, Metric_ID: 2, Numerical_Value: 40 }));
+    withEventsAndMetrics(events, metrics);
+    const service = await getPrivates();
+
+    const result = await service.getPeriodMetrics(start, end);
+
+    const batches = callsFor('Event_Metrics').map((c) => inList(c.filter, 'Event_Metrics.Event_ID'));
+    expect(batches.map((b) => b.length)).toEqual([100, 100]);
+    expect(result).toMatchObject({ totalEvents: 200, averageInPersonAttendance: 40, averageAttendance: 40 });
+    expect(console.error).not.toHaveBeenCalled();
+  });
+
+  it('sends a single batch for exactly 100 events', async () => {
+    const events = Array.from({ length: 100 }, (_, i) => ({ Event_ID: i + 1 }));
+    withEventsAndMetrics(events, events.map((e) => ({ Event_ID: e.Event_ID, Metric_ID: 3, Numerical_Value: 7 })));
+    const service = await getPrivates();
+
+    const result = await service.getPeriodMetrics(start, end);
+
+    expect(callsFor('Event_Metrics')).toHaveLength(1);
+    expect(result).toMatchObject({ totalEvents: 100, averageOnlineAttendance: 7 });
   });
 
   it('drops non-positive Event_IDs via sanitizeIds rather than interpolating them', async () => {
@@ -626,6 +685,21 @@ describe('getGroupTypeMetrics', () => {
     expect(metric).toMatchObject({ activeGroupCount: 150, totalParticipants: 150, uniqueParticipants: 150, averageGroupSize: 1 });
   });
 
+  it('sends no extra empty batch when the group count is an exact multiple of 100', async () => {
+    const groups = Array.from({ length: 100 }, (_, i) => ({ Group_ID: i + 1, Group_Type_ID: 1, Ministry_ID: null }));
+    const participants = groups.map((g) => ({ Group_Participant_ID: g.Group_ID, Group_ID: g.Group_ID, Participant_ID: g.Group_ID }));
+    withData(groups, [{ Group_Type_ID: 1, Group_Type: 'Small Group' }], participants);
+    const service = await getPrivates();
+
+    const result = await service.getGroupTypeMetrics(start, end);
+
+    const batches = callsFor('Group_Participants').map((c) => inList(c.filter, 'Group_Participants.Group_ID'));
+    expect(batches.map((b) => b.length)).toEqual([100]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ activeGroupCount: 100, totalParticipants: 100, uniqueParticipants: 100 });
+    expect(console.error).not.toHaveBeenCalled();
+  });
+
   it.each(['Groups', 'Group_Types', 'Group_Participants'])(
     'logs and returns [] when the %s query fails',
     async (failingTable) => {
@@ -705,7 +779,9 @@ describe('mapWithConcurrency (via getMonthlyAttendanceTrends)', () => {
     expect(callsFor('Event_Metrics')).toHaveLength(12);
   });
 
-  it('runs only as many workers as there are months when that is fewer than 6', async () => {
+  // Whether surplus workers are started at all cannot be seen from outside (an
+  // idle worker exits at once), so this only checks fewer months than the cap.
+  it('handles fewer months than the concurrency cap, running them all at once', async () => {
     const state = instrumented();
     const service = await getPrivates();
 
@@ -723,9 +799,22 @@ describe('mapWithConcurrency (via getMonthlyAttendanceTrends)', () => {
       const idx = MINISTRY_YEAR_KEYS.indexOf(monthKeyOf(p.filter!));
       return (12 - idx) * 3;
     });
+    // Record the order months actually finish in (their Event_Metrics call is the last step).
+    const finished: number[] = [];
+    const base = mockGetTableRecords.getMockImplementation()!;
+    mockGetTableRecords.mockImplementation(async (p: QueryParams) => {
+      const rows = await base(p);
+      if (p.table === 'Event_Metrics') finished.push(inList(p.filter, 'Event_Metrics.Event_ID')[0]);
+      return rows;
+    });
     const service = await getPrivates();
 
     const trends = await service.getMonthlyAttendanceTrends(YEAR_START, YEAR_END);
+
+    // Completion really was out of order, so the ordering below is not a timing accident.
+    expect(finished).toHaveLength(12);
+    expect(finished).not.toEqual([...finished].sort((a, b) => a - b));
+    expect(finished.indexOf(202509)).toBeGreaterThan(finished.indexOf(202510));
 
     expect(trends.map((t) => t.month)).toEqual(MINISTRY_YEAR_KEYS);
     expect(trends.map((t) => t.monthName)).toEqual([
@@ -838,16 +927,32 @@ describe('getDashboardData', () => {
   const prevEnd = new Date(2025, 7, 31, 23, 59, 59).toISOString();
 
   /**
-   * Routes every query getDashboardData fans out to. Period queries (multi-line
-   * filters) answer per year; monthly ones (single-line) return nothing, so
-   * those months succeed with zeros.
+   * A period-wide Events query ends at a period end; a monthly one ends at the
+   * end of its month. Told apart by content, not by how the filter is formatted.
+   */
+  function isPeriodEventsQuery(p: QueryParams): boolean {
+    const f = (p.filter ?? '').replace(/\s+/g, ' ');
+    return (
+      p.table === 'Events' &&
+      p.select === 'Event_ID' &&
+      [endIso, prevEnd].some((e) => f.includes(`Events.Event_End_Date <= '${e}'`))
+    );
+  }
+
+  function isMonthlyEventsQuery(p: QueryParams): boolean {
+    return p.table === 'Events' && p.select === 'Event_ID' && !isPeriodEventsQuery(p);
+  }
+
+  /**
+   * Routes every query getDashboardData fans out to. Period queries answer per
+   * year; monthly ones return nothing, so those months succeed with zeros.
    */
   function dispatcher(overrides: (p: QueryParams) => unknown = () => undefined) {
     mockGetTableRecords.mockImplementation((p: QueryParams) => {
       const o = overrides(p);
       if (o !== undefined) return o instanceof Promise ? o : Promise.resolve(o);
       const f = p.filter ?? '';
-      if (p.table === 'Events' && p.select === 'Event_ID' && f.includes('\n')) {
+      if (isPeriodEventsQuery(p)) {
         if (f.includes(start.toISOString())) return Promise.resolve([{ Event_ID: 1 }]);
         if (f.includes(prevStart)) return Promise.resolve([{ Event_ID: 2 }]);
       }
@@ -994,13 +1099,7 @@ describe('getDashboardData', () => {
   });
 
   it('rejects when every monthly attendance query fails (load-bearing for stale-while-revalidate)', async () => {
-    dispatcher((p) => {
-      const f = p.filter ?? '';
-      if (p.table === 'Events' && p.select === 'Event_ID' && !f.includes('\n')) {
-        return Promise.reject(new Error('ConnectTimeoutError'));
-      }
-      return undefined;
-    });
+    dispatcher((p) => (isMonthlyEventsQuery(p) ? Promise.reject(new Error('ConnectTimeoutError')) : undefined));
     const service = await DashboardService.getInstance();
 
     await expect(service.getDashboardData(start, end)).rejects.toThrow(/All 12 monthly attendance queries failed/);

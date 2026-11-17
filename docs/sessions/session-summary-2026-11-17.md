@@ -66,6 +66,24 @@ then a PR with a Security Review section. No `:dev` soak needed (dev tooling onl
 - Merged as #301 on 2026-11-17 with owner approval over the known picomatch audit failure (`verify` stopped at
   the audit step; lint, tsc and 1265 tests pass locally). Test config only, so no deploy.
 
+## #302 Tests for dashboardService and the dashboard/admin actions — IN PROGRESS (branch `test/dashboard-admin-actions-302`)
+
+- Ultracode workflow 1 (6 agents, one test file each): `dashboardService.{core,trends,engagement}.test.ts`,
+  `admin/{journey,compliance}-tools/actions.test.ts` and `dashboard/actions.test.ts`; 285 tests, no source change.
+- Workflow 2: one mutation tester per file, each in a worktree (134 mutants; every survivor was either killed by new tests
+  or shown to be an equivalent mutant: the `Math.min` worker cap, the type-13 groupTypes filter, the `typeof year` guard),
+  then a strengthening pass per file (+22 tests). Two independent skeptics per reported bug (reproduce and impact lenses).
+- Result: 1568 passing tests plus 3 `it.fails` (known gaps in the compliance admin actions). Stable over two full runs and
+  under `TZ=America/Chicago`. tsc and lint clean. Coverage is 54.10 / 45.42 / 44.99 / 55.33 (from 45.27 / 40.25 / 38.92 / 46.64);
+  thresholds raised to 54/45/44/55. Per file: `dashboardService.ts` 99.8% statements, and the three actions files 100%.
+- **15 suspected source bugs, 13 confirmed and 2 refuted** (B7: the empty-list early return before the admin check
+  reveals nothing; B4 confirmed by only one of the two reviewers, so it is filed as low). Filed in ideas.md as five entries:
+  - Medium: the dashboard caches empty data when one MP read fails (B9, B11, B12, B13); services on the last day of a
+    month are excluded (B8, B15, latent B10); row-order-dependent start/end merge undercounts active people (B14).
+  - Low: admin action hardening, i.e. the write rate limit, saving the parsed config, and cache clear order (B2–B6); the
+    ministry year rolls over on UTC (B1).
+- One leftover workflow worktree (no commits, only a `node_modules` link) was removed.
+
 ## Files changed
 
 - `docs/status.md` — open-findings line for the picomatch block; last-updated date.

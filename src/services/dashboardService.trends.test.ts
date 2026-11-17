@@ -10,13 +10,15 @@
  * getDashboardData would mean faking a dozen unrelated MP queries per test.
  *
  * Timezone: MP returns zone-less Central wall-clock strings
- * ("2025-09-07T10:00:00"), which `new Date()` parses as process-local time.
- * Production runs with TZ=UTC; this machine may not. Fixtures therefore use
- * zone-less mid-morning times and local `new Date(y, m, d)` bounds, so every
- * expectation holds in any timezone between UTC-13 and UTC+10, and expected
- * filter values are computed with the same local constructors the code uses.
+ * ("2025-09-07T10:00:00"), which `new Date()` parses as process-local time,
+ * while several methods key by `toISOString()` (UTC). The result therefore
+ * depends on the process timezone: a 09:00 fixture lands on the previous UTC
+ * day from UTC+10 eastward. Production runs with TZ=UTC, so this file pins
+ * process.env.TZ to UTC for its own run (Node re-reads TZ on assignment) and
+ * restores it afterwards. Expected filter values are still computed with the
+ * same local constructors the code uses, so they stay right if the pin moves.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest';
 import type {
   SmallGroupTrend,
   CommunityAttendanceTrend,
@@ -26,6 +28,13 @@ import type {
 } from '@/lib/dto';
 
 const mockGetTableRecords = vi.fn();
+// The service-layer cache would otherwise keep Group_Types between tests, so it
+// passes straight through to the fetcher; recording the call lets a test check
+// the key and TTL the code asks for (caching.md: every 'use cache' fetch goes
+// through serviceCache.getOrFetch).
+const { mockGetOrFetch } = vi.hoisted(() => ({
+  mockGetOrFetch: vi.fn((_key: string, _ttl: number, fetcher: () => Promise<unknown>) => fetcher()),
+}));
 
 vi.mock('@/lib/providers/ministry-platform', () => ({
   MPHelper: class {
@@ -40,16 +49,21 @@ vi.mock('next/cache', () => ({
   revalidateTag: vi.fn(),
 }));
 
-// The service-layer cache would otherwise keep Group_Types between tests.
-// Pass straight through to the fetcher so each test sees its own MP mock.
 vi.mock('@/lib/service-cache', () => ({
-  serviceCache: {
-    getOrFetch: (_key: string, _ttl: number, fetcher: () => Promise<unknown>) => fetcher(),
-  },
+  serviceCache: { getOrFetch: mockGetOrFetch },
   CACHE_TTL: { STANDARD: 21_600_000, LONG: 86_400_000 },
 }));
 
 import { DashboardService } from '@/services/dashboardService';
+
+// Pin the timezone to production's (see the header). Set before any describe
+// body runs, so the module-level fixture dates below are built in UTC too.
+const ORIGINAL_TZ = process.env.TZ;
+process.env.TZ = 'UTC';
+afterAll(() => {
+  if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+  else process.env.TZ = ORIGINAL_TZ;
+});
 
 interface Call {
   table: string;
@@ -82,6 +96,13 @@ const isoLocal = (y: number, m: number, d: number) => new Date(y, m, d).toISOStr
 
 /** Collapse the multi-line template filters so substring checks are stable. */
 const squash = (s: string | undefined) => (s ?? '').replace(/\s+/g, ' ').trim();
+
+/** The comma-separated list inside a filter's first `IN (...)`. */
+const inList = (filter: string | undefined): string[] => {
+  const m = /IN \(([^)]*)\)/.exec(filter ?? '');
+  if (!m) throw new Error(`no IN list in ${filter}`);
+  return m[1].split(',');
+};
 
 let errorSpy: ReturnType<typeof vi.spyOn>;
 let warnSpy: ReturnType<typeof vi.spyOn>;
@@ -157,11 +178,35 @@ describe('getSmallGroupTrends', () => {
       { month: '2025-12', monthName: 'December', activeGroupCount: 2, groupCountByType: { 'Small Group': 1, 'Type 11': 1 } },
     ]);
 
-    // Group types are looked up once, with IDs sanitized into the IN clause.
+    // Group types are looked up once, for exactly the types present. The order
+    // inside the IN list is a cache-key detail, so compare as a set.
     const gt = calls('Group_Types');
     expect(gt).toHaveLength(1);
-    // The cache key sorts lexicographically ("1,11,3"); every ID is present.
-    expect(gt[0].filter).toBe('Group_Type_ID IN (1,11,3)');
+    expect(gt[0].select).toBe('Group_Type_ID,Group_Type');
+    expect(gt[0].filter).toMatch(/^Group_Type_ID IN \([\d,]+\)$/);
+    expect(inList(gt[0].filter).map(Number).sort((a, b) => a - b)).toEqual([1, 3, 11]);
+  });
+
+  it('reads group types through serviceCache under a group-types key with the LONG TTL', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Groups') {
+        return Promise.resolve([
+          { Group_ID: 1, Group_Type_ID: 3, Start_Date: '2025-09-01T00:00:00', End_Date: null },
+          { Group_ID: 2, Group_Type_ID: 1, Start_Date: '2025-09-01T00:00:00', End_Date: null },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    await priv(svc).getSmallGroupTrends(START, END);
+
+    const gtCalls = mockGetOrFetch.mock.calls.filter(([key]) => key.startsWith('group-types:'));
+    expect(gtCalls).toHaveLength(1);
+    const [key, ttl] = gtCalls[0];
+    expect(key.slice('group-types:'.length).split(',').map(Number).sort((a, b) => a - b)).toEqual([1, 3]);
+    expect(ttl).toBe(86_400_000);
+    // The MP read happens inside the cached fetcher, not beside it.
+    expect(calls('Group_Types')).toHaveLength(1);
   });
 
   it('emits a zero-count month when no group is active in it', async () => {
@@ -311,6 +356,52 @@ describe('getCommunityAttendanceTrends', () => {
     ]);
   });
 
+  it('builds both series in date order even when MP returns later rows first', async () => {
+    // Map insertion order follows the participant rows; reversing them puts
+    // October first, so only the sorts restore chronological order.
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Groups') return Promise.resolve(GROUPS);
+      if (p.table === 'Event_Participants') return Promise.resolve([...PARTICIPANTS].reverse());
+      if (p.table === 'Events') return Promise.resolve(EVENTS);
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    const { monthly, weekly } = await priv(svc).getCommunityAttendanceTrends(START, END);
+    expect(monthly.map(m => m.weekStartDate)).toEqual(['2025-09-01', '2025-10-01']);
+    expect(weekly.map(w => w.weekStartDate)).toEqual(['2025-09-07', '2025-09-14', '2025-10-05']);
+  });
+
+  it('drops a malformed Group_ID from the participants filter instead of interpolating it', async () => {
+    // MP data is untrusted in a filter: a non-numeric Group_ID must never reach
+    // the IN clause verbatim (sanitizeIds, not a bare join).
+    const hostile = [...GROUPS, { Group_ID: '1 OR 1=1' as unknown as number, Group_Name: 'Evil' }];
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Groups') return Promise.resolve(hostile);
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    await priv(svc).getCommunityAttendanceTrends(START, END);
+    const [epCall] = calls('Event_Participants');
+    expect(epCall.filter).toBe(
+      'Event_Participants.Group_ID IN (11,12) AND Event_Participants.Participation_Status_ID IN (3, 4)',
+    );
+    expect(epCall.filter).not.toContain('OR 1=1');
+  });
+
+  it('never queries participants when every Group_ID is malformed', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) =>
+      Promise.resolve(
+        p.table === 'Groups' ? [{ Group_ID: '0) OR (1=1' as unknown as number, Group_Name: 'Evil' }] : [],
+      ),
+    );
+    const svc = await newService();
+    // sanitizeIds throws on an all-invalid list; the (reported) catch-all
+    // turns that into empty series. The point here: no query is sent.
+    await expect(priv(svc).getCommunityAttendanceTrends(START, END)).resolves.toEqual({ monthly: [], weekly: [] });
+    expect(calls('Event_Participants')).toHaveLength(0);
+    expect(errorSpy).toHaveBeenCalledWith('Error fetching community attendance trends:', expect.any(Error));
+  });
+
   it('labels a participant row whose group is not a known community "Unknown"', async () => {
     mockGetTableRecords.mockImplementation((p: Call) => {
       if (p.table === 'Groups') return Promise.resolve(GROUPS);
@@ -361,8 +452,8 @@ describe('getCommunityAttendanceTrends', () => {
     await priv(svc).getCommunityAttendanceTrends(START, END);
     const events = calls('Events');
     expect(events).toHaveLength(2);
-    expect(events[0].filter!.match(/IN \(([^)]*)\)/)![1].split(',')).toHaveLength(100);
-    expect(events[1].filter!.match(/IN \(([^)]*)\)/)![1].split(',')).toHaveLength(50);
+    expect(inList(events[0].filter)).toHaveLength(100);
+    expect(inList(events[1].filter)).toHaveLength(50);
   });
 
   // BUG (reported): swallowed error is cached by getCachedDashboardData.
@@ -432,14 +523,11 @@ describe('getMonthlyAttendanceTrends', () => {
 
     const sep = calls('Events').find(c => monthOf(c.filter) === '2025-09')!;
     expect(sep.select).toBe('Event_ID');
-    expect(sep.filter).toBe(
-      `Events.Event_Start_Date >= '${isoLocal(2025, 8, 1)}' AND ` +
-        // BUG (reported): the end bound is MIDNIGHT at the start of the last
-        // day of the month, so a service on Sep 30 (or Nov 30 2025 / Aug 31
-        // 2025, both Sundays) ends after it and is excluded from the month.
-        `Events.Event_End_Date <= '${isoLocal(2025, 8, 30)}' AND ` +
-        'Events.Cancelled = 0 AND Events.Event_Type_ID = 7',
+    // The end bound is pinned separately below (it encodes a reported bug).
+    expect(sep.filter).toMatch(
+      /^Events\.Event_Start_Date >= '[^']+' AND Events\.Event_End_Date <= '[^']+' AND Events\.Cancelled = 0 AND Events\.Event_Type_ID = 7$/,
     );
+    expect(sep.filter).toContain(`Events.Event_Start_Date >= '${isoLocal(2025, 8, 1)}'`);
 
     const metrics = calls('Event_Metrics');
     // Only the month that had events queries metrics
@@ -451,10 +539,23 @@ describe('getMonthlyAttendanceTrends', () => {
     });
   });
 
+  // BUG (reported): the end bound is MIDNIGHT at the start of the last day of
+  // the month, so a service on Sep 30 (or Nov 30 2025 / Aug 31 2025, both
+  // Sundays) ends after it and is excluded from the month. Update this test
+  // when the bound moves to the end of the last day / start of the next month.
+  it('CURRENT BEHAVIOUR: the month end bound is midnight at the start of its last day', async () => {
+    const svc = await newService();
+    await priv(svc).getMonthlyAttendanceTrends(START, END);
+    const sep = calls('Events').find(c => monthOf(c.filter) === '2025-09')!;
+    expect(sep.filter).toContain(`Events.Event_End_Date <= '${isoLocal(2025, 8, 30)}'`);
+  });
+
   it('averages in-person and online independently over the events that reported each', async () => {
     mockGetTableRecords.mockImplementation((p: Call) => {
       if (p.table === 'Events' && monthOf(p.filter) === '2025-09') {
-        return Promise.resolve([{ Event_ID: 1 }, { Event_ID: 2 }, { Event_ID: 3 }]);
+        return Promise.resolve([
+          { Event_ID: 1 }, { Event_ID: 2 }, { Event_ID: 3 }, { Event_ID: 4 }, { Event_ID: 5 },
+        ]);
       }
       if (p.table === 'Event_Metrics') {
         return Promise.resolve([
@@ -462,6 +563,9 @@ describe('getMonthlyAttendanceTrends', () => {
           { Event_ID: 1, Metric_ID: 3, Numerical_Value: 51 },
           { Event_ID: 2, Metric_ID: 2, Numerical_Value: 201 },
           // Event 3 has no metrics: not counted in any average
+          // Events 4 and 5 reported online only
+          { Event_ID: 4, Metric_ID: 3, Numerical_Value: 29 },
+          { Event_ID: 5, Metric_ID: 3, Numerical_Value: 20 },
         ]);
       }
       return Promise.resolve([]);
@@ -469,15 +573,17 @@ describe('getMonthlyAttendanceTrends', () => {
     const svc = await newService();
     const [sep, oct] = await priv(svc).getMonthlyAttendanceTrends(START, END);
 
+    // The three denominators all differ (4 / 2 / 3), so each average proves
+    // which event count it divides by.
     expect(sep).toEqual({
       month: '2025-09',
       monthName: 'September',
       averageInPersonAttendance: 151, // (100 + 201) / 2 = 150.5 -> 151
-      averageOnlineAttendance: 51, // 51 / 1, not diluted by event 2
-      averageTotalAttendance: 176, // (301 + 51) / 2 events with metrics
-      eventCount: 2,
+      averageOnlineAttendance: 33, // (51 + 29 + 20) / 3, not diluted by event 2
+      averageTotalAttendance: 100, // (301 + 100) / 4 events with any metric = 100.25
+      eventCount: 4,
       inPersonEventCount: 2,
-      onlineEventCount: 1,
+      onlineEventCount: 3,
     });
     // A month with no events is a zero row, not missing
     expect(oct).toEqual({
@@ -617,11 +723,13 @@ describe('getWeeklyAttendanceTrends', () => {
         ]);
       }
       if (p.table === 'Event_Metrics') {
+        // The later date's row comes first: grouping follows metric order, so
+        // only the sort puts Nov 2 ahead of Nov 9.
         return Promise.resolve([
+          { Event_ID: 3, Metric_ID: 3, Numerical_Value: 70 },
           { Event_ID: 1, Metric_ID: 2, Numerical_Value: 300 },
           { Event_ID: 1, Metric_ID: 3, Numerical_Value: 40 },
           { Event_ID: 2, Metric_ID: 2, Numerical_Value: 250 },
-          { Event_ID: 3, Metric_ID: 3, Numerical_Value: 70 },
           { Event_ID: 999, Metric_ID: 2, Numerical_Value: 5 }, // unknown event: skipped
         ]);
       }
@@ -664,7 +772,7 @@ describe('getWeeklyAttendanceTrends', () => {
     await priv(svc).getWeeklyAttendanceTrends(START, END);
 
     const metrics = calls('Event_Metrics');
-    expect(metrics.map(m => m.filter!.match(/IN \(([^)]*)\)/)![1].split(',').length)).toEqual([100, 100, 5]);
+    expect(metrics.map(m => inList(m.filter).length)).toEqual([100, 100, 5]);
     expect(metrics[2].filter).toBe(
       'Event_Metrics.Event_ID IN (201,202,203,204,205) AND Event_Metrics.Metric_ID IN (2, 3)',
     );

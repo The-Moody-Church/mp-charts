@@ -158,6 +158,7 @@ describe('getRosterAndAttendanceRaw', () => {
         { Event_ID: 103, Group_ID: 1, Participant_ID: 11 },
         { Event_ID: 104, Group_ID: 1, Participant_ID: 10 }, // event has no date -> skipped
         { Event_ID: 100, Group_ID: 1, Participant_ID: 12 }, // no contact -> skipped
+        { Event_ID: 102, Group_ID: 999, Participant_ID: 14 }, // group not in Groups -> skipped
       ],
       Events: () => [
         { Event_ID: 100, Event_Start_Date: '2025-09-14T10:00:00' },
@@ -203,13 +204,15 @@ describe('getRosterAndAttendanceRaw', () => {
     rosterFixture();
     await internals(service).getRosterAndAttendanceRaw(START, END);
 
-    // Group_Types goes through the cached lookup. The ID list is sorted with a bare
-    // .sort() (lexicographic: 1,11,3,99). Harmless: it only feeds a cache key.
-    expect(callsFor('Group_Types')).toEqual([{
+    // Group_Types goes through the cached lookup, once, for every type seen. The
+    // ID order only feeds a cache key, so compare the set, not the string.
+    const groupTypeCalls = callsFor('Group_Types');
+    expect(groupTypeCalls).toEqual([{
       table: 'Group_Types',
       select: 'Group_Type_ID,Group_Type',
-      filter: 'Group_Type_ID IN (1,11,3,99)',
+      filter: expect.stringMatching(/^Group_Type_ID IN \([\d,]+\)$/),
     }]);
+    expect(idsIn(groupTypeCalls[0].filter, 'Group_Type_ID').sort((a, b) => a - b)).toEqual([1, 3, 11, 99]);
 
     expect(callsFor('Group_Participants')).toEqual([{
       table: 'Group_Participants',
@@ -247,6 +250,17 @@ describe('getRosterAndAttendanceRaw', () => {
     expect(gp.filter).not.toContain('OR');
   });
 
+  // BUG (reported): same cached-empty catch as below. A batch whose IDs are all
+  // rejected makes sanitizeIds throw, and the catch turns that into empty data
+  // for the whole roster rather than just skipping the bad batch.
+  it('returns empty data when every ID in a batch is rejected (current behaviour)', async () => {
+    rosterFixture({ Groups: () => [{ Group_ID: 0, Group_Type_ID: 1 }, { Group_ID: -7, Group_Type_ID: 1 }] });
+    await expect(internals(service).getRosterAndAttendanceRaw(START, END))
+      .resolves.toEqual({ rosterMemberRecords: [], attendanceByMonth: [] });
+    expect(callsFor('Group_Participants')).toHaveLength(0);
+    expect(errorSpy).toHaveBeenCalledWith('Error fetching roster and attendance raw data:', expect.any(Error));
+  });
+
   it('chunks a large group list into batches of 100', async () => {
     const groups = Array.from({ length: 250 }, (_, i) => ({ Group_ID: i + 1, Group_Type_ID: 1 }));
     rosterFixture({ Groups: () => groups, Event_Participants: () => [], Group_Participants: () => [] });
@@ -266,6 +280,9 @@ describe('getRosterAndAttendanceRaw', () => {
     await expect(internals(service).getRosterAndAttendanceRaw(START, END))
       .resolves.toEqual({ rosterMemberRecords: [], attendanceByMonth: [] });
     expect(mockGetTableRecords).toHaveBeenCalledTimes(1);
+    // The early return, not the catch: going on would look up group types for
+    // an empty set, which sanitizeIds rejects, and the catch would log it.
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 
   it('skips the Events lookup when there is no attendance', async () => {
@@ -416,12 +433,14 @@ describe('getServingLeadingRaw', () => {
     route({ Group_Roles: () => [] });
     await expect(internals(service).getServingLeadingRaw(START, END)).resolves.toEqual([]);
     expect(mockGetTableRecords).toHaveBeenCalledTimes(1);
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 
   it('returns [] without resolving contacts when no participant holds a role', async () => {
     servingFixture({ Group_Participants: () => [] });
     await expect(internals(service).getServingLeadingRaw(START, END)).resolves.toEqual([]);
     expect(callsFor('Participants')).toHaveLength(0);
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 
   it('chunks role IDs into batches of 100, each with the date filter', async () => {
@@ -498,6 +517,7 @@ describe('getServingContactIds', () => {
     route({ Group_Roles: () => [{ Group_Role_ID: 7 }], Group_Participants: () => [] });
     expect((await internals(service).getServingContactIds(START_ISO, END_ISO)).size).toBe(0);
     expect(callsFor('Participants')).toHaveLength(0);
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 
   it('swallows an MP failure and returns an empty set', async () => {
@@ -763,11 +783,16 @@ describe('getEngagementRawData', () => {
     expect(errorSpy).toHaveBeenCalledWith('Error fetching engagement raw data:', expect.any(Error));
   });
 
-  it('returns all-empty data when the adult filter read fails', async () => {
+  // BUG (reported): same cached-empty catch as above. filterAdultContacts
+  // propagates, and getEngagementRawData's catch turns that into empty data
+  // that getCachedEngagementData then caches. The fix (rethrow, so the stale
+  // value is served) will fail this test: invert it then.
+  it('returns all-empty data when the adult filter read fails (current behaviour)', async () => {
     engagementFixture({ Contacts: () => Promise.reject(new Error('boom')) });
     await expect(internals(service).getEngagementRawData(RANGE_START, RANGE_END)).resolves.toEqual({
       activityByMonth: [], groupRecords: [], adultContactIds: [],
     });
+    expect(errorSpy).toHaveBeenCalledWith('Error fetching engagement raw data:', expect.any(Error));
   });
 
   // BUG (reported): getServingContactIds swallows its own errors, so a failed
@@ -864,13 +889,26 @@ describe('getExtendedDashboardData', () => {
       totalServingLeading: 0,
     });
 
-    // The event query uses the same full range as the other two
+    // All three reads use the same full range: events, roster groups, and
+    // serving participants.
     expect(callsFor('Events')).toContainEqual(expect.objectContaining({
       filter: `Event_Start_Date >= '${START_ISO}' AND Event_End_Date <= '${END_ISO}' AND Cancelled = 0`,
     }));
+    expect(callsFor('Groups')).toEqual([expect.objectContaining({
+      filter: `Group_Type_ID IN (1, 3, 11) AND ${ACTIVE_RANGE}`,
+    })]);
+    expect(callsFor('Group_Participants')).toContainEqual(expect.objectContaining({
+      select: 'Participant_ID,Group_Role_ID,Start_Date,End_Date',
+      filter: `Group_Role_ID IN (3) AND ${ACTIVE_RANGE}`,
+    }));
   });
 
-  it('isolates failures: a broken roster read leaves serving and event data intact', async () => {
+  // BUG (reported): this "isolation" is the cached-empty catch in
+  // getRosterAndAttendanceRaw (see 'returns empty data and logs when an MP read
+  // fails'). Inside getCachedExtendedData it caches an empty roster over the
+  // previous good value. The fix (rethrow, so the stale value is served) will
+  // fail this test: invert it then, rather than reading it as a regression.
+  it('a broken roster read returns an empty roster beside intact serving and event data (current behaviour)', async () => {
     extendedFixture({ Groups: () => Promise.reject(new Error('boom')) });
     const data = await service.getExtendedDashboardData(START, END);
 
@@ -878,5 +916,6 @@ describe('getExtendedDashboardData', () => {
     expect(data.attendanceByMonth).toEqual([]);
     expect(data.servingLeadingRecords).toHaveLength(1);
     expect(data.eventParticipantsByMonth).toHaveLength(1);
+    expect(errorSpy).toHaveBeenCalledWith('Error fetching roster and attendance raw data:', expect.any(Error));
   });
 });
