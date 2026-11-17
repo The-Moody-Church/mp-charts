@@ -60,7 +60,11 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
 
 ### Technical Debt
-- [Unit tests for dashboardService and the admin tool actions](#unit-tests-for-dashboardservice-and-the-admin-tool-actions)
+- [Dashboard caches empty data when one Ministry Platform read fails](#dashboard-caches-empty-data-when-one-ministry-platform-read-fails)
+- [Dashboard leaves out services held on the last day of a month](#dashboard-leaves-out-services-held-on-the-last-day-of-a-month)
+- [Dashboard can show active members and servers as having left](#dashboard-can-show-active-members-and-servers-as-having-left)
+- [Admin tool actions: write rate limit, save the validated config, clear the cache first](#admin-tool-actions-write-rate-limit-save-the-validated-config-clear-the-cache-first)
+- [Ministry year rolls over on UTC, not Central](#ministry-year-rolls-over-on-utc-not-central)
 - [Adopt TypeScript 7 once typescript-eslint supports it (#286)](#adopt-typescript-7-once-typescript-eslint-supports-it-286)
 - [cache-handler.js depends on private Next.js internals (#218)](#cache-handlerjs-depends-on-private-nextjs-internals-218)
 - [Micro-robustness in getContactLogsByContactId (#213)](#micro-robustness-in-getcontactlogsbycontactid-213)
@@ -69,6 +73,7 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - [Member detail modal shows the old photo after upload (#203)](#member-detail-modal-shows-the-old-photo-after-upload-203)
 - [Compliance tool editor silently drops orphaned journey config (#204)](#compliance-tool-editor-silently-drops-orphaned-journey-config-204)
 - [Blank journey selection reads as ID 0, not null (#205)](#blank-journey-selection-reads-as-id-0-not-null-205)
+- ~~[Unit tests for dashboardService and the admin tool actions (#302)](#unit-tests-for-dashboardservice-and-the-admin-tool-actions-302)~~ ✅
 - ~~[Vitest coverage config has an under-count blind spot (#212)](#vitest-coverage-config-has-an-under-count-blind-spot-212)~~ ✅
 - ~~[Digest-pin the Docker base images (#217)](#digest-pin-the-docker-base-images-217)~~ ✅
 - ~~[caching.md misdescribes `expire` and `updateTag` (#253)](#cachingmd-misdescribes-expire-and-updatetag-253)~~ ✅
