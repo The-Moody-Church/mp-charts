@@ -24,7 +24,9 @@ export async function getCachedDashboardData(ministryYear: number): Promise<Dash
   return serviceCache.getOrFetch(key, CACHE_TTL.STANDARD, async () => {
     // Ministry year runs Sept 1 - Aug 31
     const startDate = new Date(ministryYear, 8, 1); // September 1
-    const endDate = new Date(ministryYear + 1, 7, 31); // August 31 of next calendar year
+    // August 31 of next calendar year, an inclusive calendar day: the service
+    // queries `< Sep 1 00:00` Central (mp-date-range.ts), so Aug 31 is counted.
+    const endDate = new Date(ministryYear + 1, 7, 31);
 
     const dashboardService = await DashboardService.getInstance();
     return dashboardService.getDashboardData(startDate, endDate);
@@ -48,6 +50,7 @@ export async function getCachedFullRangeData(earliestYear: number, endDateIso: s
   return serviceCache.getOrFetch(key, CACHE_TTL.STANDARD, async () => {
     const startDate = new Date(earliestYear, 8, 1); // September 1, 5 years ago
     const [year, month, day] = endDateIso.split('-').map(Number);
+    // Inclusive calendar day (Aug 31): the service queries `< Sep 1 00:00` Central.
     const endDate = new Date(year, month - 1, day);
 
     const dashboardService = await DashboardService.getInstance();

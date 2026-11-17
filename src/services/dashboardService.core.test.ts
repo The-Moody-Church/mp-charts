@@ -100,6 +100,27 @@ function inList(filter: string | undefined, column: string): number[] {
 
 const tick = (ms = 1) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+/** An MP/SQL datetime literal normalised for comparison: 'T' -> ' ', fractional
+ *  seconds and a trailing Z dropped (SQL Server's datetime ignores the Z). */
+const normDt = (v: string) => v.replace('T', ' ').replace(/(\.\d+)?Z?$/, '');
+
+/**
+ * A small fake of MP's date predicates: does `row` satisfy every
+ * `<col> <op> '<datetime>'` comparison in `filter`? A row without the column
+ * fails, as it would never match in SQL.
+ */
+function matchesDatePredicates(filter: string | undefined, row: Record<string, unknown>): boolean {
+  for (const [, colRef, op, literal] of (filter ?? '').matchAll(/(\S+) (>=|<=|<|>) '([^']+)'/g)) {
+    const value = row[colRef.split('.').pop()!];
+    if (typeof value !== 'string') return false;
+    const a = normDt(value);
+    const b = normDt(literal);
+    const ok = op === '>=' ? a >= b : op === '<=' ? a <= b : op === '<' ? a < b : a > b;
+    if (!ok) return false;
+  }
+  return true;
+}
+
 // Fixed "now" so getMonthlyAttendanceTrends' cap-at-today is deterministic.
 // Only Date is faked: real setTimeout keeps the concurrency tests honest.
 const NOW = new Date('2026-11-17T12:00:00Z');
@@ -267,8 +288,9 @@ describe('getGroupTypesWithCache / getCachedGroupTypes', () => {
 // ---------------------------------------------------------------------------
 
 describe('getPeriodMetrics', () => {
-  const start = new Date('2025-09-01T05:00:00.000Z');
-  const end = new Date('2026-09-01T04:59:59.000Z');
+  // Local calendar days, as callers build them: Sep 1 through Aug 31 inclusive.
+  const start = new Date(2025, 8, 1);
+  const end = new Date(2026, 7, 31);
 
   function withEventsAndMetrics(
     events: { Event_ID: number }[],
@@ -292,8 +314,8 @@ describe('getPeriodMetrics', () => {
     expect(eventsCall.select).toBe('Event_ID');
     const filter = eventsCall.filter!.replace(/\s+/g, ' ').trim();
     expect(filter).toBe(
-      "Events.Event_Start_Date >= '2025-09-01T05:00:00.000Z' AND " +
-        "Events.Event_End_Date <= '2026-09-01T04:59:59.000Z' AND " +
+      "Events.Event_Start_Date >= '2025-09-01 00:00:00' AND " +
+        "Events.Event_Start_Date < '2026-09-01 00:00:00' AND " +
         'Events.Cancelled = 0 AND Events.Event_Type_ID = 7',
     );
   });
@@ -301,8 +323,8 @@ describe('getPeriodMetrics', () => {
   it('returns zeros and makes no Event_Metrics call when there are no events', async () => {
     const service = await getPrivates();
     await expect(service.getPeriodMetrics(start, end)).resolves.toEqual({
-      periodStart: '2025-09-01T05:00:00.000Z',
-      periodEnd: '2026-09-01T04:59:59.000Z',
+      periodStart: start.toISOString(),
+      periodEnd: end.toISOString(),
       averageAttendance: 0,
       averageInPersonAttendance: 0,
       averageOnlineAttendance: 0,
@@ -456,7 +478,7 @@ describe('getPeriodMetrics', () => {
   it.each([
     ['the Events query', 'Events'],
     ['an Event_Metrics batch', 'Event_Metrics'],
-  ])('logs and returns the zero shape when %s fails', async (_label, failingTable) => {
+  ])('logs and rethrows when %s fails, so the cache keeps its previous value (#304)', async (_label, failingTable) => {
     mockGetTableRecords.mockImplementation((p: QueryParams) => {
       if (p.table === failingTable) return Promise.reject(new Error('timeout'));
       if (p.table === 'Events') return Promise.resolve([{ Event_ID: 1 }]);
@@ -464,15 +486,8 @@ describe('getPeriodMetrics', () => {
     });
     const service = await getPrivates();
 
-    await expect(service.getPeriodMetrics(start, end)).resolves.toEqual({
-      periodStart: start.toISOString(),
-      periodEnd: end.toISOString(),
-      averageAttendance: 0,
-      averageInPersonAttendance: 0,
-      averageOnlineAttendance: 0,
-      totalEvents: 0,
-    });
-    expect(console.error).toHaveBeenCalledWith('Error fetching period metrics:', expect.any(Error));
+    await expect(service.getPeriodMetrics(start, end)).rejects.toThrow('timeout');
+    expect(console.error).toHaveBeenCalledWith('Error fetching period metrics:', expect.stringContaining('timeout'));
   });
 });
 
@@ -481,8 +496,8 @@ describe('getPeriodMetrics', () => {
 // ---------------------------------------------------------------------------
 
 describe('getGroupTypeMetrics', () => {
-  const start = new Date('2025-09-01T05:00:00.000Z');
-  const end = new Date('2026-09-01T04:59:59.000Z');
+  const start = new Date(2025, 8, 1);
+  const end = new Date(2026, 7, 31);
 
   type Group = { Group_ID: number; Group_Type_ID: number; Ministry_ID: number | null };
   type GP = { Group_Participant_ID: number; Group_ID: number; Participant_ID: number };
@@ -506,8 +521,8 @@ describe('getGroupTypeMetrics', () => {
     const [groupsCall] = callsFor('Groups');
     expect(groupsCall.select).toBe('Group_ID,Group_Type_ID,Ministry_ID');
     expect(groupsCall.filter!.replace(/\s+/g, ' ').trim()).toBe(
-      "Groups.Start_Date <= '2026-09-01T04:59:59.000Z' AND " +
-        "(Groups.End_Date IS NULL OR Groups.End_Date >= '2025-09-01T05:00:00.000Z')",
+      "Groups.Start_Date < '2026-09-01 00:00:00' AND " +
+        "(Groups.End_Date IS NULL OR Groups.End_Date >= '2025-09-01 00:00:00')",
     );
   });
 
@@ -580,8 +595,8 @@ describe('getGroupTypeMetrics', () => {
     expect(gpCall.select).toBe('Group_Participant_ID,Group_ID,Participant_ID');
     expect(gpCall.filter).toBe(
       'Group_Participants.Group_ID IN (1,3) AND ' +
-        "Group_Participants.Start_Date <= '2026-09-01T04:59:59.000Z' AND " +
-        "(Group_Participants.End_Date IS NULL OR Group_Participants.End_Date >= '2025-09-01T05:00:00.000Z')",
+        "Group_Participants.Start_Date < '2026-09-01 00:00:00' AND " +
+        "(Group_Participants.End_Date IS NULL OR Group_Participants.End_Date >= '2025-09-01 00:00:00')",
     );
     // The type lookup still includes 13 (it is filtered out of the result afterwards).
     expect(inList(callsFor('Group_Types')[0].filter, 'Group_Type_ID').sort((a, b) => a - b)).toEqual([1, 3, 13]);
@@ -701,7 +716,7 @@ describe('getGroupTypeMetrics', () => {
   });
 
   it.each(['Groups', 'Group_Types', 'Group_Participants'])(
-    'logs and returns [] when the %s query fails',
+    'logs and rethrows when the %s query fails, so the cache keeps its previous value (#304)',
     async (failingTable) => {
       mockGetTableRecords.mockImplementation((p: QueryParams) => {
         if (p.table === failingTable) return Promise.reject(new Error('timeout'));
@@ -710,8 +725,8 @@ describe('getGroupTypeMetrics', () => {
         return Promise.resolve([{ Group_Participant_ID: 1, Group_ID: 1, Participant_ID: 1 }]);
       });
       const service = await getPrivates();
-      await expect(service.getGroupTypeMetrics(start, end)).resolves.toEqual([]);
-      expect(console.error).toHaveBeenCalledWith('Error fetching group type metrics:', expect.any(Error));
+      await expect(service.getGroupTypeMetrics(start, end)).rejects.toThrow('timeout');
+      expect(console.error).toHaveBeenCalledWith('Error fetching group type metrics:', expect.stringContaining('timeout'));
     },
   );
 });
@@ -721,14 +736,11 @@ describe('getGroupTypeMetrics', () => {
 // ---------------------------------------------------------------------------
 
 describe('mapWithConcurrency (via getMonthlyAttendanceTrends)', () => {
-  /** Month key ("YYYY-MM") for a monthly Events filter, recomputed from the local month bounds. */
+  /** Month key ("YYYY-MM") for a monthly Events filter: the prefix of its MP wall-clock start bound. */
   function monthKeyOf(filter: string): string {
     const m = /Events\.Event_Start_Date >= '([^']+)'/.exec(filter);
     if (!m) throw new Error(`not a monthly Events filter: ${filter}`);
-    // The filter carries toISOString() of local midnight on the 1st; shift by
-    // 12h so the local date lands safely inside that month in any TZ.
-    const d = new Date(new Date(m[1]).getTime() + 12 * 3600 * 1000);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    return m[1].slice(0, 7);
   }
 
   /** Expected keys for Sept 2025 – Aug 2026. */
@@ -828,7 +840,10 @@ describe('mapWithConcurrency (via getMonthlyAttendanceTrends)', () => {
     }
   });
 
-  it('one failing month does not reject the others: it is dropped, logged and counted', async () => {
+  // Was a #304-class bug: the failed month was dropped and the other 11 were
+  // returned and cached over a complete series, so the year's averages were
+  // silently computed without it. Any failed month now rejects the whole series.
+  it('one failing month rejects the whole series (logged by month), so no partial year is cached', async () => {
     const failing = MINISTRY_YEAR_KEYS[4]; // January 2026
     instrumented(
       () => 2,
@@ -836,17 +851,16 @@ describe('mapWithConcurrency (via getMonthlyAttendanceTrends)', () => {
     );
     const service = await getPrivates();
 
-    const trends = await service.getMonthlyAttendanceTrends(YEAR_START, YEAR_END);
-
-    expect(trends.map((t) => t.month)).toEqual(MINISTRY_YEAR_KEYS.filter((k) => k !== failing));
+    await expect(service.getMonthlyAttendanceTrends(YEAR_START, YEAR_END)).rejects.toThrow(
+      'Monthly attendance trends: 1/12 monthly queries failed',
+    );
     expect(console.error).toHaveBeenCalledTimes(1);
-    expect(console.error).toHaveBeenCalledWith('Error fetching attendance for one month:', expect.any(Error));
-    expect(console.warn).toHaveBeenCalledWith('Monthly attendance trends: 1/12 months failed, 11 succeeded');
+    expect(console.error).toHaveBeenCalledWith(`Error fetching attendance for ${failing}:`, expect.any(String));
     // The worker that hit the failure kept going: every month was attempted.
     expect(callsFor('Events')).toHaveLength(12);
   });
 
-  it('a failing Event_Metrics read only drops its own month', async () => {
+  it('a failing Event_Metrics read rejects the whole series', async () => {
     const failing = MINISTRY_YEAR_KEYS[0];
     const [fy, fm] = failing.split('-').map(Number);
     instrumented(
@@ -854,8 +868,7 @@ describe('mapWithConcurrency (via getMonthlyAttendanceTrends)', () => {
       (p) => p.table === 'Event_Metrics' && inList(p.filter, 'Event_Metrics.Event_ID')[0] === fy * 100 + fm,
     );
     const service = await getPrivates();
-    const trends = await service.getMonthlyAttendanceTrends(YEAR_START, YEAR_END);
-    expect(trends.map((t) => t.month)).toEqual(MINISTRY_YEAR_KEYS.slice(1));
+    await expect(service.getMonthlyAttendanceTrends(YEAR_START, YEAR_END)).rejects.toThrow('1/12 monthly queries failed');
   });
 
   it('throws when every month fails, so a cache layer keeps its previous good value', async () => {
@@ -863,9 +876,9 @@ describe('mapWithConcurrency (via getMonthlyAttendanceTrends)', () => {
     const service = await getPrivates();
 
     await expect(service.getMonthlyAttendanceTrends(YEAR_START, YEAR_END)).rejects.toThrow(
-      'All 12 monthly attendance queries failed',
+      'Monthly attendance trends: 12/12 monthly queries failed',
     );
-    expect(console.warn).toHaveBeenCalledWith('Monthly attendance trends: 12/12 months failed, 0 succeeded');
+    expect(console.error).toHaveBeenCalledTimes(12);
   });
 
   it('caps the months at today and returns [] (no throw, no calls) for a wholly future range', async () => {
@@ -894,13 +907,11 @@ describe('mapWithConcurrency (via getMonthlyAttendanceTrends)', () => {
     const service = await getPrivates();
     await service.getMonthlyAttendanceTrends(new Date(2025, 8, 1), new Date(2025, 8, 30));
 
-    const monthStart = new Date(2025, 8, 1).toISOString();
-    const monthEnd = new Date(2025, 9, 0).toISOString();
     expect(callsFor('Events')).toEqual([
       {
         table: 'Events',
         select: 'Event_ID',
-        filter: `Events.Event_Start_Date >= '${monthStart}' AND Events.Event_End_Date <= '${monthEnd}' AND Events.Cancelled = 0 AND Events.Event_Type_ID = 7`,
+        filter: "Events.Event_Start_Date >= '2025-09-01 00:00:00' AND Events.Event_Start_Date < '2025-10-01 00:00:00' AND Events.Cancelled = 0 AND Events.Event_Type_ID = 7",
       },
     ]);
     expect(callsFor('Event_Metrics')).toEqual([
@@ -926,16 +937,25 @@ describe('getDashboardData', () => {
   const prevStart = new Date(2024, 8, 1).toISOString();
   const prevEnd = new Date(2025, 7, 31, 23, 59, 59).toISOString();
 
+  /** MP wall-clock [start, endExclusive) of the current and previous ministry years. */
+  const CURRENT_PERIOD = ['2025-09-01 00:00:00', '2026-09-01 00:00:00'] as const;
+  const PREVIOUS_PERIOD = ['2024-09-01 00:00:00', '2025-09-01 00:00:00'] as const;
+
+  const hasPeriodBounds = (p: QueryParams, [from, to]: readonly [string, string]) => {
+    const f = (p.filter ?? '').replace(/\s+/g, ' ');
+    return f.includes(`Events.Event_Start_Date >= '${from}'`) && f.includes(`Events.Event_Start_Date < '${to}'`);
+  };
+
   /**
-   * A period-wide Events query ends at a period end; a monthly one ends at the
-   * end of its month. Told apart by content, not by how the filter is formatted.
+   * A period-wide Events query spans a whole ministry year; a monthly one spans
+   * its month. August's monthly query shares the period's exclusive end, so the
+   * two are told apart by their start/end pair.
    */
   function isPeriodEventsQuery(p: QueryParams): boolean {
-    const f = (p.filter ?? '').replace(/\s+/g, ' ');
     return (
       p.table === 'Events' &&
       p.select === 'Event_ID' &&
-      [endIso, prevEnd].some((e) => f.includes(`Events.Event_End_Date <= '${e}'`))
+      (hasPeriodBounds(p, CURRENT_PERIOD) || hasPeriodBounds(p, PREVIOUS_PERIOD))
     );
   }
 
@@ -953,8 +973,8 @@ describe('getDashboardData', () => {
       if (o !== undefined) return o instanceof Promise ? o : Promise.resolve(o);
       const f = p.filter ?? '';
       if (isPeriodEventsQuery(p)) {
-        if (f.includes(start.toISOString())) return Promise.resolve([{ Event_ID: 1 }]);
-        if (f.includes(prevStart)) return Promise.resolve([{ Event_ID: 2 }]);
+        if (hasPeriodBounds(p, CURRENT_PERIOD)) return Promise.resolve([{ Event_ID: 1 }]);
+        if (hasPeriodBounds(p, PREVIOUS_PERIOD)) return Promise.resolve([{ Event_ID: 2 }]);
       }
       if (p.table === 'Event_Metrics' && p.select === 'Event_Metric_ID,Event_ID,Metric_ID,Numerical_Value') {
         const [id] = inList(f, 'Event_Metrics.Event_ID');
@@ -1011,7 +1031,7 @@ describe('getDashboardData', () => {
     for (const c of callsFor('Participant_Milestones')) {
       expect(c.select).toBe('Date_Accomplished');
       expect(c.filter).toMatch(
-        new RegExp(`^Milestone_ID = \\d+ AND Date_Accomplished >= '${start.toISOString()}' AND Date_Accomplished <= '${end.toISOString()}'$`),
+        /^Milestone_ID = \d+ AND Date_Accomplished >= '2025-09-01 00:00:00' AND Date_Accomplished < '2026-09-01 00:00:00'$/,
       );
     }
   });
@@ -1036,7 +1056,7 @@ describe('getDashboardData', () => {
     // Group type metrics are only fetched for the current year.
     const groupsCalls = callsFor('Groups', 'Group_ID,Group_Type_ID,Ministry_ID');
     expect(groupsCalls).toHaveLength(1);
-    expect(groupsCalls[0].filter).toContain(end.toISOString());
+    expect(groupsCalls[0].filter).toContain("Groups.Start_Date < '2026-09-01 00:00:00'");
 
     expect(data.monthlyAttendanceTrends).toHaveLength(12);
     expect(data.monthlyAttendanceTrends[0].month).toBe('2025-09');
@@ -1082,26 +1102,73 @@ describe('getDashboardData', () => {
     for (const t of ['Activity_Log', 'Contacts', 'Responses']) expect(tables.has(t)).toBe(false);
   });
 
-  it('degrades a failing section to its fallback instead of failing the whole dashboard', async () => {
-    dispatcher((p) => {
-      if (p.table === 'Participant_Milestones') return Promise.reject(new Error('timeout'));
-      if (p.table === 'Groups' && p.select === 'Group_ID,Group_Type_ID,Ministry_ID') return Promise.reject(new Error('timeout'));
-      return undefined;
+  // Was a bug (#304): each section caught its own failure and returned []/zeros,
+  // which resolved the whole dashboard and was cached over the last good value
+  // for at least 6h. One DashboardData is one cache entry, so it is all-or-nothing.
+  it.each<[string, (p: QueryParams) => boolean, string]>([
+    ['milestones', (p) => p.table === 'Participant_Milestones', 'Error fetching milestone dates for Milestone_ID='],
+    ['group type metrics', (p) => p.table === 'Groups' && p.select === 'Group_ID,Group_Type_ID,Ministry_ID', 'Error fetching group type metrics:'],
+    ['small group trends', (p) => p.table === 'Groups' && p.select === 'Group_ID,Group_Type_ID,Start_Date,End_Date', 'Error fetching small group trends:'],
+    ['community trends', (p) => p.table === 'Groups' && p.select === 'Group_ID,Group_Name', 'Error fetching community attendance trends:'],
+    ['weekly trends', (p) => p.table === 'Events' && p.select === 'Event_ID,Event_Start_Date', 'Error fetching weekly attendance trends:'],
+    ['period metrics', (p) => isPeriodEventsQuery(p), 'Error fetching period metrics:'],
+  ])('rejects when the %s read fails, so no partial dashboard is cached (#304)', async (_label, failing, logPrefix) => {
+    dispatcher((p) => (failing(p) ? Promise.reject(new Error('timeout')) : undefined));
+    const service = await DashboardService.getInstance();
+
+    await expect(service.getDashboardData(start, end)).rejects.toThrow('timeout');
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining(logPrefix), expect.stringContaining('timeout'));
+  });
+
+  // Was a bug: getCachedDashboardData passes Aug 31 at local midnight, and every
+  // upper bound was `<=` that midnight, so an Aug 31 service fell out of the
+  // weekly series, the August monthly trend and the period metrics. Rows go
+  // through a fake of MP's date predicates, so this checks the rows returned.
+  it('counts an Aug 31 service when the year ends on Aug 31 at midnight (as getCachedDashboardData builds it)', async () => {
+    const EVENTS = [
+      { Event_ID: 3, Event_Start_Date: '2026-08-31T10:00:00', Event_End_Date: '2026-08-31T11:30:00' },
+      { Event_ID: 4, Event_Start_Date: '2026-09-06T10:00:00', Event_End_Date: '2026-09-06T11:30:00' }, // next year
+    ];
+    mockGetTableRecords.mockImplementation((p: QueryParams) => {
+      if (p.table === 'Events') {
+        const rows = EVENTS.filter((e) => matchesDatePredicates(p.filter, e));
+        return Promise.resolve(
+          rows.map((e) => (p.select === 'Event_ID' ? { Event_ID: e.Event_ID } : { Event_ID: e.Event_ID, Event_Start_Date: e.Event_Start_Date })),
+        );
+      }
+      if (p.table === 'Event_Metrics') {
+        const ids = inList(p.filter, 'Event_Metrics.Event_ID');
+        return Promise.resolve(ids.map((id) => ({ Event_Metric_ID: id, Event_ID: id, Metric_ID: 2, Numerical_Value: 400 })));
+      }
+      return Promise.resolve([]);
     });
     const service = await DashboardService.getInstance();
 
-    const data = await service.getDashboardData(start, end);
+    const data = await service.getDashboardData(new Date(2025, 8, 1), new Date(2026, 7, 31));
 
-    expect(data.baptismDates).toEqual([]);
-    expect(data.youthMemberDates).toEqual([]);
-    expect(data.groupTypeMetrics).toEqual([]);
-    expect(data.currentPeriod.totalEvents).toBe(1); // unaffected sections still populate
+    expect(data.weeklyAttendanceTrends.map((w) => w.eventDate)).toEqual(['2026-08-31']);
+    const august = data.monthlyAttendanceTrends.find((t) => t.month === '2026-08')!;
+    expect(august).toMatchObject({ eventCount: 1, averageInPersonAttendance: 400 });
+    expect(data.currentPeriod).toMatchObject({ totalEvents: 1, averageInPersonAttendance: 400 });
+  });
+
+  // A partial monthly series is as wrong as a missing section: computePeriodMetrics
+  // would average the year without the failed month and nothing on the page says so.
+  it('rejects when a single month of attendance fails, so no partial series is cached', async () => {
+    dispatcher((p) =>
+      isMonthlyEventsQuery(p) && (p.filter ?? '').includes("Event_Start_Date >= '2025-11-01 00:00:00'")
+        ? Promise.reject(new Error('ConnectTimeoutError'))
+        : undefined,
+    );
+    const service = await DashboardService.getInstance();
+
+    await expect(service.getDashboardData(start, end)).rejects.toThrow(/1\/12 monthly queries failed/);
   });
 
   it('rejects when every monthly attendance query fails (load-bearing for stale-while-revalidate)', async () => {
     dispatcher((p) => (isMonthlyEventsQuery(p) ? Promise.reject(new Error('ConnectTimeoutError')) : undefined));
     const service = await DashboardService.getInstance();
 
-    await expect(service.getDashboardData(start, end)).rejects.toThrow(/All 12 monthly attendance queries failed/);
+    await expect(service.getDashboardData(start, end)).rejects.toThrow(/12\/12 monthly queries failed/);
   });
 });

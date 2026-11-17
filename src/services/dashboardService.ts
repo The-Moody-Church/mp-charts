@@ -1,7 +1,10 @@
 import { cacheLife, cacheTag } from 'next/cache';
 import { MPHelper } from '@/lib/providers/ministry-platform';
 import { sanitizeIds } from '@/lib/providers/ministry-platform/utils/filter-sanitize';
+import { toMpDateRange, monthWindows } from '@/lib/providers/ministry-platform/utils/mp-date-range';
 import { serviceCache, CACHE_TTL } from '@/lib/service-cache';
+import { errorForLog } from '@/lib/log-safe';
+import { mergeSpansByKey } from '@/services/dashboard-spans';
 import {
   DashboardData,
   PeriodMetrics,
@@ -168,6 +171,8 @@ export class DashboardService {
     previousYearEnd.setFullYear(previousYearEnd.getFullYear() - 1);
 
     // Fetch core metrics in parallel (fast queries only)
+    // Promise.all on purpose: one failed section rejects the whole result, so neither
+    // cache layer replaces its last good value with a partial dashboard (.claude/rules/caching.md).
     const [
       currentPeriod,
       previousPeriod,
@@ -250,6 +255,8 @@ export class DashboardService {
    */
   public async getExtendedDashboardData(fullRangeStart: Date, fullRangeEnd: Date): Promise<Partial<DashboardData>> {
     // All three queries run in parallel — no sequential dependency
+    // Promise.all on purpose: one failed section rejects the whole result, so neither
+    // cache layer replaces its last good value with a partial dashboard (.claude/rules/caching.md).
     const [
       eventParticipantsByMonth,
       rosterAndAttendance,
@@ -281,6 +288,7 @@ export class DashboardService {
    * Self-contained: fetches its own serving contact IDs for the adult filter.
    */
   public async getEngagementDashboardData(fullRangeStart: Date, fullRangeEnd: Date): Promise<Partial<DashboardData>> {
+    // Rejects when any read fails, so no partial engagement data is cached (.claude/rules/caching.md).
     const engagementRawData = await this.getEngagementRawData(fullRangeStart, fullRangeEnd);
 
     return {
@@ -304,8 +312,8 @@ export class DashboardService {
     startDate: Date,
     endDate: Date
   ): Promise<GroupTypeMetrics[]> {
-    const startIso = startDate.toISOString();
-    const endIso = endDate.toISOString();
+    // Inclusive calendar days -> half-open MP wall-clock bounds (see mp-date-range.ts)
+    const r = toMpDateRange(startDate, endDate);
 
     try {
       // Step 1: Get active groups for the period
@@ -317,8 +325,8 @@ export class DashboardService {
         table: 'Groups',
         select: 'Group_ID,Group_Type_ID,Ministry_ID',
         filter: `
-          Groups.Start_Date <= '${endIso}' AND
-          (Groups.End_Date IS NULL OR Groups.End_Date >= '${startIso}')
+          Groups.Start_Date < '${r.endExclusive}' AND
+          (Groups.End_Date IS NULL OR Groups.End_Date >= '${r.start}')
         `
       });
 
@@ -349,7 +357,7 @@ export class DashboardService {
         select: 'Group_Participant_ID,Group_ID,Participant_ID',
         ids: Array.from(activeGroupIds),
         idColumn: 'Group_Participants.Group_ID',
-        extraFilter: `Group_Participants.Start_Date <= '${endIso}' AND (Group_Participants.End_Date IS NULL OR Group_Participants.End_Date >= '${startIso}')`
+        extraFilter: `Group_Participants.Start_Date < '${r.endExclusive}' AND (Group_Participants.End_Date IS NULL OR Group_Participants.End_Date >= '${r.start}')`
       });
 
       // Aggregate by group type
@@ -396,8 +404,8 @@ export class DashboardService {
           : 0
       }));
     } catch (error) {
-      console.error('Error fetching group type metrics:', error);
-      return [];
+      console.error('Error fetching group type metrics:', errorForLog(error));
+      throw error;
     }
   }
 
@@ -412,8 +420,12 @@ export class DashboardService {
     startDate: Date,
     endDate: Date
   ): Promise<PeriodMetrics> {
+    // periodStart/periodEnd keep their ISO form; the client recomputes them.
     const startIso = startDate.toISOString();
     const endIso = endDate.toISOString();
+    // Inclusive calendar days -> half-open bounds on Event_Start_Date at both ends,
+    // so a service at any time on the last day is counted.
+    const r = toMpDateRange(startDate, endDate);
 
     try {
       // Step 1: Get events for the period (Event_Type_ID = 7 for Worship Services)
@@ -423,8 +435,8 @@ export class DashboardService {
         table: 'Events',
         select: 'Event_ID',
         filter: `
-          Events.Event_Start_Date >= '${startIso}' AND
-          Events.Event_End_Date <= '${endIso}' AND
+          Events.Event_Start_Date >= '${r.start}' AND
+          Events.Event_Start_Date < '${r.endExclusive}' AND
           Events.Cancelled = 0 AND
           Events.Event_Type_ID = 7
         `
@@ -500,15 +512,8 @@ export class DashboardService {
           : 0,
       };
     } catch (error) {
-      console.error('Error fetching period metrics:', error);
-      return {
-        periodStart: startIso,
-        periodEnd: endIso,
-        averageAttendance: 0,
-        averageInPersonAttendance: 0,
-        averageOnlineAttendance: 0,
-        totalEvents: 0
-      };
+      console.error('Error fetching period metrics:', errorForLog(error));
+      throw error;
     }
   }
 
@@ -531,8 +536,8 @@ export class DashboardService {
     startDate: Date,
     endDate: Date
   ): Promise<SmallGroupTrend[]> {
-    const startIso = startDate.toISOString();
-    const endIso = endDate.toISOString();
+    // Inclusive calendar days -> half-open MP wall-clock bounds (see mp-date-range.ts)
+    const r = toMpDateRange(startDate, endDate);
 
     try {
       // Step 1: Get active groups by type: Small Group (1), Class (3), Community (11)
@@ -547,8 +552,8 @@ export class DashboardService {
         select: 'Group_ID,Group_Type_ID,Start_Date,End_Date',
         filter: `
           Group_Type_ID IN (1, 3, 11) AND
-          Groups.Start_Date <= '${endIso}' AND
-          (Groups.End_Date IS NULL OR Groups.End_Date >= '${startIso}')
+          Groups.Start_Date < '${r.endExclusive}' AND
+          (Groups.End_Date IS NULL OR Groups.End_Date >= '${r.start}')
         `
       });
 
@@ -559,21 +564,21 @@ export class DashboardService {
       const groupTypes = await this.getGroupTypesWithCache(groupTypeIds);
       const groupTypeMap = new Map(groupTypes.map(gt => [gt.Group_Type_ID, gt.Group_Type]));
 
-      // Step 3: Aggregate by month in JavaScript
+      // Step 3: Aggregate by month in JavaScript. Whole calendar months, not capped at
+      // today (future months still appear). Integer month stepping never skips a month.
       const trends: SmallGroupTrend[] = [];
-      const currentDate = new Date(startDate);
 
-      while (currentDate <= endDate) {
-        const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-        const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-
+      for (const w of monthWindows(startDate, endDate)) {
         // Count active groups per type this month
         const activeGroupsByType = new Map<string, Set<number>>();
 
         for (const group of filteredGroups) {
-          const groupStart = new Date(group.Start_Date);
-          const groupEnd = group.End_Date ? new Date(group.End_Date) : null;
-          const isActive = groupStart <= monthEnd && (!groupEnd || groupEnd >= monthStart);
+          // Compare MP wall-clock days as strings ('T' or ' ' separator both slice cleanly).
+          // The window bounds are midnights, so day granularity is exact.
+          const groupStartDay = group.Start_Date.slice(0, 10);
+          const groupEndDay = group.End_Date ? group.End_Date.slice(0, 10) : null;
+          const isActive = groupStartDay < w.endExclusiveDay
+            && (groupEndDay === null || groupEndDay >= w.startDay);
 
           if (isActive) {
             const typeName = groupTypeMap.get(group.Group_Type_ID) || `Type ${group.Group_Type_ID}`;
@@ -592,20 +597,17 @@ export class DashboardService {
         }
 
         trends.push({
-          month: `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`,
-          monthName: MONTH_NAMES[currentDate.getMonth()],
+          month: w.key,
+          monthName: MONTH_NAMES[w.monthIndex],
           activeGroupCount: totalActive,
           groupCountByType,
         });
-
-        // Move to next month
-        currentDate.setMonth(currentDate.getMonth() + 1);
       }
 
       return trends;
     } catch (error) {
-      console.error('Error fetching small group trends:', error);
-      return [];
+      console.error('Error fetching small group trends:', errorForLog(error));
+      throw error;
     }
   }
 
@@ -623,6 +625,8 @@ export class DashboardService {
     startDate: Date,
     endDate: Date
   ): Promise<{ monthly: CommunityAttendanceTrend[]; weekly: CommunityAttendanceTrend[] }> {
+    // Inclusive calendar days; compared against the MP wall-clock day of each event.
+    const r = toMpDateRange(startDate, endDate);
     try {
       // Step 1: Get all Community groups (Group_Type_ID = 11)
       const communityGroups = await this.mp!.getTableRecords<{
@@ -681,13 +685,14 @@ export class DashboardService {
         const eventDate = eventDateMap.get(p.Event_ID);
         if (!eventDate) return false;
 
-        const date = new Date(eventDate);
+        // Check if within date range (MP wall-clock day, inclusive of the last day)
+        const day = eventDate.slice(0, 10);
+        if (day < r.startDay || day >= r.endExclusiveDay) return false;
 
-        // Check if within date range
-        if (date < startDate || date > endDate) return false;
-
-        // Check if Sunday (getDay() returns 0 for Sunday)
-        return date.getDay() === 0;
+        // Check if Sunday: weekday of the wall-clock calendar day, computed in UTC so
+        // the process zone cannot enter (getUTCDay() returns 0 for Sunday)
+        const [y, m, d] = day.split('-').map(Number);
+        return new Date(Date.UTC(y, m - 1, d)).getUTCDay() === 0;
       });
 
       if (sundayParticipants.length === 0) return { monthly: [], weekly: [] };
@@ -711,9 +716,10 @@ export class DashboardService {
         const eventDate = eventDateMap.get(participant.Event_ID);
         if (!eventDate) continue;
 
-        const date = new Date(eventDate);
-        const monthKey = date.toISOString().slice(0, 7); // "2025-09"
-        const dateKey = date.toISOString().slice(0, 10); // "2025-09-07"
+        // Keys straight from the MP wall-clock string: parsing it and reading it back
+        // in UTC moved evening events to the next day off a UTC host.
+        const monthKey = eventDate.slice(0, 7); // "2025-09"
+        const dateKey = eventDate.slice(0, 10); // "2025-09-07"
 
         // Monthly aggregation
         if (!monthlyGroupData.has(monthKey)) {
@@ -786,8 +792,8 @@ export class DashboardService {
 
       return { monthly, weekly };
     } catch (error) {
-      console.error('Error fetching community attendance trends:', error);
-      return { monthly: [], weekly: [] };
+      console.error('Error fetching community attendance trends:', errorForLog(error));
+      throw error;
     }
   }
 
@@ -805,29 +811,18 @@ export class DashboardService {
     // Build month ranges, then query with limited concurrency.
     // Each month needs 2 sequential calls (Events → EventMetrics), but
     // months are independent — concurrency limit prevents overwhelming the MP API.
-    // Cap at today so we don't waste API calls on future months when
-    // the cache key uses end-of-ministry-year.
-    const today = new Date();
-    const effectiveEnd = endDate < today ? endDate : today;
-    const months: { start: Date; end: Date; key: string; monthIndex: number }[] = [];
-    const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-    while (cursor <= effectiveEnd) {
-      const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-      const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
-      const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
-      months.push({ start: monthStart, end: monthEnd, key, monthIndex: cursor.getMonth() });
-      cursor.setMonth(cursor.getMonth() + 1);
-    }
+    // Cap at the current month in MP (Central) time so we don't waste API calls on
+    // future months when the cache key uses end-of-ministry-year.
+    // Each window is a whole calendar month, half-open on Event_Start_Date, so a
+    // service on the month's last day is counted (and in exactly one month).
+    const months = monthWindows(startDate, endDate, { capAtMpToday: true });
 
-    const results = await mapWithConcurrency(months, 6, async ({ start, end, key, monthIndex }) => {
-      const monthStartIso = start.toISOString();
-      const monthEndIso = end.toISOString();
-
+    const results = await mapWithConcurrency(months, 6, async (w) => {
       // Get worship service events for this month (Event_Type_ID = 7)
       const events = await this.mp!.getTableRecords<{ Event_ID: number }>({
         table: 'Events',
         select: 'Event_ID',
-        filter: `Events.Event_Start_Date >= '${monthStartIso}' AND Events.Event_End_Date <= '${monthEndIso}' AND Events.Cancelled = 0 AND Events.Event_Type_ID = 7`
+        filter: `Events.Event_Start_Date >= '${w.start}' AND Events.Event_Start_Date < '${w.endExclusive}' AND Events.Cancelled = 0 AND Events.Event_Type_ID = 7`
       });
 
       let totalInPerson = 0;
@@ -867,8 +862,8 @@ export class DashboardService {
       }
 
       return {
-        month: key,
-        monthName: MONTH_NAMES[monthIndex],
+        month: w.key,
+        monthName: MONTH_NAMES[w.monthIndex],
         averageInPersonAttendance: inPersonEventCount > 0 ? Math.round(totalInPerson / inPersonEventCount) : 0,
         averageOnlineAttendance: onlineEventCount > 0 ? Math.round(totalOnline / onlineEventCount) : 0,
         averageTotalAttendance: eventCount > 0 ? Math.round((totalInPerson + totalOnline) / eventCount) : 0,
@@ -878,26 +873,24 @@ export class DashboardService {
       };
     });
 
-    // Collect successful months, log failures individually
+    // All-or-nothing: any failed month rejects, so both cache layers keep their
+    // last good series (.claude/rules/caching.md). A partial series is not a
+    // visible gap: the chart just has one point fewer, and filterDashboardData
+    // feeds the same array to computePeriodMetrics, so a dropped month would
+    // silently change the headline averages, service count and year-over-year.
     const trends: MonthlyAttendanceTrend[] = [];
     let failures = 0;
-    for (const result of results) {
+    results.forEach((result, i) => {
       if (result.status === 'fulfilled') {
         trends.push(result.value);
       } else {
         failures++;
-        console.error('Error fetching attendance for one month:', result.reason);
+        console.error(`Error fetching attendance for ${months[i].key}:`, errorForLog(result.reason));
       }
-    }
+    });
 
     if (failures > 0) {
-      console.warn(`Monthly attendance trends: ${failures}/${months.length} months failed, ${trends.length} succeeded`);
-    }
-
-    // If ALL months failed, throw so the cache layer doesn't store empty data
-    // over previously valid cached data (stale-while-revalidate preserves old value on error)
-    if (trends.length === 0 && months.length > 0) {
-      throw new Error(`All ${months.length} monthly attendance queries failed`);
+      throw new Error(`Monthly attendance trends: ${failures}/${months.length} monthly queries failed`);
     }
 
     return trends;
@@ -915,8 +908,8 @@ export class DashboardService {
     startDate: Date,
     endDate: Date
   ): Promise<WeeklyAttendanceTrend[]> {
-    const startIso = startDate.toISOString();
-    const endIso = endDate.toISOString();
+    // Inclusive calendar days -> half-open bounds on Event_Start_Date at both ends
+    const r = toMpDateRange(startDate, endDate);
 
     try {
       // Fetch all worship service events with their dates
@@ -927,8 +920,8 @@ export class DashboardService {
         table: 'Events',
         select: 'Event_ID,Event_Start_Date',
         filter: `
-          Events.Event_Start_Date >= '${startIso}' AND
-          Events.Event_End_Date <= '${endIso}' AND
+          Events.Event_Start_Date >= '${r.start}' AND
+          Events.Event_Start_Date < '${r.endExclusive}' AND
           Events.Cancelled = 0 AND
           Events.Event_Type_ID = 7
         `
@@ -969,7 +962,8 @@ export class DashboardService {
         const eventDate = eventDateMap.get(metric.Event_ID);
         if (!eventDate) continue;
 
-        const dateKey = new Date(eventDate).toISOString().slice(0, 10);
+        // MP wall-clock day, no parsing (TZ-independent; see getCommunityAttendanceTrends)
+        const dateKey = eventDate.slice(0, 10);
 
         if (!dateGroups.has(dateKey)) {
           dateGroups.set(dateKey, {
@@ -1015,8 +1009,8 @@ export class DashboardService {
 
       return trends;
     } catch (error) {
-      console.error('Error fetching weekly attendance trends:', error);
-      return [];
+      console.error('Error fetching weekly attendance trends:', errorForLog(error));
+      throw error;
     }
   }
 
@@ -1025,20 +1019,18 @@ export class DashboardService {
    * Returns ISO date strings so counts can be filtered client-side by selected period.
    */
   private async getMilestoneDates(milestoneId: number, startDate: Date, endDate: Date): Promise<string[]> {
+    const r = toMpDateRange(startDate, endDate);
     try {
-      const startIso = startDate.toISOString();
-      const endIso = endDate.toISOString();
-
       const records = await this.mp!.getTableRecords<{ Date_Accomplished: string }>({
         table: 'Participant_Milestones',
         select: 'Date_Accomplished',
-        filter: `Milestone_ID = ${milestoneId} AND Date_Accomplished >= '${startIso}' AND Date_Accomplished <= '${endIso}'`
+        filter: `Milestone_ID = ${milestoneId} AND Date_Accomplished >= '${r.start}' AND Date_Accomplished < '${r.endExclusive}'`
       });
 
       return records.map(r => r.Date_Accomplished);
     } catch (error) {
-      console.error(`Error fetching milestone dates for Milestone_ID=${milestoneId}:`, error);
-      return [];
+      console.error(`Error fetching milestone dates for Milestone_ID=${milestoneId}:`, errorForLog(error));
+      throw error;
     }
   }
 
@@ -1047,15 +1039,15 @@ export class DashboardService {
   // ---------------------------------------------------------------
 
   private async getEventParticipantsByMonth(startDate: Date, endDate: Date): Promise<EventParticipantMonth[]> {
-    const startIso = startDate.toISOString();
-    const endIso = endDate.toISOString();
+    // Inclusive calendar days -> half-open bounds on Event_Start_Date at both ends
+    const r = toMpDateRange(startDate, endDate);
 
     try {
       // Get events in the date range with their dates
       const events = await this.mp!.getTableRecords<{ Event_ID: number; Event_Start_Date: string }>({
         table: 'Events',
         select: 'Event_ID,Event_Start_Date',
-        filter: `Event_Start_Date >= '${startIso}' AND Event_End_Date <= '${endIso}' AND Cancelled = 0`
+        filter: `Event_Start_Date >= '${r.start}' AND Event_Start_Date < '${r.endExclusive}' AND Cancelled = 0`
       });
 
       if (events.length === 0) return [];
@@ -1075,9 +1067,7 @@ export class DashboardService {
       // Build event → month map
       const eventMonthMap = new Map<number, string>();
       for (const e of events) {
-        const d = new Date(e.Event_Start_Date);
-        const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        eventMonthMap.set(e.Event_ID, month);
+        eventMonthMap.set(e.Event_ID, e.Event_Start_Date.slice(0, 7)); // MP wall-clock 'YYYY-MM'
       }
 
       // Group unique participant IDs by month
@@ -1094,8 +1084,8 @@ export class DashboardService {
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([month, pids]) => ({ month, participantIds: [...pids] }));
     } catch (error) {
-      console.error('Error fetching event participants by month:', error);
-      return [];
+      console.error('Error fetching event participants by month:', errorForLog(error));
+      throw error;
     }
   }
 
@@ -1107,8 +1097,7 @@ export class DashboardService {
     rosterMemberRecords: RosterMemberRecord[];
     attendanceByMonth: AttendanceMonthRecord[];
   }> {
-    const startIso = startDate.toISOString();
-    const endIso = endDate.toISOString();
+    const r = toMpDateRange(startDate, endDate);
 
     try {
       // Get groups filtered by Group_Type_ID: 1 (Small Group), 3 (Class), 11 (Community)
@@ -1118,7 +1107,7 @@ export class DashboardService {
       }>({
         table: 'Groups',
         select: 'Group_ID,Group_Type_ID',
-        filter: `Group_Type_ID IN (1, 3, 11) AND Start_Date <= '${endIso}' AND (End_Date IS NULL OR End_Date >= '${startIso}')`
+        filter: `Group_Type_ID IN (1, 3, 11) AND Start_Date < '${r.endExclusive}' AND (End_Date IS NULL OR End_Date >= '${r.start}')`
       });
 
       if (relevantGroups.length === 0) return { rosterMemberRecords: [], attendanceByMonth: [] };
@@ -1189,28 +1178,21 @@ export class DashboardService {
       });
       const contactMap = new Map(contactLookup.map(c => [c.Participant_ID, c.Contact_ID]));
 
-      // Build roster member records (unique contactId + groupType + date range)
-      const rosterDedup = new Map<string, RosterMemberRecord>();
+      // Build roster member records per contactId + groupType.
+      // One record per disjoint membership span; a contact can appear more than once; consumers count contacts with a Set.
+      const rosterRows = [];
       for (const gp of rosterParticipants) {
         const typeId = groupToTypeMap.get(gp.Group_ID);
         const contactId = contactMap.get(gp.Participant_ID);
         if (!typeId || !contactId) continue;
-        const key = `${contactId}-${typeId}`;
-        const existing = rosterDedup.get(key);
-        // Keep the record with the earliest start date for this contact+type
-        if (!existing || gp.Start_Date < existing.startDate) {
-          rosterDedup.set(key, {
-            contactId,
-            groupTypeId: typeId,
-            groupTypeName: groupTypeMap.get(typeId) || 'Unknown',
-            startDate: gp.Start_Date,
-            endDate: gp.End_Date,
-          });
-        } else if (existing && gp.End_Date === null) {
-          // If any record has no end date, the person is still active
-          existing.endDate = null;
-        }
+        rosterRows.push({
+          key: `${contactId}-${typeId}`,
+          meta: { contactId, groupTypeId: typeId, groupTypeName: groupTypeMap.get(typeId) || 'Unknown' },
+          startDate: gp.Start_Date,
+          endDate: gp.End_Date,
+        });
       }
+      const rosterMemberRecords: RosterMemberRecord[] = mergeSpansByKey(rosterRows);
 
       // Build attendance by month + group type (unique contact IDs per bucket)
       const attendanceBuckets = new Map<string, { groupTypeId: number; groupTypeName: string; contacts: Set<number> }>();
@@ -1221,8 +1203,7 @@ export class DashboardService {
         const contactId = contactMap.get(ep.Participant_ID);
         if (!typeId || !contactId) continue;
 
-        const d = new Date(eventDate);
-        const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const month = eventDate.slice(0, 7); // MP wall-clock 'YYYY-MM'
         const bucketKey = `${month}-${typeId}`;
 
         if (!attendanceBuckets.has(bucketKey)) {
@@ -1245,12 +1226,12 @@ export class DashboardService {
         }));
 
       return {
-        rosterMemberRecords: [...rosterDedup.values()],
+        rosterMemberRecords,
         attendanceByMonth,
       };
     } catch (error) {
-      console.error('Error fetching roster and attendance raw data:', error);
-      return { rosterMemberRecords: [], attendanceByMonth: [] };
+      console.error('Error fetching roster and attendance raw data:', errorForLog(error));
+      throw error;
     }
   }
 
@@ -1264,8 +1245,7 @@ export class DashboardService {
    * Returns raw records for client-side date filtering and aggregation.
    */
   private async getServingLeadingRaw(startDate: Date, endDate: Date): Promise<ServingLeadingRecord[]> {
-    const startIso = startDate.toISOString();
-    const endIso = endDate.toISOString();
+    const r = toMpDateRange(startDate, endDate);
 
     try {
       // Step 1: Get all Group_Roles that are serving (type 3) or leading (type 1)
@@ -1296,7 +1276,7 @@ export class DashboardService {
         select: 'Participant_ID,Group_Role_ID,Start_Date,End_Date',
         ids: servingRoleIds,
         idColumn: 'Group_Role_ID',
-        extraFilter: `Start_Date <= '${endIso}' AND (End_Date IS NULL OR End_Date >= '${startIso}')`
+        extraFilter: `Start_Date < '${r.endExclusive}' AND (End_Date IS NULL OR End_Date >= '${r.start}')`
       });
 
       if (participants.length === 0) return [];
@@ -1343,37 +1323,34 @@ export class DashboardService {
         for (const m of ministries) ministryNameMap.set(m.Ministry_ID, m.Ministry_Name);
       }
 
-      // Step 6: Build records, deduplicate per (contactId, roleTypeId, ministryId)
-      const dedup = new Map<string, ServingLeadingRecord>();
+      // Step 6: Build records per (contactId, roleTypeId, ministryId).
+      // One record per disjoint membership span; a contact can appear more than once; consumers count contacts with a Set.
+      const servingRows = [];
       for (const p of participants) {
         const contactId = contactMap.get(p.Participant_ID);
         if (!contactId) continue;
 
         const roleTypeId = roleTypeMap.get(p.Group_Role_ID) || 0;
         const ministryId = roleMinistryMap.get(p.Group_Role_ID) ?? null;
-        const key = `${contactId}-${roleTypeId}-${ministryId}`;
-
-        const existing = dedup.get(key);
-        if (!existing || p.Start_Date < existing.startDate) {
-          dedup.set(key, {
+        servingRows.push({
+          key: `${contactId}-${roleTypeId}-${ministryId}`,
+          meta: {
             contactId,
             roleTypeId,
             roleTypeName: roleTypeNameMap.get(roleTypeId) || (roleTypeId === 1 ? 'Leader' : 'Servant'),
             ministryId,
             ministryName: ministryId ? (ministryNameMap.get(ministryId) || 'Unknown') : null,
-            startDate: p.Start_Date,
-            endDate: p.End_Date,
-          });
-        } else if (existing && p.End_Date === null) {
-          // If any record has no end date, the person is still active
-          existing.endDate = null;
-        }
+          },
+          startDate: p.Start_Date,
+          endDate: p.End_Date,
+        });
       }
 
-      return [...dedup.values()];
+      const servingRecords: ServingLeadingRecord[] = mergeSpansByKey(servingRows);
+      return servingRecords;
     } catch (error) {
-      console.error('Error fetching serving/leading raw records:', error);
-      return [];
+      console.error('Error fetching serving/leading raw records:', errorForLog(error));
+      throw error;
     }
   }
 
@@ -1392,42 +1369,49 @@ export class DashboardService {
     startDate: Date,
     endDate: Date,
   ): Promise<EngagementRawData> {
-    const empty: EngagementRawData = { activityByMonth: [], groupRecords: [], adultContactIds: [] };
-    const startIso = startDate.toISOString();
-    const endIso = endDate.toISOString();
+    // Inclusive calendar days -> half-open MP wall-clock bounds (see mp-date-range.ts)
+    const r = toMpDateRange(startDate, endDate);
 
     try {
-      // Step 1: Activity — query each month in parallel for distinct Contact_IDs.
+      // Step 1: Activity — query each month for distinct Contact_IDs, at most 6 at a
+      // time (CLAUDE.md, "Ministry Platform API Concurrency").
       // Exclude Page_ID 316 (Group Participants) — engagement venn has a
       // dedicated "Groups" dimension via Group_Participants table.
-      // Cap at today so we don't waste API calls on future months when
-      // the cache key uses end-of-ministry-year.
-      const today = new Date();
-      const effectiveEnd = endDate < today ? endDate : today;
-      const months: { start: Date; end: Date; key: string }[] = [];
-      const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-      while (cursor <= effectiveEnd) {
-        const monthStart = new Date(cursor);
-        const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0, 23, 59, 59);
-        const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
-        months.push({ start: monthStart, end: monthEnd > effectiveEnd ? effectiveEnd : monthEnd, key });
-        cursor.setMonth(cursor.getMonth() + 1);
+      // Cap at the current month in MP (Central) time so we don't waste API calls on
+      // future months when the cache key uses end-of-ministry-year. Whole calendar
+      // months, half-open: Activity_Log has no future rows, so the current month
+      // needs no clip at "now".
+      const months = monthWindows(startDate, endDate, { capAtMpToday: true });
+
+      const monthResults = await mapWithConcurrency(months, 6, async (w) => {
+        const records = await this.mp!.getTableRecords<{ Contact_ID: number }>({
+          table: 'Activity_Log',
+          select: 'Contact_ID',
+          filter: `Activity_Date >= '${w.start}' AND Activity_Date < '${w.endExclusive}' AND Page_ID <> 316`,
+          distinct: true,
+          groupBy: 'Contact_ID',
+        });
+        return { month: w.key, contactIds: records.map(rec => rec.Contact_ID) };
+      });
+
+      // All-or-nothing, unlike getMonthlyAttendanceTrends: the months are unioned
+      // into one Venn set, so a dropped month would be an invisible undercount
+      // cached over a complete value. Throw before Step 2 so no further reads run.
+      const fetched: { month: string; contactIds: number[] }[] = [];
+      let failures = 0;
+      monthResults.forEach((res, i) => {
+        if (res.status === 'fulfilled') {
+          fetched.push(res.value);
+        } else {
+          failures++;
+          console.error(`Error fetching Activity_Log for ${months[i].key}:`, errorForLog(res.reason));
+        }
+      });
+      if (failures > 0) {
+        throw new Error(`Engagement activity: ${failures}/${months.length} monthly Activity_Log queries failed`);
       }
 
-      const monthResults = await Promise.all(
-        months.map(async ({ start, end, key }) => {
-          const records = await this.mp!.getTableRecords<{ Contact_ID: number }>({
-            table: 'Activity_Log',
-            select: 'Contact_ID',
-            filter: `Activity_Date >= '${start.toISOString()}' AND Activity_Date <= '${end.toISOString()}' AND Page_ID <> 316`,
-            distinct: true,
-            groupBy: 'Contact_ID',
-          });
-          return { month: key, contactIds: records.map(r => r.Contact_ID) };
-        })
-      );
-
-      const activityByMonth = monthResults
+      const activityByMonth = fetched
         .filter(m => m.contactIds.length > 0)
         .sort((a, b) => a.month.localeCompare(b.month));
 
@@ -1436,7 +1420,7 @@ export class DashboardService {
       const groups = await this.mp!.getTableRecords<{ Group_ID: number }>({
         table: 'Groups',
         select: 'Group_ID',
-        filter: `(Ministry_ID IN (8, 14, 19) OR Group_ID = 763) AND Start_Date <= '${endIso}' AND (End_Date IS NULL OR End_Date >= '${startIso}')`
+        filter: `(Ministry_ID IN (8, 14, 19) OR Group_ID = 763) AND Start_Date < '${r.endExclusive}' AND (End_Date IS NULL OR End_Date >= '${r.start}')`
       });
 
       let groupRecords: EngagementRawData['groupRecords'] = [];
@@ -1451,7 +1435,7 @@ export class DashboardService {
           select: 'Participant_ID,Start_Date,End_Date',
           ids: groupIds,
           idColumn: 'Group_ID',
-          extraFilter: `Start_Date <= '${endIso}' AND (End_Date IS NULL OR End_Date >= '${startIso}')`
+          extraFilter: `Start_Date < '${r.endExclusive}' AND (End_Date IS NULL OR End_Date >= '${r.start}')`
         });
 
         // Resolve Participant → Contact
@@ -1468,29 +1452,25 @@ export class DashboardService {
           });
           const contactMap = new Map(contacts.map(c => [c.Participant_ID, c.Contact_ID]));
 
-          // Deduplicate per contact (keep earliest start, null end if any null)
-          const dedup = new Map<number, { startDate: string; endDate: string | null }>();
+          // Merge per contact.
+          // One record per disjoint membership span; a contact can appear more than once; consumers count contacts with a Set.
+          const groupRows = [];
           for (const p of participants) {
             const contactId = contactMap.get(p.Participant_ID);
             if (!contactId) continue;
-            const existing = dedup.get(contactId);
-            if (!existing || p.Start_Date < existing.startDate) {
-              dedup.set(contactId, { startDate: p.Start_Date, endDate: p.End_Date });
-            } else if (existing && p.End_Date === null) {
-              existing.endDate = null;
-            }
+            groupRows.push({
+              key: String(contactId),
+              meta: { contactId },
+              startDate: p.Start_Date,
+              endDate: p.End_Date,
+            });
           }
-
-          groupRecords = Array.from(dedup.entries()).map(([contactId, dates]) => ({
-            contactId,
-            startDate: dates.startDate,
-            endDate: dates.endDate,
-          }));
+          groupRecords = mergeSpansByKey(groupRows);
         }
       }
 
       // Step 3: Get serving contact IDs (lightweight — just need IDs for adult filter)
-      const servingContactIds = await this.getServingContactIds(startIso, endIso);
+      const servingContactIds = await this.getServingContactIds(r.start, r.endExclusive);
 
       // Step 4: Adult filter — collect all contact IDs, filter to adults once
       const allContactIds = new Set<number>();
@@ -1515,8 +1495,8 @@ export class DashboardService {
         adultContactIds: [...adultSet],
       };
     } catch (error) {
-      console.error('Error fetching engagement raw data:', error);
-      return empty;
+      console.error('Error fetching engagement raw data:', errorForLog(error));
+      throw error;
     }
   }
 
@@ -1524,7 +1504,7 @@ export class DashboardService {
    * Lightweight query to get unique Contact_IDs of people in serving/leading roles.
    * Used by getEngagementRawData for the adult filter without needing full enriched records.
    */
-  private async getServingContactIds(startIso: string, endIso: string): Promise<Set<number>> {
+  private async getServingContactIds(start: string, endExclusive: string): Promise<Set<number>> {
     try {
       // Get serving/leading role IDs
       const servingRoles = await this.mp!.getTableRecords<{ Group_Role_ID: number }>({
@@ -1540,7 +1520,7 @@ export class DashboardService {
         select: 'Participant_ID',
         ids: servingRoles.map(r => r.Group_Role_ID),
         idColumn: 'Group_Role_ID',
-        extraFilter: `Start_Date <= '${endIso}' AND (End_Date IS NULL OR End_Date >= '${startIso}')`
+        extraFilter: `Start_Date < '${endExclusive}' AND (End_Date IS NULL OR End_Date >= '${start}')`
       });
       if (participants.length === 0) return new Set();
 
@@ -1555,8 +1535,8 @@ export class DashboardService {
 
       return new Set(contacts.map(c => c.Contact_ID));
     } catch (error) {
-      console.error('Error fetching serving contact IDs:', error);
-      return new Set();
+      console.error('Error fetching serving contact IDs:', errorForLog(error));
+      throw error;
     }
   }
 

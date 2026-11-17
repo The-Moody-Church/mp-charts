@@ -1,6 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { computePeriodMetrics } from '../filter-dashboard-data';
-import type { MonthlyAttendanceTrend } from '@/lib/dto';
+import {
+  computePeriodMetrics,
+  computeRosterVsAttendance,
+  computeServingMetrics,
+  computeEngagementOverlap,
+  countDatesInRange,
+} from '../filter-dashboard-data';
+import type {
+  MonthlyAttendanceTrend,
+  RosterMemberRecord,
+  ServingLeadingRecord,
+  EngagementRawData,
+} from '@/lib/dto';
 
 describe('computePeriodMetrics', () => {
   const start = new Date(2026, 1, 1); // Feb 1
@@ -102,5 +113,139 @@ describe('computePeriodMetrics', () => {
     expect(result.averageInPersonAttendance).toBe(500);
     expect(result.averageOnlineAttendance).toBe(100);
     expect(result.totalEvents).toBe(4);
+  });
+});
+
+// The server keeps one record per disjoint membership span, so a contact who
+// left and came back appears twice. These pin that every consumer counts
+// distinct contacts, and that a period inside the gap does not count them.
+describe('multi-span records (one contact, two disjoint spans)', () => {
+  const fullStart = new Date(2025, 8, 1); // Sep 1 2025
+  const fullEnd = new Date(2026, 2, 31); // Mar 31 2026
+  const gapStart = new Date(2025, 10, 1); // Nov 1 2025
+  const gapEnd = new Date(2025, 11, 31); // Dec 31 2025
+
+  it('computeServingMetrics counts the contact once, and not in the gap months', () => {
+    const base = {
+      contactId: 7, roleTypeId: 3, roleTypeName: 'Servant', ministryId: 60, ministryName: 'Children',
+    };
+    const records: ServingLeadingRecord[] = [
+      { ...base, startDate: '2025-09-05T00:00:00', endDate: '2025-10-15T00:00:00' },
+      { ...base, startDate: '2026-01-10T00:00:00', endDate: null },
+    ];
+
+    const result = computeServingMetrics(records, fullStart, fullEnd);
+    expect(result.totalServingLeading).toBe(1);
+    expect(result.servingByRoleType).toEqual([{ roleTypeId: 3, roleTypeName: 'Servant', uniqueContacts: 1 }]);
+    expect(result.servingByMinistry).toEqual([{ ministryId: 60, ministryName: 'Children', uniqueContacts: 1 }]);
+    expect(result.servingTrends.map((t) => [t.month, t.totalCount])).toEqual([
+      ['2025-09', 1], ['2025-10', 1], ['2025-11', 0], ['2025-12', 0],
+      ['2026-01', 1], ['2026-02', 1], ['2026-03', 1],
+    ]);
+
+    expect(computeServingMetrics(records, gapStart, gapEnd).totalServingLeading).toBe(0);
+  });
+
+  it('computeRosterVsAttendance counts the contact once, and not in a period inside the gap', () => {
+    const base = { contactId: 7, groupTypeId: 1, groupTypeName: 'Small Group' };
+    const records: RosterMemberRecord[] = [
+      { ...base, startDate: '2025-09-05T00:00:00', endDate: '2025-10-15T00:00:00' },
+      { ...base, startDate: '2026-01-10T00:00:00', endDate: null },
+    ];
+
+    expect(computeRosterVsAttendance(records, [], fullStart, fullEnd)).toEqual([
+      { groupTypeName: 'Small Group', rosterCount: 1, attendanceCount: 0 },
+    ]);
+    expect(computeRosterVsAttendance(records, [], gapStart, gapEnd)).toEqual([]);
+  });
+
+  it('computeEngagementOverlap counts the contact once in the group circle', () => {
+    const rawData: EngagementRawData = {
+      activityByMonth: [],
+      groupRecords: [
+        { contactId: 7, startDate: '2025-09-05T00:00:00', endDate: '2025-10-15T00:00:00' },
+        { contactId: 7, startDate: '2026-01-10T00:00:00', endDate: null },
+      ],
+      adultContactIds: [7],
+    };
+
+    const result = computeEngagementOverlap(rawData, [], fullStart, fullEnd);
+    expect(result.totalGroup).toBe(1);
+    expect(result.groupOnly).toBe(1);
+    expect(computeEngagementOverlap(rawData, [], gapStart, gapEnd).totalGroup).toBe(0);
+  });
+});
+
+// #305, client side: the selection's endDate is midnight at the START of the last day,
+// and MP values carry a time of day. Every consumer must count the whole last day, and
+// nothing from the day after it. Real MP rows look like these (Group_Participants
+// Start_Date '2025-08-31T11:30:00', Participant_Milestones '2026-02-22T10:15:00').
+describe('last day of the selected range (#305)', () => {
+  const augStart = new Date(2025, 7, 1); // Aug 1 2025
+  const augEnd = new Date(2025, 7, 31); // Aug 31 2025 (inclusive)
+  const serving = (startDate: string, endDate: string | null, contactId = 1): ServingLeadingRecord => ({
+    contactId, roleTypeId: 3, roleTypeName: 'Servant', ministryId: 60, ministryName: 'Children', startDate, endDate,
+  });
+
+  it('countDatesInRange counts a milestone later in the day on the last day, in that month only', () => {
+    const dates = ['2026-05-31T10:15:00', '2026-06-01T00:00:00', '2026-04-30T23:59:59'];
+    expect(countDatesInRange(dates, new Date(2026, 4, 1), new Date(2026, 4, 31))).toBe(1);
+    expect(countDatesInRange(dates, new Date(2026, 5, 1), new Date(2026, 5, 30))).toBe(1);
+    expect(countDatesInRange(dates, new Date(2026, 3, 1), new Date(2026, 3, 30))).toBe(1);
+  });
+
+  it('countDatesInRange accepts a space separator and a fractional-second value', () => {
+    expect(countDatesInRange(['2026-05-31 19:30:00', '2026-05-01T00:00:00.123'], new Date(2026, 4, 1), new Date(2026, 4, 31))).toBe(2);
+  });
+
+  it('computeServingMetrics counts a span that starts at 10:29 on the last day, in the total and the trend', () => {
+    const result = computeServingMetrics([serving('2025-08-31T10:29:00', null)], augStart, augEnd);
+    expect(result.totalServingLeading).toBe(1);
+    expect(result.servingByRoleType).toEqual([{ roleTypeId: 3, roleTypeName: 'Servant', uniqueContacts: 1 }]);
+    expect(result.servingTrends).toEqual([
+      expect.objectContaining({ month: '2025-08', servingCount: 1, totalCount: 1 }),
+    ]);
+  });
+
+  it('computeServingMetrics puts a last-day start in that month, not the month before, in a multi-month trend', () => {
+    const result = computeServingMetrics([serving('2025-11-30T10:00:00', null)], new Date(2025, 9, 1), new Date(2025, 11, 31));
+    expect(result.servingTrends.map((t) => [t.month, t.totalCount])).toEqual([
+      ['2025-10', 0], ['2025-11', 1], ['2025-12', 1],
+    ]);
+  });
+
+  it('computeServingMetrics leaves out a span that starts on the day after the range', () => {
+    const result = computeServingMetrics([serving('2025-09-01T00:00:00', null)], augStart, augEnd);
+    expect(result.totalServingLeading).toBe(0);
+    expect(result.servingTrends.map((t) => t.totalCount)).toEqual([0]);
+  });
+
+  it('computeServingMetrics counts a span that ended later in the day on the first day', () => {
+    expect(computeServingMetrics([serving('2025-06-01T00:00:00', '2025-08-01T09:00:00')], augStart, augEnd).totalServingLeading).toBe(1);
+    expect(computeServingMetrics([serving('2025-06-01T00:00:00', '2025-07-31T23:00:00')], augStart, augEnd).totalServingLeading).toBe(0);
+  });
+
+  it('computeRosterVsAttendance counts a roster span starting at 11:30 on the last day', () => {
+    const records: RosterMemberRecord[] = [
+      { contactId: 9, groupTypeId: 1, groupTypeName: 'Small Group', startDate: '2025-08-31T11:30:00', endDate: null },
+      { contactId: 10, groupTypeId: 1, groupTypeName: 'Small Group', startDate: '2025-09-01T00:00:00', endDate: null },
+    ];
+    expect(computeRosterVsAttendance(records, [], augStart, augEnd)).toEqual([
+      { groupTypeName: 'Small Group', rosterCount: 1, attendanceCount: 0 },
+    ]);
+  });
+
+  it('computeEngagementOverlap counts group and serving spans starting on the last day', () => {
+    const rawData: EngagementRawData = {
+      activityByMonth: [],
+      groupRecords: [
+        { contactId: 1, startDate: '2025-08-31T10:27:00', endDate: null },
+        { contactId: 2, startDate: '2025-09-01T00:00:00', endDate: null },
+      ],
+      adultContactIds: [1, 3],
+    };
+    const result = computeEngagementOverlap(rawData, [serving('2025-08-31T11:30:00', null, 3)], augStart, augEnd);
+    expect(result.totalGroup).toBe(1);
+    expect(result.totalServing).toBe(1);
   });
 });

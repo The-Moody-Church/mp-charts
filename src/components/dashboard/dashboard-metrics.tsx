@@ -22,6 +22,10 @@ interface DashboardMetricsProps {
   isSingleMonth?: boolean;
   extendedLoading?: boolean;
   engagementLoading?: boolean;
+  /** The extended stage failed with no earlier data: its cards say so instead of showing placeholder zeros. */
+  extendedError?: boolean;
+  /** The engagement stage failed with no earlier data. */
+  engagementError?: boolean;
 }
 
 function LoadingSkeleton({ height = 300 }: { height?: number }) {
@@ -35,7 +39,20 @@ function LoadingSkeleton({ height = 300 }: { height?: number }) {
   );
 }
 
-function EngagementOverviewCard({ data, engagementLoading }: { data: DashboardData; engagementLoading: boolean }) {
+/**
+ * Shown in place of a chart whose data failed to load. Without it the cards render
+ * getDashboardData's placeholder zeros ("0 unique people serving", an empty Venn)
+ * as if they were real figures.
+ */
+function UnavailableNotice({ height = 300 }: { height?: number }) {
+  return (
+    <div role="status" className="flex items-center justify-center text-center text-sm text-muted-foreground px-4" style={{ height }}>
+      This data could not be loaded from Ministry Platform. Try Refresh Data in a few minutes.
+    </div>
+  );
+}
+
+function EngagementOverviewCard({ data, engagementLoading, unavailable }: { data: DashboardData; engagementLoading: boolean; unavailable: boolean }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   return (
@@ -74,7 +91,7 @@ function EngagementOverviewCard({ data, engagementLoading }: { data: DashboardDa
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {engagementLoading ? <LoadingSkeleton /> : (
+        {engagementLoading ? <LoadingSkeleton /> : unavailable ? <UnavailableNotice /> : (
           <VennDiagram
             data={data.engagementOverlap}
             averageTotalAttendance={data.currentPeriod.averageInPersonAttendance + data.currentPeriod.averageOnlineAttendance}
@@ -86,13 +103,15 @@ function EngagementOverviewCard({ data, engagementLoading }: { data: DashboardDa
   );
 }
 
-export function DashboardMetrics({ data, showCompare = true, isSingleMonth = false, extendedLoading = false, engagementLoading = false }: DashboardMetricsProps) {
+export function DashboardMetrics({ data, showCompare = true, isSingleMonth = false, extendedLoading = false, engagementLoading = false, extendedError = false, engagementError = false }: DashboardMetricsProps) {
   return (
     <div className="space-y-10">
       {/* Engagement Venn Diagram */}
       <EngagementOverviewCard
         data={data}
         engagementLoading={engagementLoading}
+        // The Venn's serving circle comes from the extended stage's serving records.
+        unavailable={engagementError || extendedError}
       />
 
       {/* ============================================================ */}
@@ -243,7 +262,7 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
               <CardDescription>Unique people on group rosters vs unique people who checked in to events</CardDescription>
             </CardHeader>
             <CardContent>
-              {extendedLoading ? <LoadingSkeleton /> : (
+              {extendedLoading ? <LoadingSkeleton /> : extendedError ? <UnavailableNotice /> : (
                 <ExpandableChart
                   title="Roster vs Attendance"
                   description="Unique people on group rosters vs unique people who checked in to events"
@@ -263,10 +282,10 @@ export function DashboardMetrics({ data, showCompare = true, isSingleMonth = fal
       {/* Section 3: Grow in Love */}
       {/* ============================================================ */}
       <SectionWrapper title="Grow in Love">
-        {extendedLoading ? (
+        {extendedLoading || extendedError ? (
           <Card>
             <CardContent className="pt-6">
-              <LoadingSkeleton />
+              {extendedLoading ? <LoadingSkeleton /> : <UnavailableNotice />}
             </CardContent>
           </Card>
         ) : (

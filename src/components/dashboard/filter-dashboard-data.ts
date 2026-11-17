@@ -25,6 +25,42 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
+/**
+ * Calendar-day comparison for MP wall-clock values (#305).
+ *
+ * The selection range is two local-constructor Dates naming inclusive calendar days
+ * (`endDate` is midnight at the START of the last day). MP strings carry a time of day
+ * ('2025-08-31T11:30:00') and no zone, so `new Date(mp) <= endDate` dropped anything later
+ * than 00:00 on the last day. Compare 'YYYY-MM-DD' strings instead, as the server does
+ * (mp-date-range.ts): no parsing, no time zone, and the whole last day is in range.
+ */
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** 'YYYY-MM-DD' of a range bound, read with local getters (the frame it was built in). */
+function dayOf(d: Date): string {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+/** 'YYYY-MM-DD' of an MP wall-clock string ('T' or ' ' separator both slice cleanly). */
+function mpDay(value: string): string {
+  return value.slice(0, 10);
+}
+
+/** True when an MP date falls on an inclusive [startDay..endDay] calendar range. */
+function mpDateInDays(value: string, startDay: string, endDay: string): boolean {
+  const day = mpDay(value);
+  return day >= startDay && day <= endDay;
+}
+
+/** True when an MP membership span (null end = still active) overlaps [startDay..endDay]. */
+function mpSpanOverlapsDays(
+  span: { startDate: string; endDate: string | null },
+  startDay: string,
+  endDay: string
+): boolean {
+  return mpDay(span.startDate) <= endDay && (span.endDate === null || mpDay(span.endDate) >= startDay);
+}
+
 /** Derive monthName from YYYY-MM if missing (handles stale cached data) */
 function ensureMonthName(item: SmallGroupTrend): SmallGroupTrend {
   if (item.monthName) return item;
@@ -336,12 +372,12 @@ function filterMonthlyByDate<T extends { month: string }>(
   });
 }
 
-/** Count ISO date strings that fall within a date range */
-function countDatesInRange(dates: string[], startDate: Date, endDate: Date): number {
-  return dates.filter(d => {
-    const date = new Date(d);
-    return date >= startDate && date <= endDate;
-  }).length;
+/** Count MP wall-clock date strings on the inclusive calendar days startDate..endDate */
+/** Exported for testing */
+export function countDatesInRange(dates: string[], startDate: Date, endDate: Date): number {
+  const startDay = dayOf(startDate);
+  const endDay = dayOf(endDate);
+  return dates.filter(d => mpDateInDays(d, startDay, endDay)).length;
 }
 
 /**
@@ -448,7 +484,8 @@ function computeYearOverYear(
  * Roster: unique contacts whose membership overlaps the date range.
  * Attendance: unique contacts who attended events in the date range (by month buckets).
  */
-function computeRosterVsAttendance(
+/** Exported for testing */
+export function computeRosterVsAttendance(
   rosterRecords: DashboardData['rosterMemberRecords'],
   attendanceByMonth: DashboardData['attendanceByMonth'],
   startDate: Date,
@@ -458,11 +495,11 @@ function computeRosterVsAttendance(
 
   // Roster: filter to records whose date range overlaps the selected period
   const typeRoster = new Map<number, { name: string; contacts: Set<number> }>();
+  const startDay = dayOf(startDate);
+  const endDay = dayOf(endDate);
   for (const r of rosterRecords) {
-    const rStart = new Date(r.startDate);
-    const rEnd = r.endDate ? new Date(r.endDate) : endDate;
-    // Overlap check: record starts before period ends AND record ends after period starts
-    if (rStart <= endDate && rEnd >= startDate) {
+    // Overlap check by calendar day: starts on/before the last day, ends on/after the first
+    if (mpSpanOverlapsDays(r, startDay, endDay)) {
       if (!typeRoster.has(r.groupTypeId)) {
         typeRoster.set(r.groupTypeId, { name: r.groupTypeName, contacts: new Set() });
       }
@@ -503,7 +540,8 @@ function computeRosterVsAttendance(
  * Compute all serving metrics from raw serving/leading records for a date range.
  * Replaces 4 separate server-side methods with a single client-side computation.
  */
-function computeServingMetrics(
+/** Exported for testing */
+export function computeServingMetrics(
   records: ServingLeadingRecord[],
   startDate: Date,
   endDate: Date
@@ -517,12 +555,10 @@ function computeServingMetrics(
     return { servingTrends: [], servingByRoleType: [], servingByMinistry: [], totalServingLeading: 0 };
   }
 
-  // Filter records to those overlapping the selected period
-  const active = records.filter(r => {
-    const rStart = new Date(r.startDate);
-    const rEnd = r.endDate ? new Date(r.endDate) : endDate;
-    return rStart <= endDate && rEnd >= startDate;
-  });
+  // Filter records to those overlapping the selected period (by calendar day)
+  const startDay = dayOf(startDate);
+  const endDay = dayOf(endDate);
+  const active = records.filter(r => mpSpanOverlapsDays(r, startDay, endDay));
 
   // Total unique contacts serving/leading in the period
   const uniqueContacts = new Set(active.map(r => r.contactId));
@@ -568,17 +604,16 @@ function computeServingMetrics(
   const endMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
 
   while (currentDate <= endMonth) {
-    const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-    const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+    // Whole calendar month, inclusive of every moment of its last day
+    const monthStartDay = dayOf(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1));
+    const monthEndDay = dayOf(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0));
 
     const servingContacts = new Set<number>();
     const leadingContacts = new Set<number>();
     const allContacts = new Set<number>();
 
     for (const r of records) {
-      const rStart = new Date(r.startDate);
-      const rEnd = r.endDate ? new Date(r.endDate) : monthEnd;
-      if (rStart <= monthEnd && rEnd >= monthStart) {
+      if (mpSpanOverlapsDays(r, monthStartDay, monthEndDay)) {
         allContacts.add(r.contactId);
         if (r.roleTypeId === 3) servingContacts.add(r.contactId);
         if (r.roleTypeId === 1) leadingContacts.add(r.contactId);
@@ -604,7 +639,8 @@ function computeServingMetrics(
  * Three dimensions: Activity (monthly buckets), Groups (date-range records), Serving (from serving records).
  * Uses pre-computed adult contact IDs to filter the serving dimension.
  */
-function computeEngagementOverlap(
+/** Exported for testing */
+export function computeEngagementOverlap(
   rawData: EngagementRawData,
   servingRecords: ServingLeadingRecord[],
   startDate: Date,
@@ -628,11 +664,11 @@ function computeEngagementOverlap(
   }
 
   // Group set: filter records by date overlap
+  const startDay = dayOf(startDate);
+  const endDay = dayOf(endDate);
   const groupContacts = new Set<number>();
   for (const r of rawData.groupRecords) {
-    const rStart = new Date(r.startDate);
-    const rEnd = r.endDate ? new Date(r.endDate) : endDate;
-    if (rStart <= endDate && rEnd >= startDate) {
+    if (mpSpanOverlapsDays(r, startDay, endDay)) {
       groupContacts.add(r.contactId);
     }
   }
@@ -641,9 +677,7 @@ function computeEngagementOverlap(
   const adultSet = new Set(rawData.adultContactIds);
   const servingContacts = new Set<number>();
   for (const r of servingRecords) {
-    const rStart = new Date(r.startDate);
-    const rEnd = r.endDate ? new Date(r.endDate) : endDate;
-    if (rStart <= endDate && rEnd >= startDate && adultSet.has(r.contactId)) {
+    if (mpSpanOverlapsDays(r, startDay, endDay) && adultSet.has(r.contactId)) {
       servingContacts.add(r.contactId);
     }
   }

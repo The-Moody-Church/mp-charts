@@ -130,11 +130,15 @@ export async function refreshDashboardCache(): Promise<{
     const session = await requireFeatureAccess("dashboard");
     enforceRateLimit(session.user.id, "cacheRefresh");
 
-    // Purge the service-cache entries so the re-fetch in handleRefresh()
+    // Mark the service-cache entries so the re-fetch in handleRefresh()
     // actually hits the MP API instead of returning stale cached data.
     // Without this, the user clicks "Refresh" and sees identical old data.
-    serviceCache.deleteByPrefix('dashboard');
-    serviceCache.deleteByPrefix('group-types');
+    // markForRefresh, not deleteByPrefix: the last good value is kept until the
+    // forced fetch succeeds, so an MP failure during Refresh rejects that fetch
+    // (the shell keeps what it shows) and every later request is still served
+    // the previous data instead of a cold fetch (.claude/rules/caching.md).
+    serviceCache.markForRefresh('dashboard');
+    serviceCache.markForRefresh('group-types');
 
     // NOTE: Do NOT use revalidatePath here — it hard-purges the page's PPR
     // shell, forcing a full re-render (10+ seconds). updateTag expires the

@@ -113,6 +113,21 @@ filter: `Contact_Date >= '2026-05-01' AND Contact_Date < '2026-06-01'`
 
 Do not convert filter values to UTC. If you have a `Date` instant in JS, run it through `toMpSqlDatetime(instant)` first.
 
+### Date ranges in `$filter`
+
+A range a caller names as calendar days ("Sep 1 through Aug 31") is **half-open on MP wall-clock day strings**: `col >= '<startDay> 00:00:00' AND col < '<dayAfter(endDay)> 00:00:00'`. Never `col <= '<endDay> 00:00:00'`: that is midnight at the *start* of the last day, and it drops everything later that day (the dashboard lost every service on Aug 31, Nov 30 and May 31 this way until 2026-11).
+
+Use the helpers in `src/lib/providers/ministry-platform/utils/mp-date-range.ts`:
+
+- `toMpDateRange(startDate, endDate)` → `{ start, endExclusive, startDay, endExclusiveDay }` for an inclusive `[startDate..endDate]` of caller-built local Dates (`new Date(y, m, d)`; any time of day is ignored).
+- `monthWindows(startDate, endDate, { capAtMpToday? })` → one half-open window per calendar month, stepping integer (year, month) pairs so a start on the 29th–31st never skips a month. The optional cap uses the **Central** current month (`mpMonthKey`), not the server's UTC one.
+- For a row range check in JS, compare day strings: `mpValue.slice(0, 10) < r.endExclusiveDay` (works for both the `T` and the space separator). The same goes for the browser: `filter-dashboard-data.ts` compares `value.slice(0, 10)` with the selection's `'YYYY-MM-DD'` days (`mpSpanOverlapsDays`, `countDatesInRange`), because its `endDate` is also midnight at the start of the last day, and `new Date(mp) <= endDate` dropped a span or milestone stamped later that day.
+- For a day or month bucket key, slice the MP string (`slice(0, 10)` / `slice(0, 7)`). `new Date(mp).toISOString()` parses it in the process zone and reads it back in UTC, so off a UTC host an evening event lands on the next day (on Aug 31, the next month).
+
+**Never pass a caller-built `Date` to `toMpSqlDatetime(Date)`.** It treats the Date as an instant: under TZ=UTC, `new Date(2025, 8, 1)` becomes `'2025-08-31 19:00:00'`, the previous day. Never put `toISOString()` in a filter either: it only means Central by accident when TZ=UTC, and shifts by the offset on a developer machine.
+
+For an event, filter on `Event_Start_Date` at **both** ends, so each event lands in exactly one window (the one its start-date bucket key names). For a span overlap (groups, participants), use `Start_Date < r.endExclusive AND (End_Date IS NULL OR End_Date >= r.start)`.
+
 ## Anti-patterns
 
 These caused or could have caused timezone drift bugs. Grep for them when reviewing new code.
@@ -131,8 +146,7 @@ The shared signature of these bugs: a `Date` object that crosses a zone boundary
 
 These work today only by coincidence (consistent-drift, or because our users happen to browse from Central). Worth a separate pass to migrate them to `parseMpDatetime` / `Intl.DateTimeFormat({ timeZone })` for correctness:
 
-- `src/services/dashboardService.ts:574-575, 1078` — group/event date range comparisons. Both sides of the comparison currently drift the same way (UTC midnight on Docker), so the relative comparison is preserved. Real fix would `parseMpDatetime` the MP value AND build the loop boundaries via MP-TZ; for now leave as-is.
-- `src/services/dashboardService.ts:1579` — DOB age comparison. Works for ~99% of cases; edge case for someone whose DOB date is "today" in Central but "yesterday" in UTC.
+- `src/services/dashboardService.ts` `filterAdultContacts` — DOB age comparison. Works for ~99% of cases; edge case for someone whose DOB date is "today" in Central but "yesterday" in UTC.
 - `src/components/contact-logs/contact-logs.tsx:54` — `formatDateTime` uses `new Date(mpString).toLocaleDateString(...)`. Works for Central-locale browsers; would shift for users in other zones.
 
 ## Testing

@@ -58,7 +58,9 @@ function getCurrentMinistryYear(): number {
  *
  * Uses end-of-ministry-year (Aug 31) as end date instead of today,
  * so cache keys are stable within a ministry year — no daily key changes.
- * The service methods cap month iteration at today internally.
+ * Aug 31 is an inclusive calendar day: the service queries `< Sep 1 00:00`
+ * Central (mp-date-range.ts). The service methods cap month iteration at the
+ * current Central month internally.
  */
 function getDashboardDateParams() {
   const currentYear = getCurrentMinistryYear();

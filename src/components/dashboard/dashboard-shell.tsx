@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useTransition, useCallback, useMemo } from 'react';
+import { useState, useEffect, useTransition, useCallback, useMemo, useRef } from 'react';
 import { RefreshCw, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DashboardData } from '@/lib/dto';
@@ -48,6 +48,16 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
   const [fullData, setFullData] = useState<DashboardData>(initialData);
   const [extendedLoading, setExtendedLoading] = useState(true);
   const [engagementLoading, setEngagementLoading] = useState(true);
+  // A stage that failed with nothing loaded before: its cards say "unavailable"
+  // instead of rendering getDashboardData's placeholder zeros as real numbers.
+  const [extendedError, setExtendedError] = useState(false);
+  const [engagementError, setEngagementError] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  // The last extended/engagement data that loaded, so a Refresh whose core read
+  // succeeds but whose extended read fails keeps them instead of the core
+  // result's placeholder defaults.
+  const extendedRef = useRef<Partial<DashboardData> | null>(null);
+  const engagementRef = useRef<Partial<DashboardData> | null>(null);
   const [isRefreshing, startRefreshTransition] = useTransition();
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [filterExpanded, setFilterExpanded] = useState(false);
@@ -57,12 +67,16 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
     let cancelled = false;
     getExtendedDashboardMetrics().then(extended => {
       if (!cancelled) {
+        extendedRef.current = extended;
         setFullData(prev => ({ ...prev, ...extended }));
         setExtendedLoading(false);
       }
     }).catch(err => {
       console.error('Error loading extended dashboard data:', err);
-      if (!cancelled) setExtendedLoading(false);
+      if (!cancelled) {
+        setExtendedError(true);
+        setExtendedLoading(false);
+      }
     });
     return () => { cancelled = true; };
   }, []);
@@ -72,12 +86,16 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
     let cancelled = false;
     getEngagementDashboardMetrics().then(engagement => {
       if (!cancelled) {
+        engagementRef.current = engagement;
         setFullData(prev => ({ ...prev, ...engagement }));
         setEngagementLoading(false);
       }
     }).catch(err => {
       console.error('Error loading engagement dashboard data:', err);
-      if (!cancelled) setEngagementLoading(false);
+      if (!cancelled) {
+        setEngagementError(true);
+        setEngagementLoading(false);
+      }
     });
     return () => { cancelled = true; };
   }, []);
@@ -100,21 +118,59 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
 
   const handleRefresh = useCallback(() => {
     startRefreshTransition(async () => {
-      const cacheResult = await refreshDashboardCache();
-      if (cacheResult.success) {
-        setLastRefresh(cacheResult.timestamp);
-      }
+      // Nothing here may throw: an error escaping a transition goes to the route's
+      // error boundary, which would replace data the user already has with an
+      // error page. Each part that fails keeps what is on screen instead.
+      setRefreshError(null);
+      const cacheResult = await refreshDashboardCache().catch((err: unknown) => {
+        console.error('Error refreshing dashboard cache:', err);
+        return { success: false, timestamp: new Date() };
+      });
 
-      // Re-fetch core, extended, and engagement data
-      const [freshData, extended, engagement] = await Promise.all([
+      // Re-fetch core, extended, and engagement data; apply whichever succeeded.
+      const [core, extended, engagement] = await Promise.allSettled([
         getFullRangeDashboardMetrics(),
         getExtendedDashboardMetrics(),
         getEngagementDashboardMetrics(),
       ]);
-      setFullData({ ...freshData, ...extended, ...engagement });
+
+      if (extended.status === 'fulfilled') {
+        extendedRef.current = extended.value;
+        setExtendedError(false);
+      } else {
+        console.error('Error refreshing extended dashboard data:', extended.reason);
+        if (!extendedRef.current) setExtendedError(true);
+      }
+      if (engagement.status === 'fulfilled') {
+        engagementRef.current = engagement.value;
+        setEngagementError(false);
+      } else {
+        console.error('Error refreshing engagement dashboard data:', engagement.reason);
+        if (!engagementRef.current) setEngagementError(true);
+      }
+      if (core.status === 'rejected') {
+        console.error('Error refreshing dashboard data:', core.reason);
+      }
+
+      setFullData(prev => ({
+        ...(core.status === 'fulfilled' ? core.value : prev),
+        ...(extendedRef.current ?? {}),
+        ...(engagementRef.current ?? {}),
+      }));
       setExtendedLoading(false);
       setEngagementLoading(false);
-      router.refresh();
+
+      const anyFailed = [core, extended, engagement].some(r => r.status === 'rejected');
+      if (!cacheResult.success || anyFailed) {
+        setRefreshError(
+          anyFailed
+            ? 'Some data could not be refreshed from Ministry Platform, so the previous data is still shown. Try again in a few minutes.'
+            : 'The dashboard could not be refreshed right now, so the cached data is still shown. Try again later.'
+        );
+      } else {
+        setLastRefresh(cacheResult.timestamp);
+      }
+      if (core.status === 'fulfilled') router.refresh();
     });
   }, [router]);
 
@@ -142,6 +198,12 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
             </Button>
           </div>
         </div>
+
+        {refreshError && (
+          <p role="status" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+            {refreshError}
+          </p>
+        )}
 
         <div className="space-y-2">
           <button
@@ -171,6 +233,8 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
           isSingleMonth={isSingleMonthSelection(selection)}
           extendedLoading={extendedLoading}
           engagementLoading={engagementLoading}
+          extendedError={extendedError}
+          engagementError={engagementError}
         />
       </div>
     </div>

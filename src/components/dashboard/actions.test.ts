@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 const {
   mockRequireFeatureAccess,
   mockEnforceRateLimit,
+  mockMarkForRefresh,
   mockDeleteByPrefix,
   mockUpdateTag,
   mockRevalidatePath,
@@ -16,6 +17,7 @@ const {
 } = vi.hoisted(() => ({
   mockRequireFeatureAccess: vi.fn(),
   mockEnforceRateLimit: vi.fn(),
+  mockMarkForRefresh: vi.fn(),
   mockDeleteByPrefix: vi.fn(),
   mockUpdateTag: vi.fn(),
   mockRevalidatePath: vi.fn(),
@@ -36,7 +38,7 @@ vi.mock("next/cache", () => ({
 vi.mock("@/lib/authorization", () => ({ requireFeatureAccess: mockRequireFeatureAccess }));
 vi.mock("@/lib/rate-limit", () => ({ enforceRateLimit: mockEnforceRateLimit }));
 vi.mock("@/lib/service-cache", () => ({
-  serviceCache: { deleteByPrefix: mockDeleteByPrefix, getOrFetch: vi.fn() },
+  serviceCache: { markForRefresh: mockMarkForRefresh, deleteByPrefix: mockDeleteByPrefix, getOrFetch: vi.fn() },
   CACHE_TTL: { STANDARD: 1, LONG: 2 },
 }));
 vi.mock("@/components/dashboard/cached-data", () => ({
@@ -82,7 +84,7 @@ beforeEach(() => {
   mockRequireFeatureAccess.mockResolvedValue(SESSION);
   mockEnforceRateLimit.mockImplementation(() => {});
   // clearMocks keeps implementations, so reset the ones error-path tests override.
-  mockDeleteByPrefix.mockImplementation(() => {});
+  mockMarkForRefresh.mockImplementation(() => {});
   mockUpdateTag.mockImplementation(() => {});
   mockGetCachedDashboardData.mockResolvedValue(DATA);
   mockGetCachedFullRangeData.mockResolvedValue(DATA);
@@ -295,7 +297,7 @@ describe.each([
 // refreshDashboardCache
 // ---------------------------------------------------------------------------
 describe("refreshDashboardCache", () => {
-  it("authorizes, rate-limits with the cacheRefresh tier, purges serviceCache, then expires the tags", async () => {
+  it("authorizes, rate-limits with the cacheRefresh tier, marks serviceCache for refresh, then expires the tags", async () => {
     const result = await refreshDashboardCache();
 
     expect(result.success).toBe(true);
@@ -306,16 +308,24 @@ describe("refreshDashboardCache", () => {
     expect(mockEnforceRateLimit).toHaveBeenCalledTimes(1);
     expect(mockEnforceRateLimit).toHaveBeenCalledWith("user-1", "cacheRefresh");
 
-    expect(mockDeleteByPrefix.mock.calls).toEqual([["dashboard"], ["group-types"]]);
+    expect(mockMarkForRefresh.mock.calls).toEqual([["dashboard"], ["group-types"]]);
     expect(mockUpdateTag.mock.calls).toEqual([["dashboard-data"], ["group-types"]]);
   });
 
-  it("purges serviceCache BEFORE any updateTag (caching.md load-bearing rule)", async () => {
+  // Was a bug: deleteByPrefix dropped the last good value before the re-fetch was
+  // known to succeed, so one MP failure during Refresh left both cache layers
+  // empty and every later page load paid a cold fetch. markForRefresh keeps it.
+  it("marks serviceCache for refresh instead of deleting the last good values", async () => {
+    await refreshDashboardCache();
+    expect(mockDeleteByPrefix).not.toHaveBeenCalled();
+  });
+
+  it("marks serviceCache BEFORE any updateTag (caching.md load-bearing rule)", async () => {
     await refreshDashboardCache();
 
     const authOrder = mockRequireFeatureAccess.mock.invocationCallOrder[0];
     const rateOrder = mockEnforceRateLimit.mock.invocationCallOrder[0];
-    const purgeOrders = mockDeleteByPrefix.mock.invocationCallOrder;
+    const purgeOrders = mockMarkForRefresh.mock.invocationCallOrder;
     const tagOrders = mockUpdateTag.mock.invocationCallOrder;
 
     expect(authOrder).toBeLessThan(rateOrder);
@@ -340,9 +350,9 @@ describe("refreshDashboardCache", () => {
     expect(code).not.toMatch(/revalidatePath/);
   });
 
-  it("purges prefixes that cover every serviceCache key the tagged caches use", async () => {
+  it("marks prefixes that cover every serviceCache key the tagged caches use", async () => {
     await refreshDashboardCache();
-    const purged = mockDeleteByPrefix.mock.calls.map((c) => c[0] as string);
+    const purged = mockMarkForRefresh.mock.calls.map((c) => c[0] as string);
 
     // Every serviceCache.getOrFetch() call in the 'use cache' sources must have a
     // key we can resolve to a literal prefix: an inline string/template literal, or
@@ -378,7 +388,7 @@ describe("refreshDashboardCache", () => {
 
     expect(keyPrefixes.length).toBeGreaterThanOrEqual(5);
     for (const prefix of keyPrefixes) {
-      expect(purged.some((p) => prefix.startsWith(p)), `key prefix "${prefix}" not purged`).toBe(true);
+      expect(purged.some((p) => prefix.startsWith(p)), `key prefix "${prefix}" not marked`).toBe(true);
     }
   });
 
@@ -392,7 +402,7 @@ describe("refreshDashboardCache", () => {
     // The failure timestamp is "now" too, not a sentinel such as the epoch.
     expect(result.timestamp.getTime()).toBe(Date.now());
     expect(mockEnforceRateLimit).not.toHaveBeenCalled();
-    expect(mockDeleteByPrefix).not.toHaveBeenCalled();
+    expect(mockMarkForRefresh).not.toHaveBeenCalled();
     expect(mockUpdateTag).not.toHaveBeenCalled();
     expect(console.error).toHaveBeenCalledWith("Error refreshing dashboard cache:", expect.any(Error));
   });
@@ -407,12 +417,12 @@ describe("refreshDashboardCache", () => {
     expect(result.success).toBe(false);
     expect(result.timestamp.getTime()).toBe(Date.now());
     expect(mockEnforceRateLimit).toHaveBeenCalledWith("user-1", "cacheRefresh");
-    expect(mockDeleteByPrefix).not.toHaveBeenCalled();
+    expect(mockMarkForRefresh).not.toHaveBeenCalled();
     expect(mockUpdateTag).not.toHaveBeenCalled();
   });
 
-  it("returns success:false and skips updateTag when the serviceCache purge throws", async () => {
-    mockDeleteByPrefix.mockImplementation(() => {
+  it("returns success:false and skips updateTag when the serviceCache mark throws", async () => {
+    mockMarkForRefresh.mockImplementation(() => {
       throw new Error("purge failed");
     });
 
@@ -432,8 +442,9 @@ describe("refreshDashboardCache", () => {
 
     expect(result.success).toBe(false);
     expect(result.timestamp.getTime()).toBe(Date.now());
-    // The purge already ran: serviceCache is cold even though the tag expiry failed.
-    expect(mockDeleteByPrefix).toHaveBeenCalledTimes(2);
+    // The mark already ran: the next read of each key fetches in the foreground,
+    // keeping the old value if that fails.
+    expect(mockMarkForRefresh).toHaveBeenCalledTimes(2);
   });
 
   it("does not read dashboard data itself (the client re-fetches after refresh)", async () => {

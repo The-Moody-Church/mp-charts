@@ -9,6 +9,8 @@
  * A random token is set on process.env at runtime so the API route can
  * verify the request came from this process — no user configuration needed.
  */
+import { requestWarm, retryPartialWarm } from '@/lib/cache-warm-retry';
+
 export async function register() {
   // Only warm caches in the Node.js runtime (not Edge)
   if (process.env.NEXT_RUNTIME !== 'nodejs') return;
@@ -48,13 +50,16 @@ async function warmWithRetry(url: string, maxAttempts = 10, intervalMs = 2000): 
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
 
     try {
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        console.info(`[instrumentation] Cache warming complete (attempt ${attempt}):`, data.success ? 'all caches warmed' : 'some caches failed');
+      const outcome = await requestWarm(url);
+      if (outcome !== 'failed') {
+        console.info(`[instrumentation] Cache warming complete (attempt ${attempt}):`, outcome === 'ok' ? 'all caches warmed' : 'some caches failed');
+        // A warm that reached the server but hit an MP failure leaves those entries
+        // cold (#304: nothing empty is cached any more). Retry with backoff rather
+        // than wait for the 6:00 AM CT warm or make the first user pay the cold fetch.
+        if (outcome === 'partial') await retryPartialWarm(url, 'startup');
         return;
       }
-      console.info(`[instrumentation] Cache warming attempt ${attempt}: HTTP ${res.status}`);
+      console.info(`[instrumentation] Cache warming attempt ${attempt}: HTTP error`);
     } catch {
       // Server not ready yet — connection refused is expected
       if (attempt < maxAttempts) {
@@ -104,14 +109,14 @@ function scheduleDailyWarm(url: string): void {
 
   function triggerWarm() {
     console.info('[instrumentation] Scheduled cache re-warm triggered (6:00 AM CT)');
-    fetch(url)
-      .then(async (res) => {
-        if (res.ok) {
-          const data = await res.json();
-          console.info('[instrumentation] Scheduled cache re-warm complete:', data.success ? 'all caches warmed' : 'some caches failed');
-        } else {
-          console.error(`[instrumentation] Scheduled cache re-warm failed: HTTP ${res.status}`);
+    requestWarm(url)
+      .then(async (outcome) => {
+        if (outcome === 'failed') {
+          console.error('[instrumentation] Scheduled cache re-warm failed: HTTP error');
+          return;
         }
+        console.info('[instrumentation] Scheduled cache re-warm complete:', outcome === 'ok' ? 'all caches warmed' : 'some caches failed');
+        if (outcome === 'partial') await retryPartialWarm(url, 'scheduled');
       })
       .catch((err) => {
         console.error('[instrumentation] Scheduled cache re-warm error:', err);
