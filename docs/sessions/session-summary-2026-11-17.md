@@ -45,7 +45,7 @@ In each of mp-charts, event-manager, mp-senior-care and music-tools: branch, `np
 packages and picomatch (lockfile only, `package.json` unchanged), `node scripts/audit-gate.mjs`, tsc, lint, tests,
 then a PR with a Security Review section. No `:dev` soak needed (dev tooling only).
 
-## #212 Coverage measures the whole project — IN PROGRESS (branch `fix/coverage-include-212`)
+## #212 Coverage measures the whole project — COMPLETED (#301)
 
 - Picked next because it needs no deploy (the audit gate blocks deploys until picomatch ships).
 - `vitest.config.ts`: `coverage.include: ['src/**/*.{ts,tsx}', 'scripts/audit-gate-lib.mjs']`; also excludes
@@ -63,6 +63,8 @@ then a PR with a Security Review section. No `:dev` soak needed (dev tooling onl
   completed), status.md (row added; rows before 2026-11-10 pruned, June rows kept).
 - Siblings (event-manager, mp-senior-care, music-tools) have no `coverage.include` either. Not ported; #212 is
   mp-charts-specific.
+- Merged as #301 on 2026-11-17 with owner approval over the known picomatch audit failure (`verify` stopped at
+  the audit step; lint, tsc and 1265 tests pass locally). Test config only, so no deploy.
 
 ## Files changed
 
