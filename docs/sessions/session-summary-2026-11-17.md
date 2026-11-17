@@ -66,7 +66,7 @@ then a PR with a Security Review section. No `:dev` soak needed (dev tooling onl
 - Merged as #301 on 2026-11-17 with owner approval over the known picomatch audit failure (`verify` stopped at
   the audit step; lint, tsc and 1265 tests pass locally). Test config only, so no deploy.
 
-## #302 Tests for dashboardService and the dashboard/admin actions — IN PROGRESS (branch `test/dashboard-admin-actions-302`)
+## #302 Tests for dashboardService and the dashboard/admin actions — COMPLETED (#303)
 
 - Ultracode workflow 1 (6 agents, one test file each): `dashboardService.{core,trends,engagement}.test.ts`,
   `admin/{journey,compliance}-tools/actions.test.ts` and `dashboard/actions.test.ts`; 285 tests, no source change.
@@ -83,6 +83,7 @@ then a PR with a Security Review section. No `:dev` soak needed (dev tooling onl
   - Low: admin action hardening, i.e. the write rate limit, saving the parsed config, and cache clear order (B2–B6); the
     ministry year rolls over on UTC (B1).
 - One leftover workflow worktree (no commits, only a `node_modules` link) was removed.
+- Merged as #303 with owner approval over the known picomatch audit failure. Tests only, so no deploy.
 
 ## Files changed
 
