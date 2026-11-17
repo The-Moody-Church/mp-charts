@@ -1,0 +1,884 @@
+/**
+ * DashboardService trend builders (#302): getSmallGroupTrends,
+ * getCommunityAttendanceTrends, getMonthlyAttendanceTrends,
+ * getWeeklyAttendanceTrends, getMilestoneDates, getEventParticipantsByMonth.
+ *
+ * These are private. Wiring is checked through the public getDashboardData /
+ * getExtendedDashboardData (with their other private collaborators stubbed);
+ * the per-method behaviour is driven directly through a typed view of the
+ * private methods (`priv(svc)`), because reaching every branch through
+ * getDashboardData would mean faking a dozen unrelated MP queries per test.
+ *
+ * Timezone: MP returns zone-less Central wall-clock strings
+ * ("2025-09-07T10:00:00"), which `new Date()` parses as process-local time.
+ * Production runs with TZ=UTC; this machine may not. Fixtures therefore use
+ * zone-less mid-morning times and local `new Date(y, m, d)` bounds, so every
+ * expectation holds in any timezone between UTC-13 and UTC+10, and expected
+ * filter values are computed with the same local constructors the code uses.
+ */
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type {
+  SmallGroupTrend,
+  CommunityAttendanceTrend,
+  MonthlyAttendanceTrend,
+  WeeklyAttendanceTrend,
+  EventParticipantMonth,
+} from '@/lib/dto';
+
+const mockGetTableRecords = vi.fn();
+
+vi.mock('@/lib/providers/ministry-platform', () => ({
+  MPHelper: class {
+    getTableRecords = mockGetTableRecords;
+  },
+}));
+
+vi.mock('next/cache', () => ({
+  cacheLife: vi.fn(),
+  cacheTag: vi.fn(),
+  updateTag: vi.fn(),
+  revalidateTag: vi.fn(),
+}));
+
+// The service-layer cache would otherwise keep Group_Types between tests.
+// Pass straight through to the fetcher so each test sees its own MP mock.
+vi.mock('@/lib/service-cache', () => ({
+  serviceCache: {
+    getOrFetch: (_key: string, _ttl: number, fetcher: () => Promise<unknown>) => fetcher(),
+  },
+  CACHE_TTL: { STANDARD: 21_600_000, LONG: 86_400_000 },
+}));
+
+import { DashboardService } from '@/services/dashboardService';
+
+interface Call {
+  table: string;
+  select?: string;
+  filter?: string;
+}
+
+/** Typed view of the private methods under test. */
+interface Privates {
+  getSmallGroupTrends(start: Date, end: Date): Promise<SmallGroupTrend[]>;
+  getCommunityAttendanceTrends(
+    start: Date,
+    end: Date,
+  ): Promise<{ monthly: CommunityAttendanceTrend[]; weekly: CommunityAttendanceTrend[] }>;
+  getMonthlyAttendanceTrends(start: Date, end: Date): Promise<MonthlyAttendanceTrend[]>;
+  getWeeklyAttendanceTrends(start: Date, end: Date): Promise<WeeklyAttendanceTrend[]>;
+  getMilestoneDates(milestoneId: number, start: Date, end: Date): Promise<string[]>;
+  getEventParticipantsByMonth(start: Date, end: Date): Promise<EventParticipantMonth[]>;
+}
+const priv = (svc: DashboardService) => svc as unknown as Privates;
+
+// A per-request instance (access token) so no test shares the singleton.
+const newService = () => DashboardService.getInstance('test-token');
+
+const calls = (table: string): Call[] =>
+  mockGetTableRecords.mock.calls.map(c => c[0] as Call).filter(c => c.table === table);
+
+/** ISO string of a local-midnight date, as the code builds it. */
+const isoLocal = (y: number, m: number, d: number) => new Date(y, m, d).toISOString();
+
+/** Collapse the multi-line template filters so substring checks are stable. */
+const squash = (s: string | undefined) => (s ?? '').replace(/\s+/g, ' ').trim();
+
+let errorSpy: ReturnType<typeof vi.spyOn>;
+let warnSpy: ReturnType<typeof vi.spyOn>;
+
+beforeEach(() => {
+  mockGetTableRecords.mockReset();
+  mockGetTableRecords.mockResolvedValue([]);
+  errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
+
+// ---------------------------------------------------------------------------
+// getSmallGroupTrends
+// ---------------------------------------------------------------------------
+describe('getSmallGroupTrends', () => {
+  const START = new Date(2025, 8, 1); // Sep 1 2025, local
+  const END = new Date(2025, 11, 31); // Dec 31 2025, local
+
+  it('queries Groups for types 1, 3 and 11 overlapping the range', async () => {
+    const svc = await newService();
+    await priv(svc).getSmallGroupTrends(START, END);
+
+    const [groups] = calls('Groups');
+    expect(groups.select).toBe('Group_ID,Group_Type_ID,Start_Date,End_Date');
+    const f = squash(groups.filter);
+    expect(f).toContain('Group_Type_ID IN (1, 3, 11)');
+    expect(f).toContain(`Groups.Start_Date <= '${END.toISOString()}'`);
+    expect(f).toContain(`(Groups.End_Date IS NULL OR Groups.End_Date >= '${START.toISOString()}')`);
+  });
+
+  it('returns [] without resolving group types when no groups match', async () => {
+    const svc = await newService();
+    await expect(priv(svc).getSmallGroupTrends(START, END)).resolves.toEqual([]);
+    expect(calls('Group_Types')).toHaveLength(0);
+  });
+
+  it('counts groups active in each month per type name, one entry per month', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Groups') {
+        return Promise.resolve([
+          // Small group from mid-September, open-ended
+          { Group_ID: 1, Group_Type_ID: 1, Start_Date: '2025-09-15T00:00:00', End_Date: null },
+          // Class that ends in October
+          { Group_ID: 2, Group_Type_ID: 3, Start_Date: '2025-08-01T00:00:00', End_Date: '2025-10-10T00:00:00' },
+          // Small group that ended exactly at the start of September: still active in Sep
+          { Group_ID: 4, Group_Type_ID: 1, Start_Date: '2024-01-01T00:00:00', End_Date: '2025-09-01T00:00:00' },
+          // Community starting in December
+          { Group_ID: 3, Group_Type_ID: 11, Start_Date: '2025-12-02T00:00:00', End_Date: null },
+        ]);
+      }
+      if (p.table === 'Group_Types') {
+        return Promise.resolve([
+          { Group_Type_ID: 1, Group_Type: 'Small Group' },
+          { Group_Type_ID: 3, Group_Type: 'Class' },
+          // 11 deliberately missing: falls back to "Type 11"
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    const svc = await newService();
+    const trends = await priv(svc).getSmallGroupTrends(START, END);
+
+    expect(trends).toEqual([
+      { month: '2025-09', monthName: 'September', activeGroupCount: 3, groupCountByType: { 'Small Group': 2, Class: 1 } },
+      { month: '2025-10', monthName: 'October', activeGroupCount: 2, groupCountByType: { 'Small Group': 1, Class: 1 } },
+      { month: '2025-11', monthName: 'November', activeGroupCount: 1, groupCountByType: { 'Small Group': 1 } },
+      { month: '2025-12', monthName: 'December', activeGroupCount: 2, groupCountByType: { 'Small Group': 1, 'Type 11': 1 } },
+    ]);
+
+    // Group types are looked up once, with IDs sanitized into the IN clause.
+    const gt = calls('Group_Types');
+    expect(gt).toHaveLength(1);
+    // The cache key sorts lexicographically ("1,11,3"); every ID is present.
+    expect(gt[0].filter).toBe('Group_Type_ID IN (1,11,3)');
+  });
+
+  it('emits a zero-count month when no group is active in it', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Groups') {
+        return Promise.resolve([
+          { Group_ID: 9, Group_Type_ID: 1, Start_Date: '2025-12-05T00:00:00', End_Date: null },
+        ]);
+      }
+      if (p.table === 'Group_Types') return Promise.resolve([{ Group_Type_ID: 1, Group_Type: 'Small Group' }]);
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    const trends = await priv(svc).getSmallGroupTrends(START, END);
+    expect(trends.map(t => t.activeGroupCount)).toEqual([0, 0, 0, 1]);
+    expect(trends[0].groupCountByType).toEqual({});
+  });
+
+  // BUG (reported): monthEnd is `new Date(y, m + 1, 0)`, i.e. MIDNIGHT at the
+  // START of the last day, so a group that starts later on the last day of a
+  // month is not counted in that month. Pinned as current behaviour.
+  it('CURRENT BEHAVIOUR: a group starting during the last day of a month is not counted in that month', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Groups') {
+        return Promise.resolve([
+          { Group_ID: 5, Group_Type_ID: 1, Start_Date: '2025-11-30T10:00:00', End_Date: null },
+        ]);
+      }
+      if (p.table === 'Group_Types') return Promise.resolve([{ Group_Type_ID: 1, Group_Type: 'Small Group' }]);
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    const trends = await priv(svc).getSmallGroupTrends(new Date(2025, 10, 1), new Date(2025, 11, 31));
+    expect(trends.find(t => t.month === '2025-11')!.activeGroupCount).toBe(0);
+    expect(trends.find(t => t.month === '2025-12')!.activeGroupCount).toBe(1);
+  });
+
+  // BUG (latent, reported): the month cursor is the raw startDate, advanced
+  // with setMonth(+1). A start on the 31st overflows Feb into March, skipping
+  // February. Callers always pass the 1st today, so it does not bite yet.
+  it('CURRENT BEHAVIOUR: a start date on the 31st skips February', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Groups') {
+        return Promise.resolve([{ Group_ID: 1, Group_Type_ID: 1, Start_Date: '2025-01-01T00:00:00', End_Date: null }]);
+      }
+      if (p.table === 'Group_Types') return Promise.resolve([{ Group_Type_ID: 1, Group_Type: 'Small Group' }]);
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    const trends = await priv(svc).getSmallGroupTrends(new Date(2025, 0, 31), new Date(2025, 3, 30));
+    expect(trends.map(t => t.month)).toEqual(['2025-01', '2025-03', '2025-04']);
+  });
+
+  // BUG (reported): caching.md forbids returning an empty fallback inside a
+  // 'use cache' path, yet this catch returns [] and getCachedDashboardData
+  // caches it over the previous good value.
+  it('CURRENT BEHAVIOUR: swallows an MP failure and returns []', async () => {
+    mockGetTableRecords.mockRejectedValue(new Error('MP down'));
+    const svc = await newService();
+    await expect(priv(svc).getSmallGroupTrends(START, END)).resolves.toEqual([]);
+    expect(errorSpy).toHaveBeenCalledWith('Error fetching small group trends:', expect.any(Error));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getCommunityAttendanceTrends
+// ---------------------------------------------------------------------------
+describe('getCommunityAttendanceTrends', () => {
+  const START = new Date(2025, 8, 1);
+  const END = new Date(2025, 9, 31);
+
+  const GROUPS = [
+    { Group_ID: 11, Group_Name: 'North' },
+    { Group_ID: 12, Group_Name: 'South' },
+  ];
+
+  // Sep 7, Sep 14 and Oct 5 2025 are Sundays; Sep 10 is a Wednesday.
+  const EVENTS = [
+    { Event_ID: 101, Event_Start_Date: '2025-09-07T10:00:00' },
+    { Event_ID: 102, Event_Start_Date: '2025-09-14T10:00:00' },
+    { Event_ID: 103, Event_Start_Date: '2025-09-10T10:00:00' }, // weekday: excluded
+    { Event_ID: 104, Event_Start_Date: '2025-10-05T10:00:00' },
+    { Event_ID: 105, Event_Start_Date: '2025-11-02T10:00:00' }, // Sunday, after END: excluded
+    // 106 is cancelled: absent from the Events response
+  ];
+
+  const ep = (id: number, eventId: number, groupId: number, participantId: number) => ({
+    Event_Participant_ID: id,
+    Event_ID: eventId,
+    Group_ID: groupId,
+    Participant_ID: participantId,
+    Participation_Status_ID: 3,
+  });
+
+  const PARTICIPANTS = [
+    // North, Sep 7: 3 present
+    ep(1, 101, 11, 501), ep(2, 101, 11, 502), ep(3, 101, 11, 503),
+    // North, Sep 14: 2 present
+    ep(4, 102, 11, 501), ep(5, 102, 11, 504),
+    // South, Sep 7: participant 501 also attends South (deduped in unique count)
+    ep(6, 101, 12, 501), ep(7, 101, 12, 505),
+    // Weekday, out-of-range and cancelled events: all excluded
+    ep(8, 103, 11, 506), ep(9, 105, 11, 507), ep(10, 106, 11, 508),
+    // North, Oct 5: 1 present
+    ep(11, 104, 11, 509),
+  ];
+
+  const dispatch = (p: Call) => {
+    if (p.table === 'Groups') return Promise.resolve(GROUPS);
+    if (p.table === 'Event_Participants') return Promise.resolve(PARTICIPANTS);
+    if (p.table === 'Events') return Promise.resolve(EVENTS);
+    return Promise.resolve([]);
+  };
+
+  it('queries community groups, sanitized participants and non-cancelled events', async () => {
+    mockGetTableRecords.mockImplementation(dispatch);
+    const svc = await newService();
+    await priv(svc).getCommunityAttendanceTrends(START, END);
+
+    expect(calls('Groups')[0]).toMatchObject({ select: 'Group_ID,Group_Name', filter: 'Group_Type_ID = 11' });
+    expect(calls('Event_Participants')[0].filter).toBe(
+      'Event_Participants.Group_ID IN (11,12) AND Event_Participants.Participation_Status_ID IN (3, 4)',
+    );
+    const events = calls('Events');
+    expect(events).toHaveLength(1);
+    expect(events[0].select).toBe('Event_ID,Event_Start_Date');
+    // Unique event IDs, in first-seen order, sanitized; cancelled excluded server-side
+    expect(events[0].filter).toBe('Event_ID IN (101,102,103,105,106,104) AND Cancelled = 0');
+  });
+
+  it('averages per community per month, counts per Sunday, and dedupes unique people', async () => {
+    mockGetTableRecords.mockImplementation(dispatch);
+    const svc = await newService();
+    const { monthly, weekly } = await priv(svc).getCommunityAttendanceTrends(START, END);
+
+    expect(monthly).toEqual([
+      // North: 5 attendances over 2 Sundays = 2.5 -> 3. South: 2 over 1.
+      // Unique people Sep: 501, 502, 503, 504, 505
+      { weekStartDate: '2025-09-01', communityAttendance: { North: 3, South: 2 }, uniqueParticipants: 5 },
+      { weekStartDate: '2025-10-01', communityAttendance: { North: 1 }, uniqueParticipants: 1 },
+    ]);
+    expect(weekly).toEqual([
+      // 501 is in both North and South on Sep 7: counted once in the unique total
+      { weekStartDate: '2025-09-07', communityAttendance: { North: 3, South: 2 }, uniqueParticipants: 4 },
+      { weekStartDate: '2025-09-14', communityAttendance: { North: 2 }, uniqueParticipants: 2 },
+      { weekStartDate: '2025-10-05', communityAttendance: { North: 1 }, uniqueParticipants: 1 },
+    ]);
+  });
+
+  it('labels a participant row whose group is not a known community "Unknown"', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Groups') return Promise.resolve(GROUPS);
+      if (p.table === 'Event_Participants') return Promise.resolve([ep(1, 101, 99, 501)]);
+      if (p.table === 'Events') return Promise.resolve(EVENTS);
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    const { weekly } = await priv(svc).getCommunityAttendanceTrends(START, END);
+    expect(weekly).toEqual([{ weekStartDate: '2025-09-07', communityAttendance: { Unknown: 1 }, uniqueParticipants: 1 }]);
+  });
+
+  it('returns empty series without further queries when there are no community groups', async () => {
+    const svc = await newService();
+    await expect(priv(svc).getCommunityAttendanceTrends(START, END)).resolves.toEqual({ monthly: [], weekly: [] });
+    expect(calls('Event_Participants')).toHaveLength(0);
+    expect(calls('Events')).toHaveLength(0);
+  });
+
+  it('returns empty series without an Events query when nobody attended', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) =>
+      Promise.resolve(p.table === 'Groups' ? GROUPS : []),
+    );
+    const svc = await newService();
+    await expect(priv(svc).getCommunityAttendanceTrends(START, END)).resolves.toEqual({ monthly: [], weekly: [] });
+    expect(calls('Events')).toHaveLength(0);
+  });
+
+  it('returns empty series when no attendance falls on an in-range Sunday', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Groups') return Promise.resolve(GROUPS);
+      if (p.table === 'Event_Participants') return Promise.resolve([ep(8, 103, 11, 506)]);
+      if (p.table === 'Events') return Promise.resolve(EVENTS);
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    await expect(priv(svc).getCommunityAttendanceTrends(START, END)).resolves.toEqual({ monthly: [], weekly: [] });
+  });
+
+  it('batches the Events lookup in groups of 100 IDs', async () => {
+    const many = Array.from({ length: 150 }, (_, i) => ep(i + 1, 1000 + i, 11, 2000 + i));
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Groups') return Promise.resolve(GROUPS);
+      if (p.table === 'Event_Participants') return Promise.resolve(many);
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    await priv(svc).getCommunityAttendanceTrends(START, END);
+    const events = calls('Events');
+    expect(events).toHaveLength(2);
+    expect(events[0].filter!.match(/IN \(([^)]*)\)/)![1].split(',')).toHaveLength(100);
+    expect(events[1].filter!.match(/IN \(([^)]*)\)/)![1].split(',')).toHaveLength(50);
+  });
+
+  // BUG (reported): swallowed error is cached by getCachedDashboardData.
+  it('CURRENT BEHAVIOUR: swallows an MP failure and returns empty series', async () => {
+    mockGetTableRecords.mockRejectedValue(new Error('MP down'));
+    const svc = await newService();
+    await expect(priv(svc).getCommunityAttendanceTrends(START, END)).resolves.toEqual({ monthly: [], weekly: [] });
+    expect(errorSpy).toHaveBeenCalledWith('Error fetching community attendance trends:', expect.any(Error));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getMonthlyAttendanceTrends
+// ---------------------------------------------------------------------------
+describe('getMonthlyAttendanceTrends', () => {
+  const START = new Date(2025, 8, 1); // Sep 1 2025
+  const END = new Date(2026, 7, 31); // Aug 31 2026 (end of ministry year)
+
+  /** Month key ("2025-09") for an Events call, from its start-of-month bound. */
+  const monthOf = (filter: string | undefined): string => {
+    const m = /Event_Start_Date >= '([^']+)'/.exec(filter ?? '');
+    if (!m) throw new Error(`no start bound in ${filter}`);
+    const d = new Date(m[1]);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  };
+
+  beforeEach(() => {
+    // Only Date is faked: mapWithConcurrency uses promises, not timers.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2025, 10, 15, 12)); // Nov 15 2025, mid-ministry-year
+  });
+
+  it('caps month iteration at today (no queries for future months)', async () => {
+    const svc = await newService();
+    const trends = await priv(svc).getMonthlyAttendanceTrends(START, END);
+
+    expect(trends.map(t => t.month)).toEqual(['2025-09', '2025-10', '2025-11']);
+    expect(trends.map(t => t.monthName)).toEqual(['September', 'October', 'November']);
+    expect(calls('Events').map(c => monthOf(c.filter)).sort()).toEqual(['2025-09', '2025-10', '2025-11']);
+  });
+
+  it('iterates to endDate when the whole range is in the past', async () => {
+    vi.setSystemTime(new Date(2027, 0, 1));
+    const svc = await newService();
+    const trends = await priv(svc).getMonthlyAttendanceTrends(START, END);
+    expect(trends).toHaveLength(12);
+    expect(trends[0].month).toBe('2025-09');
+    expect(trends[11]).toMatchObject({ month: '2026-08', monthName: 'August' });
+  });
+
+  it('starts at the first of the start month even if startDate is mid-month', async () => {
+    const svc = await newService();
+    await priv(svc).getMonthlyAttendanceTrends(new Date(2025, 9, 20), END);
+    const filters = calls('Events').map(c => c.filter!);
+    expect(filters.some(f => f.includes(`Events.Event_Start_Date >= '${isoLocal(2025, 9, 1)}'`))).toBe(true);
+  });
+
+  it('queries worship services (type 7, not cancelled) per month, then metrics 2/3 with sanitized IDs', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Events' && monthOf(p.filter) === '2025-09') {
+        return Promise.resolve([{ Event_ID: 7001 }, { Event_ID: 7002 }]);
+      }
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    await priv(svc).getMonthlyAttendanceTrends(START, END);
+
+    const sep = calls('Events').find(c => monthOf(c.filter) === '2025-09')!;
+    expect(sep.select).toBe('Event_ID');
+    expect(sep.filter).toBe(
+      `Events.Event_Start_Date >= '${isoLocal(2025, 8, 1)}' AND ` +
+        // BUG (reported): the end bound is MIDNIGHT at the start of the last
+        // day of the month, so a service on Sep 30 (or Nov 30 2025 / Aug 31
+        // 2025, both Sundays) ends after it and is excluded from the month.
+        `Events.Event_End_Date <= '${isoLocal(2025, 8, 30)}' AND ` +
+        'Events.Cancelled = 0 AND Events.Event_Type_ID = 7',
+    );
+
+    const metrics = calls('Event_Metrics');
+    // Only the month that had events queries metrics
+    expect(metrics).toHaveLength(1);
+    expect(metrics[0]).toEqual({
+      table: 'Event_Metrics',
+      select: 'Event_ID,Metric_ID,Numerical_Value',
+      filter: 'Event_Metrics.Event_ID IN (7001,7002) AND Event_Metrics.Metric_ID IN (2, 3)',
+    });
+  });
+
+  it('averages in-person and online independently over the events that reported each', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Events' && monthOf(p.filter) === '2025-09') {
+        return Promise.resolve([{ Event_ID: 1 }, { Event_ID: 2 }, { Event_ID: 3 }]);
+      }
+      if (p.table === 'Event_Metrics') {
+        return Promise.resolve([
+          { Event_ID: 1, Metric_ID: 2, Numerical_Value: 100 },
+          { Event_ID: 1, Metric_ID: 3, Numerical_Value: 51 },
+          { Event_ID: 2, Metric_ID: 2, Numerical_Value: 201 },
+          // Event 3 has no metrics: not counted in any average
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    const [sep, oct] = await priv(svc).getMonthlyAttendanceTrends(START, END);
+
+    expect(sep).toEqual({
+      month: '2025-09',
+      monthName: 'September',
+      averageInPersonAttendance: 151, // (100 + 201) / 2 = 150.5 -> 151
+      averageOnlineAttendance: 51, // 51 / 1, not diluted by event 2
+      averageTotalAttendance: 176, // (301 + 51) / 2 events with metrics
+      eventCount: 2,
+      inPersonEventCount: 2,
+      onlineEventCount: 1,
+    });
+    // A month with no events is a zero row, not missing
+    expect(oct).toEqual({
+      month: '2025-10',
+      monthName: 'October',
+      averageInPersonAttendance: 0,
+      averageOnlineAttendance: 0,
+      averageTotalAttendance: 0,
+      eventCount: 0,
+      inPersonEventCount: 0,
+      onlineEventCount: 0,
+    });
+  });
+
+  it('keeps successful months when some fail, in month order, and logs the failures', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Events' && monthOf(p.filter) === '2025-10') {
+        return Promise.reject(new Error('ConnectTimeoutError'));
+      }
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    const trends = await priv(svc).getMonthlyAttendanceTrends(START, END);
+
+    expect(trends.map(t => t.month)).toEqual(['2025-09', '2025-11']);
+    expect(errorSpy).toHaveBeenCalledWith('Error fetching attendance for one month:', expect.any(Error));
+    expect(warnSpy).toHaveBeenCalledWith('Monthly attendance trends: 1/3 months failed, 2 succeeded');
+  });
+
+  it('a failed Event_Metrics read fails only that month', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Events') return Promise.resolve(monthOf(p.filter) === '2025-11' ? [{ Event_ID: 9 }] : []);
+      if (p.table === 'Event_Metrics') return Promise.reject(new Error('500'));
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    const trends = await priv(svc).getMonthlyAttendanceTrends(START, END);
+    expect(trends.map(t => t.month)).toEqual(['2025-09', '2025-10']);
+  });
+
+  it('THROWS when every month fails, so the cache keeps its previous value', async () => {
+    mockGetTableRecords.mockRejectedValue(new Error('MP down'));
+    const svc = await newService();
+    await expect(priv(svc).getMonthlyAttendanceTrends(START, END)).rejects.toThrow(
+      'All 3 monthly attendance queries failed',
+    );
+  });
+
+  it('returns [] (no throw) when the range starts after today, without querying', async () => {
+    const svc = await newService();
+    await expect(
+      priv(svc).getMonthlyAttendanceTrends(new Date(2026, 0, 1), new Date(2026, 11, 31)),
+    ).resolves.toEqual([]);
+    expect(mockGetTableRecords).not.toHaveBeenCalled();
+  });
+
+  it('returns results in month order even when later months answer first', async () => {
+    vi.setSystemTime(new Date(2027, 0, 1));
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table !== 'Events') return Promise.resolve([]);
+      // Earlier months resolve later
+      const month = Number(monthOf(p.filter).slice(5));
+      const delay = month >= 9 ? 30 - month : 20 - month;
+      return new Promise(r => setTimeout(() => r([]), delay));
+    });
+    const svc = await newService();
+    const trends = await priv(svc).getMonthlyAttendanceTrends(START, END);
+    expect(trends.map(t => t.month)).toEqual([
+      '2025-09', '2025-10', '2025-11', '2025-12', '2026-01', '2026-02',
+      '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08',
+    ]);
+  });
+
+  it('never has more than 6 months in flight against MP', async () => {
+    vi.setSystemTime(new Date(2027, 0, 1));
+    let inFlight = 0;
+    let peak = 0;
+    mockGetTableRecords.mockImplementation(() => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      return new Promise(r =>
+        setTimeout(() => {
+          inFlight--;
+          r([]);
+        }, 2),
+      );
+    });
+    const svc = await newService();
+    const trends = await priv(svc).getMonthlyAttendanceTrends(START, END);
+    expect(trends).toHaveLength(12);
+    expect(calls('Events')).toHaveLength(12);
+    expect(peak).toBe(6);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getWeeklyAttendanceTrends
+// ---------------------------------------------------------------------------
+describe('getWeeklyAttendanceTrends', () => {
+  const START = new Date(2025, 10, 1);
+  const END = new Date(2025, 10, 30);
+
+  it('queries worship services in range, then metrics 2/3 for those events', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) =>
+      Promise.resolve(p.table === 'Events' ? [{ Event_ID: 1, Event_Start_Date: '2025-11-02T09:00:00' }] : []),
+    );
+    const svc = await newService();
+    await priv(svc).getWeeklyAttendanceTrends(START, END);
+
+    const [events] = calls('Events');
+    expect(events.select).toBe('Event_ID,Event_Start_Date');
+    expect(squash(events.filter)).toBe(
+      `Events.Event_Start_Date >= '${START.toISOString()}' AND ` +
+        `Events.Event_End_Date <= '${END.toISOString()}' AND ` +
+        'Events.Cancelled = 0 AND Events.Event_Type_ID = 7',
+    );
+    expect(calls('Event_Metrics')[0]).toEqual({
+      table: 'Event_Metrics',
+      select: 'Event_ID,Metric_ID,Numerical_Value',
+      filter: 'Event_Metrics.Event_ID IN (1) AND Event_Metrics.Metric_ID IN (2, 3)',
+    });
+  });
+
+  it('returns [] without a metrics query when there are no services', async () => {
+    const svc = await newService();
+    await expect(priv(svc).getWeeklyAttendanceTrends(START, END)).resolves.toEqual([]);
+    expect(calls('Event_Metrics')).toHaveLength(0);
+  });
+
+  it('sums each date across services, sorted by date, with short labels', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Events') {
+        return Promise.resolve([
+          { Event_ID: 3, Event_Start_Date: '2025-11-09T10:00:00' },
+          { Event_ID: 1, Event_Start_Date: '2025-11-02T09:00:00' },
+          { Event_ID: 2, Event_Start_Date: '2025-11-02T11:00:00' },
+        ]);
+      }
+      if (p.table === 'Event_Metrics') {
+        return Promise.resolve([
+          { Event_ID: 1, Metric_ID: 2, Numerical_Value: 300 },
+          { Event_ID: 1, Metric_ID: 3, Numerical_Value: 40 },
+          { Event_ID: 2, Metric_ID: 2, Numerical_Value: 250 },
+          { Event_ID: 3, Metric_ID: 3, Numerical_Value: 70 },
+          { Event_ID: 999, Metric_ID: 2, Numerical_Value: 5 }, // unknown event: skipped
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    const trends = await priv(svc).getWeeklyAttendanceTrends(START, END);
+
+    expect(trends).toEqual([
+      {
+        eventDate: '2025-11-02',
+        dateLabel: 'Nov 2',
+        inPersonAttendance: 550,
+        onlineAttendance: 40,
+        totalAttendance: 590,
+        eventCount: 2,
+        inPersonEventCount: 2,
+        onlineEventCount: 1,
+      },
+      {
+        eventDate: '2025-11-09',
+        dateLabel: 'Nov 9',
+        inPersonAttendance: 0,
+        onlineAttendance: 70,
+        totalAttendance: 70,
+        eventCount: 1,
+        inPersonEventCount: 0,
+        onlineEventCount: 1,
+      },
+    ]);
+  });
+
+  it('batches Event_Metrics reads in groups of 100 event IDs', async () => {
+    const events = Array.from({ length: 205 }, (_, i) => ({
+      Event_ID: i + 1,
+      Event_Start_Date: '2025-11-02T10:00:00',
+    }));
+    mockGetTableRecords.mockImplementation((p: Call) => Promise.resolve(p.table === 'Events' ? events : []));
+    const svc = await newService();
+    await priv(svc).getWeeklyAttendanceTrends(START, END);
+
+    const metrics = calls('Event_Metrics');
+    expect(metrics.map(m => m.filter!.match(/IN \(([^)]*)\)/)![1].split(',').length)).toEqual([100, 100, 5]);
+    expect(metrics[2].filter).toBe(
+      'Event_Metrics.Event_ID IN (201,202,203,204,205) AND Event_Metrics.Metric_ID IN (2, 3)',
+    );
+  });
+
+  // BUG (reported): swallowed error is cached by getCachedDashboardData.
+  it('CURRENT BEHAVIOUR: swallows an MP failure and returns []', async () => {
+    mockGetTableRecords.mockRejectedValue(new Error('MP down'));
+    const svc = await newService();
+    await expect(priv(svc).getWeeklyAttendanceTrends(START, END)).resolves.toEqual([]);
+    expect(errorSpy).toHaveBeenCalledWith('Error fetching weekly attendance trends:', expect.any(Error));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getMilestoneDates
+// ---------------------------------------------------------------------------
+describe('getMilestoneDates', () => {
+  const START = new Date(2025, 8, 1);
+  const END = new Date(2026, 7, 31);
+
+  it('reads Date_Accomplished for one milestone in range and returns the raw values', async () => {
+    mockGetTableRecords.mockResolvedValue([
+      { Date_Accomplished: '2025-10-05T00:00:00' },
+      { Date_Accomplished: '2026-01-11T00:00:00' },
+    ]);
+    const svc = await newService();
+    await expect(priv(svc).getMilestoneDates(3, START, END)).resolves.toEqual([
+      '2025-10-05T00:00:00',
+      '2026-01-11T00:00:00',
+    ]);
+    expect(mockGetTableRecords).toHaveBeenCalledWith({
+      table: 'Participant_Milestones',
+      select: 'Date_Accomplished',
+      filter: `Milestone_ID = 3 AND Date_Accomplished >= '${START.toISOString()}' AND Date_Accomplished <= '${END.toISOString()}'`,
+    });
+  });
+
+  // BUG (reported): swallowed error is cached by getCachedDashboardData.
+  it('CURRENT BEHAVIOUR: swallows an MP failure and returns []', async () => {
+    mockGetTableRecords.mockRejectedValue(new Error('MP down'));
+    const svc = await newService();
+    await expect(priv(svc).getMilestoneDates(48, START, END)).resolves.toEqual([]);
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Error fetching milestone dates for Milestone_ID=48:',
+      expect.any(Error),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getEventParticipantsByMonth
+// ---------------------------------------------------------------------------
+describe('getEventParticipantsByMonth', () => {
+  const START = new Date(2025, 8, 1);
+  const END = new Date(2025, 10, 30);
+
+  it('queries non-cancelled events in range, then present participants for them', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) =>
+      Promise.resolve(
+        p.table === 'Events'
+          ? [
+              { Event_ID: 10, Event_Start_Date: '2025-09-07T10:00:00' },
+              { Event_ID: 20, Event_Start_Date: '2025-10-12T10:00:00' },
+            ]
+          : [],
+      ),
+    );
+    const svc = await newService();
+    await priv(svc).getEventParticipantsByMonth(START, END);
+
+    expect(calls('Events')[0]).toEqual({
+      table: 'Events',
+      select: 'Event_ID,Event_Start_Date',
+      filter: `Event_Start_Date >= '${START.toISOString()}' AND Event_End_Date <= '${END.toISOString()}' AND Cancelled = 0`,
+    });
+    expect(calls('Event_Participants')[0]).toEqual({
+      table: 'Event_Participants',
+      select: 'Event_ID,Participant_ID',
+      filter: 'Event_ID IN (10,20) AND Participation_Status_ID IN (3, 4)',
+    });
+  });
+
+  it('returns [] without a participants query when there are no events', async () => {
+    const svc = await newService();
+    await expect(priv(svc).getEventParticipantsByMonth(START, END)).resolves.toEqual([]);
+    expect(calls('Event_Participants')).toHaveLength(0);
+  });
+
+  it('buckets unique participants by event month, sorted by month', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Events') {
+        return Promise.resolve([
+          { Event_ID: 30, Event_Start_Date: '2025-11-02T10:00:00' },
+          { Event_ID: 10, Event_Start_Date: '2025-09-07T10:00:00' },
+          { Event_ID: 11, Event_Start_Date: '2025-09-30T10:00:00' },
+        ]);
+      }
+      if (p.table === 'Event_Participants') {
+        return Promise.resolve([
+          { Event_ID: 30, Participant_ID: 7 },
+          { Event_ID: 10, Participant_ID: 1 },
+          { Event_ID: 10, Participant_ID: 2 },
+          { Event_ID: 11, Participant_ID: 1 }, // same person, same month: once
+          { Event_ID: 999, Participant_ID: 8 }, // not one of our events: skipped
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    await expect(priv(svc).getEventParticipantsByMonth(START, END)).resolves.toEqual([
+      { month: '2025-09', participantIds: [1, 2] },
+      { month: '2025-11', participantIds: [7] },
+    ]);
+  });
+
+  it('batches the participants read in groups of 100 event IDs', async () => {
+    const events = Array.from({ length: 101 }, (_, i) => ({
+      Event_ID: i + 1,
+      Event_Start_Date: '2025-09-07T10:00:00',
+    }));
+    mockGetTableRecords.mockImplementation((p: Call) => Promise.resolve(p.table === 'Events' ? events : []));
+    const svc = await newService();
+    await priv(svc).getEventParticipantsByMonth(START, END);
+    const eps = calls('Event_Participants');
+    expect(eps).toHaveLength(2);
+    expect(eps[1].filter).toBe('Event_ID IN (101) AND Participation_Status_ID IN (3, 4)');
+  });
+
+  // BUG (reported): swallowed error. This path is cached by
+  // getCachedExtendedData ('use cache'), so a failure caches an empty series.
+  it('CURRENT BEHAVIOUR: swallows an MP failure and returns []', async () => {
+    mockGetTableRecords.mockRejectedValue(new Error('MP down'));
+    const svc = await newService();
+    await expect(priv(svc).getEventParticipantsByMonth(START, END)).resolves.toEqual([]);
+    expect(errorSpy).toHaveBeenCalledWith('Error fetching event participants by month:', expect.any(Error));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wiring through the public methods
+// ---------------------------------------------------------------------------
+describe('public wiring', () => {
+  type Stubbable = Record<string, (...args: unknown[]) => Promise<unknown>>;
+
+  /** Stub the collaborators this file does not cover. */
+  const stubUnrelated = (svc: DashboardService) => {
+    const s = svc as unknown as Stubbable;
+    vi.spyOn(s, 'getPeriodMetrics').mockResolvedValue({});
+    vi.spyOn(s, 'getGroupTypeMetrics').mockResolvedValue([]);
+    vi.spyOn(s, 'getRosterAndAttendanceRaw').mockResolvedValue({ rosterMemberRecords: [], attendanceByMonth: [] });
+    vi.spyOn(s, 'getServingLeadingRaw').mockResolvedValue([]);
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2025, 10, 15, 12));
+  });
+
+  it('getDashboardData maps milestones 3/48/51/52 to baptism/membership/associate/youth dates', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Participant_Milestones') {
+        const id = /Milestone_ID = (\d+)/.exec(p.filter!)![1];
+        return Promise.resolve([{ Date_Accomplished: `m${id}` }]);
+      }
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    stubUnrelated(svc);
+
+    const data = await svc.getDashboardData(new Date(2025, 8, 1), new Date(2026, 7, 31));
+
+    expect(data.baptismDates).toEqual(['m3']);
+    expect(data.membershipDates).toEqual(['m48']);
+    expect(data.associateMemberDates).toEqual(['m51']);
+    expect(data.youthMemberDates).toEqual(['m52']);
+  });
+
+  it('getDashboardData requests the previous ministry year for previousYearMonthlyAttendanceTrends', async () => {
+    const svc = await newService();
+    stubUnrelated(svc);
+    const data = await svc.getDashboardData(new Date(2025, 8, 1), new Date(2026, 7, 31));
+
+    // Current year is capped at today (Sep-Nov); previous year is complete.
+    expect(data.monthlyAttendanceTrends.map(t => t.month)).toEqual(['2025-09', '2025-10', '2025-11']);
+    expect(data.previousYearMonthlyAttendanceTrends).toHaveLength(12);
+    expect(data.previousYearMonthlyAttendanceTrends[0].month).toBe('2024-09');
+    expect(data.previousYearMonthlyAttendanceTrends[11].month).toBe('2025-08');
+    expect(data.communityAttendanceTrends).toEqual([]);
+    expect(data.weeklyCommunityAttendanceTrends).toEqual([]);
+  });
+
+  it('getDashboardData rejects when all monthly attendance fails, rather than returning data to cache', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) =>
+      p.table === 'Events' && /Event_Type_ID = 7$/.test(p.filter ?? '')
+        ? Promise.reject(new Error('MP down'))
+        : Promise.resolve([]),
+    );
+    const svc = await newService();
+    stubUnrelated(svc);
+    await expect(svc.getDashboardData(new Date(2025, 8, 1), new Date(2026, 7, 31))).rejects.toThrow(
+      /monthly attendance queries failed/,
+    );
+  });
+
+  it('getExtendedDashboardData returns getEventParticipantsByMonth output', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Events') return Promise.resolve([{ Event_ID: 5, Event_Start_Date: '2025-10-05T10:00:00' }]);
+      if (p.table === 'Event_Participants') return Promise.resolve([{ Event_ID: 5, Participant_ID: 42 }]);
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    stubUnrelated(svc);
+    const data = await svc.getExtendedDashboardData(new Date(2025, 8, 1), new Date(2025, 10, 30));
+    expect(data.eventParticipantsByMonth).toEqual([{ month: '2025-10', participantIds: [42] }]);
+  });
+});
