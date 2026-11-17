@@ -60,15 +60,16 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
 
 ### Technical Debt
+- [Unit tests for dashboardService and the admin tool actions](#unit-tests-for-dashboardservice-and-the-admin-tool-actions)
 - [Adopt TypeScript 7 once typescript-eslint supports it (#286)](#adopt-typescript-7-once-typescript-eslint-supports-it-286)
 - [cache-handler.js depends on private Next.js internals (#218)](#cache-handlerjs-depends-on-private-nextjs-internals-218)
-- [Vitest coverage config has an under-count blind spot (#212)](#vitest-coverage-config-has-an-under-count-blind-spot-212)
 - [Micro-robustness in getContactLogsByContactId (#213)](#micro-robustness-in-getcontactlogsbycontactid-213)
 - [Remove the vestigial `_requestedId` params in shared-actions/user.ts (#214)](#remove-the-vestigial-_requestedid-params-in-shared-actionsuserts-214)
 - [Server-render the contact detail page's initial read (#202)](#server-render-the-contact-detail-pages-initial-read-202)
 - [Member detail modal shows the old photo after upload (#203)](#member-detail-modal-shows-the-old-photo-after-upload-203)
 - [Compliance tool editor silently drops orphaned journey config (#204)](#compliance-tool-editor-silently-drops-orphaned-journey-config-204)
 - [Blank journey selection reads as ID 0, not null (#205)](#blank-journey-selection-reads-as-id-0-not-null-205)
+- ~~[Vitest coverage config has an under-count blind spot (#212)](#vitest-coverage-config-has-an-under-count-blind-spot-212)~~ ✅
 - ~~[Digest-pin the Docker base images (#217)](#digest-pin-the-docker-base-images-217)~~ ✅
 - ~~[caching.md misdescribes `expire` and `updateTag` (#253)](#cachingmd-misdescribes-expire-and-updatetag-253)~~ ✅
 - ~~[Upgrade TypeScript 5.9 to 6.0 (#136)](#upgrade-typescript-59-to-60-136)~~ ✅
