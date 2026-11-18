@@ -85,7 +85,7 @@ Branch `security/batch1-headers-proxy`.
 - **Next:** port batch 1 to event-manager, mp-senior-care and music-db; then batch 2 (auth core). Separately, drop
   the withdrawn picomatch allow-list entry in all four repos.
 
-### Withdrawn picomatch allow-list entry — COMPLETED (PR pending CI)
+### Withdrawn picomatch allow-list entry — COMPLETED (mp-charts #321, event-manager #91, mp-senior-care #252, music-tools #208)
 
 Branch `chore/drop-withdrawn-picomatch-entry`. GitHub withdrew GHSA-fc5q-39xc-vjpf at 2026-11-18 15:38 UTC
 (`gh api /advisories/GHSA-fc5q-39xc-vjpf` → `withdrawn_at`), and the gate warned the entry was stale.
@@ -95,3 +95,17 @@ Branch `chore/drop-withdrawn-picomatch-entry`. GitHub withdrew GHSA-fc5q-39xc-vj
 - Docs: CLAUDE.md (Node Runtime), `.claude/rules/security.md` ("Current entries: none"; the vendored-picomatch guard kept), status.md, and the `src/test-only-imports.test.ts` header comment.
 - Checks: gate `0 stale`, tsc, lint, 1885 tests.
 - Same change going to event-manager, mp-senior-care and music-tools (the three gate files stay byte-identical).
+- All four merged 2026-11-18 after green CI (mp-charts `1d03423`). No runtime change, so no deploy needed; the
+  next deploy of each app carries it.
+
+### Batch 1 ports — IN PROGRESS (event-manager #92, mp-senior-care #253, music-tools #209)
+
+Ported by one agent per repo, each checked by an independent reviewer against `e059fca` (no defects; one stale
+CLAUDE.md sentence fixed on event-manager's picomatch branch). Per repo: matcher and `/api` bounded, `originOf`,
+`base-uri 'none'`, COOP/CORP (new to all three), `next-config.test.ts`. next.config: event-manager adds
+`poweredByHeader` + `logging` (already `unoptimized`); mp-senior-care adds all three; music-tools swaps
+`remotePatterns` for `unoptimized` and adds `logging` (and keeps no `next-action` skip). New tests failing on the
+old source: 26 / 27 / 21. CI green on all three. Each branch merged in its picomatch branch to resolve doc-row
+conflicts. event-manager and music-tools status.md pruned to 7 days per their rules.
+- **Next:** `:dev` soak with a human sign-in/sign-out per repo (mp-senior-care: also a case page with the map
+  and the email preview), then merge and deploy `:latest`.
