@@ -409,17 +409,19 @@ describe("validateAllowlist", () => {
   it("the committed scripts/audit-allowlist.json is valid", () => {
     const file = JSON.parse(readFileSync(resolve(__dirname, "audit-allowlist.json"), "utf8"));
     expect(validateAllowlist(file)).toEqual(file);
-    // GHSA-vfj7-8cjw-p6xm (braces) was withdrawn by GitHub; its entry was removed on 2026-10-24.
+    // Both withdrawn by GitHub, and their entries removed: GHSA-vfj7-8cjw-p6xm (braces)
+    // on 2026-10-24, GHSA-fc5q-39xc-vjpf (picomatch) on 2026-11-18.
     expect(file.map((e: { id: string }) => e.id)).not.toContain(BRACES);
+    expect(file.map((e: { id: string }) => e.id)).not.toContain(PICOMATCH);
   });
 
-  it(`only ${PICOMATCH} carries ${OPTIONAL_PEER_FIELD}, with exactly better-auth > vitest`, () => {
-    // Pinned against widening: a new (from, peer) edge, or the field on another
-    // entry, needs a reviewed change to this test as well as to the allow-list.
+  it(`no committed entry carries ${OPTIONAL_PEER_FIELD}`, () => {
+    // Pinned against widening: the field on any entry, or a new (from, peer) edge,
+    // needs a reviewed change to this test as well as to the allow-list. Its one
+    // user, the picomatch entry (better-auth > vitest), was removed on 2026-11-18.
     const file = JSON.parse(readFileSync(resolve(__dirname, "audit-allowlist.json"), "utf8"));
     const fielded = file.filter((e: Record<string, unknown>) => Object.hasOwn(e, OPTIONAL_PEER_FIELD));
-    expect(fielded.map((e: { id: string; package: string }) => [e.id, e.package])).toEqual([[PICOMATCH, "picomatch"]]);
-    expect(fielded[0][OPTIONAL_PEER_FIELD]).toEqual([{ from: "better-auth", peer: "vitest" }]);
+    expect(fielded).toEqual([]);
   });
 });
 

@@ -42,11 +42,11 @@ Note the runner stage runs `npm uninstall -g npm`, so **the production image shi
 npm version that matters is CI's (whatever Node 24 bundles: 11.19.0), which runs the npm audit
 deploy gate (`node scripts/audit-gate.mjs`: any HIGH/CRITICAL fails except advisories in
 `scripts/audit-allowlist.json` — see `.claude/rules/security.md`, "npm audit gate and its allow-list").
-The picomatch entry carries `production_via_optional_peer` (better-auth 1.7's optional peer on vitest
-keeps it in `npm audit --omit=dev`); the gate then proves from `package-lock.json` that this edge is
-the only way in. The graph is not the image, so `npm run check:standalone` (`scripts/check-standalone.mjs`, after
-the build in CI `verify` and in the Dockerfile) fails if the server build ships any npm file outside the production
-graph without optional peers. Drop the entry when picomatch ships a fix.
+The allow-list is empty since 2026-11-18: GitHub withdrew the picomatch advisory (GHSA-fc5q-39xc-vjpf) that
+needed the one entry. The gate keeps its `production_via_optional_peer` support (an entry may be proven to reach
+`npm audit --omit=dev` only through an optional peer such as better-auth 1.7's vitest), and
+`npm run check:standalone` (`scripts/check-standalone.mjs`, after the build in CI `verify` and in the Dockerfile)
+still fails if the server build ships any npm file outside the production graph without optional peers.
 
 ## Architecture
 

@@ -1,10 +1,1 @@
-[
-  {
-    "id": "GHSA-fc5q-39xc-vjpf",
-    "package": "picomatch",
-    "reason": "picomatch <=4.0.7, no patched release. The npm package reaches node_modules only through dev tooling (vitest, vite, tinyglobby/fdir; eslint-config-next -> fast-glob -> micromatch). npm audit --omit=dev keeps it only because better-auth@1.7.x declares vitest as an OPTIONAL peer (loaded only by its better-auth/test export, dist/test-utils). scripts/check-standalone.mjs, run on the build output in CI verify and in the Dockerfile, fails if the server build copies, traces or bundles any npm file outside the production graph without optional peers, so no npm picomatch ships; src/test-only-imports.test.ts warns earlier from the source. The image does ship Next's own vendored picomatch 4 (next/dist/compiled/picomatch, used by images.remotePatterns/localPatterns matching), which npm audit cannot see; that copy is safe only while next.config sets no extglob image patterns, which src/test-only-imports.test.ts enforces (it sets none), and runtime code may not import it.",
-    "added": "2026-11-17",
-    "review_by": "2026-12-17",
-    "production_via_optional_peer": [{ "from": "better-auth", "peer": "vitest" }]
-  }
-]
+[]
