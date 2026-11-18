@@ -88,7 +88,9 @@ jobs:
       # call it replaced, except advisories in scripts/audit-allowlist.json —
       # and only when EVERY root advisory behind a vulnerability is listed.
       # Entries are dev-only exceptions: it also fails if an allow-listed
-      # advisory shows up in the production tree (`npm audit --omit=dev`).
+      # advisory shows up in the production tree (`npm audit --omit=dev`),
+      # unless the entry's production_via_optional_peer edge is proven from
+      # package-lock.json to be its only way in (exit 2 if it cannot be proven).
       # Retries an audit-endpoint outage (3 attempts) and fails if it persists;
       # never passes on an error. See .claude/rules/security.md, "npm audit gate".
       - name: Audit npm dependencies
@@ -114,6 +116,17 @@ jobs:
       # here, against the actual build output. See src/app/layout.tsx.
       - name: Check prerendered shells carry no scripts
         run: npm run check:shells
+
+      # The audit gate's production_via_optional_peer proof (picomatch, via
+      # better-auth's optional peer on vitest) is about the lockfile graph, not
+      # the image. This reads the build output itself: every npm file copied
+      # into .next/standalone, listed in a .nft.json trace, or bundled into a
+      # server chunk (from its source map) must belong to a lockfile node
+      # reachable over production edges with every optional-peer edge removed.
+      # Exit 1 on a violation, 2 if it cannot verify. The Dockerfile runs it
+      # again on the build that ships. See .claude/rules/security.md.
+      - name: Check the standalone build ships only production packages
+        run: npm run check:standalone
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4

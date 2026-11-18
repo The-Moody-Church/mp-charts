@@ -1,7 +1,9 @@
 name: Nightly Audit
 
 # The npm audit gate (`node scripts/audit-gate.mjs`: any HIGH or CRITICAL
-# advisory fails, except those in scripts/audit-allowlist.json) is a hard deploy
+# advisory fails, except those in scripts/audit-allowlist.json, which must stay
+# out of `npm audit --omit=dev` unless an entry's production_via_optional_peer
+# edge is proven from package-lock.json to be the only way in) is a hard deploy
 # gate: it runs in the `verify` job of docker-build-push.yml, and when it exits
 # non-zero the `build-scan-and-push` job is skipped, so no image ships.
 #
@@ -46,6 +48,10 @@ jobs:
       # Identical to the gate in docker-build-push.yml `verify`. If this fails,
       # deploys are already blocked — fix the advisory before merging anything.
       # It also warns (without failing) when an allow-list entry passes its
-      # review_by date or no longer matches anything in the audit.
+      # review_by date or no longer matches anything in the audit, and when an
+      # entry's advisory no longer appears in `npm audit --omit=dev` (remove its
+      # production_via_optional_peer field; a unit test in
+      # scripts/audit-gate-lib.test.ts fails once the package has left the
+      # production tree, until you do).
       - name: Audit npm dependencies
         run: node scripts/audit-gate.mjs

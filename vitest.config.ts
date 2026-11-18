@@ -17,7 +17,7 @@ export default defineConfig({
       // #212: without `include`, v8 coverage counts only the files a test happens
       // to import, so a file with no test at all never enters the denominator and
       // the percentage overstates real coverage. List the source explicitly.
-      include: ['src/**/*.{ts,tsx}', 'scripts/audit-gate-lib.mjs'],
+      include: ['src/**/*.{ts,tsx}', 'scripts/audit-gate-lib.mjs', 'scripts/standalone-check-lib.mjs'],
       // Floors at the measured totals (2026-11-17 after #302: 54.10 / 45.42 / 44.99 / 55.33),
       // so `npm run test:coverage` fails if coverage drops. Raise them as tests land.
       thresholds: { statements: 54, branches: 45, functions: 44, lines: 55 },

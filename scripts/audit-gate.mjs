@@ -12,14 +12,24 @@
  * the gate if an allow-listed advisory appears there. The decision logic and
  * its tests live in scripts/audit-gate-lib.mjs / scripts/audit-gate-lib.test.ts.
  *
+ * One opt-in exception: an entry carrying `production_via_optional_peer`
+ * names exact (from, peer) optional-peer edges (better-auth > vitest). When
+ * its advisory is in the production audit, the gate reads package-lock.json
+ * and package.json (readProjectFile below serves only those two names) and
+ * proves, against npm's own dev flags in the lockfile, that the package
+ * reaches production only through those edges. See .claude/rules/security.md.
+ *
  *   node scripts/audit-gate.mjs
  *
  * Exit 0: nothing HIGH/CRITICAL outside the allow-list, and no allow-listed
  *         advisory in the production tree.
  * Exit 1: at least one violation (printed as ::error::).
  * Exit 2: could not verify — the audit endpoint still failing after 3
- *         attempts, npm output that is not a valid report, or an invalid
- *         allow-list. Never a pass.
+ *         attempts, npm output that is not a valid report, an invalid
+ *         allow-list, or (for a production_via_optional_peer entry) a
+ *         package-lock.json / package.json that cannot be read, is not v3,
+ *         is out of sync, disagrees with the reach model, or does not match
+ *         the report. Never a pass.
  *
  * Needs no installed dependencies: plain node + the npm on PATH. Audits the
  * repository this file lives in, whatever the working directory.
@@ -79,4 +89,9 @@ process.exitCode = await runGate({
   print,
   allowlist,
   today: todayUtc(),
+  // Only the two project files the optional-peer proof models; nothing else.
+  readProjectFile: (name) => {
+    if (name !== "package-lock.json" && name !== "package.json") throw new Error(`refusing to read ${name}`);
+    return readFileSync(fileURLToPath(new URL(`../${name}`, import.meta.url)), "utf8");
+  },
 });
