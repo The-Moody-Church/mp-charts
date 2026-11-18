@@ -134,7 +134,7 @@ then a PR with a Security Review section. No `:dev` soak needed (dev tooling onl
 - One leftover workflow worktree (no commits, only a `node_modules` link) was removed.
 - Merged as #303 with owner approval over the known picomatch audit failure. Tests only, so no deploy.
 
-## Dashboard: services on the last day of a month — IN PROGRESS (branch `fix/dashboard-data-correctness`)
+## Dashboard: services on the last day of a month — COMPLETED (#310)
 
 - Fixes the ideas.md entry "Dashboard leaves out services held on the last day of a month" (B8, B15, latent B10).
 - New pure module `src/lib/providers/ministry-platform/utils/mp-date-range.ts` (`calendarDay`, `addDays`,
@@ -156,7 +156,7 @@ then a PR with a Security Review section. No `:dev` soak needed (dev tooling onl
 - To confirm on the dev soak: the Nov 30 2025 and Aug 31 2025 services now appear (the `'YYYY-MM-DD 00:00:00'` literal
   relies on MP's us_english DATEFORMAT; the ISO `T` form is the fallback).
 
-## Dashboard: empty data cached when one MP read fails (#304) — IN PROGRESS (branch `fix/dashboard-data-correctness`)
+## Dashboard: empty data cached when one MP read fails (#304) — COMPLETED (#310)
 
 - All 11 `dashboardService.ts` readers now log (`errorForLog`) and rethrow instead of returning `[]`/zeros/empty Set:
   the 9 in the ideas.md entry plus `getGroupTypeMetrics` and `getPeriodMetrics`. Legitimately empty MP answers still
@@ -185,7 +185,7 @@ then a PR with a Security Review section. No `:dev` soak needed (dev tooling onl
   concurrency limit across the three dashboard fetches (~31 at peak). (`getMonthlyAttendanceTrends`' partial success
   was fixed in the review follow-ups below.)
 
-## Dashboard fix: review follow-ups (11 findings) — IN PROGRESS (branch `fix/dashboard-data-correctness`)
+## Dashboard fix: review follow-ups (11 findings) — COMPLETED (#310)
 
 Each finding was checked first; all were real (two pairs were the same defect). Fixed, with tests:
 
@@ -215,7 +215,7 @@ Each finding was checked first; all were real (two pairs were the same defect). 
 - Docs: caching.md (refresh rule, all-or-nothing fan-outs, warm retry, stage errors), datetimehandling.md (browser
   checks, bucket keys; the bucketing-key follow-up removed), CLAUDE.md timezone paragraph, ideas.md #304/#305, status.md.
 
-## Dashboard fix: second review round and soak — IN PROGRESS (branch `fix/dashboard-data-correctness`)
+## Dashboard fix: second review round and soak — COMPLETED (#310)
 
 - Round-2 review (five lenses, two skeptics per finding): 10 findings, 3 confirmed and fixed in `5d95f60`:
   `refreshDashboardCache`'s `updateTag` re-rendered `/dashboard` inside the action response, where a failed forced fetch
@@ -224,7 +224,8 @@ Each finding was checked first; all were real (two pairs were the same defect). 
 - Merged `main` (the audit-gate change) into the branch; conflicts in `vitest.config.ts` and the ideas.md TOC only.
   After the merge: 1843 tests + 3 `it.fails` (UTC and Central), tsc, lint, the audit gate, the build and
   `check:standalone` all pass; coverage 59.44 / 50.32 / 50.60 / 60.66, floors raised to 59/50/50/60.
-- Next: CI builds `:dev` from this branch; owner soaks it on mptools (approved 2026-11-17).
+- Soaked on mptools `:dev` (`c706189`, started 2026-11-18 03:59 UTC): cache warming 4/4 on the first try (0:45.56),
+  307 → `/signin` 200. Owner approved "merge and deploy" 2026-11-18; merged as #310 and deployed to `:latest`.
 
 ## Files changed
 
