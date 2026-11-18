@@ -22,19 +22,35 @@
  */
 
 /**
+ * A hostname that is safe to paste into a CSP source list: letters, digits,
+ * dots and hyphens (WHATWG URL lowercases it and turns an IDN into punycode).
+ */
+const CSP_SAFE_HOSTNAME = /^[a-z0-9.-]+$/;
+
+/**
  * Parses an origin out of a configured URL.
  *
  * Returns null rather than throwing for anything unusable. This runs on the
  * request path in `src/proxy.ts`, where a missing or malformed environment
  * variable must degrade to a TIGHTER policy and never take the app down.
+ *
+ * Only http(s) origins with a plain hostname are returned (N13, upstream
+ * MPNext 6e160a3). `new URL(raw).origin` alone keeps whatever the host
+ * carries: `https://a;sandbox` (and `https://a%3Bsandbox`) would add a CSP
+ * directive, `https://*` (and `https://%2A`) would allow every https host,
+ * and `ftp://h` a scheme the policy never meant to allow.
  */
 export function originOf(raw: string | undefined | null): string | null {
   if (!raw) return null;
+  let url: URL;
   try {
-    return new URL(raw).origin;
+    url = new URL(raw);
   } catch {
     return null;
   }
+  if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+  if (!CSP_SAFE_HOSTNAME.test(url.hostname)) return null;
+  return url.origin;
 }
 
 /**
@@ -174,7 +190,8 @@ export function buildContentSecurityPolicy({
     "frame-src 'none'",
 
     // Stops an injected <base> from re-pointing every relative URL on the page.
-    "base-uri 'self'",
+    // 'none': neither this app nor Next renders a <base> (upstream MPNext 6e160a3).
+    "base-uri 'none'",
 
     `form-action 'self'${formActionOrigin ? ` ${formActionOrigin}` : ""}`,
 

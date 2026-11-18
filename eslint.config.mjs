@@ -5,7 +5,7 @@ import nextTypescript from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTypescript,
-  globalIgnores([".next/**", "out/**", "build/**", "coverage/**", "next-env.d.ts"]),
+  globalIgnores([".next/**", "out/**", "build/**", "coverage/**", "next-env.d.ts", ".claude/worktrees/**"]),
   {
     // Honor the `_`-prefix convention for intentionally unused vars/args.
     rules: {
