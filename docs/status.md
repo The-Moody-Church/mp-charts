@@ -23,11 +23,14 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 - The 2026-10-10 audit (`.claude/notes/security-audit-2026-10-10.md`): **N1** and **N23** fixed in #251; **N5** and **N6** closed and **N2–N4, N7** fixed 2026-10-27. The audit's MEDIUM and HIGH findings are all closed; LOW items N9–N19 remain (upstream ports, CI hardening, fetch hygiene).
 - The better-auth 1.6 redirect URIs were removed from TM.Widgets on 2026-10-27 (probe: old five refused, new five accepted). The obsolete `docker-compose.rollback-1.6.yml` pins were deleted the same day.
-- The audit allow-list is empty (`[]`) since 2026-10-24.
+- The audit allow-list has one entry since 2026-11-17 (#309; ported to event-manager #90, mp-senior-care #251, music-tools #204).
 - **Deploys blocked by the audit gate since 2026-11-17** (all four repos): GHSA-fc5q-39xc-vjpf, picomatch <=4.0.7
   ReDoS, HIGH, no patched release (GitHub-reviewed 15:56 UTC that day). Dev tooling only (vitest, vite, eslint); the
-  image ships no npm picomatch. An allow-list entry is refused: better-auth's optional peer `vitest` puts it in
-  `npm audit --omit=dev`. Owner chose to wait for the upstream fix. See `docs/sessions/session-summary-2026-11-17.md`.
+  image ships no npm picomatch. A plain allow-list entry is refused: better-auth's optional peer `vitest` puts it in
+  `npm audit --omit=dev`. **Fixed** by a gate change, `production_via_optional_peer`, proves from the
+  lockfile that picomatch reaches production only through better-auth > vitest, plus the typescript-eslint 8.73.0
+  bump, and a post-build check (`npm run check:standalone`, CI `verify` + Dockerfile) that no npm file outside that
+  graph ships. mp-charts first, then the other three. See `docs/sessions/session-summary-2026-11-17.md`.
 
 ## Planned
 

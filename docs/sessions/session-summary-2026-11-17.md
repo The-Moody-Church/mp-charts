@@ -27,7 +27,7 @@ all four repos now that typescript-eslint has moved typescript-estree to `minima
   `match-remote-pattern` / `match-local-pattern` for `images.remotePatterns`/`localPatterns`. The globs come from
   `next.config.ts`, not from users, and the attack needs an attacker-supplied glob.
 - **Why an allow-list entry doesn't work.** better-auth 1.7.18 declares `vitest` as an optional peer (for
-  `better-auth/test-utils`). Since vitest is also a devDependency, the lockfile marks it `devOptional`, and
+  its `better-auth/test` export, `dist/test-utils`). Since vitest is also a devDependency, the lockfile marks it `devOptional`, and
   `npm audit --omit=dev` keeps it. The gate's production-tree check therefore reports picomatch as reaching
   production. A probe with a temporary entry exited 1 ("now reaches a production dependency"). `--omit=peer` still
   leaves 5 HIGH; `--omit=optional` would also hide shipped optional packages (sharp's binaries). Per security.md
@@ -38,6 +38,55 @@ all four repos now that typescript-eslint has moved typescript-estree to `minima
   (better-auth → vitest), checked against the lockfile, byte-identical in all four repos.
 - Note that micromatch pulls picomatch 2.x (2.3.2), so the fix needs a 2.3.x release as well as 4.0.x, or
   the eslint path stays flagged.
+
+## Audit gate: `production_via_optional_peer` — COMPLETED (mp-charts #309, event-manager #90, mp-senior-care #251, music-tools #204)
+
+The owner approved changing the gate after all. Implemented in an mp-charts worktree; still to port to event-manager,
+mp-senior-care and music-tools (the three gate files stay byte-identical; the check against each repo's real lockfile
+already proves the entry there).
+
+- New optional allow-list field `production_via_optional_peer: [{ from, peer }]` (1–4 exact edges; plain lowercase
+  npm names; `from` is not the advisory's package; `review_by` at most 45 days after `added`).
+- When the production audit lists such an entry, the gate reads `package-lock.json` + `package.json` (only those two
+  names) and proves, from the lockfile, that no node of the package is reachable from the root's production edges
+  once exactly those optional-peer edges are removed. The reach model reproduces Arborist's `Node.resolve`,
+  `loadDeps` edge order and `calcDepFlags`, and must equal npm's own non-dev set in the lockfile first. Integrity
+  doubts exit 2; a broken premise or a witness path exits 1.
+- Allow-list entry added: GHSA-fc5q-39xc-vjpf (picomatch), better-auth > vitest, review by 2026-12-17.
+- Companion change: the typescript-eslint 8.73.0 lockfile update (fixes the minimatch co-root, GHSA-g3hv-75wg-m249).
+  Without it typescript-estree is still a mixed-root violation.
+- New repo-local guard `src/test-only-imports.test.ts` (the graph proof cannot see Next's standalone trace). After
+  adversarial review it is an allow-list, not a deny-list: every runtime import (src/** outside tests, plus
+  `cache-handler.js` and `next.config.ts`) must be a Node builtin or a `dependencies` entry reachable without
+  optional peers (exception: `@better-auth/core`); `better-auth/test` is refused by name (the first version named
+  `better-auth/test-utils`, which is not an export, and missed tinyglobby/vite/fdir/picomatch). It narrows the gap,
+  it does not close it.
+- Review fixes, same branch: the production check now matches the GHSA id alone (an advisory under another package,
+  or none, in `--omit=dev` was read as absent and only warned); the repo-lockfile test fails with "remove
+  production_via_optional_peer" once the peer stops carrying picomatch (documented as stricter than the gate); the
+  entry's reason names Next's vendored picomatch 4; the workflow comments describe the field.
+- `node scripts/audit-gate.mjs` exits 0 with the proof as a `::notice::`. With the field removed it exits 1 with the old
+  "now reaches a production dependency" error.
+- Round-2 review (the graph is not the image): a reviewer built picomatch into the standalone output past the guard
+  (`createRequire`, `@/../node_modules/...`, a route importing a `__mocks__` file, `outputFileTracingIncludes`) with the
+  gate still exiting 0. Fixes:
+  - New post-build check `scripts/check-standalone.mjs` (+ `standalone-check-lib.mjs` / `.test.ts`,
+    `npm run check:standalone`), run after the build in `verify` and in the Dockerfile builder stage. Every npm file
+    the server build copies into `.next/standalone`, lists in an `.nft.json` trace, or bundles into a server chunk
+    (read from its source map) must be in the production graph without optional peers. Measured: the real build
+    passes (102 nodes; notices for `semver/package.json` and lucide's `shared/src` map names); the reviewer's
+    `outputFileTracingIncludes` build and a build with the three bundling routes both exit 1 naming picomatch.
+  - The source guard now resolves `@/` and relative imports (must stay in src/, resolve to a file, and not be a
+    test/mock/test-setup file), reads `module.require`, `import.meta.resolve` and `@jsxImportSource`, refuses
+    `createRequire` and `require` used as a value, refuses every picomatch/micromatch specifier (Next's vendored copy
+    included), pins `next.config.ts`'s options, and fails on an extglob image pattern.
+  - The follow-up "CI: check the built image has no npm picomatch" (added to ideas.md on this branch) is done by the
+    build check and was removed.
+  - Not done here (this step was scoped to mp-charts): event-manager and music-db carry the same field with no
+    guard and no build check. Port `scripts/check-standalone.mjs`, `standalone-check-lib.mjs` and its test (they are
+    repo-agnostic apart from the CI-wiring test and the real-lockfile node list) to all three siblings, with the
+    `verify` step and Dockerfile line, before their entries keep the field; mp-senior-care's guard copy needs the
+    same hardening.
 
 ## When picomatch ships
 
@@ -91,3 +140,11 @@ then a PR with a Security Review section. No `:dev` soak needed (dev tooling onl
 - `docs/sessions/session-summary-2026-11-17.md` — this file.
 - Branch `fix/coverage-include-212`: `vitest.config.ts`, `.claude/rules/testing.md`, `README.md`, `docs/ideas.md`,
   `docs/status.md`.
+
+### Gate rollout
+
+- CI green on all four PRs (verify incl. the audit gate and `check:standalone`, and build-scan-and-push incl. the
+  Dockerfile check and Trivy): mp-charts #309, event-manager #90, mp-senior-care #251, music-tools #204. The six shared
+  scripts are byte-identical in all four; music-tools runs the standalone check only in its Dockerfile (no runner build),
+  and the shared CI-wiring test accepts either layout.
+- Merged with owner approval 2026-11-17. No runtime change, so no deploy needed for the gate itself.

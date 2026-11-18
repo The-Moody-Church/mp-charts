@@ -43,6 +43,13 @@ RUN --mount=type=secret,id=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY \
     fi; \
     npm run build
 
+# Fail the image build if the server build ships an npm file outside the
+# production graph without optional peers (the audit gate's
+# production_via_optional_peer proof covers only the lockfile graph; this
+# checks the standalone output that the runner stage copies). Same check as
+# CI's `verify` step; scripts/standalone-check-lib.mjs has the rule.
+RUN node scripts/check-standalone.mjs
+
 # Stage 3: Runner
 FROM node:24.22.2-alpine AS runner
 WORKDIR /app
