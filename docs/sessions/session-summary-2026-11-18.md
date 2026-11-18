@@ -9,7 +9,7 @@ Continues 2026-11-17's session (see `session-summary-2026-11-17.md`).
   succeeded on attempt 1; 307 → `/signin` 200. The pre-soak rollback pin in `/srv/mpcharts/docker-compose.rollback.yml`
   is unchanged.
 
-## Admin tool actions and the ministry year — IN PROGRESS (branch `fix/admin-actions-ministry-year`)
+## Admin tool actions and the ministry year — COMPLETED (#319)
 
 The two low ideas.md entries left from #302's test findings.
 
@@ -30,3 +30,4 @@ The two low ideas.md entries left from #302's test findings.
 - Docs: ideas.md entries linked to #307/#308 and COMPLETED; testing.md notes no `it.fails` remain; status.md row.
 - The ideas.md sync had opened each entry twice (#307/#317, #308/#318) because the entries carried no issue link.
   #317 and #318 closed as duplicates.
+- PR #319: CI green (security-lint, verify, build-scan-and-push, CodeQL). Owner approved "merge and deploy" 2026-11-18.
