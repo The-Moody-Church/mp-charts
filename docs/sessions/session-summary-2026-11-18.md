@@ -115,3 +115,54 @@ conflicts. event-manager and music-tools status.md pruned to 7 days per their ru
 - GitHub left a Dependabot alert open for the withdrawn advisory in event-manager (#4) and music-tools (#156),
   development scope; it is not an npm audit finding.
 - **Next:** batch 2 (auth core), per `.claude/plans/open-items-2026-11-18.md`.
+
+### Batch 2 — auth core (N19, f2af96d userinfo, 721d6e5/5620831, 6167cfd, 6aa1633, aa696f8) — COMMITTED, not pushed
+
+Branch `security/batch2-auth-core` from `1f9fa24`. One commit, no push, no PR yet. No pinned setting changed
+(`pkce: false`, no `discoveryUrl`, providerId `ministryplatform`, session/cookieCache, `allowedAuthRoutes`,
+`disabledAuthPaths`, `input: true`, `/api/auth` outside the proxy).
+
+1. **N19** — new `src/lib/env.ts` (`getMpBaseUrl`, `getAuthBaseUrl`; upstream 6616310 + 2227a80). No `NEXTAUTH_URL`
+   fallback; loopback http allowed for `BETTER_AUTH_URL` even in production; MP URL https only (loopback outside
+   production), path kept; auth URL a bare origin, trailing slash stripped; credentials/query/fragment refused;
+   messages never echo the value. `auth.ts` reads both after `assertAuthEnvironment`, under the same
+   `NEXT_PHASE=phase-production-build` exemption (`BUILD_PHASE_PLACEHOLDER_ORIGIN` during the build only).
+   `handleSignOut` (no localhost `post_logout_redirect_uri`), `client.ts` and `client-credentials.ts` lose their `!`
+   reads. `advanced.useSecureCookies: true` for an https origin in production: confirmed a pure restatement
+   (better-auth 1.7.18 `dist/cookies/index.mjs` is its only reader) and pinned by option value and cookie name.
+2. **f2af96d (userinfo only)** — `USERINFO_TIMEOUT_MS = 10_000`, `AbortSignal.timeout`, `redirect: "error"`;
+   `auth.userinfo.fetch_failed` now carries `errName` (no message); the login-profile log uses `errorForLog`.
+   Not taken: `jwe`/withholding (N16, batch 7), id_token verification (N17).
+3. **721d6e5 / 5620831** — `withNoStore` on every `/api/auth` return path and `no-store` on our 404; the copy
+   fallback keeps every Set-Cookie. Mount-point (`''`, `/`) and outside-mount tests.
+4. **6167cfd (adapted)** — new `src/app/api/auth/[...all]/route.code-flow.test.ts` through the real route: five
+   hostile callbackURLs → 403 `INVALID_CALLBACK_URL`, cross-site Origin on a cookie-bearing POST → 403
+   `INVALID_ORIGIN` (controls: relative and same-origin accepted), negative controls `disableOriginCheck: true` and
+   `trustedOrigins: ["*"]`; callback state missing / mismatched / no cookie / tampered / >10 min, each with no token
+   call (control: 9 min accepted); cookie attributes over http and, with an https `BETTER_AUTH_URL`, `__Secure-` +
+   `Secure` on oauth_state, session_token and session_data.
+5. **6aa1633 (adapted)** — `CODE_SHAPE = /^[A-Za-z0-9_]{1,64}$/` plus a string check, for both lookup and echo;
+   the table moved to `src/app/auth-error/error-codes.ts`. Tests: free text, array, 65 chars not echoed; unknown
+   well-formed code echoed; every `ERROR_MESSAGES` key matches.
+6. **aa696f8** — global-error: `<a href="/">Reload the app</a>`, retry button only after hydration
+   (`useSyncExternalStore`), imports only `react` (pinned).
+
+**Checks:** tsc, lint clean; `test:run` 96 files / 2029 tests; `test:coverage` above the floors (59.66 / 50.77 /
+50.8 / 60.9). `env -u BETTER_AUTH_URL -u MINISTRY_PLATFORM_BASE_URL npm run build` passed, but Next still loaded
+`.env.local` ("Environments: .env.local"), so it proved little; a second build with `.env.local` moved aside and
+the secret unset too also passed with no `[env]`/`[auth]` error and no "Base URL" warning (better-auth's
+pre-existing "default secret" log lines appear, as in any build without a secret). `check:standalone` and
+`check:shells` green on that build.
+**Mutation check:** 33 mutants of the source changes (reverting each wiring, re-adding fallbacks, dropping the
+timeout/redirect, unwrapping no-store, a lossy copy, `disableOriginCheck: true`, `trustedOrigins: ["*"]`, weaker
+cookie attributes, the raw echo, upstream's lower-case regex, no link, an always-on button) each turned at least
+one test red; all restored.
+**Live (standalone, placeholder env, no MP write):** `/api/auth/get-session` 200, `/api/auth/nope` 404,
+`/sign-in/social` 200 and the callback 302 all `cache-control: no-store`; `/auth-error?error=Call%20555` renders the
+fallback with no `<code>` (the value is only in Next's escaped RSC payload, as documented); with
+`BETTER_AUTH_URL` unset, every auth request is 500 with `[env] BETTER_AUTH_URL is not set.` logged and the process
+stays up (`/auth-error` still 200).
+**Next:** operator check that `BETTER_AUTH_URL` and `MINISTRY_PLATFORM_BASE_URL` are https in `/srv/mpcharts/.env`
+and the Ironside dev `.env`; push, PR (security review section), `:dev` soak with a human sign-in and sign-out;
+then mirror to event-manager, mp-senior-care and music-tools (route `app-url.ts` through `getAuthBaseUrl` in the
+first two, or document its production fallback).

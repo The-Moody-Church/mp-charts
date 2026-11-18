@@ -154,7 +154,8 @@ BETTER_AUTH_SECRET=your_generated_secret
 # name; the runtime env does not need it (see DOCKER.md, "Server Actions encryption key")
 NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=
 
-# Application base URL — used for OAuth callbacks and redirects
+# Application base URL — used for OAuth callbacks and redirects. Required; an origin
+# only, https except http://localhost (checked by src/lib/env.ts, no fallback)
 BETTER_AUTH_URL=http://localhost:3000
 
 # MinistryPlatform API Configuration
@@ -289,7 +290,7 @@ npm run dev
 
 When deploying to production:
 
-1. Update `BETTER_AUTH_URL` to your production domain
+1. Update `BETTER_AUTH_URL` to your production origin (`https://`, no path or trailing slash). It and `MINISTRY_PLATFORM_BASE_URL` (https) are validated when the auth module loads; a bad or missing value makes every auth request fail with an `[env] …` log line while the container stays up, so check the log after deploying
 2. Add production redirect URIs to Ministry Platform OAuth client
 3. Add production post-logout redirect URIs
 4. Ensure environment variables are set in your hosting provider. If every request reaches the app through Cloudflare, also set `AUTH_IP_ADDRESS_HEADERS=cf-connecting-ip` so better-auth's sign-in rate limit keys on the real client IP (see `.env.example`), then check the log: an invalid value makes every auth request fail with an `[auth] …` line while the container stays up

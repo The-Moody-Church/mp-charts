@@ -102,8 +102,45 @@ describe("GlobalError structural contract", () => {
     expect(appImports).toEqual([]);
   });
 
+  it("imports only from react", () => {
+    const src = readFileSync(GLOBAL_ERROR_SRC, "utf8");
+    const specifiers = [...src.matchAll(/(?:from|import)\s*\(?\s*["']([^"']+)["']/g)].map((m) => m[1]);
+    expect(specifiers.length).toBeGreaterThan(0);
+    expect(specifiers.every((s) => s === "react")).toBe(true);
+  });
+
   it("styles inline only — a nonce-based style-src would drop a stylesheet", () => {
     const src = readFileSync(GLOBAL_ERROR_SRC, "utf8");
     expect(src).not.toContain("className=");
+  });
+});
+
+/**
+ * Upstream MPNext aa696f8. Next prerenders this boundary (_global-error.html,
+ * the static 500 page). A prerender has no CSP nonce, so under the enforcing
+ * nonce-based script-src the static copy never hydrates. Its markup must carry
+ * a control that works without JavaScript, and must not carry one that needs it.
+ */
+describe("GlobalError without JavaScript (the prerendered, nonce-less copy)", () => {
+  const staticMarkup = () =>
+    renderToStaticMarkup(<GlobalError error={makeError("boom")} retry={vi.fn()} />);
+
+  it("offers a plain link that reloads the app", () => {
+    expect(staticMarkup()).toMatch(/<a[^>]+href="\/"[^>]*>Reload the app<\/a>/);
+  });
+
+  it("does not render a retry button that could never work", () => {
+    expect(staticMarkup()).not.toContain("<button");
+  });
+
+  it("once hydrated, shows both the link and a working retry button", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const retry = vi.fn();
+
+    render(<GlobalError error={makeError("boom")} retry={retry} />);
+
+    expect(screen.getByRole("link", { name: /reload the app/i })).toHaveAttribute("href", "/");
+    fireEvent.click(screen.getByRole("button", { name: /try again/i }));
+    expect(retry).toHaveBeenCalledTimes(1);
   });
 });

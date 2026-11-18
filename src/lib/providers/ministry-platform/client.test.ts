@@ -41,6 +41,22 @@ describe('MinistryPlatformClient', () => {
       // Verify HTTP client was created
       expect(httpClient).toBeDefined();
     });
+
+    // Audit N19: the `!` read is gone; an unusable base URL fails here, not as
+    // `undefined/tables/...` on the first request.
+    it.each([
+      ['unset', undefined, 'MINISTRY_PLATFORM_BASE_URL is not set'],
+      ['http on a real host', 'http://mp.example.com', 'MINISTRY_PLATFORM_BASE_URL must use https://'],
+    ])('refuses a base URL that is %s', (_label, value, message) => {
+      const saved = process.env.MINISTRY_PLATFORM_BASE_URL;
+      if (value === undefined) delete process.env.MINISTRY_PLATFORM_BASE_URL;
+      else process.env.MINISTRY_PLATFORM_BASE_URL = value;
+      try {
+        expect(() => new MinistryPlatformClient()).toThrow(message);
+      } finally {
+        process.env.MINISTRY_PLATFORM_BASE_URL = saved;
+      }
+    });
   });
 
   describe('Token Management - ensureValidToken', () => {

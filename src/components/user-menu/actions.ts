@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { buildEndSessionUrl, MP_PROVIDER_ID } from "@/lib/auth-endsession";
 import { takeIdToken } from "@/lib/id-token-store";
+import { getAuthBaseUrl, getMpBaseUrl } from "@/lib/env";
 import { logError } from "@/lib/logger";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -111,17 +112,19 @@ export async function handleSignOut() {
   // 2. Clear this app's session.
   await auth.api.signOut({ headers: requestHeaders });
 
-  const baseUrl = process.env.MINISTRY_PLATFORM_BASE_URL;
-  if (!baseUrl) {
-    throw new Error('MINISTRY_PLATFORM_BASE_URL is not configured');
-  }
+  // Both validated (src/lib/env.ts); each throws on an unset or unusable
+  // value, after the local session is already cleared. No localhost fallback
+  // for the post-logout URI: a redirect to the wrong origin either fails MP's
+  // registered-URI check or sends the user somewhere unexpected.
+  const baseUrl = getMpBaseUrl();
+  const postLogoutUri = getAuthBaseUrl();
 
   // 3. Hand the browser to MP, the only thing that can end the IdP session.
   //    `redirect()` throws NEXT_REDIRECT, so it must stay outside any catch.
   redirect(
     buildEndSessionUrl({
       baseUrl,
-      postLogoutUri: process.env.BETTER_AUTH_URL || 'http://localhost:3000',
+      postLogoutUri,
       idToken,
       clientId: process.env.OIDC_CLIENT_ID,
     })

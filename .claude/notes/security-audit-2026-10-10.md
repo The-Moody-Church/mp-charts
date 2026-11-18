@@ -55,14 +55,14 @@ repo visibility, protection, scanning status, open alerts and advisory data.
 | N9 | `proxy.ts` `/api` prefix match and unanchored matcher | LOW | **Fixed 2026-11-18** (batch 1): exact `/api` public path; every matcher exclusion bounded |
 | N10 | Journey/compliance pages render tool config without a feature gate | LOW | Open |
 | N11 | Duplicate reachable action at a weaker rate tier; one orphan export | LOW | Partly fixed: `getDashboardMetrics` gone; three unused contact-log actions remain (not in the current action manifest, so latent). Batch 4 |
-| N12 | Outbound fetches without timeout/redirect refusal; token refresh not single-flight; token body unvalidated | LOW | Open |
+| N12 | Outbound fetches without timeout/redirect refusal; token refresh not single-flight; token body unvalidated | LOW | Partly fixed 2026-11-18 (batch 2): the userinfo fetch has a 10 s timeout and `redirect: "error"` (upstream f2af96d). The MP client part is batch 3 |
 | N13 | `originOf` allows env-controlled CSP directive injection | LOW | **Fixed 2026-11-18** (batch 1): http(s) only, `[a-z0-9.-]` hostname; also `base-uri 'none'` |
 | N14 | `X-Powered-By`, live `/_next/image`, dev action-arg logging | LOW | **Fixed 2026-11-18** (batch 1): `poweredByHeader: false`, `images.unoptimized`, `logging.serverFunctions: false` |
 | N15 | Three CodeQL `js/log-injection` alerts open since 2026-08-07 | LOW | **Fixed**, confirmed 2026-11-18: no open `js/log-injection` alerts. (One unrelated open alert, #37 `js/incomplete-sanitization` in a test file, batch 4) |
 | N16 | Cookie cache `jwt` (signed, readable) and `/get-session` returns token/IP/UA | LOW | Open — owner approved `jwe` + payload strip 2026-11-18 (batch 7, all four repos) |
 | N17 | id_token not signature-verified; no `exp`/`azp` check | LOW | Open — owner decided 2026-11-18 to port upstream's lazy verifier (all four repos) |
 | N18 | CI actions pinned by tag; no workflow-level `permissions`; `persist-credentials` default | LOW | Open |
-| N19 | `BETTER_AUTH_URL` / MP URL not validated at boot; localhost fallback | LOW | Open |
+| N19 | `BETTER_AUTH_URL` / MP URL not validated at boot; localhost fallback | LOW | **Fixed 2026-11-18** (batch 2): `src/lib/env.ts` validates both under the secret guard's rule and `next build` exemption; no `NEXTAUTH_URL` or localhost fallback; the `!` reads in `client.ts` / `client-credentials.ts` are gone |
 | N20 | Local checkout 8 commits behind; stale `node_modules`; tests not run | INFO | Operational |
 | N21 | `$ignorePermissions` still declared (unused) | INFO | Open |
 | N22 | `main` has no branch protection; `.claude/settings.local.json` tracked (benign) | INFO | Branch part fixed 2026-10-21: ruleset `main` (id 25566298) blocks deletion and force pushes; no PR or status-check requirement, so docs-direct pushes and the Issues ↔ Ideas sync still work |
@@ -331,7 +331,7 @@ Upstream's own triage block was run against our tree. Results, with the fork's d
 | Upstream phase / item | Fork status | Note |
 |---|---|---|
 | P2 secret guard, `disableOriginCheck` pinned | ✓ done | #244 |
-| P2 `env.ts` URL validation | ✗ open | N19 |
+| P2 `env.ts` URL validation | ✓ done | N19, batch 2 (2026-11-18), build-phase exemption kept, no `NEXTAUTH_URL` |
 | P2 `.env*` ignored, no tracked env, pre-commit env hook | ✓ / ✓ / ✗ | no hook here; push protection covers secrets |
 | P2 `settings.local.json` untracked | ✗ (tracked, benign) | N22 |
 | P3 12 h / no-slide / `refreshCache: false` / no account cookie / tokens stripped | ✓ done | #244 |
@@ -341,7 +341,7 @@ Upstream's own triage block was run against our tree. Results, with the fork's d
 | P5 id_token verified; `exp`/`azp` | ✗ (posture) | N17 — playbook state C, needs a decision |
 | P5 no `offline_access`; userinfo never throws | ✓ done | userinfo lacks timeout/redirect refusal → N12 |
 | P6 body cap, raw Content-Type, `callbackURL` ≤ 2048, IP config | ✓ done | #244 |
-| P6 `no-store` on every auth-route response | partial | better-auth sets it on `/get-session`; our 404s don't |
+| P6 `no-store` on every auth-route response | ✓ done | batch 2 (2026-11-18): `withNoStore` on every return path, 404s included |
 | P7 fail-closed role gate | n/a | RBAC groups; `ADMIN_USER_GROUP_IDS` empty → nobody is admin (fail-closed) |
 | P8 timeouts / `redirect: "error"` / path guard / single-flight / token validation / 401 retry | ✓ timeouts only | N12 |
 | P9 identifier guards, procedure allowlist, trusted sender, `$ignorePermissions` removal, codegen escaping | mostly n/a | no procedures/communications called; `$ignorePermissions` type remains (N21); codegen escaping not checked |
@@ -352,8 +352,8 @@ Upstream's own triage block was run against our tree. Results, with the fork's d
 | P11 `poweredByHeader`, `images.unoptimized`, `serverFunctions: false` | ✗ open | N14 |
 | P11 COOP/CORP | ✓ done | in `next.config.ts` since 2026-06 (F14) |
 | P11 `base-uri 'none'`; `originOf` validation | ✗ open | `'self'` today; N13 |
-| P12 `/auth-error` `Object.hasOwn` | ✓ done | #242 (code regex not adopted; React escapes) |
-| P12 `/signed-out`, `SessionGuard`, cross-tab broadcast, sign-in loop cap, no-JS global-error | ✗ open | UX/safety hardening; shared-PC sign-back-in risk is real but MP SSO-level |
+| P12 `/auth-error` `Object.hasOwn` | ✓ done | #242; code-shape regex adopted in batch 2 (2026-11-18) as `/^[A-Za-z0-9_]{1,64}$/` (keeps `MISSING_FIELD`): the threat is content spoofing, not XSS |
+| P12 `/signed-out`, `SessionGuard`, cross-tab broadcast, sign-in loop cap, no-JS global-error | partial | UX/safety hardening; shared-PC sign-back-in risk is real but MP SSO-level. No-JS global-error done in batch 2 (2026-11-18); `/signed-out` declined; the rest batch 6 |
 | P12 every page self-gates | partial | `/admin` yes; tool pages no (N10) |
 | P13 Flight-promise `.catch` crash | n/a | our `UserProvider` loads client-side via server actions, not a streamed promise |
 | P14 `server-only` guards | ✗ open | would fail the build on a client import of a service |

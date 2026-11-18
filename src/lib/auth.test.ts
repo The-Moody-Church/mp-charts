@@ -7,6 +7,7 @@ import {
   syntheticEmailForSub,
   mapMpProfileToUser,
   SYNTHETIC_EMAIL_DOMAIN,
+  USERINFO_TIMEOUT_MS,
   auth,
 } from "@/lib/auth";
 import type { GenericOAuthConfig } from "better-auth/plugins";
@@ -185,7 +186,57 @@ describe("getMpUserInfo", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(fetch).toHaveBeenCalledWith("https://test-mp.example.com/oauth/connect/userinfo", {
       headers: { Authorization: "Bearer token" },
+      signal: expect.any(AbortSignal),
+      redirect: "error",
     });
+  });
+
+  // Upstream MPNext f2af96d, userinfo part: a deadline, and the user's bearer
+  // never follows a redirect.
+  it("gives the userinfo request a 10 s deadline and refuses redirects", async () => {
+    expect(USERINFO_TIMEOUT_MS).toBe(10_000);
+    const timeout = vi.spyOn(AbortSignal, "timeout");
+    stubUserinfo(VALID_SUB);
+    mockGetTableRecords.mockResolvedValue([]);
+
+    await getMpUserInfo("token");
+
+    expect(timeout).toHaveBeenCalledWith(USERINFO_TIMEOUT_MS);
+    const init = vi.mocked(fetch).mock.calls[0][1] as RequestInit;
+    expect(init.signal).toBe(timeout.mock.results[0].value);
+    expect(init.redirect).toBe("error");
+    timeout.mockRestore();
+  });
+
+  it.each([
+    ["a timeout", new DOMException("The operation was aborted due to timeout", "TimeoutError"), "TimeoutError"],
+    ["a refused redirect", new TypeError("fetch failed"), "TypeError"],
+  ])("returns null on %s, logging only the error name", async (_label, failure, name) => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(failure));
+
+    await expect(getMpUserInfo("token")).resolves.toBeNull();
+    const logged = errorSpy.mock.calls.flat().join(" ");
+    expect(JSON.parse(errorSpy.mock.calls[0][0] as string)).toEqual({
+      event: "auth.userinfo.fetch_failed",
+      errName: name,
+    });
+    expect(logged).not.toContain(failure.message);
+    expect(logged).not.toContain("test-mp.example.com");
+    errorSpy.mockRestore();
+  });
+
+  it("logs the enrichment failure through errorForLog, one line with no raw Error", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    stubUserinfo(VALID_SUB);
+    mockGetTableRecords.mockRejectedValue(new Error("MP is down\nforged: line"));
+
+    await getMpUserInfo("token");
+
+    const call = errorSpy.mock.calls.find((c) => String(c[0]).startsWith("Auth: Error fetching MP user profile"));
+    expect(call).toBeDefined();
+    expect(call![1]).toBe("Error: MP is downforged: line");
+    errorSpy.mockRestore();
   });
 
   it("still returns the user when the MP enrichment lookup fails", async () => {
@@ -450,7 +501,10 @@ describe("configured getUserInfo (the function better-auth actually calls)", () 
     expect(p).toMatchObject({ sub: VALID_SUB, id: VALID_SUB, userGuid: VALID_SUB, mpUserId: 42, mpContactId: 99 });
     expect(takeIdToken(VALID_SUB)).toBe(idt);
     // The token endpoint's access token is what reaches userinfo.
-    expect(fetch).toHaveBeenCalledWith(expect.any(String), { headers: { Authorization: "Bearer at" } });
+    expect(fetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ headers: { Authorization: "Bearer at" } }),
+    );
   });
   it("refuses an ID token whose sub differs from userinfo's", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});

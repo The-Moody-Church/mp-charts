@@ -25,7 +25,18 @@ vi.mock("@/lib/providers/ministry-platform", () => ({
 }));
 
 const GOOD_SECRET = "a-perfectly-fine-test-secret-0123456789";
-const KEYS = ["BETTER_AUTH_SECRET", "NEXTAUTH_SECRET", "BETTER_AUTH_SECRETS", "NODE_ENV", "TEST", "NEXT_PHASE"] as const;
+const KEYS = [
+  "BETTER_AUTH_SECRET",
+  "NEXTAUTH_SECRET",
+  "BETTER_AUTH_SECRETS",
+  "NODE_ENV",
+  "TEST",
+  "NEXT_PHASE",
+  // Left at src/test-setup.ts's valid values unless a test overrides them.
+  "BETTER_AUTH_URL",
+  "MINISTRY_PLATFORM_BASE_URL",
+  "NEXTAUTH_URL",
+] as const;
 type Key = (typeof KEYS)[number];
 let saved: Record<string, string | undefined>;
 
@@ -147,6 +158,99 @@ describe("assertAuthEnvironment at module load", () => {
     await expect(
       importAuthWith({ BETTER_AUTH_SECRET: undefined, NODE_ENV: "production", NEXT_PHASE: "phase-production-server" }),
     ).rejects.toThrow(/BETTER_AUTH_SECRET is not set/);
+  });
+});
+
+/**
+ * Audit N19: the two auth-critical URLs (src/lib/env.ts has the per-value
+ * cases) are read under the same rule and the same `next build` exemption as
+ * the secret, so these prove the module-level wiring.
+ */
+describe("auth-critical URLs at module load", () => {
+  it.each([
+    ["BETTER_AUTH_URL", { BETTER_AUTH_URL: undefined }, /\[env\] BETTER_AUTH_URL is not set/],
+    ["MINISTRY_PLATFORM_BASE_URL", { MINISTRY_PLATFORM_BASE_URL: undefined }, /\[env\] MINISTRY_PLATFORM_BASE_URL is not set/],
+  ])("refuses a production import with %s unset (no localhost, no undefined/oauth)", async (_name, env, message) => {
+    await expect(importAuthWith({ NODE_ENV: "production", ...env })).rejects.toThrow(message);
+  });
+
+  it("refuses an unset BETTER_AUTH_URL outside production too, and does not fall back to NEXTAUTH_URL", async () => {
+    await expect(
+      importAuthWith({ BETTER_AUTH_URL: undefined, NEXTAUTH_URL: "https://legacy.example.org" }),
+    ).rejects.toThrow(/BETTER_AUTH_URL is not set/);
+  });
+
+  it("refuses an http BETTER_AUTH_URL on a real host, in production", async () => {
+    await expect(
+      importAuthWith({ NODE_ENV: "production", BETTER_AUTH_URL: "http://mptools.example.org" }),
+    ).rejects.toThrow(/BETTER_AUTH_URL must use https:\/\//);
+  });
+
+  it("refuses an http MINISTRY_PLATFORM_BASE_URL on a real host", async () => {
+    await expect(importAuthWith({ MINISTRY_PLATFORM_BASE_URL: "http://mp.example.org" })).rejects.toThrow(
+      /MINISTRY_PLATFORM_BASE_URL must use https:\/\//,
+    );
+  });
+
+  it("uses the normalized values: an origin-only baseURL, the MP path kept, no //oauth", async () => {
+    const { auth } = await importAuthWith({
+      BETTER_AUTH_URL: "https://app.example.org/",
+      MINISTRY_PLATFORM_BASE_URL: "https://mp.example.org/ministryplatformapi/",
+    });
+    expect(auth.options.baseURL).toBe("https://app.example.org");
+    const response = await auth.api.signInSocial({
+      body: { provider: "ministryplatform", callbackURL: "/" },
+      headers: new Headers({ origin: "https://app.example.org" }),
+      asResponse: true,
+    });
+    const authorize = new URL((await response.json()).url);
+    expect(authorize.origin + authorize.pathname).toBe(
+      "https://mp.example.org/ministryplatformapi/oauth/connect/authorize",
+    );
+    expect(authorize.searchParams.get("redirect_uri")).toBe(
+      "https://app.example.org/api/auth/callback/ministryplatform",
+    );
+  });
+
+  it("accepts a loopback http BETTER_AUTH_URL on a production process (a local next start), without forcing Secure cookies", async () => {
+    const { auth } = await importAuthWith({ NODE_ENV: "production", BETTER_AUTH_URL: "http://localhost:3000" });
+    expect(auth.options.baseURL).toBe("http://localhost:3000");
+    expect(auth.options.advanced?.useSecureCookies).toBeUndefined();
+    expect((await auth.$context).authCookies.sessionToken.name).toBe("better-auth.session_token");
+  });
+
+  // useSecureCookies is a pure restatement of better-auth's own derivation
+  // (https baseURL => Secure + __Secure-); these pin both the option and the
+  // cookie it yields, so a change to either shows up here.
+  it("pins Secure cookies for an https origin in production", async () => {
+    const { auth } = await importAuthWith({ NODE_ENV: "production", BETTER_AUTH_URL: "https://app.example.org" });
+    expect(auth.options.advanced?.useSecureCookies).toBe(true);
+    const cookies = (await auth.$context).authCookies;
+    expect(cookies.sessionToken.name).toBe("__Secure-better-auth.session_token");
+    expect(cookies.sessionToken.attributes.secure).toBe(true);
+  });
+
+  it("leaves an https origin outside production to better-auth's derivation (still Secure)", async () => {
+    const { auth } = await importAuthWith({ BETTER_AUTH_URL: "https://app.example.org" });
+    expect(auth.options.advanced?.useSecureCookies).toBeUndefined();
+    expect((await auth.$context).authCookies.sessionToken.name).toBe("__Secure-better-auth.session_token");
+  });
+
+  it("is skipped during next build: imports with BOTH URLs and the secret unset (the CI verify and Docker build path)", async () => {
+    const mod = await importAuthWith({
+      BETTER_AUTH_SECRET: undefined,
+      BETTER_AUTH_URL: undefined,
+      MINISTRY_PLATFORM_BASE_URL: undefined,
+      NODE_ENV: "production",
+      NEXT_PHASE: "phase-production-build",
+    });
+    expect(mod.auth.options.baseURL).toBe(mod.BUILD_PHASE_PLACEHOLDER_ORIGIN);
+  });
+
+  it("is NOT skipped at runtime (NEXT_PHASE=phase-production-server)", async () => {
+    await expect(
+      importAuthWith({ BETTER_AUTH_URL: undefined, NODE_ENV: "production", NEXT_PHASE: "phase-production-server" }),
+    ).rejects.toThrow(/BETTER_AUTH_URL is not set/);
   });
 });
 

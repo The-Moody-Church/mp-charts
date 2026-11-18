@@ -1,3 +1,4 @@
+import { getMpBaseUrl } from "@/lib/env";
 import { getClientCredentialsToken } from "./auth/client-credentials";
 import { HttpClient } from "./utils/http-client";
 
@@ -45,8 +46,9 @@ export class MinistryPlatformClient {
      *               instead of client credentials.
      */
     constructor(options?: MinistryPlatformClientOptions) {
-        // Get base URL from environment variable
-        this.baseUrl = process.env.MINISTRY_PLATFORM_BASE_URL!;
+        // Validated base URL (https, no credentials/query, no trailing slash;
+        // src/lib/env.ts). Throws on an unset or unusable value.
+        this.baseUrl = getMpBaseUrl();
 
         if (options?.accessToken) {
             // User token mode: use the pre-authenticated token directly.
