@@ -51,8 +51,7 @@ vi.mock("@/services/complianceProcessingService", () => ({
   ComplianceProcessingService: { clearCache: mockClearCache },
 }));
 
-// Not imported by the source today (a known gap); mocked so the `it.fails`
-// tests in the "rate limiting" block can state the required write tier.
+// Mocked so the "rate limiting" block can check the write tier and a refusal.
 vi.mock("@/lib/rate-limit", () => ({ enforceRateLimit: mockEnforceRateLimit }));
 
 import {
@@ -524,10 +523,14 @@ describe("saveComplianceToolAction", () => {
       success: false,
       error: "disk full",
     });
-    // CURRENT BEHAVIOUR: the tool config was already persisted (not atomic) and
-    // the processing-service cache is left stale for this slug.
+    // The tool config was already persisted (the two files are not written
+    // atomically), so the processing-service cache is cleared right after that
+    // write, before feature access, and never keeps serving the old config.
     expect(mockSaveConfig).toHaveBeenCalledTimes(1);
-    expect(mockClearCache).not.toHaveBeenCalled();
+    expect(mockClearCache).toHaveBeenCalledWith("kids-volunteers");
+    expect(mockClearCache.mock.invocationCallOrder[0]).toBeLessThan(
+      mockSaveFeatureAccess.mock.invocationCallOrder[0],
+    );
   });
 
   it("saves every schema field of a payload that carries an extra key", async () => {
@@ -538,12 +541,9 @@ describe("saveComplianceToolAction", () => {
     expect(mockSaveConfig.mock.calls[0][0].tools[0]).toMatchObject(makeTool());
   });
 
-  // KNOWN GAP (reported): validateComplianceToolConfig's parsed (stripped) result
-  // is discarded and the caller-shaped `tool` object is saved instead, so keys
-  // outside the schema reach the config file. `it.fails` records the intended
-  // behaviour without blessing the bug: when the action saves the parsed value,
-  // this starts passing, Vitest reports it, and `.fails` should be removed.
-  it.fails("strips keys outside the schema before saving", async () => {
+  // The action saves validateComplianceToolConfig's PARSED value, which strips
+  // keys the schema does not declare (security.md: "the strip is the control").
+  it("strips keys outside the schema before saving", async () => {
     const tool = { ...makeTool(), injected: "<script>" } as unknown as ComplianceToolConfig;
 
     await saveComplianceToolAction(tool, true);
@@ -610,6 +610,23 @@ describe("deleteComplianceToolAction", () => {
     expect(mockSaveConfig.mock.calls[0][0].tools.map((t: ComplianceToolConfig) => t.slug)).toEqual(["a"]);
   });
 
+  it("clears the service cache even when removing the feature-access entry fails", async () => {
+    config = { tools: [makeTool()] };
+    featureAccess = {
+      "compliance:kids-volunteers": { label: "K", description: "", allowedGroupIds: [5] },
+    };
+    mockSaveFeatureAccess.mockImplementation(() => {
+      throw new Error("disk full");
+    });
+
+    await expect(deleteComplianceToolAction("kids-volunteers")).resolves.toEqual({
+      success: false,
+      error: "Failed to delete compliance tool",
+    });
+    expect(mockSaveConfig.mock.calls[0][0].tools).toEqual([]);
+    expect(mockClearCache).toHaveBeenCalledWith("kids-volunteers");
+  });
+
   it("does not leak the underlying error message on a write failure", async () => {
     mockSaveConfig.mockImplementation(() => {
       throw new Error("EACCES: /app/data/compliance-tools.json");
@@ -629,20 +646,50 @@ describe("deleteComplianceToolAction", () => {
 // ---------------------------------------------------------------------------
 
 describe("rate limiting", () => {
-  // KNOWN GAP (reported): .claude/rules/security.md asks write actions to call
-  // enforceRateLimit(session.user.id, "write"). These admin writes rely only on
-  // the "general" tier applied inside requireSession() (via
-  // requireFeatureAccess); actions.ts does not import @/lib/rate-limit at all.
-  // `it.fails` states the required behaviour without asserting the gap is
-  // correct: once the write tier is added these start passing, Vitest reports
-  // them, and `.fails` should be removed.
-  it.fails("save applies the write tier for the acting admin", async () => {
+  // .claude/rules/security.md: write actions call enforceRateLimit(session.user.id,
+  // "write") after the session check, on top of the "general" tier that
+  // requireSession() (via requireFeatureAccess) applies.
+  it("save applies the write tier for the acting admin", async () => {
     await expect(saveComplianceToolAction(makeTool(), true)).resolves.toEqual({ success: true });
     expect(mockEnforceRateLimit).toHaveBeenCalledWith("u1", "write");
   });
 
-  it.fails("delete applies the write tier for the acting admin", async () => {
+  it("delete applies the write tier for the acting admin", async () => {
     await expect(deleteComplianceToolAction("kids-volunteers")).resolves.toEqual({ success: true });
     expect(mockEnforceRateLimit).toHaveBeenCalledWith("u1", "write");
+  });
+
+  it("a refused save reports the limit and writes nothing", async () => {
+    mockEnforceRateLimit.mockImplementation(() => {
+      throw new Error("Rate limit exceeded. Try again in 30 seconds.");
+    });
+    await expect(saveComplianceToolAction(makeTool(), true)).resolves.toEqual({
+      success: false,
+      error: "Rate limit exceeded. Try again in 30 seconds.",
+    });
+    expect(mockLoadConfig).not.toHaveBeenCalled();
+    expect(mockSaveConfig).not.toHaveBeenCalled();
+    expect(mockSaveFeatureAccess).not.toHaveBeenCalled();
+    expect(mockClearCache).not.toHaveBeenCalled();
+  });
+
+  it("a refused delete writes nothing", async () => {
+    mockEnforceRateLimit.mockImplementation(() => {
+      throw new Error("Rate limit exceeded. Try again in 30 seconds.");
+    });
+    await expect(deleteComplianceToolAction("kids-volunteers")).resolves.toEqual({
+      success: false,
+      error: "Failed to delete compliance tool",
+    });
+    expect(mockSaveConfig).not.toHaveBeenCalled();
+    expect(mockSaveFeatureAccess).not.toHaveBeenCalled();
+    expect(mockClearCache).not.toHaveBeenCalled();
+  });
+
+  it("checks the session before the rate limit (a denied caller is not counted)", async () => {
+    mockRequireFeatureAccess.mockRejectedValue(FORBIDDEN);
+    await saveComplianceToolAction(makeTool(), true);
+    await deleteComplianceToolAction("kids-volunteers");
+    expect(mockEnforceRateLimit).not.toHaveBeenCalled();
   });
 });

@@ -10,9 +10,14 @@
  * `< Sep 1 00:00` Central (mp-date-range.ts) and caps month iteration at the
  * current Central month itself.
  *
- * The ministry year is read with server-local getters: production runs in a UTC
- * container, so there the rollover happens at local (UTC) midnight.
+ * The ministry year is read on the MP (US Central) calendar, whatever the
+ * server's zone: the rollover, and with it every dashboard cache key, happens at
+ * midnight Central on Sep 1. (Server-local getters rolled over at 00:00 UTC in
+ * the production container, which is 19:00 CDT on Aug 31.) The browser's
+ * default selection (date-range-filter.tsx) keeps the viewer's own calendar.
  */
+import { mpMonthKey } from '@/lib/providers/ministry-platform/utils/mp-date-range';
+
 export interface DashboardRange {
   /** Current ministry year (the calendar year its September falls in). */
   currentYear: number;
@@ -27,7 +32,8 @@ export interface DashboardRange {
 }
 
 export function getDashboardRange(now: Date = new Date()): DashboardRange {
-  const currentYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+  const [year, month] = mpMonthKey(now).split('-').map(Number);
+  const currentYear = month >= 9 ? year : year - 1;
   const earliestYear = currentYear - 4;
   const endDateIso = `${currentYear + 1}-08-31`;
   return {

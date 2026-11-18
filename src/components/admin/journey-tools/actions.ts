@@ -1,6 +1,7 @@
 "use server";
 
 import { requireFeatureAccess, loadFeatureAccess, saveFeatureAccess } from "@/lib/authorization";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { MPHelper } from "@/lib/providers/ministry-platform";
 import { sanitizeLikeValue, sanitizeId, sanitizeIds } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
 import { z } from "zod";
@@ -211,10 +212,13 @@ export async function saveJourneyToolAction(
   isNew?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await requireFeatureAccess("admin");
+    const session = await requireFeatureAccess("admin");
+    enforceRateLimit(session.user.id, "write");
 
-    // Validate with Zod
-    validateJourneyToolConfig(tool);
+    // Validate with Zod, and save the PARSED value: the parse strips keys the
+    // schema does not declare, so a caller-shaped payload cannot add fields to
+    // the config file (security.md, "the strip is the control").
+    tool = validateJourneyToolConfig(tool);
 
     const config = loadJourneyToolsConfig();
     const existingIndex = config.journeys.findIndex((j) => j.slug === tool.slug);
@@ -230,6 +234,10 @@ export async function saveJourneyToolAction(
     }
 
     saveJourneyToolsConfig(config);
+    // Clear the service cache as soon as the new config is on disk, before the
+    // feature-access step: if that throws, the action reports failure but the
+    // config is already saved, and the service must not keep serving the old one.
+    JourneyProcessingService.clearCache(tool.slug);
 
     // Register in feature-access.json if not present
     if (tool.enabled) {
@@ -244,9 +252,6 @@ export async function saveJourneyToolAction(
         saveFeatureAccess(featureConfig);
       }
     }
-
-    // Clear service cache for this slug so it picks up new config
-    JourneyProcessingService.clearCache(tool.slug);
 
     return { success: true };
   } catch (error) {
@@ -266,11 +271,14 @@ export async function deleteJourneyToolAction(
   slug: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await requireFeatureAccess("admin");
+    const session = await requireFeatureAccess("admin");
+    enforceRateLimit(session.user.id, "write");
 
     const config = loadJourneyToolsConfig();
     config.journeys = config.journeys.filter((j) => j.slug !== slug);
     saveJourneyToolsConfig(config);
+    // Clear the service cache before the feature-access step (see save).
+    JourneyProcessingService.clearCache(slug);
 
     // Remove from feature-access.json
     const featureConfig = loadFeatureAccess();
@@ -279,9 +287,6 @@ export async function deleteJourneyToolAction(
       delete featureConfig[featureKey];
       saveFeatureAccess(featureConfig);
     }
-
-    // Clear service cache
-    JourneyProcessingService.clearCache(slug);
 
     return { success: true };
   } catch (error) {

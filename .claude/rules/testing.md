@@ -103,7 +103,8 @@ vi.unstubAllGlobals();
   components and pages make up most of the rest
 - **`it.fails` marks a known, reported gap**, written as the behaviour we want: it passes while the source is wrong
   and fails (loudly) once someone fixes it, at which point drop `.fails`. Use it only with a comment naming the gap
-  and an ideas.md entry; never to hide a test you could not get passing
+  and an ideas.md entry; never to hide a test you could not get passing. None are open (2026-11-18): the first three,
+  in the compliance admin actions tests, became plain tests when #307 was fixed
 - Run `npm run test:coverage` to check before committing
 
 ## Running Tests

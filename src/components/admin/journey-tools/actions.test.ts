@@ -10,6 +10,7 @@ const {
   mockLoadJourneyToolsConfig,
   mockSaveJourneyToolsConfig,
   mockClearCache,
+  mockEnforceRateLimit,
 } = vi.hoisted(() => ({
   mockRequireFeatureAccess: vi.fn(),
   mockLoadFeatureAccess: vi.fn(),
@@ -18,6 +19,7 @@ const {
   mockLoadJourneyToolsConfig: vi.fn(),
   mockSaveJourneyToolsConfig: vi.fn(),
   mockClearCache: vi.fn(),
+  mockEnforceRateLimit: vi.fn(),
 }));
 
 vi.mock("@/lib/authorization", () => ({
@@ -48,6 +50,8 @@ vi.mock("@/lib/journey-tools-config", async () => {
 vi.mock("@/services/journeyProcessingService", () => ({
   JourneyProcessingService: { clearCache: mockClearCache },
 }));
+
+vi.mock("@/lib/rate-limit", () => ({ enforceRateLimit: mockEnforceRateLimit }));
 
 import {
   getAvailableJourneys,
@@ -99,6 +103,7 @@ beforeEach(() => {
     mockLoadJourneyToolsConfig,
     mockSaveJourneyToolsConfig,
     mockClearCache,
+    mockEnforceRateLimit,
   ]) {
     m.mockReset();
   }
@@ -571,15 +576,31 @@ describe("saveJourneyToolAction", () => {
     });
   });
 
-  // BUG (reported): the action validates with Zod but discards the parsed
-  // (key-stripped) result and persists the caller's raw object. Unknown keys a
-  // caller adds to the payload are written to data/journey-tools.json.
-  // When fixed, INVERT this test (expect no "injected" key), do not delete it.
-  it("current behaviour: unknown keys on the payload are persisted (parsed output is discarded)", async () => {
+  // The action saves validateJourneyToolConfig's PARSED value, which strips keys
+  // the schema does not declare (security.md: "the strip is the control").
+  it("strips keys outside the schema before saving, keeping every schema field", async () => {
     const smuggled = { ...makeTool(), injected: "<script>" } as unknown as JourneyToolConfig;
     await expect(saveJourneyToolAction(smuggled, true)).resolves.toEqual({ success: true });
     const saved = mockSaveJourneyToolsConfig.mock.calls[0][0] as JourneyToolsConfig;
-    expect(saved.journeys[0]).toHaveProperty("injected", "<script>");
+    expect(saved.journeys[0]).not.toHaveProperty("injected");
+    expect(saved.journeys[0]).toEqual(makeTool());
+  });
+
+  it("clears the service cache even when feature-access registration fails after the config was saved", async () => {
+    mockSaveFeatureAccess.mockImplementation(() => {
+      throw new Error("disk full");
+    });
+    await expect(saveJourneyToolAction(makeTool(), true)).resolves.toEqual({
+      success: false,
+      error: "disk full",
+    });
+    // The two files are not written atomically: the config is already saved, so
+    // the cache is cleared right after that write, before feature access.
+    expect(mockSaveJourneyToolsConfig).toHaveBeenCalledTimes(1);
+    expect(mockClearCache).toHaveBeenCalledWith("new-members");
+    expect(mockClearCache.mock.invocationCallOrder[0]).toBeLessThan(
+      mockSaveFeatureAccess.mock.invocationCallOrder[0],
+    );
   });
 });
 
@@ -619,6 +640,20 @@ describe("deleteJourneyToolAction", () => {
     expect(Object.keys(mockSaveFeatureAccess.mock.calls[0][0])).toEqual(["compliance:x"]);
   });
 
+  it("clears the service cache even when removing the feature-access entry fails", async () => {
+    storedConfig = { journeys: [makeTool()] };
+    featureAccess = { "journey:new-members": { label: "N", description: "", allowedGroupIds: [5] } };
+    mockSaveFeatureAccess.mockImplementation(() => {
+      throw new Error("disk full");
+    });
+    await expect(deleteJourneyToolAction("new-members")).resolves.toEqual({
+      success: false,
+      error: "Failed to delete journey tool",
+    });
+    expect(mockSaveJourneyToolsConfig.mock.calls[0][0]).toEqual({ journeys: [] });
+    expect(mockClearCache).toHaveBeenCalledWith("new-members");
+  });
+
   it("returns a static error message (never echoing the error) when a write fails", async () => {
     mockSaveJourneyToolsConfig.mockImplementation(() => {
       throw new Error("EACCES: /app/data/journey-tools.json");
@@ -629,5 +664,58 @@ describe("deleteJourneyToolAction", () => {
     });
     expect(mockSaveFeatureAccess).not.toHaveBeenCalled();
     expect(mockClearCache).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Rate limiting
+// ---------------------------------------------------------------------------
+
+describe("rate limiting", () => {
+  // .claude/rules/security.md: write actions call enforceRateLimit(session.user.id,
+  // "write") after the session check, on top of the "general" tier that
+  // requireSession() (via requireFeatureAccess) applies.
+  it("save applies the write tier for the acting admin", async () => {
+    await expect(saveJourneyToolAction(makeTool(), true)).resolves.toEqual({ success: true });
+    expect(mockEnforceRateLimit).toHaveBeenCalledWith("u1", "write");
+  });
+
+  it("delete applies the write tier for the acting admin", async () => {
+    await expect(deleteJourneyToolAction("new-members")).resolves.toEqual({ success: true });
+    expect(mockEnforceRateLimit).toHaveBeenCalledWith("u1", "write");
+  });
+
+  it("a refused save reports the limit and writes nothing", async () => {
+    mockEnforceRateLimit.mockImplementation(() => {
+      throw new Error("Rate limit exceeded. Try again in 30 seconds.");
+    });
+    await expect(saveJourneyToolAction(makeTool(), true)).resolves.toEqual({
+      success: false,
+      error: "Rate limit exceeded. Try again in 30 seconds.",
+    });
+    expect(mockLoadJourneyToolsConfig).not.toHaveBeenCalled();
+    expect(mockSaveJourneyToolsConfig).not.toHaveBeenCalled();
+    expect(mockSaveFeatureAccess).not.toHaveBeenCalled();
+    expect(mockClearCache).not.toHaveBeenCalled();
+  });
+
+  it("a refused delete writes nothing", async () => {
+    mockEnforceRateLimit.mockImplementation(() => {
+      throw new Error("Rate limit exceeded. Try again in 30 seconds.");
+    });
+    await expect(deleteJourneyToolAction("new-members")).resolves.toEqual({
+      success: false,
+      error: "Failed to delete journey tool",
+    });
+    expect(mockSaveJourneyToolsConfig).not.toHaveBeenCalled();
+    expect(mockSaveFeatureAccess).not.toHaveBeenCalled();
+    expect(mockClearCache).not.toHaveBeenCalled();
+  });
+
+  it("checks the session before the rate limit (a denied caller is not counted)", async () => {
+    mockRequireFeatureAccess.mockRejectedValue(FORBIDDEN);
+    await saveJourneyToolAction(makeTool(), true);
+    await deleteJourneyToolAction("new-members");
+    expect(mockEnforceRateLimit).not.toHaveBeenCalled();
   });
 });
