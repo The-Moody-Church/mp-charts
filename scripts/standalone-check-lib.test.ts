@@ -352,14 +352,24 @@ describe("CI wiring", () => {
       .filter((line) => !line.trimStart().startsWith("#"))
       .join("\n");
 
-  it("verify runs the check after the build, with no way to fail open", () => {
+  // Two CI layouts are in use across the four repos. Most run `npm run build` on
+  // the runner in a `verify` job, and that job must check the build it made.
+  // music-tools never builds outside Docker: its only build is the Dockerfile's,
+  // which the next test pins. Either way every CI build is checked.
+  it("every CI build outside Docker is followed by the check, with no way to fail open", () => {
     const workflow = code(readFileSync(resolve(ROOT, ".github/workflows/docker-build-push.yml"), "utf8"));
-    const verify = workflow.slice(workflow.indexOf("\n  verify:"), workflow.indexOf("\n  build-scan-and-push:"));
-    const build = verify.indexOf("run: npm run build\n");
-    const check = verify.indexOf("- name: Check the standalone build ships only production packages\n        run: npm run check:standalone\n");
-    expect(build).toBeGreaterThan(-1);
-    expect(check).toBeGreaterThan(build);
-    expect(verify).not.toMatch(/continue-on-error/);
+    const jobs = workflow.split(/\n {2}(?=[A-Za-z0-9_-]+:\n)/).slice(1);
+    const step = "- name: Check the standalone build ships only production packages\n        run: npm run check:standalone\n";
+    const building = jobs.filter((job) => job.includes("run: npm run build\n"));
+    for (const job of building) {
+      const build = job.indexOf("run: npm run build\n");
+      expect(job.indexOf(step, build), `job ${job.split(":")[0]} builds without the check after it`).toBeGreaterThan(build);
+      expect(job).not.toMatch(/continue-on-error/);
+    }
+    if (building.length === 0) {
+      // No runner build at all: the image build (Dockerfile, next test) is the only one.
+      expect(workflow).toMatch(/uses: docker\/build-push-action@/);
+    }
     const pkg = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf8"));
     expect(pkg.scripts["check:standalone"]).toBe("node scripts/check-standalone.mjs");
   });
