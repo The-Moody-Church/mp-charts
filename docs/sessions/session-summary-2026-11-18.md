@@ -98,7 +98,7 @@ Branch `chore/drop-withdrawn-picomatch-entry`. GitHub withdrew GHSA-fc5q-39xc-vj
 - All four merged 2026-11-18 after green CI (mp-charts `1d03423`). No runtime change, so no deploy needed; the
   next deploy of each app carries it.
 
-### Batch 1 ports — IN PROGRESS (event-manager #92, mp-senior-care #253, music-tools #209)
+### Batch 1 ports — COMPLETED (event-manager #92, mp-senior-care #253, music-tools #209)
 
 Ported by one agent per repo, each checked by an independent reviewer against `e059fca` (no defects; one stale
 CLAUDE.md sentence fixed on event-manager's picomatch branch). Per repo: matcher and `/api` bounded, `originOf`,
@@ -107,5 +107,11 @@ CLAUDE.md sentence fixed on event-manager's picomatch branch). Per repo: matcher
 `remotePatterns` for `unoptimized` and adds `logging` (and keeps no `next-action` skip). New tests failing on the
 old source: 26 / 27 / 21. CI green on all three. Each branch merged in its picomatch branch to resolve doc-row
 conflicts. event-manager and music-tools status.md pruned to 7 days per their rules.
-- **Next:** `:dev` soak with a human sign-in/sign-out per repo (mp-senior-care: also a case page with the map
-  and the email preview), then merge and deploy `:latest`.
+- Soaked on `:dev` together at 20:23 UTC (rollback pins written first). Live checks on all three: CSP
+  `base-uri 'none'` with MP origin kept, COOP/CORP, no `X-Powered-By`, `/_next/image` 404, `/apidocs` 307, PWA files
+  200 and `/sw.jsx` 307. Owner signed in and out on each and approved. Merged (`223056f`, `d15321d`, `753c71e`), main
+  CI green, `:latest` deployed 20:50 UTC (labels `branch: main`); cache warming attempt 1 on event-manager and
+  mp-senior-care; music-tools pulled the app service only, neon-backup untouched. Each repo's own docs recorded on main.
+- GitHub left a Dependabot alert open for the withdrawn advisory in event-manager (#4) and music-tools (#156),
+  development scope; it is not an npm audit finding.
+- **Next:** batch 2 (auth core), per `.claude/plans/open-items-2026-11-18.md`.

@@ -28,7 +28,7 @@ Quick-reference snapshot of current project state. Read this first at session st
 - The 2026-10-10 audit (`.claude/notes/security-audit-2026-10-10.md`): **N1** and **N23** fixed in #251; **N5** and **N6** closed and **N2–N4, N7** fixed 2026-10-27. The audit's MEDIUM and HIGH findings are all closed. N15 confirmed fixed and N8 reviewed 2026-11-18; LOW items N9–N14, N16–N19 are planned as PR batches in `.claude/plans/open-items-2026-11-18.md`.
 - The better-auth 1.6 redirect URIs were removed from TM.Widgets on 2026-10-27 (probe: old five refused, new five accepted). The obsolete `docker-compose.rollback-1.6.yml` pins were deleted the same day.
 - The audit allow-list is empty again since 2026-11-18: GitHub withdrew GHSA-fc5q-39xc-vjpf (picomatch), so its entry (#309, added 2026-11-17) was removed in all four repos (#321; event-manager #91, mp-senior-care #252, music-tools #208).
-- Batch 1 ports open, CI green, awaiting `:dev` soak: event-manager #92, mp-senior-care #253, music-tools #209.
+- Batch 1 ported, soaked and deployed 2026-11-18 in event-manager #92, mp-senior-care #253, music-tools #209. Next: batch 2 (auth core).
 - **Audit gate blocked deploys 2026-11-17, resolved the same day** (all four repos): GHSA-fc5q-39xc-vjpf, picomatch <=4.0.7
   ReDoS, HIGH, no patched release (GitHub-reviewed 15:56 UTC that day). Dev tooling only (vitest, vite, eslint); the
   image ships no npm picomatch. A plain allow-list entry is refused: better-auth's optional peer `vitest` puts it in
