@@ -39,7 +39,7 @@ all four repos now that typescript-eslint has moved typescript-estree to `minima
 - Note that micromatch pulls picomatch 2.x (2.3.2), so the fix needs a 2.3.x release as well as 4.0.x, or
   the eslint path stays flagged.
 
-## Audit gate: `production_via_optional_peer` — IN PROGRESS (mp-charts first, branch `chore/audit-gate-optional-peer`)
+## Audit gate: `production_via_optional_peer` — COMPLETED (mp-charts #309, event-manager #90, mp-senior-care #251, music-tools #204)
 
 The owner approved changing the gate after all. Implemented in an mp-charts worktree; still to port to event-manager,
 mp-senior-care and music-tools (the three gate files stay byte-identical; the check against each repo's real lockfile
@@ -140,3 +140,11 @@ then a PR with a Security Review section. No `:dev` soak needed (dev tooling onl
 - `docs/sessions/session-summary-2026-11-17.md` — this file.
 - Branch `fix/coverage-include-212`: `vitest.config.ts`, `.claude/rules/testing.md`, `README.md`, `docs/ideas.md`,
   `docs/status.md`.
+
+### Gate rollout
+
+- CI green on all four PRs (verify incl. the audit gate and `check:standalone`, and build-scan-and-push incl. the
+  Dockerfile check and Trivy): mp-charts #309, event-manager #90, mp-senior-care #251, music-tools #204. The six shared
+  scripts are byte-identical in all four; music-tools runs the standalone check only in its Dockerfile (no runner build),
+  and the shared CI-wiring test accepts either layout.
+- Merged with owner approval 2026-11-17. No runtime change, so no deploy needed for the gate itself.
