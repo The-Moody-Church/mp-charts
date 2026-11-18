@@ -52,12 +52,12 @@ repo visibility, protection, scanning status, open alerts and advisory data.
 | N6 | Public repo: internal IPs/hosts in tracked docs (checklist violation) | MEDIUM (policy) / LOW (exploit) | **Closed 2026-10-27.** IPs and the SSH user removed from the 2026-04-04 and 2026-09-01 summaries; the archived 2026-02-06 note names only "a reverse proxy (Caddy)" and was left. Git history still has them (no rewrite: force-push is blocked and the repo is public, so clones already have it) |
 | N7 | `transitionMember` writes any participant's Member_Status_ID | LOW | **Fixed 2026-10-27**: participant and contact must be the same member |
 | N8 | Upstream 2026-09-28 wave unreviewed (see §3) | LOW–MEDIUM aggregate | **Reviewed 2026-11-18** (upstream-sync-log.md); ports planned in batches, `.claude/plans/open-items-2026-11-18.md` |
-| N9 | `proxy.ts` `/api` prefix match and unanchored matcher | LOW | Open |
+| N9 | `proxy.ts` `/api` prefix match and unanchored matcher | LOW | **Fixed 2026-11-18** (batch 1): exact `/api` public path; every matcher exclusion bounded |
 | N10 | Journey/compliance pages render tool config without a feature gate | LOW | Open |
 | N11 | Duplicate reachable action at a weaker rate tier; one orphan export | LOW | Partly fixed: `getDashboardMetrics` gone; three unused contact-log actions remain (not in the current action manifest, so latent). Batch 4 |
 | N12 | Outbound fetches without timeout/redirect refusal; token refresh not single-flight; token body unvalidated | LOW | Open |
-| N13 | `originOf` allows env-controlled CSP directive injection | LOW | Open |
-| N14 | `X-Powered-By`, live `/_next/image`, dev action-arg logging | LOW | Open |
+| N13 | `originOf` allows env-controlled CSP directive injection | LOW | **Fixed 2026-11-18** (batch 1): http(s) only, `[a-z0-9.-]` hostname; also `base-uri 'none'` |
+| N14 | `X-Powered-By`, live `/_next/image`, dev action-arg logging | LOW | **Fixed 2026-11-18** (batch 1): `poweredByHeader: false`, `images.unoptimized`, `logging.serverFunctions: false` |
 | N15 | Three CodeQL `js/log-injection` alerts open since 2026-08-07 | LOW | **Fixed**, confirmed 2026-11-18: no open `js/log-injection` alerts. (One unrelated open alert, #37 `js/incomplete-sanitization` in a test file, batch 4) |
 | N16 | Cookie cache `jwt` (signed, readable) and `/get-session` returns token/IP/UA | LOW | Open — owner approved `jwe` + payload strip 2026-11-18 (batch 7, all four repos) |
 | N17 | id_token not signature-verified; no `exp`/`azp` check | LOW | Open — owner decided 2026-11-18 to port upstream's lazy verifier (all four repos) |

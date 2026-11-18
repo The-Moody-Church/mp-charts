@@ -95,6 +95,24 @@ describe('Proxy', () => {
       expect(NextResponse.redirect).not.toHaveBeenCalled();
     });
 
+    // N9: `/api` is public exactly or as a segment, never as a bare prefix.
+    it.each(['/api', '/api/cache-warm'])('lets %s through with no session cookie', async (path) => {
+      const { proxy } = await import('./proxy');
+      mockGetSessionCookie.mockReturnValue(undefined);
+
+      expect((await proxy(createMockRequest(path))).type).toBe('next');
+      expect(mockGetSessionCookie).not.toHaveBeenCalled();
+    });
+
+    it.each(['/apidocs', '/api-keys'])('redirects %s with no session cookie', async (path) => {
+      const { proxy } = await import('./proxy');
+      mockGetSessionCookie.mockReturnValue(undefined);
+
+      const result = (await proxy(createMockRequest(path))) as { type: string; url: string };
+      expect(result.type).toBe('redirect');
+      expect(result.url).toContain('/signin');
+    });
+
     it('still redirects a protected path with no session cookie', async () => {
       // Negative control: proves the two assertions above are not vacuous.
       const { proxy } = await import('./proxy');
@@ -105,29 +123,6 @@ describe('Proxy', () => {
       expect(result.type).toBe('redirect');
       expect(result.url).toContain('/signin');
       expect(result.url).toContain('callbackUrl=%2Fdashboard');
-    });
-  });
-
-  describe('Public Paths', () => {
-    it('should allow access to /api routes without authentication', () => {
-      const request = createMockRequest('/api/auth/session');
-      const { pathname } = request.nextUrl;
-      const isPublicPath = pathname.startsWith('/api') || pathname === '/signin';
-      expect(isPublicPath).toBe(true);
-    });
-
-    it('should allow access to /signin without authentication', () => {
-      const request = createMockRequest('/signin');
-      const { pathname } = request.nextUrl;
-      const isPublicPath = pathname.startsWith('/api') || pathname === '/signin';
-      expect(isPublicPath).toBe(true);
-    });
-
-    it('should allow access to nested /api routes', () => {
-      const request = createMockRequest('/api/some/nested/route');
-      const { pathname } = request.nextUrl;
-      const isPublicPath = pathname.startsWith('/api') || pathname === '/signin';
-      expect(isPublicPath).toBe(true);
     });
   });
 
@@ -171,13 +166,28 @@ describe('Proxy', () => {
       // Only the /api/auth segment is excluded, not every path that starts with it.
       '/api/authority',
       '/api/auth-extra',
+      '/apidocs',
+      // N9: each exclusion is bounded, so a path that merely starts like a
+      // static asset still gets the cookie check and the CSP.
+      '/_next/imagefoo',
+      '/_next/staticX',
+      '/favicon.ico/x',
+      '/faviconXico',
+      '/manifest.jsonx',
+      '/manifest.json/x',
+      '/sw.js.map',
+      '/sw.jsx',
+      '/offline.html/x',
+      '/offline.htmlx',
     ])('runs the proxy on %s', async (path) => {
       expect(await matches(path)).toBe(true);
     });
 
     it.each([
       '/_next/static/chunks/main.js',
+      '/_next/image',
       '/_next/image?url=x',
+      '/_next/image/x',
       '/favicon.ico',
       '/assets/logo.png',
       '/manifest.json',
@@ -249,46 +259,6 @@ describe('Proxy Integration', () => {
       },
     } as unknown as NextRequest;
   }
-
-  it('should follow the complete authentication flow for protected routes', () => {
-    mockGetSessionCookie.mockReturnValue('valid-session');
-
-    const request = createMockRequest('/dashboard');
-
-    // Step 1: Check if public path
-    const { pathname } = request.nextUrl;
-    const isPublicPath = pathname.startsWith('/api') || pathname === '/signin';
-    expect(isPublicPath).toBe(false);
-
-    // Step 2: Check session cookie
-    const sessionCookie = mockGetSessionCookie(request);
-    expect(sessionCookie).not.toBeNull();
-
-    // Step 3: Should allow access (NextResponse.next())
-    const response = NextResponse.next();
-    expect(response.type).toBe('next');
-  });
-
-  it('should follow the complete flow for unauthenticated user', () => {
-    mockGetSessionCookie.mockReturnValue(null);
-
-    const request = createMockRequest('/dashboard');
-
-    // Step 1: Check if public path
-    const { pathname } = request.nextUrl;
-    const isPublicPath = pathname.startsWith('/api') || pathname === '/signin';
-    expect(isPublicPath).toBe(false);
-
-    // Step 2: No session cookie
-    const sessionCookie = mockGetSessionCookie(request);
-    expect(sessionCookie).toBeNull();
-
-    // Step 3: Should redirect to signin
-    const redirectUrl = new URL('/signin', request.url);
-    const response = NextResponse.redirect(redirectUrl);
-    expect(response.type).toBe('redirect');
-    expect(response.url).toBe('http://localhost:3000/signin');
-  });
 
   /**
    * Content-Security-Policy wiring (F9).

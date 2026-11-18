@@ -54,7 +54,14 @@ export async function proxy(request: NextRequest) {
   // /auth-error must be public: a failed OAuth callback lands there with no
   // session, and redirecting it to /signin would auto-start OAuth again and
   // loop forever. (F7, upstream MPNext 91d226f.)
-  if (pathname.startsWith('/api') || pathname === '/signin' || pathname === '/auth-error') {
+  // `/api` is matched exactly or as a segment, so a future page such as
+  // `/apidocs` is not made public by accident (N9, upstream MPNext 9b61b82).
+  if (
+    pathname === '/api' ||
+    pathname.startsWith('/api/') ||
+    pathname === '/signin' ||
+    pathname === '/auth-error'
+  ) {
     return proceed();
   }
 
@@ -91,7 +98,7 @@ export async function proxy(request: NextRequest) {
 // did nothing there anyway: `/api` was already a public early return, and a
 // CSP nonce means nothing on JSON and redirect responses. The static headers
 // in next.config.ts still apply. Page paths still go through the proxy and
-// keep the 10 MB copy (#297, docs/ideas.md).
+// keep the 10 MB copy (#297, accepted 2026-11-18: see docs/ideas.md).
 //
 // Server Action requests (`next-action` header) are NOT matched either (#252).
 // The 10 MB copy is all a matched request's handler gets: a 12 MB upload
@@ -103,11 +110,18 @@ export async function proxy(request: NextRequest) {
 // forged `next-action` header also skips the proxy, and gets the same static
 // shell plus an in-stream redirect to /signin that a fake cookie already got,
 // only without the CSP header on that one response.
+//
+// Every exclusion is bounded (N9, adapted from upstream MPNext 9b61b82): a
+// directory ends in `/`, a file ends in `$` with its dot escaped, and
+// `_next/image` is the endpoint itself or a path under it. Unbounded, a path
+// such as `/_next/imageX`, `/favicon.ico/x` or `/sw.jsx` skipped the cookie
+// check and the CSP. Upstream's own matcher string is not ours to copy: it
+// matches `/api/auth` and has no `next-action` condition.
 export const config = {
   matcher: [
     {
       source:
-        '/((?!api/auth(?:/|$)|_next/static|_next/image|favicon.ico|assets/|manifest\\.json|sw\\.js|offline\\.html).*)',
+        '/((?!api/auth(?:/|$)|_next/static/|_next/image(?:$|/)|favicon\\.ico$|assets/|manifest\\.json$|sw\\.js$|offline\\.html$).*)',
       missing: [{ type: 'header', key: 'next-action' }],
     },
   ],

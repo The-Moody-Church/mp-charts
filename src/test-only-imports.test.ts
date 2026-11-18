@@ -371,9 +371,20 @@ describe("next.config.ts changes nothing about what ships without an import", ()
    * Every option next.config.ts sets, reviewed. outputFileTracingIncludes,
    * serverExternalPackages, turbopack (resolveAlias), webpack, transpilePackages
    * and images all change what ships or how; adding one fails here until it is
-   * reviewed against scripts/check-standalone.mjs and listed.
+   * reviewed against scripts/check-standalone.mjs and listed. `images` is
+   * `{ unoptimized: true }` only (N14): it adds no pattern and turns the
+   * optimizer off; `logging` and `poweredByHeader` change no output.
    */
-  const REVIEWED_OPTIONS = ["cacheComponents", "cacheHandlers", "experimental", "headers", "output"];
+  const REVIEWED_OPTIONS = [
+    "cacheComponents",
+    "cacheHandlers",
+    "experimental",
+    "headers",
+    "images",
+    "logging",
+    "output",
+    "poweredByHeader",
+  ];
   const REVIEWED_EXPERIMENTAL = ["serverActions"];
   /** An extglob in a pattern: Next matches image patterns with its vendored picomatch (GHSA-fc5q-39xc-vjpf). */
   const EXTGLOB = /[@!?*+]\(/;

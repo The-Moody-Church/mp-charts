@@ -3,6 +3,16 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone", // Required for Docker deployment
   cacheComponents: true, // Enables Cache Components (PPR + 'use cache' directive)
+  // N14 (upstream MPNext 9904f67): no `X-Powered-By: Next.js` header.
+  poweredByHeader: false,
+  // N14: every <Image> passes `unoptimized`, so the optimizer is unused. With
+  // this set, /_next/image answers 404 before any pattern match: the endpoint is
+  // excluded from the proxy, so it was unauthenticated, and it was the only
+  // runtime path into Next's vendored picomatch (GHSA-fc5q-39xc-vjpf).
+  images: { unoptimized: true },
+  // N14: `next dev` logs Server Function arguments by default (pastoral notes,
+  // search terms), and dev points at production MP. Off everywhere.
+  logging: { serverFunctions: false },
   experimental: {
     serverActions: {
       bodySizeLimit: '20mb', // Match the 20 MB file upload limit in processing-utils.ts

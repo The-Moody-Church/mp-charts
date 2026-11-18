@@ -59,3 +59,21 @@ Picked up the older open items: #297, audit LOW findings N9–N19, and the unlog
   callers; same in event-manager and mp-senior-care). Batch 4 deletes it.
 - **Next:** batch 1 (N9 proxy matcher anchoring, N13 `originOf`, N14 next.config, `base-uri 'none'`), mp-charts
   first, then the three sibling repos after a `:dev` soak.
+
+### Batch 1 — headers and proxy (N9, N13, N14) — IN PROGRESS
+
+Branch `security/batch1-headers-proxy`.
+- `src/proxy.ts`: `/api` public only as `/api` or `/api/...`; matcher exclusions bounded (`_next/static/`,
+  `_next/image(?:$|/)`, `favicon\.ico$`, `manifest\.json$`, `sw\.js$`, `offline\.html$`). `/api/auth` stays
+  excluded and the `next-action` skip stays (upstream 9b61b82's string would have dropped both).
+- `src/lib/security-headers.ts`: `originOf` refuses non-http(s) schemes and hostnames outside `[a-z0-9.-]`;
+  `base-uri 'none'`.
+- `next.config.ts`: `poweredByHeader: false`, `images: { unoptimized: true }`, `logging: { serverFunctions: false }`;
+  `REVIEWED_OPTIONS` updated.
+- Tests: `src/lib/next-config.test.ts` (new; also pins COOP/CORP, which no test covered), near-miss matcher paths
+  and `/apidocs` in `src/proxy.test.ts` (tautological inline-regex tests removed), `originOf` refusals. 25 of the
+  new tests fail on the old source.
+- `.claude/worktrees/` ignored in git and eslint (upstream #104).
+- Checks: tsc, lint, 1886 tests, build, `check:shells`, `check:standalone`, audit gate.
+- **Found on the way:** GHSA-fc5q-39xc-vjpf (picomatch) was **withdrawn** 2026-11-18 15:38 UTC. The gate now warns the
+  allow-list entry is stale; remove it (and `production_via_optional_peer`) in all four repos as its own change.

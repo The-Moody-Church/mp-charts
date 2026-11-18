@@ -229,6 +229,8 @@ route importing a `__mocks__` file all bundled picomatch into a server chunk). T
 npm audit nor the build check can see it. The ReDoS needs an extglob in one of those patterns, which come
 from `next.config.ts`; `src/test-only-imports.test.ts` fails if a pattern contains one (`@(`, `!(`, `?(`,
 `*(`, `+(`), and runtime code may not import that copy. Keep it that way while the advisory is open.
+Since 2026-11-18 (N14) `images: { unoptimized: true }` also makes `/_next/image` answer 404 before any
+pattern is matched, so no runtime request reaches the vendored copy at all; it still ships inside `next`.
 
 **Adding a new edge** needs the same PR evidence as an entry, plus the dependency path through the
 edge and the lockfile's `peerDependenciesMeta` for `from`. Use it only for an optional peer that the
@@ -430,6 +432,21 @@ Security headers are configured in `next.config.ts` via the `headers()` function
 - `Strict-Transport-Security` — enforces HTTPS
 - `Referrer-Policy: strict-origin-when-cross-origin`
 - `Permissions-Policy` — disables unused browser APIs
+- `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Resource-Policy: same-origin` (F14)
+
+Three more `next.config.ts` settings are security controls (N14, 2026-11-18): `poweredByHeader: false`,
+`images: { unoptimized: true }` (the optimizer is unauthenticated, since the proxy skips `/_next/image`, and
+every `<Image>` already passes `unoptimized`), and `logging: { serverFunctions: false }` (`next dev` otherwise
+logs Server Action arguments such as pastoral notes, and dev points at production MP).
+`src/lib/next-config.test.ts` pins all of these values; `src/test-only-imports.test.ts` pins which options exist.
+
+The CSP itself is per-request (it carries a nonce) and is built in `src/lib/security-headers.ts`, attached by
+`src/proxy.ts`. `originOf` only returns http(s) origins with a plain `[a-z0-9.-]` hostname (N13), so a bad
+env value can drop a source but never add a directive or a wildcard. `base-uri` is `'none'`.
+
+**The proxy matcher's exclusions are bounded** (N9): directories end in `/`, files in `$` with the dot escaped,
+`_next/image` is the endpoint or a path under it, and `/api` is public only as `/api` or `/api/...`. A new
+exclusion must be bounded the same way; `src/proxy.test.ts` checks near-miss paths against the real `config`.
 
 ## Rate Limiting
 

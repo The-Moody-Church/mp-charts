@@ -33,6 +33,38 @@ describe("originOf", () => {
       expect(originOf(bad)).toBeNull();
     }
   });
+
+  // N13: the result is pasted into the policy, so a host that carries CSP
+  // syntax or a wildcard, or a non-http(s) scheme, must not come back.
+  it.each([
+    ["a directive separator", "https://a;sandbox"],
+    ["an encoded directive separator", "https://a%3Bsandbox"],
+    ["a wildcard host", "https://*"],
+    ["an encoded wildcard host", "https://%2A"],
+    ["a quote", "https://a'b"],
+    ["a non-http scheme", "ftp://h"],
+    ["a javascript: URL", "javascript:alert(1)"],
+    ["a data: URL", "data:text/html,x"],
+  ])("refuses %s (%s)", (_label, raw) => {
+    expect(originOf(raw)).toBeNull();
+  });
+
+  it("still accepts http localhost and an IDN (as punycode)", () => {
+    expect(originOf("http://localhost:3000")).toBe("http://localhost:3000");
+    expect(originOf("https://bücher.example/x")).toBe("https://xn--bcher-kva.example");
+  });
+
+  it("keeps a refused origin out of the policy entirely", () => {
+    const csp = buildContentSecurityPolicy({
+      nonce: NONCE,
+      isDev: false,
+      imageOrigin: originOf("https://a;sandbox"),
+      formActionOrigin: originOf("https://*"),
+    });
+    expect(directive(csp, "img-src")).toBe("img-src 'self' data: blob:");
+    expect(directive(csp, "form-action")).toBe("form-action 'self'");
+    expect(directive(csp, "sandbox")).toBeUndefined();
+  });
 });
 
 describe("createNonce", () => {
@@ -147,7 +179,7 @@ describe("buildContentSecurityPolicy", () => {
     expect(directive(csp, "frame-ancestors")).toBe("frame-ancestors 'none'");
     expect(directive(csp, "object-src")).toBe("object-src 'none'");
     expect(directive(csp, "frame-src")).toBe("frame-src 'none'");
-    expect(directive(csp, "base-uri")).toBe("base-uri 'self'");
+    expect(directive(csp, "base-uri")).toBe("base-uri 'none'");
     expect(directive(csp, "default-src")).toBe("default-src 'self'");
   });
 
