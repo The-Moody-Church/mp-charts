@@ -117,7 +117,8 @@ export interface ServingByMinistry {
 
 /**
  * Raw serving/leading record for client-side date filtering.
- * Each record represents a person in a serving or leading role.
+ * One record per disjoint membership span of a (contact, role type, ministry);
+ * a contact can appear more than once; consumers count contacts with a Set.
  */
 export interface ServingLeadingRecord {
   contactId: number;
@@ -140,7 +141,8 @@ export interface EngagementActivityMonth {
 
 /**
  * Raw group participation record for engagement venn client-side filtering.
- * Each record represents a person in a group within Ministry_ID=8.
+ * One record per disjoint membership span of a contact in the engagement groups;
+ * a contact can appear more than once; consumers count contacts with a Set.
  */
 export interface EngagementGroupRecord {
   contactId: number;
@@ -196,7 +198,8 @@ export interface EventParticipantMonth {
 
 /**
  * Raw group roster membership record for client-side date filtering.
- * Each entry represents a unique person on a group roster.
+ * One record per disjoint membership span of a (contact, group type);
+ * a contact can appear more than once; consumers count contacts with a Set.
  */
 export interface RosterMemberRecord {
   contactId: number;
@@ -269,4 +272,23 @@ export interface DashboardData {
   /** Raw data for client-side engagement venn computation */
   engagementRawData: EngagementRawData;
   generatedAt: string;
+}
+
+/**
+ * Result of the dashboard's Refresh action (refreshDashboardCache).
+ *
+ * The action reloads each section from Ministry Platform itself and returns what
+ * reloaded, so the client never has to re-read a section to find out. A section
+ * is present only when its forced MP fetch succeeded; an absent section kept its
+ * last good value in both cache layers, and the client keeps what it shows.
+ */
+export interface DashboardRefreshResult {
+  /** True only when every section reloaded. */
+  success: boolean;
+  /** True when the refresh was refused before any MP read (authorization, rate limit). */
+  refused: boolean;
+  timestamp: Date;
+  core?: DashboardData;
+  extended?: Partial<DashboardData>;
+  engagement?: Partial<DashboardData>;
 }

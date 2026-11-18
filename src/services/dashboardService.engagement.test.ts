@@ -66,7 +66,7 @@ interface Internals {
   }>;
   getServingLeadingRaw(start: Date, end: Date): Promise<ServingLeadingRecord[]>;
   getEngagementRawData(start: Date, end: Date): Promise<EngagementRawData>;
-  getServingContactIds(startIso: string, endIso: string): Promise<Set<number>>;
+  getServingContactIds(start: string, endExclusive: string): Promise<Set<number>>;
   filterAdultContacts(ids: Set<number>): Promise<Set<number>>;
 }
 
@@ -103,9 +103,11 @@ function participantsHandler(unmapped: number[] = []): Handler {
 
 const START = new Date(2025, 8, 1); // Sept 1, local
 const END = new Date(2026, 7, 31); // Aug 31, local
-const START_ISO = START.toISOString();
-const END_ISO = END.toISOString();
-const ACTIVE_RANGE = `Start_Date <= '${END_ISO}' AND (End_Date IS NULL OR End_Date >= '${START_ISO}')`;
+// The service reads START..END as inclusive calendar days and filters half-open
+// on MP wall-clock strings (mp-date-range.ts): Aug 31 is in, Sep 1 is out.
+const MP_START = '2025-09-01 00:00:00';
+const MP_END_EXCLUSIVE = '2026-09-01 00:00:00';
+const ACTIVE_RANGE = `Start_Date < '${MP_END_EXCLUSIVE}' AND (End_Date IS NULL OR End_Date >= '${MP_START}')`;
 
 let service: DashboardService;
 let errorSpy: ReturnType<typeof vi.spyOn>;
@@ -143,7 +145,7 @@ describe('getRosterAndAttendanceRaw', () => {
       ],
       Group_Participants: () => [
         { Group_ID: 1, Participant_ID: 10, Start_Date: '2025-09-05T00:00:00', End_Date: '2025-12-01T00:00:00' },
-        // Later start in another type-1 group, still active -> the merged record goes active
+        // Later start in another type-1 group, still active -> a gap keeps two spans
         { Group_ID: 5, Participant_ID: 10, Start_Date: '2026-01-10T00:00:00', End_Date: null },
         { Group_ID: 2, Participant_ID: 11, Start_Date: '2025-09-01T00:00:00', End_Date: null },
         { Group_ID: 1, Participant_ID: 12, Start_Date: '2025-09-01T00:00:00', End_Date: null }, // no contact
@@ -187,8 +189,9 @@ describe('getRosterAndAttendanceRaw', () => {
     const result = await internals(service).getRosterAndAttendanceRaw(START, END);
 
     expect(result.rosterMemberRecords).toEqual([
-      // earliest start kept, and the active later row clears the end date
-      { contactId: 1010, groupTypeId: 1, groupTypeName: 'Small Group', startDate: '2025-09-05T00:00:00', endDate: null },
+      // a gap between the ended and the later active row keeps two spans
+      { contactId: 1010, groupTypeId: 1, groupTypeName: 'Small Group', startDate: '2025-09-05T00:00:00', endDate: '2025-12-01T00:00:00' },
+      { contactId: 1010, groupTypeId: 1, groupTypeName: 'Small Group', startDate: '2026-01-10T00:00:00', endDate: null },
       { contactId: 1011, groupTypeId: 3, groupTypeName: 'Class', startDate: '2025-09-01T00:00:00', endDate: null },
       { contactId: 1013, groupTypeId: 99, groupTypeName: 'Unknown', startDate: '2025-10-01T00:00:00', endDate: null },
     ]);
@@ -250,15 +253,14 @@ describe('getRosterAndAttendanceRaw', () => {
     expect(gp.filter).not.toContain('OR');
   });
 
-  // BUG (reported): same cached-empty catch as below. A batch whose IDs are all
-  // rejected makes sanitizeIds throw, and the catch turns that into empty data
-  // for the whole roster rather than just skipping the bad batch.
-  it('returns empty data when every ID in a batch is rejected (current behaviour)', async () => {
+  // A batch whose IDs are all rejected makes sanitizeIds throw. MP never returns
+  // non-positive IDs, so this is malformed data: it fails rather than caching an
+  // empty roster (#304), and no filter is ever built from the bad IDs.
+  it('rejects (no Group_Participants read) when sanitizeIds rejects every ID', async () => {
     rosterFixture({ Groups: () => [{ Group_ID: 0, Group_Type_ID: 1 }, { Group_ID: -7, Group_Type_ID: 1 }] });
-    await expect(internals(service).getRosterAndAttendanceRaw(START, END))
-      .resolves.toEqual({ rosterMemberRecords: [], attendanceByMonth: [] });
+    await expect(internals(service).getRosterAndAttendanceRaw(START, END)).rejects.toThrow();
     expect(callsFor('Group_Participants')).toHaveLength(0);
-    expect(errorSpy).toHaveBeenCalledWith('Error fetching roster and attendance raw data:', expect.any(Error));
+    expect(errorSpy).toHaveBeenCalledWith('Error fetching roster and attendance raw data:', expect.any(String));
   });
 
   it('chunks a large group list into batches of 100', async () => {
@@ -290,25 +292,27 @@ describe('getRosterAndAttendanceRaw', () => {
     const result = await internals(service).getRosterAndAttendanceRaw(START, END);
     expect(callsFor('Events')).toHaveLength(0);
     expect(result.attendanceByMonth).toEqual([]);
-    expect(result.rosterMemberRecords).toHaveLength(3);
+    expect(result.rosterMemberRecords).toHaveLength(4);
   });
 
-  // BUG (reported): the catch returns empty data, and this runs inside the
-  // 'use cache' getCachedExtendedData, so one MP failure caches an empty roster
-  // over the previous good value (.claude/rules/caching.md, "Never silently
-  // return empty data in cached code paths"). This pins the current behaviour.
-  it('returns empty data and logs when an MP read fails (current behaviour)', async () => {
+  // Was a bug (#304): the catch returned empty data inside the 'use cache'
+  // getCachedExtendedData, so one MP failure cached an empty roster over the
+  // previous good value (.claude/rules/caching.md, "Never silently return empty
+  // data in cached code paths"). Rethrowing lets the cache keep that value.
+  it('rethrows an MP failure (logged) so the cache keeps its previous value', async () => {
     rosterFixture({ Event_Participants: () => Promise.reject(new Error('ConnectTimeoutError')) });
-    await expect(internals(service).getRosterAndAttendanceRaw(START, END))
-      .resolves.toEqual({ rosterMemberRecords: [], attendanceByMonth: [] });
-    expect(errorSpy).toHaveBeenCalledWith('Error fetching roster and attendance raw data:', expect.any(Error));
+    await expect(internals(service).getRosterAndAttendanceRaw(START, END)).rejects.toThrow('ConnectTimeoutError');
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Error fetching roster and attendance raw data:',
+      expect.stringContaining('ConnectTimeoutError'),
+    );
   });
 
-  // BUG (reported): the merge is order-dependent. When an ended row with an
-  // EARLIER start arrives after an active row, it replaces the whole record,
-  // end date included, so a currently active member is reported as having
-  // left. In the opposite order the same rows give endDate: null.
-  it('loses an active membership when an earlier ended row comes second (current behaviour)', async () => {
+  // The merge used to be order-dependent: an ended row with an EARLIER start
+  // arriving after an active row replaced the whole record, end date included,
+  // so a currently active member read as having left; the other order filled
+  // the gap. Each disjoint span is now kept, whatever order MP returns.
+  it('gives the same roster spans whatever order MP returns the rows', async () => {
     const active = { Group_ID: 5, Participant_ID: 10, Start_Date: '2026-01-10T00:00:00', End_Date: null };
     const ended = { Group_ID: 1, Participant_ID: 10, Start_Date: '2025-09-05T00:00:00', End_Date: '2025-12-01T00:00:00' };
 
@@ -318,8 +322,12 @@ describe('getRosterAndAttendanceRaw', () => {
     rosterFixture({ Group_Participants: () => [ended, active], Event_Participants: () => [] });
     const endedFirst = await internals(service).getRosterAndAttendanceRaw(START, END);
 
-    expect(endedFirst.rosterMemberRecords[0].endDate).toBeNull();
-    expect(activeFirst.rosterMemberRecords[0].endDate).toBe('2025-12-01T00:00:00'); // should be null
+    const expected = [
+      { contactId: 1010, groupTypeId: 1, groupTypeName: 'Small Group', startDate: '2025-09-05T00:00:00', endDate: '2025-12-01T00:00:00' },
+      { contactId: 1010, groupTypeId: 1, groupTypeName: 'Small Group', startDate: '2026-01-10T00:00:00', endDate: null },
+    ];
+    expect(activeFirst.rosterMemberRecords).toEqual(expected);
+    expect(endedFirst.rosterMemberRecords).toEqual(expected);
   });
 });
 
@@ -392,11 +400,11 @@ describe('getServingLeadingRaw', () => {
         ministryId: 50, ministryName: 'Music',
         startDate: '2025-09-01T00:00:00', endDate: null,
       },
-      // roles 2 and 5 share ministry 60: one record, earliest start
+      // roles 2 and 5 share ministry 60 and overlap: one record, earliest start, latest end
       {
         contactId: 1021, roleTypeId: 3, roleTypeName: 'Servant',
         ministryId: 60, ministryName: 'Children',
-        startDate: '2025-10-15T00:00:00', endDate: '2026-01-01T00:00:00',
+        startDate: '2025-10-15T00:00:00', endDate: '2026-02-01T00:00:00',
       },
       {
         contactId: 1021, roleTypeId: 3, roleTypeName: 'Servant',
@@ -455,10 +463,9 @@ describe('getServingLeadingRaw', () => {
     for (const p of calls) expect(p.filter).toContain(`) AND ${ACTIVE_RANGE}`);
   });
 
-  // BUG (reported): same order-dependent merge as the roster. A later active row
-  // reopens an earlier ended one, but an earlier ended row arriving second
-  // overwrites an active one, so a current servant reads as having stopped.
-  it('merges end dates differently depending on row order (current behaviour)', async () => {
+  // Same span merge as the roster: an ended row and a later active one stay two
+  // spans in either order (it used to depend on the order MP returned them).
+  it('keeps an ended and a later active serving span apart, whatever the row order', async () => {
     const ended = { Participant_ID: 21, Group_Role_ID: 2, Start_Date: '2025-09-01T00:00:00', End_Date: '2025-12-01T00:00:00' };
     const active = { Participant_ID: 21, Group_Role_ID: 2, Start_Date: '2026-01-05T00:00:00', End_Date: null };
 
@@ -468,18 +475,34 @@ describe('getServingLeadingRaw', () => {
     servingFixture({ Group_Participants: () => [active, ended] });
     const activeFirst = await internals(service).getServingLeadingRaw(START, END);
 
-    expect(endedFirst).toEqual([expect.objectContaining({ startDate: '2025-09-01T00:00:00', endDate: null })]);
-    expect(activeFirst).toEqual([
-      expect.objectContaining({ startDate: '2025-09-01T00:00:00', endDate: '2025-12-01T00:00:00' }), // should be null
-    ]);
+    const expected = [
+      expect.objectContaining({ contactId: 1021, startDate: '2025-09-01T00:00:00', endDate: '2025-12-01T00:00:00' }),
+      expect.objectContaining({ contactId: 1021, startDate: '2026-01-05T00:00:00', endDate: null }),
+    ];
+    expect(endedFirst).toEqual(expected);
+    expect(activeFirst).toEqual(expected);
   });
 
-  // BUG (reported): same cached-empty problem as the roster (runs inside
-  // getCachedExtendedData). Pins the current behaviour.
-  it('returns [] and logs when an MP read fails (current behaviour)', async () => {
+  it('keeps the latest end of overlapping ended rows in either order', async () => {
+    const a = { Participant_ID: 21, Group_Role_ID: 2, Start_Date: '2025-10-15T00:00:00', End_Date: '2026-01-01T00:00:00' };
+    const b = { Participant_ID: 21, Group_Role_ID: 2, Start_Date: '2025-11-01T00:00:00', End_Date: '2026-02-01T00:00:00' };
+    const expected = [
+      expect.objectContaining({ contactId: 1021, startDate: '2025-10-15T00:00:00', endDate: '2026-02-01T00:00:00' }),
+    ];
+
+    servingFixture({ Group_Participants: () => [a, b] });
+    expect(await internals(service).getServingLeadingRaw(START, END)).toEqual(expected);
+
+    servingFixture({ Group_Participants: () => [b, a] });
+    expect(await internals(service).getServingLeadingRaw(START, END)).toEqual(expected);
+  });
+
+  // Was a bug (#304): same cached-empty catch as the roster (runs inside
+  // getCachedExtendedData).
+  it('rethrows an MP failure (logged) so the cache keeps its previous value', async () => {
     servingFixture({ Participants: () => Promise.reject(new Error('boom')) });
-    await expect(internals(service).getServingLeadingRaw(START, END)).resolves.toEqual([]);
-    expect(errorSpy).toHaveBeenCalledWith('Error fetching serving/leading raw records:', expect.any(Error));
+    await expect(internals(service).getServingLeadingRaw(START, END)).rejects.toThrow('boom');
+    expect(errorSpy).toHaveBeenCalledWith('Error fetching serving/leading raw records:', expect.stringContaining('boom'));
   });
 });
 
@@ -494,7 +517,7 @@ describe('getServingContactIds', () => {
       Group_Participants: () => [{ Participant_ID: 30 }, { Participant_ID: 30 }, { Participant_ID: 31 }],
       Participants: participantsHandler(),
     });
-    const ids = await internals(service).getServingContactIds(START_ISO, END_ISO);
+    const ids = await internals(service).getServingContactIds(MP_START, MP_END_EXCLUSIVE);
 
     expect([...ids]).toEqual([1030, 1031]);
     expect(callsFor('Group_Roles')).toEqual([{
@@ -510,21 +533,21 @@ describe('getServingContactIds', () => {
 
   it('returns an empty set early when there are no roles or no participants', async () => {
     route({ Group_Roles: () => [] });
-    expect((await internals(service).getServingContactIds(START_ISO, END_ISO)).size).toBe(0);
+    expect((await internals(service).getServingContactIds(MP_START, MP_END_EXCLUSIVE)).size).toBe(0);
     expect(mockGetTableRecords).toHaveBeenCalledTimes(1);
 
     mockGetTableRecords.mockClear();
     route({ Group_Roles: () => [{ Group_Role_ID: 7 }], Group_Participants: () => [] });
-    expect((await internals(service).getServingContactIds(START_ISO, END_ISO)).size).toBe(0);
+    expect((await internals(service).getServingContactIds(MP_START, MP_END_EXCLUSIVE)).size).toBe(0);
     expect(callsFor('Participants')).toHaveLength(0);
     expect(errorSpy).not.toHaveBeenCalled();
   });
 
-  it('swallows an MP failure and returns an empty set', async () => {
+  // Was a bug (#304): an empty set on failure silently shrank the adult set.
+  it('rethrows an MP failure (logged) instead of returning an empty set', async () => {
     route({ Group_Roles: () => Promise.reject(new Error('boom')) });
-    const ids = await internals(service).getServingContactIds(START_ISO, END_ISO);
-    expect(ids.size).toBe(0);
-    expect(errorSpy).toHaveBeenCalledWith('Error fetching serving contact IDs:', expect.any(Error));
+    await expect(internals(service).getServingContactIds(MP_START, MP_END_EXCLUSIVE)).rejects.toThrow('boom');
+    expect(errorSpy).toHaveBeenCalledWith('Error fetching serving contact IDs:', expect.stringContaining('boom'));
   });
 });
 
@@ -620,12 +643,14 @@ describe('getEngagementRawData', () => {
   const RANGE_END = new Date(2026, 7, 31);
   const NOW = new Date(2026, 2, 15, 12, 0, 0); // Mar 15 2026, noon local
 
-  const jan = { start: new Date(2026, 0, 1), end: new Date(2026, 0, 31, 23, 59, 59) };
-  const feb = { start: new Date(2026, 1, 1), end: new Date(2026, 1, 28, 23, 59, 59) };
-  const mar = { start: new Date(2026, 2, 1), end: NOW };
+  // Whole calendar months, half-open on MP wall-clock strings. The current
+  // month (March) is not clipped at NOW: Activity_Log has no future rows.
+  const jan = { start: '2026-01-01 00:00:00', endExclusive: '2026-02-01 00:00:00' };
+  const feb = { start: '2026-02-01 00:00:00', endExclusive: '2026-03-01 00:00:00' };
+  const mar = { start: '2026-03-01 00:00:00', endExclusive: '2026-04-01 00:00:00' };
 
-  const activityFilter = (m: { start: Date; end: Date }) =>
-    `Activity_Date >= '${m.start.toISOString()}' AND Activity_Date <= '${m.end.toISOString()}' AND Page_ID <> 316`;
+  const activityFilter = (m: { start: string; endExclusive: string }) =>
+    `Activity_Date >= '${m.start}' AND Activity_Date < '${m.endExclusive}' AND Page_ID <> 316`;
 
   const DOBS: Record<number, string | null> = {
     1001: null,
@@ -688,9 +713,7 @@ describe('getEngagementRawData', () => {
     engagementFixture();
     await internals(service).getEngagementRawData(RANGE_START, RANGE_END);
 
-    const s = RANGE_START.toISOString();
-    const e = RANGE_END.toISOString();
-    const range = `Start_Date <= '${e}' AND (End_Date IS NULL OR End_Date >= '${s}')`;
+    const range = "Start_Date < '2026-09-01 00:00:00' AND (End_Date IS NULL OR End_Date >= '2026-01-01 00:00:00')";
 
     expect(callsFor('Groups')).toEqual([{
       table: 'Groups',
@@ -720,7 +743,7 @@ describe('getEngagementRawData', () => {
       { month: '2026-03', contactIds: [1001] }, // 1009 has no Contacts row
     ]);
     expect(result.groupRecords).toEqual([
-      // earliest start kept; the later active row clears the end date
+      // overlapping rows: earliest start, and the active row keeps it open
       { contactId: 1001, startDate: '2025-06-01T00:00:00', endDate: null },
       { contactId: 1004, startDate: '2025-09-01T00:00:00', endDate: null },
     ]);
@@ -732,6 +755,25 @@ describe('getEngagementRawData', () => {
     expect(contactCalls).toHaveLength(1);
     expect(idsIn(contactCalls[0].filter, 'Contact_ID').sort((a, b) => a - b))
       .toEqual([1001, 1002, 1003, 1004, 1005, 1009]);
+  });
+
+  it('keeps an active group span that arrives before an earlier ended one', async () => {
+    const active = { Participant_ID: 1, Start_Date: '2026-01-05T00:00:00', End_Date: null };
+    const ended = { Participant_ID: 1, Start_Date: '2025-06-01T00:00:00', End_Date: '2025-08-01T00:00:00' };
+    const other = { Participant_ID: 4, Start_Date: '2025-09-01T00:00:00', End_Date: null };
+    const rows = (gp: unknown[]) => (p: { filter?: string }) =>
+      p.filter?.includes('Group_Role_ID IN') ? [{ Participant_ID: 5 }] : gp;
+    const expected = [
+      { contactId: 1001, startDate: '2025-06-01T00:00:00', endDate: '2025-08-01T00:00:00' },
+      { contactId: 1001, startDate: '2026-01-05T00:00:00', endDate: null },
+      { contactId: 1004, startDate: '2025-09-01T00:00:00', endDate: null },
+    ];
+
+    engagementFixture({ Group_Participants: rows([active, ended, other]) as Handler });
+    expect((await internals(service).getEngagementRawData(RANGE_START, RANGE_END)).groupRecords).toEqual(expected);
+
+    engagementFixture({ Group_Participants: rows([ended, active, other]) as Handler });
+    expect((await internals(service).getEngagementRawData(RANGE_START, RANGE_END)).groupRecords).toEqual(expected);
   });
 
   it('skips group participant reads when no engagement group is active', async () => {
@@ -750,17 +792,17 @@ describe('getEngagementRawData', () => {
     expect(filters).toEqual([activityFilter(jan), activityFilter(feb)]);
   });
 
-  // BUG (reported, minor): the last month is capped at endDate itself, and the
-  // cached callers build endDate as local midnight (new Date(y, m, d)), so
-  // activity on the final day of a finished range is dropped.
-  it('cuts the final day when the end date is midnight (current behaviour)', async () => {
+  // Was a bug: the last month was capped at endDate itself, and the cached
+  // callers build endDate as local midnight (new Date(y, m, d)), so activity
+  // on the final day of a finished range was dropped.
+  it('includes the final day when the end date is midnight', async () => {
     vi.setSystemTime(new Date(2026, 10, 17, 10));
     engagementFixture({ Activity_Log: () => [] });
     const endMidnight = new Date(2026, 1, 28);
     await internals(service).getEngagementRawData(new Date(2026, 1, 1), endMidnight);
 
     expect(callsFor('Activity_Log').map((p) => p.filter)).toEqual([
-      activityFilter({ start: new Date(2026, 1, 1), end: endMidnight }),
+      "Activity_Date >= '2026-02-01 00:00:00' AND Activity_Date < '2026-03-01 00:00:00' AND Page_ID <> 316",
     ]);
   });
 
@@ -770,42 +812,78 @@ describe('getEngagementRawData', () => {
     expect(callsFor('Activity_Log')[0].filter).toBe(activityFilter(feb));
   });
 
-  // BUG (reported): Promise.all over the months, not allSettled. One failed month
-  // throws away every month, groups and the adult set, and the catch returns
-  // empty data inside the 'use cache' getCachedEngagementData, caching it.
-  it('returns all-empty data when a single month fails (current behaviour)', async () => {
+  // Was a bug (#304): one failed month threw away every month, groups and the
+  // adult set, and the catch returned all-empty data inside the 'use cache'
+  // getCachedEngagementData, caching it. Now any failed month rejects (the
+  // months are unioned into one Venn set, so a dropped month would be an
+  // invisible undercount), after every month was tried and before Step 2.
+  it('rejects when a single month fails, after trying every month and before any group read', async () => {
     engagementFixture({
       Activity_Log: (p) => (p.filter === activityFilter(feb) ? Promise.reject(new Error('timeout')) : []),
     });
-    await expect(internals(service).getEngagementRawData(RANGE_START, RANGE_END)).resolves.toEqual({
-      activityByMonth: [], groupRecords: [], adultContactIds: [],
-    });
-    expect(errorSpy).toHaveBeenCalledWith('Error fetching engagement raw data:', expect.any(Error));
+    await expect(internals(service).getEngagementRawData(RANGE_START, RANGE_END))
+      .rejects.toThrow(/1\/3 monthly Activity_Log queries failed/);
+    expect(errorSpy).toHaveBeenCalledWith('Error fetching Activity_Log for 2026-02:', expect.stringContaining('timeout'));
+    expect(callsFor('Activity_Log')).toHaveLength(3);
+    expect(callsFor('Groups')).toHaveLength(0);
+    expect(callsFor('Contacts')).toHaveLength(0);
   });
 
-  // BUG (reported): same cached-empty catch as above. filterAdultContacts
-  // propagates, and getEngagementRawData's catch turns that into empty data
-  // that getCachedEngagementData then caches. The fix (rethrow, so the stale
-  // value is served) will fail this test: invert it then.
-  it('returns all-empty data when the adult filter read fails (current behaviour)', async () => {
+  it('rejects when the adult filter read fails', async () => {
     engagementFixture({ Contacts: () => Promise.reject(new Error('boom')) });
-    await expect(internals(service).getEngagementRawData(RANGE_START, RANGE_END)).resolves.toEqual({
-      activityByMonth: [], groupRecords: [], adultContactIds: [],
-    });
-    expect(errorSpy).toHaveBeenCalledWith('Error fetching engagement raw data:', expect.any(Error));
+    await expect(internals(service).getEngagementRawData(RANGE_START, RANGE_END)).rejects.toThrow('boom');
+    expect(errorSpy).toHaveBeenCalledWith('Error fetching engagement raw data:', expect.stringContaining('boom'));
   });
 
-  // BUG (reported): getServingContactIds swallows its own errors, so a failed
-  // serving read silently leaves serving-only adults out of adultContactIds.
-  // filterDashboardData intersects serving records with that set, so the venn's
-  // serving circle shrinks with no error, and the result is cached.
-  it('silently drops serving-only adults when the serving read fails (current behaviour)', async () => {
+  // Was a bug (#304): getServingContactIds swallowed its own errors, so a failed
+  // serving read silently left serving-only adults out of adultContactIds, and
+  // filterDashboardData's serving circle shrank with no error, cached.
+  it('rejects when the serving read fails, rather than dropping serving-only adults', async () => {
     engagementFixture({ Group_Roles: () => Promise.reject(new Error('boom')) });
-    const result = await internals(service).getEngagementRawData(RANGE_START, RANGE_END);
+    await expect(internals(service).getEngagementRawData(RANGE_START, RANGE_END)).rejects.toThrow('boom');
+    expect(errorSpy).toHaveBeenCalledWith('Error fetching serving contact IDs:', expect.stringContaining('boom'));
+    expect(errorSpy).toHaveBeenCalledWith('Error fetching engagement raw data:', expect.stringContaining('boom'));
+  });
 
-    expect(result.activityByMonth).not.toEqual([]); // the rest still comes back
-    expect(result.adultContactIds).not.toContain(1005);
-    expect(errorSpy).toHaveBeenCalledWith('Error fetching serving contact IDs:', expect.any(Error));
+  /** The YYYY-MM of an Activity_Log query, from its start bound. */
+  const activityMonth = (filter: string | undefined) => /Activity_Date >= '(\d{4}-\d{2})-01 /.exec(filter ?? '')![1];
+  const realDelay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)); // only Date is faked
+
+  // Was unbounded: Promise.all fired every month at once (~51 for the full
+  // range), ignoring the MP concurrency cap of 6 (CLAUDE.md).
+  it('reads Activity_Log at most 6 months at a time', async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    engagementFixture({
+      Activity_Log: async () => {
+        inFlight++;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await realDelay(5);
+        inFlight--;
+        return [{ Contact_ID: 1001 }];
+      },
+    });
+    // Jan 2025 .. Mar 2026 (NOW) = 15 months
+    const result = await internals(service).getEngagementRawData(new Date(2025, 0, 1), RANGE_END);
+    expect(callsFor('Activity_Log')).toHaveLength(15);
+    expect(maxInFlight).toBe(6);
+    expect(result.activityByMonth).toHaveLength(15);
+  });
+
+  it('returns months in ascending order even when later months answer first', async () => {
+    engagementFixture({
+      Activity_Log: async (p) => {
+        const [y, m] = activityMonth(p.filter).split('-').map(Number);
+        await realDelay((2026 - y) * 12 + (12 - m)); // later month -> shorter delay
+        return [{ Contact_ID: 1001 }];
+      },
+    });
+    const result = await internals(service).getEngagementRawData(new Date(2025, 5, 1), RANGE_END);
+    const months = result.activityByMonth.map((b) => b.month);
+    expect(months).toEqual([
+      '2025-06', '2025-07', '2025-08', '2025-09', '2025-10', '2025-11', '2025-12',
+      '2026-01', '2026-02', '2026-03',
+    ]);
   });
 });
 
@@ -836,6 +914,17 @@ describe('getEngagementDashboardData', () => {
         adultContactIds: [1001],
       },
     });
+  });
+});
+
+describe('getEngagementDashboardData failures', () => {
+  // #304: no partial engagement data reaches the cache.
+  it('rejects when an Activity_Log read rejects', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 0, 20, 9));
+    route({ Activity_Log: () => Promise.reject(new Error('timeout')) });
+    await expect(service.getEngagementDashboardData(new Date(2026, 0, 1), new Date(2026, 7, 31)))
+      .rejects.toThrow(/monthly Activity_Log queries failed/);
   });
 });
 
@@ -892,7 +981,7 @@ describe('getExtendedDashboardData', () => {
     // All three reads use the same full range: events, roster groups, and
     // serving participants.
     expect(callsFor('Events')).toContainEqual(expect.objectContaining({
-      filter: `Event_Start_Date >= '${START_ISO}' AND Event_End_Date <= '${END_ISO}' AND Cancelled = 0`,
+      filter: `Event_Start_Date >= '${MP_START}' AND Event_Start_Date < '${MP_END_EXCLUSIVE}' AND Cancelled = 0`,
     }));
     expect(callsFor('Groups')).toEqual([expect.objectContaining({
       filter: `Group_Type_ID IN (1, 3, 11) AND ${ACTIVE_RANGE}`,
@@ -903,19 +992,12 @@ describe('getExtendedDashboardData', () => {
     }));
   });
 
-  // BUG (reported): this "isolation" is the cached-empty catch in
-  // getRosterAndAttendanceRaw (see 'returns empty data and logs when an MP read
-  // fails'). Inside getCachedExtendedData it caches an empty roster over the
-  // previous good value. The fix (rethrow, so the stale value is served) will
-  // fail this test: invert it then, rather than reading it as a regression.
-  it('a broken roster read returns an empty roster beside intact serving and event data (current behaviour)', async () => {
+  // Was a bug (#304): the roster's catch returned an empty roster beside intact
+  // serving and event data, and getCachedExtendedData cached that partial result
+  // over the previous good value. One extended result is one cache entry.
+  it('rejects when the roster read fails, so no partial extended data is cached', async () => {
     extendedFixture({ Groups: () => Promise.reject(new Error('boom')) });
-    const data = await service.getExtendedDashboardData(START, END);
-
-    expect(data.rosterMemberRecords).toEqual([]);
-    expect(data.attendanceByMonth).toEqual([]);
-    expect(data.servingLeadingRecords).toHaveLength(1);
-    expect(data.eventParticipantsByMonth).toHaveLength(1);
-    expect(errorSpy).toHaveBeenCalledWith('Error fetching roster and attendance raw data:', expect.any(Error));
+    await expect(service.getExtendedDashboardData(START, END)).rejects.toThrow('boom');
+    expect(errorSpy).toHaveBeenCalledWith('Error fetching roster and attendance raw data:', expect.stringContaining('boom'));
   });
 });

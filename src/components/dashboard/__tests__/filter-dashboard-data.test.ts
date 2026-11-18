@@ -1,6 +1,20 @@
-import { describe, it, expect } from 'vitest';
-import { computePeriodMetrics } from '../filter-dashboard-data';
-import type { MonthlyAttendanceTrend } from '@/lib/dto';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import {
+  computePeriodMetrics,
+  computeRosterVsAttendance,
+  computeServingMetrics,
+  computeEngagementOverlap,
+  countDatesInRange,
+  filterDashboardData,
+} from '../filter-dashboard-data';
+import { getPreviousPeriodRange, shiftYearsClamped } from '../date-range-filter';
+import type {
+  DashboardData,
+  MonthlyAttendanceTrend,
+  RosterMemberRecord,
+  ServingLeadingRecord,
+  EngagementRawData,
+} from '@/lib/dto';
 
 describe('computePeriodMetrics', () => {
   const start = new Date(2026, 1, 1); // Feb 1
@@ -102,5 +116,214 @@ describe('computePeriodMetrics', () => {
     expect(result.averageInPersonAttendance).toBe(500);
     expect(result.averageOnlineAttendance).toBe(100);
     expect(result.totalEvents).toBe(4);
+  });
+});
+
+// The server keeps one record per disjoint membership span, so a contact who
+// left and came back appears twice. These pin that every consumer counts
+// distinct contacts, and that a period inside the gap does not count them.
+describe('multi-span records (one contact, two disjoint spans)', () => {
+  const fullStart = new Date(2025, 8, 1); // Sep 1 2025
+  const fullEnd = new Date(2026, 2, 31); // Mar 31 2026
+  const gapStart = new Date(2025, 10, 1); // Nov 1 2025
+  const gapEnd = new Date(2025, 11, 31); // Dec 31 2025
+
+  it('computeServingMetrics counts the contact once, and not in the gap months', () => {
+    const base = {
+      contactId: 7, roleTypeId: 3, roleTypeName: 'Servant', ministryId: 60, ministryName: 'Children',
+    };
+    const records: ServingLeadingRecord[] = [
+      { ...base, startDate: '2025-09-05T00:00:00', endDate: '2025-10-15T00:00:00' },
+      { ...base, startDate: '2026-01-10T00:00:00', endDate: null },
+    ];
+
+    const result = computeServingMetrics(records, fullStart, fullEnd);
+    expect(result.totalServingLeading).toBe(1);
+    expect(result.servingByRoleType).toEqual([{ roleTypeId: 3, roleTypeName: 'Servant', uniqueContacts: 1 }]);
+    expect(result.servingByMinistry).toEqual([{ ministryId: 60, ministryName: 'Children', uniqueContacts: 1 }]);
+    expect(result.servingTrends.map((t) => [t.month, t.totalCount])).toEqual([
+      ['2025-09', 1], ['2025-10', 1], ['2025-11', 0], ['2025-12', 0],
+      ['2026-01', 1], ['2026-02', 1], ['2026-03', 1],
+    ]);
+
+    expect(computeServingMetrics(records, gapStart, gapEnd).totalServingLeading).toBe(0);
+  });
+
+  it('computeRosterVsAttendance counts the contact once, and not in a period inside the gap', () => {
+    const base = { contactId: 7, groupTypeId: 1, groupTypeName: 'Small Group' };
+    const records: RosterMemberRecord[] = [
+      { ...base, startDate: '2025-09-05T00:00:00', endDate: '2025-10-15T00:00:00' },
+      { ...base, startDate: '2026-01-10T00:00:00', endDate: null },
+    ];
+
+    expect(computeRosterVsAttendance(records, [], fullStart, fullEnd)).toEqual([
+      { groupTypeName: 'Small Group', rosterCount: 1, attendanceCount: 0 },
+    ]);
+    expect(computeRosterVsAttendance(records, [], gapStart, gapEnd)).toEqual([]);
+  });
+
+  it('computeEngagementOverlap counts the contact once in the group circle', () => {
+    const rawData: EngagementRawData = {
+      activityByMonth: [],
+      groupRecords: [
+        { contactId: 7, startDate: '2025-09-05T00:00:00', endDate: '2025-10-15T00:00:00' },
+        { contactId: 7, startDate: '2026-01-10T00:00:00', endDate: null },
+      ],
+      adultContactIds: [7],
+    };
+
+    const result = computeEngagementOverlap(rawData, [], fullStart, fullEnd);
+    expect(result.totalGroup).toBe(1);
+    expect(result.groupOnly).toBe(1);
+    expect(computeEngagementOverlap(rawData, [], gapStart, gapEnd).totalGroup).toBe(0);
+  });
+});
+
+// #305, client side: the selection's endDate is midnight at the START of the last day,
+// and MP values carry a time of day. Every consumer must count the whole last day, and
+// nothing from the day after it. Real MP rows look like these (Group_Participants
+// Start_Date '2025-08-31T11:30:00', Participant_Milestones '2026-02-22T10:15:00').
+describe('last day of the selected range (#305)', () => {
+  const augStart = new Date(2025, 7, 1); // Aug 1 2025
+  const augEnd = new Date(2025, 7, 31); // Aug 31 2025 (inclusive)
+  const serving = (startDate: string, endDate: string | null, contactId = 1): ServingLeadingRecord => ({
+    contactId, roleTypeId: 3, roleTypeName: 'Servant', ministryId: 60, ministryName: 'Children', startDate, endDate,
+  });
+
+  it('countDatesInRange counts a milestone later in the day on the last day, in that month only', () => {
+    const dates = ['2026-05-31T10:15:00', '2026-06-01T00:00:00', '2026-04-30T23:59:59'];
+    expect(countDatesInRange(dates, new Date(2026, 4, 1), new Date(2026, 4, 31))).toBe(1);
+    expect(countDatesInRange(dates, new Date(2026, 5, 1), new Date(2026, 5, 30))).toBe(1);
+    expect(countDatesInRange(dates, new Date(2026, 3, 1), new Date(2026, 3, 30))).toBe(1);
+  });
+
+  it('countDatesInRange accepts a space separator and a fractional-second value', () => {
+    expect(countDatesInRange(['2026-05-31 19:30:00', '2026-05-01T00:00:00.123'], new Date(2026, 4, 1), new Date(2026, 4, 31))).toBe(2);
+  });
+
+  it('computeServingMetrics counts a span that starts at 10:29 on the last day, in the total and the trend', () => {
+    const result = computeServingMetrics([serving('2025-08-31T10:29:00', null)], augStart, augEnd);
+    expect(result.totalServingLeading).toBe(1);
+    expect(result.servingByRoleType).toEqual([{ roleTypeId: 3, roleTypeName: 'Servant', uniqueContacts: 1 }]);
+    expect(result.servingTrends).toEqual([
+      expect.objectContaining({ month: '2025-08', servingCount: 1, totalCount: 1 }),
+    ]);
+  });
+
+  it('computeServingMetrics puts a last-day start in that month, not the month before, in a multi-month trend', () => {
+    const result = computeServingMetrics([serving('2025-11-30T10:00:00', null)], new Date(2025, 9, 1), new Date(2025, 11, 31));
+    expect(result.servingTrends.map((t) => [t.month, t.totalCount])).toEqual([
+      ['2025-10', 0], ['2025-11', 1], ['2025-12', 1],
+    ]);
+  });
+
+  it('computeServingMetrics leaves out a span that starts on the day after the range', () => {
+    const result = computeServingMetrics([serving('2025-09-01T00:00:00', null)], augStart, augEnd);
+    expect(result.totalServingLeading).toBe(0);
+    expect(result.servingTrends.map((t) => t.totalCount)).toEqual([0]);
+  });
+
+  it('computeServingMetrics counts a span that ended later in the day on the first day', () => {
+    expect(computeServingMetrics([serving('2025-06-01T00:00:00', '2025-08-01T09:00:00')], augStart, augEnd).totalServingLeading).toBe(1);
+    expect(computeServingMetrics([serving('2025-06-01T00:00:00', '2025-07-31T23:00:00')], augStart, augEnd).totalServingLeading).toBe(0);
+  });
+
+  it('computeRosterVsAttendance counts a roster span starting at 11:30 on the last day', () => {
+    const records: RosterMemberRecord[] = [
+      { contactId: 9, groupTypeId: 1, groupTypeName: 'Small Group', startDate: '2025-08-31T11:30:00', endDate: null },
+      { contactId: 10, groupTypeId: 1, groupTypeName: 'Small Group', startDate: '2025-09-01T00:00:00', endDate: null },
+    ];
+    expect(computeRosterVsAttendance(records, [], augStart, augEnd)).toEqual([
+      { groupTypeName: 'Small Group', rosterCount: 1, attendanceCount: 0 },
+    ]);
+  });
+
+  it('computeEngagementOverlap counts group and serving spans starting on the last day', () => {
+    const rawData: EngagementRawData = {
+      activityByMonth: [],
+      groupRecords: [
+        { contactId: 1, startDate: '2025-08-31T10:27:00', endDate: null },
+        { contactId: 2, startDate: '2025-09-01T00:00:00', endDate: null },
+      ],
+      adultContactIds: [1, 3],
+    };
+    const result = computeEngagementOverlap(rawData, [serving('2025-08-31T11:30:00', null, 3)], augStart, augEnd);
+    expect(result.totalGroup).toBe(1);
+    expect(result.totalServing).toBe(1);
+  });
+});
+
+// Ministry year 2027 runs Sep 2027 .. Aug 2028, and 2028 is a leap year. Shifting
+// Feb 29 2028 back a year with setFullYear rolled over to Mar 1 2027, putting a
+// whole extra day, and with it an extra month, into the previous period.
+describe('previous period of a range ending Feb 29 (leap year)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const local = (d: Date) => [d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes()];
+
+  it('shiftYearsClamped maps Feb 29 to Feb 28, keeps the time of day, and leaves other days alone', () => {
+    expect(local(shiftYearsClamped(new Date(2028, 1, 29, 10, 30), -1))).toEqual([2027, 2, 28, 10, 30]);
+    expect(local(shiftYearsClamped(new Date(2028, 1, 29), 1))).toEqual([2029, 2, 28, 0, 0]);
+    expect(local(shiftYearsClamped(new Date(2028, 1, 29), -4))).toEqual([2024, 2, 29, 0, 0]);
+    expect(local(shiftYearsClamped(new Date(2026, 7, 31, 23, 59), -1))).toEqual([2025, 8, 31, 23, 59]);
+    expect(local(shiftYearsClamped(new Date(2027, 2, 1), -1))).toEqual([2026, 3, 1, 0, 0]);
+  });
+
+  it('getPreviousPeriodRange ends a Feb 2028 selection on Feb 28 2027, not Mar 1', () => {
+    const { startDate, endDate } = getPreviousPeriodRange(new Date(2028, 1, 1), new Date(2028, 1, 29));
+    expect(local(startDate)).toEqual([2027, 2, 1, 0, 0]);
+    expect(local(endDate)).toEqual([2027, 2, 28, 0, 0]);
+  });
+
+  const month = (m: string): MonthlyAttendanceTrend => ({
+    month: m, monthName: '', averageInPersonAttendance: 100, averageOnlineAttendance: 0,
+    averageTotalAttendance: 100, eventCount: 4, inPersonEventCount: 4, onlineEventCount: 0,
+  });
+
+  /** Full-range data with only the fields the previous period reads filled in. */
+  function fullData(overrides: Partial<DashboardData>): DashboardData {
+    return {
+      monthlyAttendanceTrends: [], weeklyAttendanceTrends: [], communityAttendanceTrends: [],
+      weeklyCommunityAttendanceTrends: [], smallGroupTrends: [], baptismDates: [], membershipDates: [],
+      associateMemberDates: [], youthMemberDates: [], eventParticipantsByMonth: [], rosterMemberRecords: [],
+      attendanceByMonth: [], servingLeadingRecords: [],
+      engagementRawData: { activityByMonth: [], groupRecords: [], adultContactIds: [] },
+      ...overrides,
+    } as unknown as DashboardData;
+  }
+
+  it('filterDashboardData leaves Mar 1 2027 out of the previous period of Jan-Feb 2028', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2028, 5, 15, 12)); // after the selection: no today cap
+    const data = filterDashboardData(
+      fullData({
+        monthlyAttendanceTrends: ['2027-01', '2027-02', '2027-03', '2028-01', '2028-02'].map(month),
+        baptismDates: ['2027-02-14T10:00:00', '2027-03-01T10:00:00'],
+        servingLeadingRecords: [{
+          contactId: 1, roleTypeId: 3, roleTypeName: 'Servant', ministryId: 60, ministryName: 'Children',
+          startDate: '2026-06-01T00:00:00', endDate: null,
+        }],
+      }),
+      { months: [0, 1], years: [2027], compare: true },
+    );
+
+    expect(data.baptismsPreviousPeriod).toBe(1);
+    expect(data.previousYearMonthlyAttendanceTrends.map((t) => t.month)).toEqual(['2027-01', '2027-02']);
+    expect(data.previousYearServingTrends.map((t) => t.month)).toEqual(['2027-01', '2027-02']);
+    expect(data.servingTrends.map((t) => t.month)).toEqual(['2028-01', '2028-02']);
+  });
+
+  it('filterDashboardData caps the previous period at Feb 28 2027 when today is Feb 29 2028', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2028, 1, 29, 12)); // midway through ministry year 2027
+    const data = filterDashboardData(
+      fullData({ baptismDates: ['2027-02-28T09:00:00', '2027-03-01T09:00:00'] }),
+      { months: [8, 9, 10, 11, 0, 1, 2, 3, 4, 5, 6, 7], years: [2027], compare: true },
+    );
+
+    // Sep 1 2026 .. Feb 28 2027 12:00, the same elapsed part of the year.
+    expect(data.baptismsPreviousPeriod).toBe(1);
   });
 });

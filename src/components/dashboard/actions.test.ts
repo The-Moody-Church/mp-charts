@@ -5,25 +5,31 @@ import { fileURLToPath } from "url";
 const {
   mockRequireFeatureAccess,
   mockEnforceRateLimit,
+  mockMarkForRefresh,
   mockDeleteByPrefix,
   mockUpdateTag,
   mockRevalidatePath,
   mockRevalidateTag,
-  mockGetCachedDashboardData,
   mockGetCachedFullRangeData,
   mockGetCachedExtendedData,
   mockGetCachedEngagementData,
+  mockLoadFullRangeData,
+  mockLoadExtendedData,
+  mockLoadEngagementData,
 } = vi.hoisted(() => ({
   mockRequireFeatureAccess: vi.fn(),
   mockEnforceRateLimit: vi.fn(),
+  mockMarkForRefresh: vi.fn(),
   mockDeleteByPrefix: vi.fn(),
   mockUpdateTag: vi.fn(),
   mockRevalidatePath: vi.fn(),
   mockRevalidateTag: vi.fn(),
-  mockGetCachedDashboardData: vi.fn(),
   mockGetCachedFullRangeData: vi.fn(),
   mockGetCachedExtendedData: vi.fn(),
   mockGetCachedEngagementData: vi.fn(),
+  mockLoadFullRangeData: vi.fn(),
+  mockLoadExtendedData: vi.fn(),
+  mockLoadEngagementData: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({
@@ -36,18 +42,19 @@ vi.mock("next/cache", () => ({
 vi.mock("@/lib/authorization", () => ({ requireFeatureAccess: mockRequireFeatureAccess }));
 vi.mock("@/lib/rate-limit", () => ({ enforceRateLimit: mockEnforceRateLimit }));
 vi.mock("@/lib/service-cache", () => ({
-  serviceCache: { deleteByPrefix: mockDeleteByPrefix, getOrFetch: vi.fn() },
+  serviceCache: { markForRefresh: mockMarkForRefresh, deleteByPrefix: mockDeleteByPrefix, getOrFetch: vi.fn() },
   CACHE_TTL: { STANDARD: 1, LONG: 2 },
 }));
 vi.mock("@/components/dashboard/cached-data", () => ({
-  getCachedDashboardData: mockGetCachedDashboardData,
   getCachedFullRangeData: mockGetCachedFullRangeData,
   getCachedExtendedData: mockGetCachedExtendedData,
   getCachedEngagementData: mockGetCachedEngagementData,
+  loadFullRangeData: mockLoadFullRangeData,
+  loadExtendedData: mockLoadExtendedData,
+  loadEngagementData: mockLoadEngagementData,
 }));
 
 import {
-  getDashboardMetrics,
   getFullRangeDashboardMetrics,
   getExtendedDashboardMetrics,
   getEngagementDashboardMetrics,
@@ -56,6 +63,13 @@ import {
 
 const SESSION = { user: { id: "user-1" } };
 const DATA = { marker: "dashboard-data" };
+const CORE = { marker: "fresh-core" };
+const EXTENDED = { marker: "fresh-extended" };
+const ENGAGEMENT = { marker: "fresh-engagement" };
+const SECTION_TAGS = ["dashboard-full-range", "dashboard-extended", "dashboard-engagement"];
+
+/** updateTag calls naming a section tag. */
+const sectionTagCalls = () => mockUpdateTag.mock.calls.map((c) => c[0]).filter((t) => SECTION_TAGS.includes(t));
 
 // getCurrentMinistryYear reads server-local time (getMonth/getFullYear), so the
 // fake clock is set with the local-time Date constructor to stay TZ-independent.
@@ -82,12 +96,14 @@ beforeEach(() => {
   mockRequireFeatureAccess.mockResolvedValue(SESSION);
   mockEnforceRateLimit.mockImplementation(() => {});
   // clearMocks keeps implementations, so reset the ones error-path tests override.
-  mockDeleteByPrefix.mockImplementation(() => {});
+  mockMarkForRefresh.mockImplementation(() => {});
   mockUpdateTag.mockImplementation(() => {});
-  mockGetCachedDashboardData.mockResolvedValue(DATA);
   mockGetCachedFullRangeData.mockResolvedValue(DATA);
   mockGetCachedExtendedData.mockResolvedValue(DATA);
   mockGetCachedEngagementData.mockResolvedValue(DATA);
+  mockLoadFullRangeData.mockResolvedValue(CORE);
+  mockLoadExtendedData.mockResolvedValue(EXTENDED);
+  mockLoadEngagementData.mockResolvedValue(ENGAGEMENT);
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -96,120 +112,6 @@ afterEach(() => {
   else process.env.TZ = ORIGINAL_TZ;
   vi.useRealTimers();
   vi.restoreAllMocks();
-});
-
-// ---------------------------------------------------------------------------
-// getDashboardMetrics
-// ---------------------------------------------------------------------------
-describe("getDashboardMetrics", () => {
-  it("requires the dashboard feature before touching the cache", async () => {
-    await expect(getDashboardMetrics(2025)).resolves.toBe(DATA);
-    expect(mockRequireFeatureAccess).toHaveBeenCalledWith("dashboard");
-    expect(mockRequireFeatureAccess.mock.invocationCallOrder[0]).toBeLessThan(
-      mockGetCachedDashboardData.mock.invocationCallOrder[0],
-    );
-  });
-
-  it("propagates an authorization failure and never reads the cache", async () => {
-    mockRequireFeatureAccess.mockRejectedValue(new Error("Forbidden"));
-    await expect(getDashboardMetrics(2025)).rejects.toThrow("Forbidden");
-    expect(mockGetCachedDashboardData).not.toHaveBeenCalled();
-  });
-
-  it("defaults to the current ministry year when no year is given", async () => {
-    await getDashboardMetrics();
-    expect(mockGetCachedDashboardData).toHaveBeenCalledWith(2026);
-  });
-
-  it("uses the previous calendar year before September (August is still the old ministry year)", async () => {
-    setLocalNow(2026, 7, 31); // 31 Aug 2026
-    await getDashboardMetrics();
-    expect(mockGetCachedDashboardData).toHaveBeenCalledWith(2025);
-  });
-
-  it("rolls over to the new ministry year on 1 September", async () => {
-    setLocalNow(2026, 8, 1); // 1 Sep 2026
-    await getDashboardMetrics();
-    expect(mockGetCachedDashboardData).toHaveBeenCalledWith(2026);
-  });
-
-  // The ministry year follows the SERVER's local calendar, not UTC and not Central.
-  // Production runs in Docker with TZ unset (UTC), so there the rollover — and with
-  // it every dashboard cache key — happens at Aug 31 19:00 CDT. These pin the
-  // local-time reading: a getUTCMonth()/getUTCFullYear() version would disagree.
-  it("reads the ministry year in server-local time: still August in Chicago when UTC is already September", async () => {
-    setServerTimeZone("America/Chicago");
-    vi.setSystemTime(new Date("2026-09-01T03:00:00Z")); // Aug 31 22:00 CDT
-    await getDashboardMetrics();
-    expect(mockGetCachedDashboardData).toHaveBeenLastCalledWith(2025);
-    await getFullRangeDashboardMetrics();
-    expect(mockGetCachedFullRangeData).toHaveBeenLastCalledWith(2021, "2026-08-31");
-  });
-
-  it("reads the ministry year in server-local time: already September in Tokyo when UTC is still August", async () => {
-    setServerTimeZone("Asia/Tokyo");
-    vi.setSystemTime(new Date("2026-08-31T20:00:00Z")); // Sep 1 05:00 JST
-    await getDashboardMetrics();
-    expect(mockGetCachedDashboardData).toHaveBeenLastCalledWith(2026);
-  });
-
-  it("rolls over at local midnight under UTC (the production container's zone)", async () => {
-    setServerTimeZone("UTC");
-    vi.setSystemTime(new Date("2026-08-31T23:59:59Z"));
-    await getDashboardMetrics();
-    expect(mockGetCachedDashboardData).toHaveBeenLastCalledWith(2025);
-    vi.setSystemTime(new Date("2026-09-01T00:00:00Z"));
-    await getDashboardMetrics();
-    expect(mockGetCachedDashboardData).toHaveBeenLastCalledWith(2026);
-  });
-
-  it("passes through valid years at both ends of the window (current-10 .. current+1)", async () => {
-    await getDashboardMetrics(2016);
-    expect(mockGetCachedDashboardData).toHaveBeenLastCalledWith(2016);
-    await getDashboardMetrics(2027);
-    expect(mockGetCachedDashboardData).toHaveBeenLastCalledWith(2027);
-    await getDashboardMetrics(2026);
-    expect(mockGetCachedDashboardData).toHaveBeenLastCalledWith(2026);
-  });
-
-  it.each([
-    ["just below the window", 2015],
-    ["just above the window", 2028],
-    ["far future", 999999],
-    ["negative", -1],
-    ["zero", 0],
-    ["fractional", 2025.5],
-    ["NaN", Number.NaN],
-    ["Infinity", Number.POSITIVE_INFINITY],
-  ])("clamps an out-of-range or non-integer year (%s) to the current ministry year", async (_label, year) => {
-    await getDashboardMetrics(year);
-    expect(mockGetCachedDashboardData).toHaveBeenCalledWith(2026);
-  });
-
-  it.each([
-    ["numeric string", "2025"],
-    ["injection-shaped string", "2025 OR 1=1"],
-    ["null", null],
-    ["object", { year: 2025 }],
-  ])("treats a type-erased wire value (%s) as untrusted and falls back to the current year", async (_label, year) => {
-    await getDashboardMetrics(year as unknown as number);
-    expect(mockGetCachedDashboardData).toHaveBeenCalledWith(2026);
-  });
-
-  it("clamps relative to the current ministry year, not the calendar year", async () => {
-    // 1 Feb 2027 is still ministry year 2026, so 2028 (current+2) is out of range
-    // and 2027 (current+1) is the upper bound.
-    setLocalNow(2027, 1, 1);
-    await getDashboardMetrics(2028);
-    expect(mockGetCachedDashboardData).toHaveBeenLastCalledWith(2026);
-    await getDashboardMetrics(2027);
-    expect(mockGetCachedDashboardData).toHaveBeenLastCalledWith(2027);
-  });
-
-  it("propagates a cache/data error to the caller", async () => {
-    mockGetCachedDashboardData.mockRejectedValue(new Error("MP down"));
-    await expect(getDashboardMetrics(2026)).rejects.toThrow("MP down");
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -232,6 +134,15 @@ describe("getFullRangeDashboardMetrics", () => {
     const keys = mockGetCachedFullRangeData.mock.calls.map((c) => JSON.stringify(c));
     expect(new Set(keys).size).toBe(1);
     expect(mockGetCachedFullRangeData).toHaveBeenCalledWith(2022, "2027-08-31");
+  });
+
+  // The ministry year follows the SERVER's local calendar, not UTC and not Central
+  // (dashboard-range.test.ts covers the rollover itself).
+  it("reads the ministry year in server-local time: still August in Chicago when UTC is already September", async () => {
+    setServerTimeZone("America/Chicago");
+    vi.setSystemTime(new Date("2026-09-01T03:00:00Z")); // Aug 31 22:00 CDT
+    await getFullRangeDashboardMetrics();
+    expect(mockGetCachedFullRangeData).toHaveBeenLastCalledWith(2021, "2026-08-31");
   });
 
   it("changes the key at the ministry-year rollover", async () => {
@@ -295,34 +206,122 @@ describe.each([
 // refreshDashboardCache
 // ---------------------------------------------------------------------------
 describe("refreshDashboardCache", () => {
-  it("authorizes, rate-limits with the cacheRefresh tier, purges serviceCache, then expires the tags", async () => {
+  it("authorizes, rate-limits, marks serviceCache, reloads every section and returns the fresh data", async () => {
     const result = await refreshDashboardCache();
 
-    expect(result.success).toBe(true);
-    expect(result.timestamp).toBeInstanceOf(Date);
-    expect(result.timestamp.getTime()).toBe(Date.now());
+    expect(result).toEqual({
+      success: true,
+      refused: false,
+      timestamp: new Date(Date.now()),
+      core: CORE,
+      extended: EXTENDED,
+      engagement: ENGAGEMENT,
+    });
 
     expect(mockRequireFeatureAccess).toHaveBeenCalledWith("dashboard");
     expect(mockEnforceRateLimit).toHaveBeenCalledTimes(1);
     expect(mockEnforceRateLimit).toHaveBeenCalledWith("user-1", "cacheRefresh");
+    expect(mockMarkForRefresh.mock.calls).toEqual([["dashboard"], ["group-types"]]);
 
-    expect(mockDeleteByPrefix.mock.calls).toEqual([["dashboard"], ["group-types"]]);
-    expect(mockUpdateTag.mock.calls).toEqual([["dashboard-data"], ["group-types"]]);
+    // The same stable keys the read actions use (17 Nov 2026 -> ministry year 2026).
+    expect(mockLoadFullRangeData).toHaveBeenCalledWith(2022, "2027-08-31");
+    expect(mockLoadExtendedData).toHaveBeenCalledWith("2022-09-01", "2027-08-31");
+    expect(mockLoadEngagementData).toHaveBeenCalledWith("2022-09-01", "2027-08-31");
+
+    expect(mockUpdateTag.mock.calls).toEqual([
+      ["group-types"],
+      ["dashboard-full-range"],
+      ["dashboard-extended"],
+      ["dashboard-engagement"],
+    ]);
   });
 
-  it("purges serviceCache BEFORE any updateTag (caching.md load-bearing rule)", async () => {
+  // updateTag makes Next re-render /dashboard into the action's response. Had a
+  // section tag been expired before its load settled, that render would have run
+  // the forced MP fetch itself, and an MP failure would have thrown into the
+  // dashboard's error boundary, replacing the whole page.
+  it("expires no section tag until every load has settled", async () => {
+    let releaseCore!: (v: unknown) => void;
+    mockLoadFullRangeData.mockReturnValue(new Promise((resolve) => (releaseCore = resolve)));
+
+    const pending = refreshDashboardCache();
+    await vi.waitFor(() => expect(mockLoadEngagementData).toHaveBeenCalled());
+    await Promise.resolve();
+    expect(sectionTagCalls()).toEqual([]);
+
+    releaseCore(CORE);
+    await pending;
+    expect(sectionTagCalls()).toEqual(SECTION_TAGS);
+  });
+
+  it("marks serviceCache, then expires group-types, BEFORE any section loads", async () => {
     await refreshDashboardCache();
 
     const authOrder = mockRequireFeatureAccess.mock.invocationCallOrder[0];
     const rateOrder = mockEnforceRateLimit.mock.invocationCallOrder[0];
-    const purgeOrders = mockDeleteByPrefix.mock.invocationCallOrder;
-    const tagOrders = mockUpdateTag.mock.invocationCallOrder;
+    const markOrders = mockMarkForRefresh.mock.invocationCallOrder;
+    const groupTypesTag = mockUpdateTag.mock.invocationCallOrder[mockUpdateTag.mock.calls.findIndex((c) => c[0] === "group-types")];
+    const firstLoad = Math.min(
+      mockLoadFullRangeData.mock.invocationCallOrder[0],
+      mockLoadExtendedData.mock.invocationCallOrder[0],
+      mockLoadEngagementData.mock.invocationCallOrder[0],
+    );
 
     expect(authOrder).toBeLessThan(rateOrder);
-    expect(rateOrder).toBeLessThan(Math.min(...purgeOrders));
-    // Every purge happens before the first updateTag; otherwise the re-run
-    // 'use cache' function would just return its own serviceCache value.
-    expect(Math.max(...purgeOrders)).toBeLessThan(Math.min(...tagOrders));
+    expect(rateOrder).toBeLessThan(Math.min(...markOrders));
+    // Marked first: an unmarked load returns its own cached serviceCache value.
+    expect(Math.max(...markOrders)).toBeLessThan(groupTypesTag);
+    // group-types expired before the loads, so their Group_Types lookups re-run
+    // getCachedGroupTypes' body and take its marked serviceCache entry.
+    expect(groupTypesTag).toBeLessThan(firstLoad);
+  });
+
+  it.each([
+    ["core", mockLoadFullRangeData, "dashboard-full-range"],
+    ["extended", mockLoadExtendedData, "dashboard-extended"],
+    ["engagement", mockLoadEngagementData, "dashboard-engagement"],
+  ] as const)("leaves the %s tag alone and omits its data when its MP reload fails, and still applies the others", async (name, load, tag) => {
+    load.mockRejectedValue(new Error("MP down"));
+
+    const result = await refreshDashboardCache();
+
+    expect(result.success).toBe(false);
+    expect(result.refused).toBe(false);
+    expect(result).not.toHaveProperty(name);
+    expect(sectionTagCalls()).toEqual(SECTION_TAGS.filter((t) => t !== tag));
+    expect(Object.keys(result).filter((k) => ["core", "extended", "engagement"].includes(k))).toHaveLength(2);
+  });
+
+  it("expires no section tag when every reload fails, and is not reported as refused", async () => {
+    mockLoadFullRangeData.mockRejectedValue(new Error("down"));
+    mockLoadExtendedData.mockRejectedValue(new Error("down"));
+    mockLoadEngagementData.mockRejectedValue(new Error("down"));
+
+    const result = await refreshDashboardCache();
+
+    expect(result).toEqual({ success: false, refused: false, timestamp: new Date(Date.now()) });
+    expect(sectionTagCalls()).toEqual([]);
+  });
+
+  it("returns a reloaded section but success:false when its tag cannot be expired", async () => {
+    mockUpdateTag.mockImplementation((tag: string) => {
+      if (tag === "dashboard-extended") throw new Error("handler down");
+    });
+
+    const result = await refreshDashboardCache();
+
+    expect(result.success).toBe(false);
+    expect(result.extended).toBe(EXTENDED);
+    expect(result.core).toBe(CORE);
+    expect(console.error).toHaveBeenCalledWith("Error refreshing dashboard cache:", expect.any(Error));
+  });
+
+  // Was a bug: deleteByPrefix dropped the last good value before the re-fetch was
+  // known to succeed, so one MP failure during Refresh left both cache layers
+  // empty and every later page load paid a cold fetch. markForRefresh keeps it.
+  it("marks serviceCache for refresh instead of deleting the last good values", async () => {
+    await refreshDashboardCache();
+    expect(mockDeleteByPrefix).not.toHaveBeenCalled();
   });
 
   it("never calls revalidatePath or revalidateTag", async () => {
@@ -340,12 +339,19 @@ describe("refreshDashboardCache", () => {
     expect(code).not.toMatch(/revalidatePath/);
   });
 
-  it("purges prefixes that cover every serviceCache key the tagged caches use", async () => {
+  it("reloads through the serviceCache layer, never the 'use cache' layer", async () => {
     await refreshDashboardCache();
-    const purged = mockDeleteByPrefix.mock.calls.map((c) => c[0] as string);
+    expect(mockGetCachedFullRangeData).not.toHaveBeenCalled();
+    expect(mockGetCachedExtendedData).not.toHaveBeenCalled();
+    expect(mockGetCachedEngagementData).not.toHaveBeenCalled();
+  });
 
-    // Every serviceCache.getOrFetch() call in the 'use cache' sources must have a
-    // key we can resolve to a literal prefix: an inline string/template literal, or
+  it("marks prefixes that cover every serviceCache key the tagged caches use", async () => {
+    await refreshDashboardCache();
+    const purged = mockMarkForRefresh.mock.calls.map((c) => c[0] as string);
+
+    // Every serviceCache.getOrFetch() call in the cached sources must have a key
+    // we can resolve to a literal prefix: an inline string/template literal, or
     // an identifier bound to one in the same file. A key we cannot resolve fails the
     // test instead of being skipped, so a refactor of the key style is caught here
     // rather than silently narrowing coverage. A new cached function whose key
@@ -359,8 +365,8 @@ describe("refreshDashboardCache", () => {
         const arg = call[1];
         let literal = arg;
         if (/^[A-Za-z_$][\w$]*$/.test(arg)) {
-          // The nearest binding of that name before this call (each cached
-          // function declares its own `const key`).
+          // The nearest binding of that name before this call (each loader
+          // declares its own `const key`).
           const bindings = [
             ...src
               .slice(0, call.index)
@@ -376,71 +382,37 @@ describe("refreshDashboardCache", () => {
       });
     });
 
-    expect(keyPrefixes.length).toBeGreaterThanOrEqual(5);
+    // full range, extended, engagement, group types
+    expect(keyPrefixes.length).toBeGreaterThanOrEqual(4);
     for (const prefix of keyPrefixes) {
-      expect(purged.some((p) => prefix.startsWith(p)), `key prefix "${prefix}" not purged`).toBe(true);
+      expect(purged.some((p) => prefix.startsWith(p)), `key prefix "${prefix}" not marked`).toBe(true);
     }
   });
 
-  it("returns success:false and touches no cache when authorization fails", async () => {
-    mockRequireFeatureAccess.mockRejectedValue(new Error("Forbidden"));
+  it.each([
+    ["authorization fails", () => mockRequireFeatureAccess.mockRejectedValue(new Error("Forbidden"))],
+    ["the cacheRefresh rate limit is exceeded", () => mockEnforceRateLimit.mockImplementation(() => { throw new Error("Rate limit exceeded"); })],
+    ["the serviceCache mark throws", () => mockMarkForRefresh.mockImplementation(() => { throw new Error("mark failed"); })],
+    ["updateTag throws (e.g. called outside a server action)", () => mockUpdateTag.mockImplementation(() => { throw new Error("updateTag can only be called from within a Server Action"); })],
+  ])("is refused, and reads nothing from MP, when %s", async (_label, arrange) => {
+    arrange();
 
     const result = await refreshDashboardCache();
 
-    expect(result.success).toBe(false);
-    expect(result.timestamp).toBeInstanceOf(Date);
     // The failure timestamp is "now" too, not a sentinel such as the epoch.
-    expect(result.timestamp.getTime()).toBe(Date.now());
-    expect(mockEnforceRateLimit).not.toHaveBeenCalled();
-    expect(mockDeleteByPrefix).not.toHaveBeenCalled();
-    expect(mockUpdateTag).not.toHaveBeenCalled();
+    expect(result).toEqual({ success: false, refused: true, timestamp: new Date(Date.now()) });
+    expect(mockLoadFullRangeData).not.toHaveBeenCalled();
+    expect(mockLoadExtendedData).not.toHaveBeenCalled();
+    expect(mockLoadEngagementData).not.toHaveBeenCalled();
+    expect(sectionTagCalls()).toEqual([]);
     expect(console.error).toHaveBeenCalledWith("Error refreshing dashboard cache:", expect.any(Error));
   });
 
-  it("returns success:false and touches no cache when the cacheRefresh rate limit is exceeded", async () => {
-    mockEnforceRateLimit.mockImplementation(() => {
-      throw new Error("Rate limit exceeded");
-    });
-
-    const result = await refreshDashboardCache();
-
-    expect(result.success).toBe(false);
-    expect(result.timestamp.getTime()).toBe(Date.now());
-    expect(mockEnforceRateLimit).toHaveBeenCalledWith("user-1", "cacheRefresh");
-    expect(mockDeleteByPrefix).not.toHaveBeenCalled();
-    expect(mockUpdateTag).not.toHaveBeenCalled();
-  });
-
-  it("returns success:false and skips updateTag when the serviceCache purge throws", async () => {
-    mockDeleteByPrefix.mockImplementation(() => {
-      throw new Error("purge failed");
-    });
-
-    const result = await refreshDashboardCache();
-
-    expect(result.success).toBe(false);
-    expect(result.timestamp.getTime()).toBe(Date.now());
-    expect(mockUpdateTag).not.toHaveBeenCalled();
-  });
-
-  it("returns success:false when updateTag throws (e.g. called outside a server action)", async () => {
-    mockUpdateTag.mockImplementation(() => {
-      throw new Error("updateTag can only be called from within a Server Action");
-    });
-
-    const result = await refreshDashboardCache();
-
-    expect(result.success).toBe(false);
-    expect(result.timestamp.getTime()).toBe(Date.now());
-    // The purge already ran: serviceCache is cold even though the tag expiry failed.
-    expect(mockDeleteByPrefix).toHaveBeenCalledTimes(2);
-  });
-
-  it("does not read dashboard data itself (the client re-fetches after refresh)", async () => {
+  it("does not rate-limit or mark anything when authorization fails", async () => {
+    mockRequireFeatureAccess.mockRejectedValue(new Error("Forbidden"));
     await refreshDashboardCache();
-    expect(mockGetCachedDashboardData).not.toHaveBeenCalled();
-    expect(mockGetCachedFullRangeData).not.toHaveBeenCalled();
-    expect(mockGetCachedExtendedData).not.toHaveBeenCalled();
-    expect(mockGetCachedEngagementData).not.toHaveBeenCalled();
+    expect(mockEnforceRateLimit).not.toHaveBeenCalled();
+    expect(mockMarkForRefresh).not.toHaveBeenCalled();
+    expect(mockUpdateTag).not.toHaveBeenCalled();
   });
 });

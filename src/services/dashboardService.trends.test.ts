@@ -10,13 +10,17 @@
  * getDashboardData would mean faking a dozen unrelated MP queries per test.
  *
  * Timezone: MP returns zone-less Central wall-clock strings
- * ("2025-09-07T10:00:00"), which `new Date()` parses as process-local time,
- * while several methods key by `toISOString()` (UTC). The result therefore
- * depends on the process timezone: a 09:00 fixture lands on the previous UTC
- * day from UTC+10 eastward. Production runs with TZ=UTC, so this file pins
- * process.env.TZ to UTC for its own run (Node re-reads TZ on assignment) and
- * restores it afterwards. Expected filter values are still computed with the
- * same local constructors the code uses, so they stay right if the pin moves.
+ * ("2025-09-07T10:00:00"). Every day/month bucket key is now sliced from that
+ * string, so no result depends on the process zone (the "whatever the process
+ * zone" tests switch it with `inTimeZone` to prove it; they used to key by
+ * `toISOString()`, which moved an evening service to the next day off UTC).
+ * The file still pins process.env.TZ to production's UTC for its own run
+ * (Node re-reads TZ on assignment) and restores it afterwards.
+ *
+ * Date bounds: every range filter is half-open on MP wall-clock day strings
+ * (`>= 'YYYY-MM-DD 00:00:00' AND < '<day after the end> 00:00:00'`, built by
+ * mp-date-range.ts), so the expected filter strings are literal and do not
+ * depend on the process timezone.
  */
 import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest';
 import type {
@@ -91,11 +95,43 @@ const newService = () => DashboardService.getInstance('test-token');
 const calls = (table: string): Call[] =>
   mockGetTableRecords.mock.calls.map(c => c[0] as Call).filter(c => c.table === table);
 
-/** ISO string of a local-midnight date, as the code builds it. */
-const isoLocal = (y: number, m: number, d: number) => new Date(y, m, d).toISOString();
+/** An MP/SQL datetime literal normalised for comparison: 'T' -> ' ', fractional
+ *  seconds and a trailing Z dropped (SQL Server's datetime ignores the Z). */
+const normDt = (v: string) => v.replace('T', ' ').replace(/(\.\d+)?Z?$/, '');
+
+/**
+ * A small fake of MP's date predicates: does `row` satisfy every
+ * `<col> <op> '<datetime>'` comparison in `filter`? Lets a test feed MP-shaped
+ * rows through whatever filter the code sends, so a bound that cuts off the
+ * last day shows up as a missing row, not just as a different string.
+ */
+const matchesDatePredicates = (filter: string | undefined, row: Record<string, unknown>): boolean => {
+  for (const [, colRef, op, literal] of (filter ?? '').matchAll(/(\S+) (>=|<=|<|>) '([^']+)'/g)) {
+    const value = row[colRef.split('.').pop()!];
+    if (typeof value !== 'string') return false;
+    const a = normDt(value);
+    const b = normDt(literal);
+    const ok = op === '>=' ? a >= b : op === '<=' ? a <= b : op === '<' ? a < b : a > b;
+    if (!ok) return false;
+  }
+  return true;
+};
 
 /** Collapse the multi-line template filters so substring checks are stable. */
 const squash = (s: string | undefined) => (s ?? '').replace(/\s+/g, ' ').trim();
+
+/**
+ * Run `fn` with the process in another time zone, then put UTC back. Bucket keys
+ * must come from the MP wall-clock string, not from parsing it in the process zone.
+ */
+const inTimeZone = async <T>(tz: string, fn: () => Promise<T>): Promise<T> => {
+  process.env.TZ = tz;
+  try {
+    return await fn();
+  } finally {
+    process.env.TZ = 'UTC';
+  }
+};
 
 /** The comma-separated list inside a filter's first `IN (...)`. */
 const inList = (filter: string | undefined): string[] => {
@@ -105,13 +141,12 @@ const inList = (filter: string | undefined): string[] => {
 };
 
 let errorSpy: ReturnType<typeof vi.spyOn>;
-let warnSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
   mockGetTableRecords.mockReset();
   mockGetTableRecords.mockResolvedValue([]);
   errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-  warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
 });
 
 afterEach(() => {
@@ -134,8 +169,8 @@ describe('getSmallGroupTrends', () => {
     expect(groups.select).toBe('Group_ID,Group_Type_ID,Start_Date,End_Date');
     const f = squash(groups.filter);
     expect(f).toContain('Group_Type_ID IN (1, 3, 11)');
-    expect(f).toContain(`Groups.Start_Date <= '${END.toISOString()}'`);
-    expect(f).toContain(`(Groups.End_Date IS NULL OR Groups.End_Date >= '${START.toISOString()}')`);
+    expect(f).toContain(`Groups.Start_Date < '2026-01-01 00:00:00'`);
+    expect(f).toContain(`(Groups.End_Date IS NULL OR Groups.End_Date >= '2025-09-01 00:00:00')`);
   });
 
   it('returns [] without resolving group types when no groups match', async () => {
@@ -225,10 +260,24 @@ describe('getSmallGroupTrends', () => {
     expect(trends[0].groupCountByType).toEqual({});
   });
 
-  // BUG (reported): monthEnd is `new Date(y, m + 1, 0)`, i.e. MIDNIGHT at the
-  // START of the last day, so a group that starts later on the last day of a
-  // month is not counted in that month. Pinned as current behaviour.
-  it('CURRENT BEHAVIOUR: a group starting during the last day of a month is not counted in that month', async () => {
+  // Was a bug: monthEnd was `new Date(y, m + 1, 0)`, MIDNIGHT at the START of
+  // the last day, so a group starting later that day missed its month.
+  it('ends a group that ended on the last day of a month in that month, not the next', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Groups') {
+        return Promise.resolve([
+          { Group_ID: 6, Group_Type_ID: 1, Start_Date: '2025-01-01 00:00:00', End_Date: '2025-10-31 18:00:00' },
+        ]);
+      }
+      if (p.table === 'Group_Types') return Promise.resolve([{ Group_Type_ID: 1, Group_Type: 'Small Group' }]);
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    const trends = await priv(svc).getSmallGroupTrends(START, END);
+    expect(trends.map(t => t.activeGroupCount)).toEqual([1, 1, 0, 0]);
+  });
+
+  it('counts a group starting during the last day of a month in that month', async () => {
     mockGetTableRecords.mockImplementation((p: Call) => {
       if (p.table === 'Groups') {
         return Promise.resolve([
@@ -240,14 +289,30 @@ describe('getSmallGroupTrends', () => {
     });
     const svc = await newService();
     const trends = await priv(svc).getSmallGroupTrends(new Date(2025, 10, 1), new Date(2025, 11, 31));
-    expect(trends.find(t => t.month === '2025-11')!.activeGroupCount).toBe(0);
+    expect(trends.find(t => t.month === '2025-11')!.activeGroupCount).toBe(1);
     expect(trends.find(t => t.month === '2025-12')!.activeGroupCount).toBe(1);
   });
 
-  // BUG (latent, reported): the month cursor is the raw startDate, advanced
-  // with setMonth(+1). A start on the 31st overflows Feb into March, skipping
-  // February. Callers always pass the 1st today, so it does not bite yet.
-  it('CURRENT BEHAVIOUR: a start date on the 31st skips February', async () => {
+  // The month window is half-open: a group starting at 00:00 on the 1st of the
+  // next month is not active in this one (pins `< endExclusiveDay`, not `<=`).
+  it('does not count a group starting on the 1st of the next month in this month', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Groups') {
+        return Promise.resolve([
+          { Group_ID: 7, Group_Type_ID: 1, Start_Date: '2025-11-01T00:00:00', End_Date: null },
+        ]);
+      }
+      if (p.table === 'Group_Types') return Promise.resolve([{ Group_Type_ID: 1, Group_Type: 'Small Group' }]);
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    const trends = await priv(svc).getSmallGroupTrends(new Date(2025, 9, 1), new Date(2025, 10, 30));
+    expect(trends.map(t => [t.month, t.activeGroupCount])).toEqual([['2025-10', 0], ['2025-11', 1]]);
+  });
+
+  // Was a latent bug: the cursor was the raw startDate advanced with
+  // setMonth(+1), so Jan 31 overflowed to Mar 3 and February was skipped.
+  it('does not skip a month when the start date is on the 31st', async () => {
     mockGetTableRecords.mockImplementation((p: Call) => {
       if (p.table === 'Groups') {
         return Promise.resolve([{ Group_ID: 1, Group_Type_ID: 1, Start_Date: '2025-01-01T00:00:00', End_Date: null }]);
@@ -257,17 +322,31 @@ describe('getSmallGroupTrends', () => {
     });
     const svc = await newService();
     const trends = await priv(svc).getSmallGroupTrends(new Date(2025, 0, 31), new Date(2025, 3, 30));
-    expect(trends.map(t => t.month)).toEqual(['2025-01', '2025-03', '2025-04']);
+    expect(trends.map(t => t.month)).toEqual(['2025-01', '2025-02', '2025-03', '2025-04']);
+    expect(trends.map(t => t.monthName)).toEqual(['January', 'February', 'March', 'April']);
   });
 
-  // BUG (reported): caching.md forbids returning an empty fallback inside a
-  // 'use cache' path, yet this catch returns [] and getCachedDashboardData
-  // caches it over the previous good value.
-  it('CURRENT BEHAVIOUR: swallows an MP failure and returns []', async () => {
+  // Was a bug (#304): the catch returned an empty value, which the 'use cache'
+  // caller then cached over the previous good value for at least 6h. Rethrowing
+  // lets both cache layers keep serving the last good data.
+  it('rethrows an MP failure (logged) so the cache keeps its previous value', async () => {
     mockGetTableRecords.mockRejectedValue(new Error('MP down'));
     const svc = await newService();
-    await expect(priv(svc).getSmallGroupTrends(START, END)).resolves.toEqual([]);
-    expect(errorSpy).toHaveBeenCalledWith('Error fetching small group trends:', expect.any(Error));
+    await expect(priv(svc).getSmallGroupTrends(START, END)).rejects.toThrow('MP down');
+    expect(errorSpy).toHaveBeenCalledWith('Error fetching small group trends:', expect.stringContaining('MP down'));
+  });
+
+  it('rejects when the Group_Types read fails after Groups succeeded (no partial result)', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Groups') {
+        return Promise.resolve([{ Group_ID: 1, Group_Type_ID: 1, Start_Date: '2025-09-15T00:00:00', End_Date: null }]);
+      }
+      if (p.table === 'Group_Types') return Promise.reject(new Error('MP down'));
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    await expect(priv(svc).getSmallGroupTrends(START, END)).rejects.toThrow('MP down');
+    expect(errorSpy).toHaveBeenCalledWith('Error fetching small group trends:', expect.stringContaining('MP down'));
   });
 });
 
@@ -395,11 +474,11 @@ describe('getCommunityAttendanceTrends', () => {
       ),
     );
     const svc = await newService();
-    // sanitizeIds throws on an all-invalid list; the (reported) catch-all
-    // turns that into empty series. The point here: no query is sent.
-    await expect(priv(svc).getCommunityAttendanceTrends(START, END)).resolves.toEqual({ monthly: [], weekly: [] });
+    // sanitizeIds throws on an all-invalid list and the method rethrows it
+    // (malformed MP data fails rather than caching empty series). No query is sent.
+    await expect(priv(svc).getCommunityAttendanceTrends(START, END)).rejects.toThrow();
     expect(calls('Event_Participants')).toHaveLength(0);
-    expect(errorSpy).toHaveBeenCalledWith('Error fetching community attendance trends:', expect.any(Error));
+    expect(errorSpy).toHaveBeenCalledWith('Error fetching community attendance trends:', expect.any(String));
   });
 
   it('labels a participant row whose group is not a known community "Unknown"', async () => {
@@ -412,6 +491,66 @@ describe('getCommunityAttendanceTrends', () => {
     const svc = await newService();
     const { weekly } = await priv(svc).getCommunityAttendanceTrends(START, END);
     expect(weekly).toEqual([{ weekStartDate: '2025-09-07', communityAttendance: { Unknown: 1 }, uniqueParticipants: 1 }]);
+  });
+
+  // Was a bug: `date > endDate` with endDate = Aug 31 00:00 dropped the
+  // Sunday Aug 31 2025 service from the ministry year it closes.
+  it('includes a Sunday on the last day of the range (Aug 31)', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Groups') return Promise.resolve(GROUPS);
+      if (p.table === 'Event_Participants') return Promise.resolve([ep(1, 201, 11, 501), ep(2, 202, 11, 502)]);
+      if (p.table === 'Events') {
+        return Promise.resolve([
+          { Event_ID: 201, Event_Start_Date: '2025-08-31T10:00:00' },
+          { Event_ID: 202, Event_Start_Date: '2025-09-07T10:00:00' }, // after the range
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    const { monthly, weekly } = await priv(svc).getCommunityAttendanceTrends(new Date(2024, 8, 1), new Date(2025, 7, 31));
+    expect(weekly).toEqual([{ weekStartDate: '2025-08-31', communityAttendance: { North: 1 }, uniqueParticipants: 1 }]);
+    expect(monthly).toEqual([{ weekStartDate: '2025-08-01', communityAttendance: { North: 1 }, uniqueParticipants: 1 }]);
+  });
+
+  // The Events read has no date filter, so the in-code check is the only date
+  // bound. Sep 1 2024 (the first day) and Aug 31 2025 (the day after Aug 30)
+  // are both Sundays: the first is in, the second is out.
+  it('includes a Sunday on the first day of the range and excludes one on the day after it', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Groups') return Promise.resolve(GROUPS);
+      if (p.table === 'Event_Participants') {
+        return Promise.resolve([ep(1, 301, 11, 501), ep(2, 302, 11, 502), ep(3, 303, 11, 503)]);
+      }
+      if (p.table === 'Events') {
+        return Promise.resolve([
+          { Event_ID: 301, Event_Start_Date: '2024-08-25T10:00:00' }, // Sunday before the range
+          { Event_ID: 302, Event_Start_Date: '2024-09-01T10:00:00' }, // Sunday, first day
+          { Event_ID: 303, Event_Start_Date: '2025-08-31T10:00:00' }, // Sunday, day after the range
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    const { weekly } = await priv(svc).getCommunityAttendanceTrends(new Date(2024, 8, 1), new Date(2025, 7, 30));
+    expect(weekly.map(w => w.weekStartDate)).toEqual(['2024-09-01']);
+  });
+
+  it('keys an evening Sunday service by its own day and month, whatever the process zone', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Groups') return Promise.resolve(GROUPS);
+      if (p.table === 'Event_Participants') return Promise.resolve([ep(1, 401, 11, 501)]);
+      if (p.table === 'Events') return Promise.resolve([{ Event_ID: 401, Event_Start_Date: '2025-08-31T19:30:00' }]);
+      return Promise.resolve([]);
+    });
+    for (const tz of ['America/Chicago', 'Pacific/Auckland']) {
+      const { monthly, weekly } = await inTimeZone(tz, async () => {
+        const svc = await newService();
+        return priv(svc).getCommunityAttendanceTrends(new Date(2025, 7, 1), new Date(2025, 7, 31));
+      });
+      expect(weekly.map(w => w.weekStartDate), tz).toEqual(['2025-08-31']);
+      expect(monthly.map(w => w.weekStartDate), tz).toEqual(['2025-08-01']);
+    }
   });
 
   it('returns empty series without further queries when there are no community groups', async () => {
@@ -456,12 +595,29 @@ describe('getCommunityAttendanceTrends', () => {
     expect(inList(events[1].filter)).toHaveLength(50);
   });
 
-  // BUG (reported): swallowed error is cached by getCachedDashboardData.
-  it('CURRENT BEHAVIOUR: swallows an MP failure and returns empty series', async () => {
+  // Was a bug (#304): the catch returned an empty value, which the 'use cache'
+  // caller then cached over the previous good value for at least 6h. Rethrowing
+  // lets both cache layers keep serving the last good data.
+  it('rethrows an MP failure (logged) so the cache keeps its previous value', async () => {
     mockGetTableRecords.mockRejectedValue(new Error('MP down'));
     const svc = await newService();
-    await expect(priv(svc).getCommunityAttendanceTrends(START, END)).resolves.toEqual({ monthly: [], weekly: [] });
-    expect(errorSpy).toHaveBeenCalledWith('Error fetching community attendance trends:', expect.any(Error));
+    await expect(priv(svc).getCommunityAttendanceTrends(START, END)).rejects.toThrow('MP down');
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Error fetching community attendance trends:',
+      expect.stringContaining('MP down'),
+    );
+  });
+
+  it('rejects when the Events read fails after participants were read (no partial result)', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Groups') return Promise.resolve(GROUPS);
+      if (p.table === 'Event_Participants') return Promise.resolve([ep(1, 101, 11, 501)]);
+      if (p.table === 'Events') return Promise.reject(new Error('MP down'));
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    await expect(priv(svc).getCommunityAttendanceTrends(START, END)).rejects.toThrow('MP down');
+    expect(calls('Event_Participants')).toHaveLength(1);
   });
 });
 
@@ -476,8 +632,7 @@ describe('getMonthlyAttendanceTrends', () => {
   const monthOf = (filter: string | undefined): string => {
     const m = /Event_Start_Date >= '([^']+)'/.exec(filter ?? '');
     if (!m) throw new Error(`no start bound in ${filter}`);
-    const d = new Date(m[1]);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    return m[1].slice(0, 7);
   };
 
   beforeEach(() => {
@@ -495,6 +650,17 @@ describe('getMonthlyAttendanceTrends', () => {
     expect(calls('Events').map(c => monthOf(c.filter)).sort()).toEqual(['2025-09', '2025-10', '2025-11']);
   });
 
+  it('caps at the current month in Central time, not UTC', async () => {
+    // 03:00 UTC on Dec 1 is still 21:00 on Nov 30 in Chicago: December has not
+    // started in MP time, so it is not queried. (The old UTC "today" cap
+    // queried an empty December here.)
+    vi.setSystemTime(new Date('2025-12-01T03:00:00Z'));
+    const svc = await newService();
+    const trends = await priv(svc).getMonthlyAttendanceTrends(START, END);
+    expect(trends.map(t => t.month)).toEqual(['2025-09', '2025-10', '2025-11']);
+    expect(calls('Events')).toHaveLength(3);
+  });
+
   it('iterates to endDate when the whole range is in the past', async () => {
     vi.setSystemTime(new Date(2027, 0, 1));
     const svc = await newService();
@@ -508,7 +674,7 @@ describe('getMonthlyAttendanceTrends', () => {
     const svc = await newService();
     await priv(svc).getMonthlyAttendanceTrends(new Date(2025, 9, 20), END);
     const filters = calls('Events').map(c => c.filter!);
-    expect(filters.some(f => f.includes(`Events.Event_Start_Date >= '${isoLocal(2025, 9, 1)}'`))).toBe(true);
+    expect(filters.some(f => f.includes(`Events.Event_Start_Date >= '2025-10-01 00:00:00'`))).toBe(true);
   });
 
   it('queries worship services (type 7, not cancelled) per month, then metrics 2/3 with sanitized IDs', async () => {
@@ -523,11 +689,10 @@ describe('getMonthlyAttendanceTrends', () => {
 
     const sep = calls('Events').find(c => monthOf(c.filter) === '2025-09')!;
     expect(sep.select).toBe('Event_ID');
-    // The end bound is pinned separately below (it encodes a reported bug).
-    expect(sep.filter).toMatch(
-      /^Events\.Event_Start_Date >= '[^']+' AND Events\.Event_End_Date <= '[^']+' AND Events\.Cancelled = 0 AND Events\.Event_Type_ID = 7$/,
+    // Half-open on Event_Start_Date: the whole of Sep 30 is in, Oct 1 is out.
+    expect(sep.filter).toBe(
+      "Events.Event_Start_Date >= '2025-09-01 00:00:00' AND Events.Event_Start_Date < '2025-10-01 00:00:00' AND Events.Cancelled = 0 AND Events.Event_Type_ID = 7",
     );
-    expect(sep.filter).toContain(`Events.Event_Start_Date >= '${isoLocal(2025, 8, 1)}'`);
 
     const metrics = calls('Event_Metrics');
     // Only the month that had events queries metrics
@@ -539,15 +704,38 @@ describe('getMonthlyAttendanceTrends', () => {
     });
   });
 
-  // BUG (reported): the end bound is MIDNIGHT at the start of the last day of
-  // the month, so a service on Sep 30 (or Nov 30 2025 / Aug 31 2025, both
-  // Sundays) ends after it and is excluded from the month. Update this test
-  // when the bound moves to the end of the last day / start of the next month.
-  it('CURRENT BEHAVIOUR: the month end bound is midnight at the start of its last day', async () => {
+  // Was a bug: the month end bound was MIDNIGHT at the start of the month's
+  // last day, so the Sunday services on Nov 30 2025 and Aug 31 2025 fell out
+  // of their month. Rows go through a fake of MP's date predicates, so this
+  // checks the rows returned, not just the filter text.
+  it('counts a service on the last day of the month in that month', async () => {
+    vi.setSystemTime(new Date(2025, 11, 15, 12));
+    const EVENTS = [
+      { Event_ID: 1, Event_Start_Date: '2025-11-30T10:00:00', Event_End_Date: '2025-11-30T11:30:00' },
+      { Event_ID: 2, Event_Start_Date: '2025-11-09T10:00:00', Event_End_Date: '2025-11-09T11:30:00' },
+    ];
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Events') {
+        return Promise.resolve(
+          EVENTS.filter(e => matchesDatePredicates(p.filter, e)).map(e => ({ Event_ID: e.Event_ID })),
+        );
+      }
+      if (p.table === 'Event_Metrics') {
+        const ids = inList(p.filter).map(Number);
+        return Promise.resolve(
+          ids.map(id => ({ Event_ID: id, Metric_ID: 2, Numerical_Value: id === 1 ? 300 : 100 })),
+        );
+      }
+      return Promise.resolve([]);
+    });
     const svc = await newService();
-    await priv(svc).getMonthlyAttendanceTrends(START, END);
-    const sep = calls('Events').find(c => monthOf(c.filter) === '2025-09')!;
-    expect(sep.filter).toContain(`Events.Event_End_Date <= '${isoLocal(2025, 8, 30)}'`);
+    const trends = await priv(svc).getMonthlyAttendanceTrends(START, END);
+
+    const nov = trends.find(t => t.month === '2025-11')!;
+    expect(nov.eventCount).toBe(2);
+    expect(nov.averageInPersonAttendance).toBe(200);
+    expect(trends.find(t => t.month === '2025-10')!.eventCount).toBe(0);
+    expect(trends.find(t => t.month === '2025-12')!.eventCount).toBe(0);
   });
 
   it('averages in-person and online independently over the events that reported each', async () => {
@@ -598,7 +786,10 @@ describe('getMonthlyAttendanceTrends', () => {
     });
   });
 
-  it('keeps successful months when some fail, in month order, and logs the failures', async () => {
+  // Was a #304-class bug: one failed month was dropped and the rest returned,
+  // so the cache stored a series missing that month over a complete one, and
+  // computePeriodMetrics averaged the year without it. Now any failure rejects.
+  it('rejects when one month fails, naming the month in the log', async () => {
     mockGetTableRecords.mockImplementation((p: Call) => {
       if (p.table === 'Events' && monthOf(p.filter) === '2025-10') {
         return Promise.reject(new Error('ConnectTimeoutError'));
@@ -606,29 +797,28 @@ describe('getMonthlyAttendanceTrends', () => {
       return Promise.resolve([]);
     });
     const svc = await newService();
-    const trends = await priv(svc).getMonthlyAttendanceTrends(START, END);
-
-    expect(trends.map(t => t.month)).toEqual(['2025-09', '2025-11']);
-    expect(errorSpy).toHaveBeenCalledWith('Error fetching attendance for one month:', expect.any(Error));
-    expect(warnSpy).toHaveBeenCalledWith('Monthly attendance trends: 1/3 months failed, 2 succeeded');
+    await expect(priv(svc).getMonthlyAttendanceTrends(START, END)).rejects.toThrow(
+      'Monthly attendance trends: 1/3 monthly queries failed',
+    );
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledWith('Error fetching attendance for 2025-10:', expect.stringContaining('ConnectTimeoutError'));
   });
 
-  it('a failed Event_Metrics read fails only that month', async () => {
+  it('rejects when one month\'s Event_Metrics read fails', async () => {
     mockGetTableRecords.mockImplementation((p: Call) => {
       if (p.table === 'Events') return Promise.resolve(monthOf(p.filter) === '2025-11' ? [{ Event_ID: 9 }] : []);
       if (p.table === 'Event_Metrics') return Promise.reject(new Error('500'));
       return Promise.resolve([]);
     });
     const svc = await newService();
-    const trends = await priv(svc).getMonthlyAttendanceTrends(START, END);
-    expect(trends.map(t => t.month)).toEqual(['2025-09', '2025-10']);
+    await expect(priv(svc).getMonthlyAttendanceTrends(START, END)).rejects.toThrow('1/3 monthly queries failed');
   });
 
   it('THROWS when every month fails, so the cache keeps its previous value', async () => {
     mockGetTableRecords.mockRejectedValue(new Error('MP down'));
     const svc = await newService();
     await expect(priv(svc).getMonthlyAttendanceTrends(START, END)).rejects.toThrow(
-      'All 3 monthly attendance queries failed',
+      'Monthly attendance trends: 3/3 monthly queries failed',
     );
   });
 
@@ -696,8 +886,8 @@ describe('getWeeklyAttendanceTrends', () => {
     const [events] = calls('Events');
     expect(events.select).toBe('Event_ID,Event_Start_Date');
     expect(squash(events.filter)).toBe(
-      `Events.Event_Start_Date >= '${START.toISOString()}' AND ` +
-        `Events.Event_End_Date <= '${END.toISOString()}' AND ` +
+      "Events.Event_Start_Date >= '2025-11-01 00:00:00' AND " +
+        "Events.Event_Start_Date < '2025-12-01 00:00:00' AND " +
         'Events.Cancelled = 0 AND Events.Event_Type_ID = 7',
     );
     expect(calls('Event_Metrics')[0]).toEqual({
@@ -705,6 +895,45 @@ describe('getWeeklyAttendanceTrends', () => {
       select: 'Event_ID,Metric_ID,Numerical_Value',
       filter: 'Event_Metrics.Event_ID IN (1) AND Event_Metrics.Metric_ID IN (2, 3)',
     });
+  });
+
+  // Was a bug: `Event_End_Date <= '<Nov 30 00:00>'` dropped the Nov 30 service.
+  it('includes a service on the last day of the range', async () => {
+    const EVENTS = [
+      { Event_ID: 1, Event_Start_Date: '2025-11-30T10:00:00', Event_End_Date: '2025-11-30T11:30:00' },
+      { Event_ID: 2, Event_Start_Date: '2025-12-07T10:00:00', Event_End_Date: '2025-12-07T11:30:00' },
+    ];
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Events') {
+        return Promise.resolve(
+          EVENTS.filter(e => matchesDatePredicates(squash(p.filter), e))
+            .map(({ Event_ID, Event_Start_Date }) => ({ Event_ID, Event_Start_Date })),
+        );
+      }
+      if (p.table === 'Event_Metrics') {
+        return Promise.resolve(inList(p.filter).map(id => ({ Event_ID: Number(id), Metric_ID: 2, Numerical_Value: 250 })));
+      }
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    const trends = await priv(svc).getWeeklyAttendanceTrends(START, END);
+    expect(trends.map(t => t.eventDate)).toEqual(['2025-11-30']);
+    expect(trends[0].inPersonAttendance).toBe(250);
+  });
+
+  it('keys an evening service by its own day, whatever the process zone', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Events') return Promise.resolve([{ Event_ID: 1, Event_Start_Date: '2025-11-30T19:30:00' }]);
+      if (p.table === 'Event_Metrics') return Promise.resolve([{ Event_ID: 1, Metric_ID: 2, Numerical_Value: 90 }]);
+      return Promise.resolve([]);
+    });
+    for (const tz of ['America/Chicago', 'Pacific/Auckland']) {
+      const trends = await inTimeZone(tz, async () => {
+        const svc = await newService();
+        return priv(svc).getWeeklyAttendanceTrends(START, END);
+      });
+      expect(trends.map(t => t.eventDate), tz).toEqual(['2025-11-30']);
+    }
   });
 
   it('returns [] without a metrics query when there are no services', async () => {
@@ -778,12 +1007,30 @@ describe('getWeeklyAttendanceTrends', () => {
     );
   });
 
-  // BUG (reported): swallowed error is cached by getCachedDashboardData.
-  it('CURRENT BEHAVIOUR: swallows an MP failure and returns []', async () => {
+  // Was a bug (#304): the catch returned an empty value, which the 'use cache'
+  // caller then cached over the previous good value for at least 6h. Rethrowing
+  // lets both cache layers keep serving the last good data.
+  it('rethrows an MP failure (logged) so the cache keeps its previous value', async () => {
     mockGetTableRecords.mockRejectedValue(new Error('MP down'));
     const svc = await newService();
-    await expect(priv(svc).getWeeklyAttendanceTrends(START, END)).resolves.toEqual([]);
-    expect(errorSpy).toHaveBeenCalledWith('Error fetching weekly attendance trends:', expect.any(Error));
+    await expect(priv(svc).getWeeklyAttendanceTrends(START, END)).rejects.toThrow('MP down');
+    expect(errorSpy).toHaveBeenCalledWith('Error fetching weekly attendance trends:', expect.stringContaining('MP down'));
+  });
+
+  it('rejects when the second Event_Metrics batch fails (no partial result)', async () => {
+    const events = Array.from({ length: 150 }, (_, i) => ({ Event_ID: i + 1, Event_Start_Date: '2025-11-02T10:00:00' }));
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Events') return Promise.resolve(events);
+      if (p.table === 'Event_Metrics') {
+        return Number(inList(p.filter)[0]) > 100
+          ? Promise.reject(new Error('MP down'))
+          : Promise.resolve([{ Event_ID: 1, Metric_ID: 2, Numerical_Value: 300 }]);
+      }
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    await expect(priv(svc).getWeeklyAttendanceTrends(START, END)).rejects.toThrow('MP down');
+    expect(calls('Event_Metrics')).toHaveLength(2);
   });
 });
 
@@ -807,18 +1054,20 @@ describe('getMilestoneDates', () => {
     expect(mockGetTableRecords).toHaveBeenCalledWith({
       table: 'Participant_Milestones',
       select: 'Date_Accomplished',
-      filter: `Milestone_ID = 3 AND Date_Accomplished >= '${START.toISOString()}' AND Date_Accomplished <= '${END.toISOString()}'`,
+      filter: "Milestone_ID = 3 AND Date_Accomplished >= '2025-09-01 00:00:00' AND Date_Accomplished < '2026-09-01 00:00:00'",
     });
   });
 
-  // BUG (reported): swallowed error is cached by getCachedDashboardData.
-  it('CURRENT BEHAVIOUR: swallows an MP failure and returns []', async () => {
+  // Was a bug (#304): the catch returned an empty value, which the 'use cache'
+  // caller then cached over the previous good value for at least 6h. Rethrowing
+  // lets both cache layers keep serving the last good data.
+  it('rethrows an MP failure (logged) so the cache keeps its previous value', async () => {
     mockGetTableRecords.mockRejectedValue(new Error('MP down'));
     const svc = await newService();
-    await expect(priv(svc).getMilestoneDates(48, START, END)).resolves.toEqual([]);
+    await expect(priv(svc).getMilestoneDates(48, START, END)).rejects.toThrow('MP down');
     expect(errorSpy).toHaveBeenCalledWith(
       'Error fetching milestone dates for Milestone_ID=48:',
-      expect.any(Error),
+      expect.stringContaining('MP down'),
     );
   });
 });
@@ -847,13 +1096,40 @@ describe('getEventParticipantsByMonth', () => {
     expect(calls('Events')[0]).toEqual({
       table: 'Events',
       select: 'Event_ID,Event_Start_Date',
-      filter: `Event_Start_Date >= '${START.toISOString()}' AND Event_End_Date <= '${END.toISOString()}' AND Cancelled = 0`,
+      filter: "Event_Start_Date >= '2025-09-01 00:00:00' AND Event_Start_Date < '2025-12-01 00:00:00' AND Cancelled = 0",
     });
     expect(calls('Event_Participants')[0]).toEqual({
       table: 'Event_Participants',
       select: 'Event_ID,Participant_ID',
       filter: 'Event_ID IN (10,20) AND Participation_Status_ID IN (3, 4)',
     });
+  });
+
+  // Was a bug: the ministry-year end (Aug 31 00:00) dropped every Aug 31 event.
+  it('includes an event on the last day of the ministry year', async () => {
+    const EVENTS = [
+      { Event_ID: 1, Event_Start_Date: '2026-08-31T10:00:00', Event_End_Date: '2026-08-31T12:00:00' },
+      { Event_ID: 2, Event_Start_Date: '2026-09-01T10:00:00', Event_End_Date: '2026-09-01T12:00:00' },
+    ];
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Events') {
+        return Promise.resolve(
+          EVENTS.filter(e => matchesDatePredicates(p.filter, e))
+            .map(({ Event_ID, Event_Start_Date }) => ({ Event_ID, Event_Start_Date })),
+        );
+      }
+      if (p.table === 'Event_Participants') {
+        return Promise.resolve(inList(p.filter).map(id => ({ Event_ID: Number(id), Participant_ID: 900 + Number(id) })));
+      }
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    await expect(
+      priv(svc).getEventParticipantsByMonth(new Date(2025, 8, 1), new Date(2026, 7, 31)),
+    ).resolves.toEqual([{ month: '2026-08', participantIds: [901] }]);
+    expect(calls('Events')[0].filter).toBe(
+      "Event_Start_Date >= '2025-09-01 00:00:00' AND Event_Start_Date < '2026-09-01 00:00:00' AND Cancelled = 0",
+    );
   });
 
   it('returns [] without a participants query when there are no events', async () => {
@@ -902,13 +1178,33 @@ describe('getEventParticipantsByMonth', () => {
     expect(eps[1].filter).toBe('Event_ID IN (101) AND Participation_Status_ID IN (3, 4)');
   });
 
-  // BUG (reported): swallowed error. This path is cached by
-  // getCachedExtendedData ('use cache'), so a failure caches an empty series.
-  it('CURRENT BEHAVIOUR: swallows an MP failure and returns []', async () => {
+  // Was a bug (#304): the catch returned an empty value, which the 'use cache'
+  // caller then cached over the previous good value for at least 6h. Rethrowing
+  // lets both cache layers keep serving the last good data.
+  it('rethrows an MP failure (logged) so the cache keeps its previous value', async () => {
     mockGetTableRecords.mockRejectedValue(new Error('MP down'));
     const svc = await newService();
-    await expect(priv(svc).getEventParticipantsByMonth(START, END)).resolves.toEqual([]);
-    expect(errorSpy).toHaveBeenCalledWith('Error fetching event participants by month:', expect.any(Error));
+    await expect(priv(svc).getEventParticipantsByMonth(START, END)).rejects.toThrow('MP down');
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Error fetching event participants by month:',
+      expect.stringContaining('MP down'),
+    );
+  });
+
+  it('rejects when the second Event_Participants batch fails (no partial result)', async () => {
+    const events = Array.from({ length: 101 }, (_, i) => ({ Event_ID: i + 1, Event_Start_Date: '2025-09-07T10:00:00' }));
+    mockGetTableRecords.mockImplementation((p: Call) => {
+      if (p.table === 'Events') return Promise.resolve(events);
+      if (p.table === 'Event_Participants') {
+        return Number(inList(p.filter)[0]) > 100
+          ? Promise.reject(new Error('MP down'))
+          : Promise.resolve([{ Event_ID: 1, Participant_ID: 7 }]);
+      }
+      return Promise.resolve([]);
+    });
+    const svc = await newService();
+    await expect(priv(svc).getEventParticipantsByMonth(START, END)).rejects.toThrow('MP down');
+    expect(calls('Event_Participants')).toHaveLength(2);
   });
 });
 
@@ -965,6 +1261,32 @@ describe('public wiring', () => {
     expect(data.weeklyCommunityAttendanceTrends).toEqual([]);
   });
 
+  // Was wasteful: the current and previous series were fetched separately, and for
+  // the 5-year range they overlap in 48 months, so those months were queried twice
+  // (about 96 extra MP calls, each one more way to fail the all-or-nothing section).
+  it('getDashboardData queries each month of attendance once and splits it into both periods', async () => {
+    const svc = await newService();
+    stubUnrelated(svc);
+    // Today is Nov 15 2025: the full range Sep 2021 .. Aug 2026, as loadFullRangeData builds it.
+    const data = await svc.getDashboardData(new Date(2021, 8, 1), new Date(2026, 7, 31));
+
+    const monthStarts = calls('Events')
+      .filter((c) => /Event_Type_ID = 7$/.test(c.filter ?? ''))
+      .map((c) => /Event_Start_Date >= '(\d{4}-\d{2})-01 /.exec(c.filter ?? '')![1]);
+    // Sep 2020 (the previous period's start) .. Nov 2025 (capped at today): 63 months.
+    expect(monthStarts).toHaveLength(63);
+    expect(new Set(monthStarts).size).toBe(63);
+    expect(monthStarts[0]).toBe('2020-09');
+    expect(monthStarts.at(-1)).toBe('2025-11');
+
+    const current = data.monthlyAttendanceTrends.map((t) => t.month);
+    expect(current).toHaveLength(51);
+    expect([current[0], current.at(-1)]).toEqual(['2021-09', '2025-11']);
+    const previous = data.previousYearMonthlyAttendanceTrends.map((t) => t.month);
+    expect(previous).toHaveLength(60);
+    expect([previous[0], previous.at(-1)]).toEqual(['2020-09', '2025-08']);
+  });
+
   it('getDashboardData rejects when all monthly attendance fails, rather than returning data to cache', async () => {
     mockGetTableRecords.mockImplementation((p: Call) =>
       p.table === 'Events' && /Event_Type_ID = 7$/.test(p.filter ?? '')
@@ -974,8 +1296,34 @@ describe('public wiring', () => {
     const svc = await newService();
     stubUnrelated(svc);
     await expect(svc.getDashboardData(new Date(2025, 8, 1), new Date(2026, 7, 31))).rejects.toThrow(
-      /monthly attendance queries failed/,
+      /monthly queries failed/,
     );
+  });
+
+  // #304: one DashboardData is one cache entry, so one failed section must
+  // reject the whole result rather than resolve with an empty section.
+  it('getDashboardData rejects when a single milestone read fails', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) =>
+      p.table === 'Participant_Milestones' && /Milestone_ID = 51 /.test(p.filter ?? '')
+        ? Promise.reject(new Error('MP down'))
+        : Promise.resolve([]),
+    );
+    const svc = await newService();
+    stubUnrelated(svc);
+    await expect(svc.getDashboardData(new Date(2025, 8, 1), new Date(2026, 7, 31))).rejects.toThrow('MP down');
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Error fetching milestone dates for Milestone_ID=51:',
+      expect.stringContaining('MP down'),
+    );
+  });
+
+  it('getExtendedDashboardData rejects when the event participants read fails', async () => {
+    mockGetTableRecords.mockImplementation((p: Call) =>
+      p.table === 'Events' ? Promise.reject(new Error('MP down')) : Promise.resolve([]),
+    );
+    const svc = await newService();
+    stubUnrelated(svc);
+    await expect(svc.getExtendedDashboardData(new Date(2025, 8, 1), new Date(2025, 10, 30))).rejects.toThrow('MP down');
   });
 
   it('getExtendedDashboardData returns getEventParticipantsByMonth output', async () => {

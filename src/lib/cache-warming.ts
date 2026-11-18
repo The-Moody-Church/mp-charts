@@ -14,7 +14,6 @@
  *
  * | Function                    | Source File                                      | Revalidate | Stale |
  * |-----------------------------|--------------------------------------------------|------------|-------|
- * | getCachedDashboardData      | src/components/dashboard/cached-data.ts           | 6h         | 24h   |
  * | getCachedFullRangeData      | src/components/dashboard/cached-data.ts           | 6h         | 24h   |
  * | getCachedExtendedData       | src/components/dashboard/cached-data.ts           | 6h         | 24h   |
  * | getCachedEngagementData     | src/components/dashboard/cached-data.ts           | 6h         | 24h   |
@@ -22,18 +21,18 @@
  * | getCachedAllContacts        | src/components/contact-lookup/cached-contacts.ts  | 6h         | 24h   |
  *
  * Note: getCachedGroupTypes is warmed indirectly — it's called internally
- * by DashboardService during getCachedDashboardData/getCachedFullRangeData.
+ * by DashboardService during getCachedFullRangeData/getCachedExtendedData.
  *
  * Note: Summer Blast Volunteers (intake + volunteers) is intentionally NOT cached —
  * staff need fresh data on every page load.
  */
 
 import {
-  getCachedDashboardData,
   getCachedFullRangeData,
   getCachedExtendedData,
   getCachedEngagementData,
 } from '@/components/dashboard/cached-data';
+import { getDashboardRange } from '@/components/dashboard/dashboard-range';
 import { getCachedAllContacts } from '@/components/contact-lookup/cached-contacts';
 
 interface WarmingResult {
@@ -41,34 +40,6 @@ interface WarmingResult {
   status: 'success' | 'error';
   durationMs: number;
   error?: string;
-}
-
-/**
- * Computes the current ministry year.
- * Duplicated from dashboard actions to avoid importing from 'use server' module.
- */
-function getCurrentMinistryYear(): number {
-  const today = new Date();
-  return today.getMonth() >= 8 ? today.getFullYear() : today.getFullYear() - 1;
-}
-
-/**
- * Computes common date parameters used by dashboard cached functions.
- * Mirrors the parameter computation in dashboard server actions.
- *
- * Uses end-of-ministry-year (Aug 31) as end date instead of today,
- * so cache keys are stable within a ministry year — no daily key changes.
- * The service methods cap month iteration at today internally.
- */
-function getDashboardDateParams() {
-  const currentYear = getCurrentMinistryYear();
-  const earliestYear = currentYear - 4;
-
-  const endDateIso = `${currentYear + 1}-08-31`;
-  const fullRangeStartIso = `${earliestYear}-09-01`;
-  const fullRangeEndIso = endDateIso;
-
-  return { currentYear, earliestYear, endDateIso, fullRangeStartIso, fullRangeEndIso };
 }
 
 /**
@@ -92,18 +63,17 @@ async function warmOne(name: string, fn: () => Promise<unknown>): Promise<Warmin
 /**
  * Warms all registered caches. Returns detailed results for each.
  *
- * Dashboard caches run in parallel (Stage 1: core + full range, Stage 2: extended + engagement).
+ * Dashboard caches (full range, extended, engagement) run in parallel.
  * Contact search cache runs in parallel with dashboard caches.
  */
 export async function warmAllCaches(): Promise<WarmingResult[]> {
-  const params = getDashboardDateParams();
+  // The same keys the dashboard actions read (dashboard-range.ts). Only what a
+  // page reads is warmed: every entry here is one more burst of MP calls on each
+  // start and at 6:00, and one more way for the warm to report a partial result.
+  const params = getDashboardRange();
 
   // Run all cache warming in parallel — each is independent
   const results = await Promise.all([
-    // Dashboard: current ministry year
-    warmOne('getCachedDashboardData', () =>
-      getCachedDashboardData(params.currentYear)
-    ),
     // Dashboard: full 5-year range
     warmOne('getCachedFullRangeData', () =>
       getCachedFullRangeData(params.earliestYear, params.endDateIso)

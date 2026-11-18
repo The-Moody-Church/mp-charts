@@ -108,7 +108,7 @@ Server actions in `actions.ts` should call **service classes** (not MPHelper dir
 
 ### Ministry Platform API Concurrency
 
-The MP API (`moody.ministryplatform.com`) has limited connection capacity. **Never fire unbounded parallel requests** — use the `mapWithConcurrency` utility in `dashboardService.ts` to limit concurrent API calls (currently capped at 6). This is especially important for methods that iterate over many months or records.
+The MP API (`moody.ministryplatform.com`) has limited connection capacity. **Never fire unbounded parallel requests** — use the `mapWithConcurrency` utility in `dashboardService.ts` to limit concurrent API calls (currently capped at 6). This is especially important for methods that iterate over many months or records. Both per-month fan-outs use it: `getMonthlyAttendanceTrends` and, since #304, `getEngagementRawData`'s Activity_Log months (~51 for the full range, which used to go out at once). The cap is per method: a full dashboard load still runs the core, extended and engagement fetches side by side (~31 calls at peak).
 
 Without concurrency control, bursts of 50+ simultaneous connections cause `ConnectTimeoutError` (TCP timeout), which can cascade into token refresh failures and silent data loss. This was the root cause of intermittent 0-attendance on the dashboard (fixed 2026-03-15).
 
@@ -135,6 +135,8 @@ MP stores and returns datetimes as **wall-clock values in US Central Time** with
 - **Sending to MP**: `toMpSqlDatetime(value)` in the **service layer**, converting **after** Zod validation, not before. Accepts ISO instants (converted to Central), bare `YYYY-MM-DD` (Central midnight), zone-less datetime-local strings (treated as Central wall-clock), already-SQL strings (idempotent passthrough), and `Date` instances; throws on garbage instead of emitting `NaN`.
 - **Reading from MP (arithmetic)**: `parseMpDatetime(value)` builds the true UTC instant for an MP wall-clock string — use for date diffs, age calcs, range checks. Do NOT use raw `new Date(mpString)`.
 - **Reading from MP (display)**: format with `timeZone: getMpTimezone()` in `toLocaleDateString`/`Intl.DateTimeFormat` options (see `formatDateTime` in `contact-logs.tsx`), or for date-only fields in client components, `parseLocalDate()` (in `contact-lookup-details.tsx`) which builds browser-local midnight from the `YYYY-MM-DD` prefix.
+
+**Date ranges in `$filter` are half-open on MP wall-clock day strings**: `col >= '<startDay> 00:00:00' AND col < '<dayAfter(endDay)> 00:00:00'`, built with `toMpDateRange` / `monthWindows` from `src/lib/providers/ministry-platform/utils/mp-date-range.ts`. Never `<= '<endDay> 00:00:00'` (midnight at the *start* of the last day), never `toISOString()` in a filter, and never `toMpSqlDatetime(callerDate)` on a `new Date(y, m, d)` (it treats the day as a UTC instant and lands on the previous day). In JS (server or browser), compare and bucket MP values as day strings (`value.slice(0, 10)` / `slice(0, 7)`), not `new Date(value)` against a midnight or `.toISOString()`. Details: datetimehandling.md, "Date ranges in `$filter`".
 
 **Date-only values — two live conventions, don't mix them per field**: the contact-log form sends noon UTC (`${date}T12:00:00.000Z`, see `contact-logs.tsx`), which converts to 06:00/07:00 Central same-day regardless of DST; a bare `YYYY-MM-DD` through `toMpSqlDatetime` becomes Central **midnight**. Both keep the calendar day correct — but pick one per field and stay consistent, since the stored times differ.
 

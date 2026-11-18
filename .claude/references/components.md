@@ -131,7 +131,7 @@ Actions are co-located with their feature components:
 | contact-logs | `contact-logs/actions.ts` | `getContactLogTypes`, `createContactLog`, `updateContactLog`, `deleteContactLog` |
 | contact-lookup | `contact-lookup/actions.ts` | `searchContacts` |
 | contact-lookup-details | `contact-lookup-details/actions.ts` | `getContactDetails`, `getContactLogsByContactId` |
-| dashboard | `dashboard/actions.ts` | `getDashboardMetrics`, `getFullRangeDashboardMetrics`, `refreshDashboardCache` |
+| dashboard | `dashboard/actions.ts` | `getFullRangeDashboardMetrics`, `getExtendedDashboardMetrics`, `getEngagementDashboardMetrics`, `refreshDashboardCache` |
 | journey-processing | `journey-processing/actions.ts` | Journey applicant CRUD, milestone operations, pause/resume |
 | manage-members | `manage-members/actions.ts` | Member listing, status transitions, detail operations |
 | user-menu | `user-menu/actions.ts` | `handleSignOut` |

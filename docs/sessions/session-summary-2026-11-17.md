@@ -5,7 +5,7 @@
 Pick up the next follow-up from 2026-11-10: clear the minimatch alert (GHSA-g3hv-75wg-m249, moderate, dev-only) in
 all four repos now that typescript-eslint has moved typescript-estree to `minimatch ^11.0.1`.
 
-## minimatch update — BLOCKED (waiting on picomatch)
+## minimatch update — COMPLETED (in the audit-gate PRs: typescript-eslint 8.73.0, minimatch 11.0.9)
 
 - typescript-eslint shipped the fix as **8.73.0** on 2026-11-16 (not 8.72.3). eslint-config-next takes `^8.56.0`,
   so it is a lockfile-only update. All four repos have the same path: `eslint-config-next@16.4.5` →
@@ -17,7 +17,7 @@ all four repos now that typescript-eslint has moved typescript-estree to `minima
 - **The audit gate then failed** on a new advisory, so the change was discarded rather than held on a red branch.
   Redo it with the picomatch update below, in one `npm update`.
 
-## picomatch GHSA-fc5q-39xc-vjpf — deploys blocked in all four repos
+## picomatch GHSA-fc5q-39xc-vjpf — RESOLVED by the audit-gate change below (deploys unblocked 2026-11-17)
 
 - picomatch `<= 4.0.7`, ReDoS via single-branch repeated extglobs (`+(*)`), CVE-2026-112366, HIGH, **no patched
   version**. Published 2026-10-19, GitHub-reviewed 2026-11-17 15:56 UTC, which is when npm audit started reporting it
@@ -88,7 +88,7 @@ already proves the entry there).
     `verify` step and Dockerfile line, before their entries keep the field; mp-senior-care's guard copy needs the
     same hardening.
 
-## When picomatch ships
+## When picomatch ships (still to do: take the fixed release and drop the allow-list entry)
 
 In each of mp-charts, event-manager, mp-senior-care and music-tools: branch, `npm update` the typescript-eslint
 packages and picomatch (lockfile only, `package.json` unchanged), `node scripts/audit-gate.mjs`, tsc, lint, tests,
@@ -133,6 +133,99 @@ then a PR with a Security Review section. No `:dev` soak needed (dev tooling onl
     ministry year rolls over on UTC (B1).
 - One leftover workflow worktree (no commits, only a `node_modules` link) was removed.
 - Merged as #303 with owner approval over the known picomatch audit failure. Tests only, so no deploy.
+
+## Dashboard: services on the last day of a month — COMPLETED (#310)
+
+- Fixes the ideas.md entry "Dashboard leaves out services held on the last day of a month" (B8, B15, latent B10).
+- New pure module `src/lib/providers/ministry-platform/utils/mp-date-range.ts` (`calendarDay`, `addDays`,
+  `toMpDateRange`, `monthWindows`, `mpMonthKey`) + `mp-date-range.test.ts` (run under TZ UTC, America/Chicago and
+  Asia/Tokyo). Caller `Date`s are inclusive calendar days; every range is half-open on MP wall-clock strings
+  (`>= 'YYYY-MM-DD 00:00:00' AND < '<day after end> 00:00:00'`). Never `toMpSqlDatetime(callerDate)`.
+- `dashboardService.ts`: every date filter moved off `toISOString()` and `<=`. Events filter on `Event_Start_Date` at
+  both ends; span overlaps use `Start_Date < endExclusive AND (End_Date IS NULL OR End_Date >= start)`.
+  `getSmallGroupTrends` steps integer months (no skipped month from a 31st start) and compares MP day strings. The
+  monthly-attendance and Activity_Log "today" caps use the Central current month. Callers and cache keys unchanged
+  (comments only in `cached-data.ts`, `cache-warming.ts`).
+- Tests: trends/core/engagement updated to the new literal filters; new behavioural tests feed MP-shaped rows through a
+  small fake of MP's date predicates (last-day service in monthly, weekly, event participants, community and
+  `getDashboardData` with an Aug 31 midnight end; small-group last-day start and 31st start; Central today cap;
+  engagement final day). Checked against HEAD's service: those tests fail there. Dashboard tests also pass under
+  `TZ=America/Chicago` and `TZ=Asia/Tokyo`.
+- Docs: `datetimehandling.md` gains "Date ranges in `$filter`" (and the stale `dashboardService.ts:574-575` follow-up
+  is replaced by the remaining bucketing-key follow-up); CLAUDE.md Timezone Handling bullet; ideas.md entry COMPLETED.
+- To confirm on the dev soak: the Nov 30 2025 and Aug 31 2025 services now appear (the `'YYYY-MM-DD 00:00:00'` literal
+  relies on MP's us_english DATEFORMAT; the ISO `T` form is the fallback).
+
+## Dashboard: empty data cached when one MP read fails (#304) — COMPLETED (#310)
+
+- All 11 `dashboardService.ts` readers now log (`errorForLog`) and rethrow instead of returning `[]`/zeros/empty Set:
+  the 9 in the ideas.md entry plus `getGroupTypeMetrics` and `getPeriodMetrics`. Legitimately empty MP answers still
+  return empty through their early returns. Only the catch bodies changed (messages kept), so the lastday/dedup hunks
+  in the same methods are untouched.
+- Aggregators (`getDashboardData`, extended, engagement) stay all-or-nothing `Promise.all`, with a comment saying why:
+  each result is one cache entry, so a per-section fallback would cache an empty section.
+- `getEngagementRawData`: Activity_Log months go through `mapWithConcurrency(…, 6, …)` (was ~51 at once), and **any**
+  failed month rejects before Step 2. Decision: all-or-nothing, not the ideas.md text's partial success, because the
+  months are unioned into one Venn set (a dropped month is an invisible undercount). One-line switch if wanted:
+  `failures === months.length`.
+- `service-cache.ts`: a failed background refresh is now `console.warn`ed (keys are server-computed) instead of
+  swallowed silently.
+- Tests: the catch-and-return-empty tests in core/trends/engagement inverted; new per-section `getDashboardData`
+  rejection tests, mid-chain batch failures, Activity_Log max-6-in-flight and ordering tests, a service-cache refresh
+  test, and new `src/components/dashboard/cached-data.test.ts` (real serviceCache: a failed refresh keeps the good
+  roster; a failed cold read caches nothing and the next call re-queries MP). 39 new/inverted tests fail on the
+  pre-fix service (checked by swapping it in).
+- Docs: caching.md ("Never silently return empty data") now states the propagate / per-bucket / all-or-nothing rules;
+  CLAUDE.md MP API Concurrency names the Activity_Log fan-out; ideas.md #304 COMPLETED, and the #304–#306 issue links
+  added to the three completed dashboard entries so the sync closes them instead of opening duplicates.
+- Behaviour change to watch on the soak: on a cold cache an MP failure now shows the error boundary (core) or leaves
+  extended/engagement charts at their defaults, uncached, rather than caching zeros. The `[cache-warm] ✗` log line
+  now appears where a false ✓ used to.
+- Follow-ups (not done): `getPeriodMetrics`' server read looks dead (recomputed client-side); a process-wide MP
+  concurrency limit across the three dashboard fetches (~31 at peak). (`getMonthlyAttendanceTrends`' partial success
+  was fixed in the review follow-ups below.)
+
+## Dashboard fix: review follow-ups (11 findings) — COMPLETED (#310)
+
+Each finding was checked first; all were real (two pairs were the same defect). Fixed, with tests:
+
+- **Last day in the browser** (2 findings): `filter-dashboard-data.ts` compared `new Date(mp)` against the
+  selection's `endDate`, midnight at the start of the last day, so serving/roster/group spans and milestones stamped
+  later that day were still dropped (real MP rows exist). Range checks now compare `'YYYY-MM-DD'` strings
+  (`mpSpanOverlapsDays`, `countDatesInRange`, the per-month serving trend). 9 new tests, passing under UTC, Chicago,
+  Auckland and Los Angeles.
+- **Bucket keys** (2 findings): weekly, community, event-participant and roster-attendance keys are sliced from the MP
+  string, and the Sunday check uses the day string's UTC weekday. The Aug 31 core test failed under
+  `TZ=Pacific/Auckland` before; the three service files now pass under Auckland, Kiritimati, Lord Howe, Chicago and UTC.
+  New "whatever the process zone" tests switch TZ mid-run.
+- **Monthly attendance all-or-nothing** (2 findings): any failed month now rejects (it used to drop the month and
+  cache the rest, skewing `computePeriodMetrics`). Partial-success tests inverted; a `getDashboardData` single-month
+  rejection test added; caching.md no longer names partial success as the pattern.
+- **Refresh keeps the last good value**: new `serviceCache.markForRefresh(prefix)` replaces `deleteByPrefix` in
+  `refreshDashboardCache`: forced foreground fetch, old value kept until it succeeds, one shared in-flight fetch per
+  key. `DashboardShell.handleRefresh` uses `Promise.allSettled`, keeps whatever failed, shows an inline message, and
+  never lets a rejection reach the error boundary. New `dashboard-shell.test.tsx` (8 of 10 fail on the old shell),
+  service-cache and cached-data end-to-end tests.
+- **Failed stages say so**: `extendedError` / `engagementError` make those cards show "could not be loaded" instead of
+  placeholder zeros (the Venn also when extended failed, since its serving circle comes from there).
+- **Warm retry**: new `src/lib/cache-warm-retry.ts`; a warm answered with `success: false` is retried after 1, 3 and 5
+  minutes (startup and 6:00 AM). 8 tests.
+- **Boundary tests**: small-group exclusive month end, community first-day and day-after Sundays. Mutation-checked:
+  `<`→`<=`, `>=`→`>`, `<`→`<=` and reverting the weekly slice each fail a test.
+- Docs: caching.md (refresh rule, all-or-nothing fan-outs, warm retry, stage errors), datetimehandling.md (browser
+  checks, bucket keys; the bucketing-key follow-up removed), CLAUDE.md timezone paragraph, ideas.md #304/#305, status.md.
+
+## Dashboard fix: second review round and soak — COMPLETED (#310)
+
+- Round-2 review (five lenses, two skeptics per finding): 10 findings, 3 confirmed and fixed in `5d95f60`:
+  `refreshDashboardCache`'s `updateTag` re-rendered `/dashboard` inside the action response, where a failed forced fetch
+  reached the error boundary; the previous-period shift rolled Feb 29 to Mar 1; `getDashboardData` read the monthly series
+  twice. The other 7 were refuted by both skeptics.
+- Merged `main` (the audit-gate change) into the branch; conflicts in `vitest.config.ts` and the ideas.md TOC only.
+  After the merge: 1843 tests + 3 `it.fails` (UTC and Central), tsc, lint, the audit gate, the build and
+  `check:standalone` all pass; coverage 59.44 / 50.32 / 50.60 / 60.66, floors raised to 59/50/50/60.
+- Soaked on mptools `:dev` (`c706189`, started 2026-11-18 03:59 UTC): cache warming 4/4 on the first try (0:45.56),
+  307 → `/signin` 200. Owner approved "merge and deploy" 2026-11-18; merged as #310 and deployed to `:latest`.
 
 ## Files changed
 

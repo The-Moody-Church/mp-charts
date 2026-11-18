@@ -12,14 +12,24 @@
  * and during normal 'use cache' function execution.
  */
 
+import { errorForLog } from '@/lib/log-safe';
+
 interface CacheEntry<T = unknown> {
   data: T;
   timestamp: number;
+  /**
+   * Set by markForRefresh(): the next getOrFetch() fetches in the foreground
+   * instead of returning this value, but the value is kept until that fetch
+   * succeeds, so a failed refresh never leaves the key empty.
+   */
+  refreshRequested?: boolean;
 }
 
 class ServiceCache {
   private store = new Map<string, CacheEntry>();
   private refreshing = new Set<string>();
+  /** In-flight forced refreshes, so concurrent callers share one fetch per key. */
+  private forced = new Map<string, Promise<unknown>>();
   /**
    * Upper bound on distinct cache entries. The app's known cached functions use a
    * small, fixed set of keys, so this only ever trips if keys are derived from
@@ -43,8 +53,11 @@ class ServiceCache {
         .then(data => {
           this.store.set(key, { data, timestamp: Date.now() });
         })
-        .catch(() => {
-          // Keep old data on failure — never lose cached data
+        .catch((error) => {
+          // Keep old data on failure — never lose cached data. Log it: callers
+          // already got the stale value, so this line is the only trace of the
+          // failed refresh. Keys are fixed prefixes plus server-computed dates.
+          console.warn('[service-cache] background refresh failed; keeping cached value:', key, errorForLog(error));
         })
         .finally(() => this.refreshing.delete(key));
     }
@@ -87,11 +100,30 @@ class ServiceCache {
   }
 
   /**
+   * Ask for a foreground refresh of every entry whose key starts with `prefix`,
+   * WITHOUT dropping the entries. Used by explicit Refresh actions instead of
+   * deleteByPrefix(): the next getOrFetch() for such a key awaits the fetcher.
+   * - success: the new value replaces the old one and is returned
+   * - failure: the old value stays cached (no longer marked), and the call
+   *   rejects, so the caller can say the refresh failed. The next request is
+   *   served the old value instantly, as after a failed background refresh.
+   */
+  markForRefresh(prefix: string): void {
+    for (const [key, entry] of this.store) {
+      if (key.startsWith(prefix)) entry.refreshRequested = true;
+    }
+  }
+
+  /**
    * Get cached data or fetch if not available.
    * - Cache hit: returns instantly (triggers background refresh if stale)
+   * - Marked by markForRefresh(): awaits the fetcher; keeps the old value if it fails
    * - Cache miss: awaits fetcher, stores result, returns it
    */
   async getOrFetch<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Promise<T> {
+    const entry = this.store.get(key);
+    if (entry?.refreshRequested) return this.forceRefresh(key, entry, fetcher);
+
     const cached = this.get<T>(key, ttlMs, fetcher);
     if (cached !== undefined) return cached;
 
@@ -99,6 +131,26 @@ class ServiceCache {
     const data = await fetcher();
     this.set(key, data);
     return data;
+  }
+
+  private forceRefresh<T>(key: string, entry: CacheEntry, fetcher: () => Promise<T>): Promise<T> {
+    const inFlight = this.forced.get(key);
+    if (inFlight) return inFlight as Promise<T>;
+
+    const p = fetcher()
+      .then((data) => {
+        this.set(key, data);
+        return data;
+      }, (error: unknown) => {
+        // Keep the last good value; stop forcing, so later requests get it instantly
+        // (and the usual TTL background refresh) instead of failing again in the foreground.
+        if (this.store.get(key) === entry) entry.refreshRequested = false;
+        console.warn('[service-cache] forced refresh failed; keeping cached value:', key, errorForLog(error));
+        throw error;
+      })
+      .finally(() => this.forced.delete(key));
+    this.forced.set(key, p);
+    return p;
   }
 }
 

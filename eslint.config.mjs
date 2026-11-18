@@ -77,6 +77,7 @@ const eslintConfig = defineConfig([
     files: [
       "src/instrumentation.ts",
       "src/app/api/cache-warm/route.ts",
+      "src/lib/cache-warm-retry.ts",
     ],
     rules: {
       "no-console": ["error", { allow: ["info", "warn", "error"] }],
