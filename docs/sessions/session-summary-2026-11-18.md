@@ -31,3 +31,13 @@ The two low ideas.md entries left from #302's test findings.
 - The ideas.md sync had opened each entry twice (#307/#317, #308/#318) because the entries carried no issue link.
   #317 and #318 closed as duplicates.
 - PR #319: CI green (security-lint, verify, build-scan-and-push, CodeQL). Owner approved "merge and deploy" 2026-11-18.
+- Merged as #319 (`3ae528c`); main CI green; `:latest` deployed to TMC1 15:54 UTC (labels `branch: main`,
+  `sha: 3ae528c`), cache warming on attempt 1, 307 → `/signin` 200. The sync closed #307 and #308.
+
+## Follow-ups
+
+- picomatch: when GHSA-fc5q-39xc-vjpf has a patched release, take it and drop the allow-list entry (and its
+  `production_via_optional_peer`) in all four repos; the entry's review_by is 2026-12-17.
+- Still open from earlier: #297 (page paths get the proxy's 10 MB body copy), audit LOW items N9–N19, the upstream
+  MPNext review (`75d249d..aa1bc64` not yet logged).
+- Session ended 2026-11-18.
