@@ -228,7 +228,7 @@ route importing a `__mocks__` file all bundled picomatch into a server chunk). T
 `images.remotePatterns`/`localPatterns` matching). It ships in the image as part of `next`, and neither
 npm audit nor the build check can see it. The ReDoS needs an extglob in one of those patterns, which come
 from `next.config.ts`; `src/test-only-imports.test.ts` fails if a pattern contains one (`@(`, `!(`, `?(`,
-`*(`, `+(`), and runtime code may not import that copy. Keep it that way while the advisory is open.
+`*(`, `+(`), and runtime code may not import that copy. Keep it that way: GitHub withdrew the advisory on 2026-11-18, but the guard costs nothing.
 Since 2026-11-18 (N14) `images: { unoptimized: true }` also makes `/_next/image` answer 404 before any
 pattern is matched, so no runtime request reaches the vendored copy at all; it still ships inside `next`.
 
@@ -238,9 +238,10 @@ app never loads. It never excuses an advisory that has a fix: the 2026-11-17 min
 (GHSA-g3hv-75wg-m249 on `@typescript-eslint/typescript-estree`) was fixed by bumping typescript-eslint
 to 8.73, not allow-listed. Without that bump the gate still fails on the mixed root.
 
-**Current entries: one.** GHSA-fc5q-39xc-vjpf (picomatch, HIGH), added 2026-11-17, review by 2026-12-17,
-with `production_via_optional_peer: [{ from: "better-auth", peer: "vitest" }]` (see above). Drop the
-field and the entry once picomatch ships a fix.
+**Current entries: none** (since 2026-11-18). The picomatch entry, GHSA-fc5q-39xc-vjpf (HIGH, added 2026-11-17,
+the only one ever to carry `production_via_optional_peer`), was removed when GitHub **withdrew** the advisory
+on 2026-11-18 and the gate began warning that it no longer appeared in `npm audit`. The picomatch/micromatch
+import refusal and the extglob image-pattern check in `src/test-only-imports.test.ts` stay as cheap guards.
 
 The first entry was GHSA-vfj7-8cjw-p6xm (braces, HIGH), added 2026-10-07 for a lint-toolchain-only path (`eslint-config-next` → `@next/eslint-plugin-next` → `fast-glob` →
 `micromatch` → `braces`) with no patched release. GitHub **withdrew** the advisory by 2026-10-24. The gate then

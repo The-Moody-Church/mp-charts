@@ -7,10 +7,11 @@ import ts from "typescript";
 import { assertProjectFiles, packageNodes, reachProduction, resolveDep } from "../scripts/audit-gate-lib.mjs";
 
 /**
- * The npm audit gate's production_via_optional_peer exception for picomatch
- * (scripts/audit-allowlist.json) proves from package-lock.json that picomatch
- * reaches the production DEPENDENCY GRAPH only through better-auth's OPTIONAL
- * peer on vitest. The graph is not the image: Next's standalone trace copies
+ * The npm audit gate's production_via_optional_peer exception (unused since
+ * 2026-11-18, when the picomatch advisory that needed it was withdrawn) proves
+ * from package-lock.json that a package reaches the production DEPENDENCY GRAPH
+ * only through an OPTIONAL peer, such as better-auth's on vitest. The graph is
+ * not the image: Next's standalone trace copies
  * whatever runtime code imports, and Turbopack bundles it into server chunks.
  *
  * The check that DECIDES is scripts/check-standalone.mjs, run on the build

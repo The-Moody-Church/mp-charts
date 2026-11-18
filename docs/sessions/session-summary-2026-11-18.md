@@ -84,3 +84,14 @@ Branch `security/batch1-headers-proxy`.
   `/` 307, `/signin` 200.
 - **Next:** port batch 1 to event-manager, mp-senior-care and music-db; then batch 2 (auth core). Separately, drop
   the withdrawn picomatch allow-list entry in all four repos.
+
+### Withdrawn picomatch allow-list entry — COMPLETED (PR pending CI)
+
+Branch `chore/drop-withdrawn-picomatch-entry`. GitHub withdrew GHSA-fc5q-39xc-vjpf at 2026-11-18 15:38 UTC
+(`gh api /advisories/GHSA-fc5q-39xc-vjpf` → `withdrawn_at`), and the gate warned the entry was stale.
+- `scripts/audit-allowlist.json` is `[]`. `scripts/audit-gate-lib.test.ts`: the committed list may not contain the
+  picomatch id, and no entry may carry `production_via_optional_peer` (the old pin required exactly that entry).
+  The gate's optional-peer support and the picomatch/extglob guards in `src/test-only-imports.test.ts` stay.
+- Docs: CLAUDE.md (Node Runtime), `.claude/rules/security.md` ("Current entries: none"; the vendored-picomatch guard kept), status.md, and the `src/test-only-imports.test.ts` header comment.
+- Checks: gate `0 stale`, tsc, lint, 1885 tests.
+- Same change going to event-manager, mp-senior-care and music-tools (the three gate files stay byte-identical).
