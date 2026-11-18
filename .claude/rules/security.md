@@ -120,12 +120,14 @@ How it decides, failing closed at every step:
 - **An entry is a dev-only exception, and the gate enforces that.** Whenever an entry is in use (the
   first audit passed with at least one allow-listed finding), the gate runs a second audit of the
   production tree, `npm audit --json --offline=false --omit=dev --include=optional --include=peer`.
-  If an allow-listed advisory appears there at any severity (GHSA id and package), the gate fails
+  If an allow-listed advisory appears there at any severity, the gate fails
   (exit 1): `allow-listed GHSA-… (pkg) now reaches a production dependency; the dev-only exception
-  no longer holds`. Nothing else would catch it: Trivy runs with `ignore-unfixed`, and an advisory
+  no longer holds`. This check matches the GHSA id alone, under any package name or none, so an
+  advisory the production audit files under another package still counts. Nothing else would catch it: Trivy runs with `ignore-unfixed`, and an advisory
   that needs an entry has no fix. (Measured: `npm install micromatch@4.0.8 --save` made braces a
   production dependency, and the gate without this check still exited 0.) That second audit goes
-  through the same retry and fails closed the same way.
+  through the same retry and fails closed the same way. The one exception is an entry carrying
+  `production_via_optional_peer` (below), which is proven from the lockfile instead.
 - The audit endpoint failing (`audit endpoint returned an error`) is retried, 3 attempts 30 s apart,
   then the step **fails** (exit 2). Output that is not a valid report, or an invalid allow-list, also
   fails (exit 2). Violations exit 1. It never passes on an error. npm's error text is echoed with
@@ -137,10 +139,108 @@ How it decides, failing closed at every step:
   `review_by` date, or whose advisory no longer appears in the audit at all, is a `::warning::` (it
   does not fail); each violation is an `::error::` with the package, severity and advisory URLs;
   the production-tree check ends with one line saying no allow-listed advisory reaches it, or an
-  `::error::` per entry that does.
+  `::error::` per entry that does. A proven `production_via_optional_peer` entry is a `::notice::`
+  with the path it was proven on, and the last line then says how many were proven.
 
-**Current entries: none** (`[]`, since 2026-10-24). The first and only entry so far was GHSA-vfj7-8cjw-p6xm (braces, HIGH),
-added 2026-10-07 for a lint-toolchain-only path (`eslint-config-next` → `@next/eslint-plugin-next` → `fast-glob` →
+#### Optional-peer production exception (`production_via_optional_peer`)
+
+**Why it exists.** GHSA-fc5q-39xc-vjpf (picomatch `<=4.0.7`, HIGH, no patched release) reached
+`npm audit` on 2026-11-17 and failed the gate in all four repos. picomatch is dev tooling only
+(vitest, vite, tinyglobby/fdir, the eslint chain), and the standalone image has no npm picomatch. A
+plain entry could not pass, because the production check above still found it: better-auth 1.7
+declares **vitest as an optional peer** (`peerDependenciesMeta.vitest.optional`, used only by
+its `better-auth/test` export, `dist/test-utils`). vitest is also a devDependency, so npm marks it `devOptional`, and
+`--omit=dev` keeps it with its whole subtree. `--omit=peer` leaves it there too, and
+`--omit=optional` would also hide shipped optional packages such as sharp's platform binaries.
+
+**What it says.** An entry may carry `"production_via_optional_peer": [{ "from": "better-auth",
+"peer": "vitest" }]`: 1 to 4 exact **(from, peer) edges**, never package names on their own. It
+means "this advisory may appear in `npm audit --omit=dev` only through the optional-peer edge(s)
+named here". `from`/`peer` must be plain lowercase npm names (no paths, `..`, `node_modules`,
+whitespace or wildcards), `from` may not be the advisory's own package, and an entry carrying the
+field must have `review_by` **at most 45 days** after `added`. An entry without the field behaves
+exactly as before. A test pins which entry may carry the field and with which edge, so widening it
+needs a reviewed test change too.
+
+**How the gate proves it.** Only when the production audit lists an entry carrying the field, the
+gate reads `package-lock.json` and `package.json`. `audit-gate.mjs` serves `readProjectFile` those
+two names and nothing else. Then:
+
+1. The lockfile must be `lockfileVersion` 3, with no legacy `dependencies`, no workspaces or links,
+   only `node_modules/...` keys, and a root identical to `package.json` (dependencies, dev,
+   optional, peer and peer meta).
+2. **Model check.** The gate reaches the production graph from the root over `dependencies`,
+   `optionalDependencies` and `peerDependencies`, never devDependencies. It resolves each edge the
+   way npm's Arborist does (`Node.resolve`: own `node_modules` child first, then each ancestor's),
+   and loads edge types in Arborist's `loadDeps` order. The set it reaches must equal npm's own
+   non-`dev` nodes in the lockfile (`calcDepFlags`), in both directions, or the gate stops.
+3. Every node `npm audit --omit=dev` reports for the package must be a real, non-dev lockfile node
+   of it, and the advisory may not appear under any other package name.
+4. Every production copy of `from` must be the real package (not an alias or bundled), declare
+   `peer` in `peerDependencies` with `peerDependenciesMeta[peer].optional === true` (the boolean),
+   and not also list it as a dependency. The edge must resolve to a production node.
+5. **The proof.** With exactly those (from, peer) `peerOptional` edges removed, `from` must still be
+   reachable, and **no node of the package, of any version and by installed or real name**, may be
+   reachable. Any one that is reachable is reported with a shortest witness path, such as
+   `root -dep-> node_modules/micromatch -dep-> node_modules/picomatch`.
+
+Exit 2 (could not verify): a project file that cannot be read or parsed, a lockfile that fails
+step 1, a model disagreement, an unresolved required edge, or a report that does not bind to the
+lockfile (step 3; locally, a stale `node_modules` lands here). Exit 1 (violation): a broken premise
+(step 4) or any witness path (step 5). A plain entry that is exposed, or an exposed proof, beats an
+unprovable one, so the gate exits 1. The full-tree rules are unchanged: a mixed root still fails.
+
+**What it does not cover, and the build check that does.** The proof is about the dependency graph, not
+the image. Next's standalone trace copies, and Turbopack bundles, whatever runtime code loads, so an app
+import of `vitest`, `better-auth/test`, `tinyglobby`, `vite`, `fdir` or `picomatch`, or an
+`outputFileTracingIncludes` glob, would put picomatch in the image while the gate passed (a 2026-11-17
+review built exactly that: `createRequire(...)("picomatch")`, `@/../node_modules/picomatch/index.js` and a
+route importing a `__mocks__` file all bundled picomatch into a server chunk). Two repo-local checks close it:
+
+- **`scripts/check-standalone.mjs`, the one that decides** (`npm run check:standalone`; rule and tests in
+  `scripts/standalone-check-lib.mjs` / `.test.ts`). It runs on the build output, after `npm run build`, in
+  the `verify` job and again in the Dockerfile's builder stage, so the build the runner copies is the one
+  checked. Every npm file the server build ships must belong to a lockfile node reachable over production
+  edges **with every optional-peer edge removed**: each file copied into `.next/standalone/node_modules`,
+  each node_modules file in a `.next/**/*.nft.json` trace, and each module Turbopack bundled into a
+  shipped `.next/server` chunk, read from the chunk's source map. Exit 1 names the node and where it was
+  seen; exit 2 (could not verify) for a missing standalone dir, a server chunk without a source map (Next
+  writes them by default; turning them off fails this step), a map source it cannot place, or a lockfile
+  out of sync. Two notices, not failures: a lone `package.json` of an unshipped node (Next's trace records
+  `node_modules/semver/package.json` while resolving sharp's own semver: metadata, no code), and bundled
+  source names that a package's own source map invented (lucide-react's maps name `../shared/src`), which
+  fail only if they name a package outside the shipped graph. Client chunks (`.next/static`) run in the
+  browser, have no maps in production, and are not checked.
+- **`src/test-only-imports.test.ts`, the early warning** at `npm run test:run` time. Every module reference
+  in runtime code (src/** outside tests, plus the root runtime files `cache-handler.js` and
+  `next.config.ts`; any new root-level source file must be classified) must be a Node builtin, a
+  package.json `dependencies` entry (or a listed transitive exception, today only `@better-auth/core`) that
+  resolves to a lockfile node reachable without any optional-peer edge, or a relative/`@/` path that
+  **resolves** to a file inside src/ that is not a test, mock (`__mocks__`/`__tests__`) or test-setup file.
+  References are import/export, `import()`, `require()`, `require.resolve()`, `module.require()`,
+  `import.meta.resolve()` and `@jsxImportSource` pragmas, each with a literal; `createRequire` and
+  `require`/`module.require` passed around as a value are refused outright. `better-auth/test` is refused
+  by name, and so is **every picomatch or micromatch specifier**, Next's vendored one included. It also
+  pins the options `next.config.ts` sets (a new one, such as `outputFileTracingIncludes`,
+  `serverExternalPackages`, `turbopack`, `webpack` or `images`, fails until reviewed and listed).
+
+**Next itself vendors picomatch 4** (`next/dist/compiled/picomatch`, used by
+`images.remotePatterns`/`localPatterns` matching). It ships in the image as part of `next`, and neither
+npm audit nor the build check can see it. The ReDoS needs an extglob in one of those patterns, which come
+from `next.config.ts`; `src/test-only-imports.test.ts` fails if a pattern contains one (`@(`, `!(`, `?(`,
+`*(`, `+(`), and runtime code may not import that copy. Keep it that way while the advisory is open.
+
+**Adding a new edge** needs the same PR evidence as an entry, plus the dependency path through the
+edge and the lockfile's `peerDependenciesMeta` for `from`. Use it only for an optional peer that the
+app never loads. It never excuses an advisory that has a fix: the 2026-11-17 minimatch co-root
+(GHSA-g3hv-75wg-m249 on `@typescript-eslint/typescript-estree`) was fixed by bumping typescript-eslint
+to 8.73, not allow-listed. Without that bump the gate still fails on the mixed root.
+
+**Current entries: one.** GHSA-fc5q-39xc-vjpf (picomatch, HIGH), added 2026-11-17, review by 2026-12-17,
+with `production_via_optional_peer: [{ from: "better-auth", peer: "vitest" }]` (see above). Drop the
+field and the entry once picomatch ships a fix.
+
+The first entry was GHSA-vfj7-8cjw-p6xm (braces, HIGH), added 2026-10-07 for a lint-toolchain-only path (`eslint-config-next` → `@next/eslint-plugin-next` → `fast-glob` →
 `micromatch` → `braces`) with no patched release. GitHub **withdrew** the advisory by 2026-10-24. The gate then
 warned that the entry no longer appeared in `npm audit`, as designed, and it was removed.
 
@@ -148,13 +248,17 @@ warned that the entry no longer appeared in `npm audit`, as designed, and it was
 production image. Prefer a fix every time: a patched release, a lockfile update within range, or an
 `overrides` entry. The advisory must be absent from `npm audit --omit=dev`; if it is not, the gate
 fails however the entry is written, and that is deliberate: shipping a known-vulnerable package is a
-bigger decision than a JSON line, and needs a change to the gate itself. An entry is:
+bigger decision than a JSON line. The only exception is an advisory that reaches `--omit=dev` solely
+through an optional peer, proven by `production_via_optional_peer` (above). An entry is:
 
 ```json
 { "id": "GHSA-xxxx-xxxx-xxxx", "package": "<the package the advisory is filed against>",
   "reason": "<why it is safe to ship: the path, why no fix, why not in the image>",
-  "added": "YYYY-MM-DD", "review_by": "YYYY-MM-DD" }
+  "added": "YYYY-MM-DD", "review_by": "YYYY-MM-DD",
+  "production_via_optional_peer": [{ "from": "<npm name>", "peer": "<npm name>" }] }
 ```
+
+The last field is optional; leave it out unless the production check needs it.
 
 `review_by` must be after `added`; keep it about a month out. The gate refuses the whole file (exit 2)
 if any field is missing or malformed, an id repeats, or an unknown field appears. Put the evidence in
@@ -165,8 +269,17 @@ patched release (or a Next release whose `@next/eslint-plugin-next` no longer pi
 chain). If one exists, take it and delete the entry; if not, re-confirm the reasoning and move
 `review_by` forward in a PR that says so. When the run warns an entry *no longer appears in npm
 audit*, the dependency was fixed or removed — delete the entry. An empty list (`[]`) is valid. If
-the gate fails with *now reaches a production dependency*, find the new production path
-(`npm ls <package> --omit=dev`) and remove it; do not widen the exception.
+the gate fails with *now reaches a production dependency*, or *reaches a production dependency outside
+its declared optional peer edge(s)*, find the new production path (the witness, or
+`npm ls <package> --omit=dev`) and remove it; do not widen the exception. When the run warns that an
+entry's advisory *no longer appears in npm audit --omit=dev*, remove `production_via_optional_peer`
+from it (the entry is then an ordinary dev-only one). The gate only warns there, but the unit test
+`this repository's package-lock.json > <id> is in production only through its declared optional-peer
+edges` (part of `npm run test:run`, so it blocks `verify`) **fails** as soon as no node of the
+entry's package is in the lockfile's production tree, with the message `remove
+production_via_optional_peer from this entry`. That is deliberate: the field is removed in the same
+PR that makes it unused (for example a better-auth release that drops its vitest peer, which a
+Dependabot PR would otherwise merge with the field left behind).
 
 Do **not** add `continue-on-error`, `|| true` or a raw `npm audit` call back to either workflow; the
 "CI wiring" tests in `scripts/audit-gate-lib.test.ts` fail if you do.

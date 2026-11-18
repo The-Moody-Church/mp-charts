@@ -26,13 +26,30 @@
  *   else is a violation.
  * - An allow-list entry is a DEV-ONLY exception. Whenever one is in use, the
  *   gate audits the production tree too (`npm audit --omit=dev`); if an
- *   allow-listed advisory shows up there at any severity, the premise of the
- *   entry no longer holds and the gate fails. Trivy cannot catch that case: it
+ *   allow-listed advisory's GHSA id shows up there at any severity, under any
+ *   package name or none, the premise of the entry no longer holds and the
+ *   gate fails. Trivy cannot catch that case: it
  *   runs with `ignore-unfixed`, and an allow-listed advisory has no fix.
+ * - The one opt-in exception to that: an entry may carry
+ *   `production_via_optional_peer`, a list of exact (from, peer) edges, each an
+ *   OPTIONAL peer dependency that a production package declares (better-auth
+ *   1.7 declares vitest as one, so npm marks vitest devOptional and keeps it in
+ *   `--omit=dev`). When such an entry's advisory is in the production audit,
+ *   the gate reads package-lock.json and package.json (through the injected
+ *   `readProjectFile`, which serves only those two names) and must PROVE, from
+ *   the lockfile, that every node of the package is reachable from the root's
+ *   production edges only through those declared edges. The proof models
+ *   npm's own resolution (Arborist `Node.resolve`) and is first checked
+ *   against npm's dev flags in the lockfile (`calcDepFlags`): any
+ *   disagreement, a lockfile that is not v3 or does not match package.json,
+ *   or a report that does not bind to the lockfile is EXIT_UNVERIFIED (2).
+ *   A broken premise, or any path that avoids the declared edges, is
+ *   EXIT_VIOLATION (1) with witness paths.
  *
  * Everything here is pure (no I/O, no clock, no process) so it can be unit
- * tested; `audit-gate.mjs` supplies npm, the allow-list file, the date, sleep
- * and stdout. Plain ESM so node runs it without a build step.
+ * tested; `audit-gate.mjs` supplies npm, the allow-list file, the two project
+ * files, the date, sleep and stdout. Plain ESM so node runs it without a
+ * build step.
  */
 
 /** Severities the gate fails on — the old `--audit-level=high`. */
@@ -99,7 +116,11 @@ const GHSA_IN_TEXT = /GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}/gi;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
- * @typedef {{ id: string, package: string, reason: string, added: string, review_by: string }} AllowlistEntry
+ * @typedef {{ from: string, peer: string }} OptionalPeerEdge
+ * @typedef {{ id: string, package: string, reason: string, added: string, review_by: string, production_via_optional_peer?: OptionalPeerEdge[] }} AllowlistEntry
+ * @typedef {{ kind: "proven", targets: string[], nodes: string[], paths: string[] } | { kind: "exposed", witnesses: string[], reasons: string[], problems: string[] } | { kind: "unprovable", problems: string[] }} ProofResult
+ * @typedef {ProofResult & { entry: AllowlistEntry }} EntryProof
+ * @typedef {{ reached: Set<string>, pathTo: (loc: string) => string }} Reach
  * @typedef {{ id: string | null, package: string | null, title: string | null, url: string | null, severity: string | null, allowListed: boolean }} RootAdvisory
  * @typedef {{ name: string, severity: string, nodes: string[], advisories: RootAdvisory[], entries: AllowlistEntry[] }} AllowedFinding
  * @typedef {{ name: string, severity: string, nodes: string[], advisories: RootAdvisory[], problems: string[] }} Violation
@@ -155,6 +176,69 @@ export function advisoryGhsaId(advisory) {
   return found.size === 1 ? [...found][0] : null;
 }
 
+/** The opt-in allow-list field: exact optional-peer edges, proven from the lockfile. */
+export const OPTIONAL_PEER_FIELD = "production_via_optional_peer";
+
+/** At most this many (from, peer) edges per entry. */
+export const MAX_OPTIONAL_PEER_EDGES = 4;
+
+/** An entry carrying OPTIONAL_PEER_FIELD must be reviewed within this many days of `added`. */
+export const OPTIONAL_PEER_MAX_REVIEW_DAYS = 45;
+
+/** A plain npm package name: lowercase, optionally scoped, no path tricks. */
+const NPM_NAME = /^(?:@[a-z0-9~-][a-z0-9._~-]*\/)?[a-z0-9~-][a-z0-9._~-]*$/;
+
+/** @param {unknown} value */
+function isPlainNpmName(value) {
+  return (
+    typeof value === "string" &&
+    value.length <= 214 &&
+    NPM_NAME.test(value) &&
+    !value.includes("..") &&
+    !value.includes("node_modules")
+  );
+}
+
+/**
+ * Throws unless `entry[OPTIONAL_PEER_FIELD]` is well formed. Called only when
+ * the key is present, after the entry's other fields have validated.
+ * @param {Record<string, any>} entry
+ * @param {string} where
+ */
+function validateOptionalPeerField(entry, where) {
+  const edges = entry[OPTIONAL_PEER_FIELD];
+  if (!Array.isArray(edges) || edges.length < 1 || edges.length > MAX_OPTIONAL_PEER_EDGES) {
+    throw new Error(
+      `${where}: "${OPTIONAL_PEER_FIELD}" must be an array of 1 to ${MAX_OPTIONAL_PEER_EDGES} {"from", "peer"} objects`,
+    );
+  }
+  const seen = new Set();
+  edges.forEach((edge, i) => {
+    const at = `${where}: "${OPTIONAL_PEER_FIELD}"[${i}]`;
+    if (!isPlainObject(edge)) throw new Error(`${at} must be an object`);
+    const keys = Object.keys(edge).sort();
+    if (keys.length !== 2 || keys[0] !== "from" || keys[1] !== "peer") {
+      throw new Error(`${at} must have exactly the keys "from" and "peer"`);
+    }
+    for (const key of ["from", "peer"]) {
+      if (!isPlainNpmName(edge[key])) {
+        throw new Error(`${at}: "${key}" must be a plain lowercase npm package name`);
+      }
+    }
+    if (edge.from === edge.peer) throw new Error(`${at}: "from" and "peer" must differ`);
+    if (edge.from === entry.package) throw new Error(`${at}: "from" must not be the advisory's own package`);
+    const pair = JSON.stringify([edge.from, edge.peer]);
+    if (seen.has(pair)) throw new Error(`${at}: duplicate edge ${edge.from} > ${edge.peer}`);
+    seen.add(pair);
+  });
+  const days = (Date.parse(`${entry.review_by}T00:00:00Z`) - Date.parse(`${entry.added}T00:00:00Z`)) / 86_400_000;
+  if (days > OPTIONAL_PEER_MAX_REVIEW_DAYS) {
+    throw new Error(
+      `${where}: an entry with "${OPTIONAL_PEER_FIELD}" must have "review_by" at most ${OPTIONAL_PEER_MAX_REVIEW_DAYS} days after "added"`,
+    );
+  }
+}
+
 /**
  * Throws unless `allowlist` is a well-formed allow-list. An invalid file must
  * stop the gate, never be read as "nothing allow-listed" or as "allow all".
@@ -169,7 +253,7 @@ export function validateAllowlist(allowlist) {
   allowlist.forEach((entry, index) => {
     const where = `audit allow-list entry ${index}`;
     if (!isPlainObject(entry)) throw new Error(`${where} must be an object`);
-    const allowed = ["id", "package", "reason", "added", "review_by"];
+    const allowed = ["id", "package", "reason", "added", "review_by", OPTIONAL_PEER_FIELD];
     for (const key of Object.keys(entry)) {
       if (!allowed.includes(key)) throw new Error(`${where} has unknown field "${key}"`);
     }
@@ -189,6 +273,7 @@ export function validateAllowlist(allowlist) {
     if (entry.review_by <= entry.added) {
       throw new Error(`${where} (${entry.id}): "review_by" must be after "added"`);
     }
+    if (Object.hasOwn(entry, OPTIONAL_PEER_FIELD)) validateOptionalPeerField(entry, `${where} (${entry.id})`);
     const id = normalizeGhsaId(entry.id);
     if (seen.has(id)) throw new Error(`${where}: duplicate id ${entry.id}`);
     seen.add(id);
@@ -389,11 +474,16 @@ function reportAdvisories(vulnerabilities) {
 }
 
 /**
- * The allow-list entries whose advisory (GHSA id AND package) appears, at any
- * severity, in a PRODUCTION-ONLY audit report (`npm audit --omit=dev`). Every
- * entry is a dev-only exception, so any entry returned here no longer holds
- * and the gate must fail. Validates the report and the allow-list the same
- * way `evaluateAudit` does, and throws rather than read a bad report as clean.
+ * The allow-list entries whose advisory appears, at any severity, in a
+ * PRODUCTION-ONLY audit report (`npm audit --omit=dev`). Matched on the GHSA
+ * id ALONE, under any package name or none: an advisory the production audit
+ * files under a different (or missing) package than the entry's is still in
+ * production, and must not read as absent. Every entry is a dev-only
+ * exception, so any entry returned here no longer holds and the gate must
+ * fail, unless it carries OPTIONAL_PEER_FIELD, whose proof then refuses a
+ * report that files the id under another package (exit 2). Validates the
+ * report and the allow-list the same way `evaluateAudit` does, and throws
+ * rather than read a bad report as clean.
  * @param {unknown} prodAuditJson parsed `npm audit --json --omit=dev` output
  * @param {unknown} allowlist parsed `scripts/audit-allowlist.json`
  * @returns {AllowlistEntry[]}
@@ -401,10 +491,343 @@ function reportAdvisories(vulnerabilities) {
 export function productionExposedEntries(prodAuditJson, allowlist) {
   const report = assertAuditReport(prodAuditJson);
   const entries = validateAllowlist(allowlist);
-  const present = new Set(
-    reportAdvisories(report.vulnerabilities).map((a) => JSON.stringify([a.id, a.package])),
+  const present = new Set(reportAdvisories(report.vulnerabilities).map((a) => a.id));
+  return entries.filter((e) => present.has(normalizeGhsaId(e.id)));
+}
+
+// ---------------------------------------------------------------------------
+// production_via_optional_peer: the lockfile proof
+//
+// Models what npm 11's Arborist does with a v3 lockfile (verified against
+// @npmcli/arborist in npm 11.19.1):
+// - node.js `loadDeps`: a node's edges are its peerDependencies (type `peer`,
+//   or `peerOptional` when peerDependenciesMeta[name].optional), then
+//   dependencies (`prod`), then optionalDependencies (`optional`), each later
+//   type replacing an earlier edge of the same name; devDependencies only for
+//   the root, last.
+// - edge.js: every edge, peers included, resolves with `from.resolve(name)`,
+//   which is node.js `resolve`: the node's own node_modules child, then each
+//   resolveParent's, up to the root.
+// - calc-dep-flags.js: `dev` is cleared across every non-dev edge whose target
+//   exists, from the root outwards, so the non-dev nodes are exactly those
+//   reachable from the root over non-dev edges.
+// The model is never trusted on its own: `checkProductionModel` requires it to
+// reproduce npm's own dev flags in the lockfile exactly.
+// ---------------------------------------------------------------------------
+
+const NODE_PATH = /^(node_modules\/(@[^/]+\/)?[^/]+\/)*node_modules\/(@[^/]+\/)?[^/]+$/;
+const NODE_MODULES = "node_modules/";
+
+/** Key-sorted JSON, for comparing package.json fields with the lockfile root. @param {unknown} value @returns {string} */
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (isPlainObject(value)) {
+    return `{${Object.keys(value)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${canonicalJson(value[k])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/** @param {unknown} value */
+function isStringMap(value) {
+  return isPlainObject(value) && Object.values(value).every((v) => typeof v === "string");
+}
+
+/**
+ * Throws unless `lock` is a v3 package-lock.json whose shape the proof can
+ * model, and whose root matches `pj` (package.json).
+ * @param {unknown} lock parsed package-lock.json
+ * @param {unknown} pj parsed package.json
+ * @returns {Record<string, Record<string, any>>} lock.packages
+ */
+export function assertProjectFiles(lock, pj) {
+  if (!isPlainObject(lock)) throw new Error("package-lock.json is not a JSON object");
+  if (lock.lockfileVersion !== 3) {
+    throw new Error(`package-lock.json: lockfileVersion must be 3, got ${JSON.stringify(lock.lockfileVersion ?? null)}`);
+  }
+  if (Object.hasOwn(lock, "dependencies")) {
+    throw new Error('package-lock.json has a legacy top-level "dependencies" section');
+  }
+  const packages = lock.packages;
+  if (!isPlainObject(packages)) throw new Error('package-lock.json has no "packages" object');
+  if (!isPlainObject(packages[""])) throw new Error('package-lock.json has no root package ("")');
+  if (!isPlainObject(pj)) throw new Error("package.json is not a JSON object");
+  if (Object.hasOwn(pj, "workspaces") || Object.hasOwn(packages[""], "workspaces")) {
+    throw new Error("package-lock.json: workspaces are not supported by the optional-peer proof");
+  }
+  for (const [loc, node] of Object.entries(packages)) {
+    if (loc !== "" && !NODE_PATH.test(loc)) throw new Error(`package-lock.json: ${JSON.stringify(loc)} is not a node_modules path`);
+    if (!isPlainObject(node)) throw new Error(`package-lock.json: ${JSON.stringify(loc)} is not an object`);
+    if (node.link === true) throw new Error(`package-lock.json: ${JSON.stringify(loc)} is a link`);
+    for (const key of ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"]) {
+      if (node[key] !== undefined && !isStringMap(node[key])) {
+        throw new Error(`package-lock.json: ${JSON.stringify(loc)} has a malformed "${key}"`);
+      }
+    }
+    const meta = node.peerDependenciesMeta;
+    if (meta !== undefined && !(isPlainObject(meta) && Object.values(meta).every(isPlainObject))) {
+      throw new Error(`package-lock.json: ${JSON.stringify(loc)} has a malformed "peerDependenciesMeta"`);
+    }
+  }
+  for (const key of ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies", "peerDependenciesMeta"]) {
+    if (canonicalJson(pj[key] ?? {}) !== canonicalJson(packages[""][key] ?? {})) {
+      throw new Error(`package-lock.json is out of sync with package.json ("${key}" differs)`);
+    }
+  }
+  return packages;
+}
+
+/** The name a lockfile location is installed under (scope kept). @param {string} loc */
+export function installedName(loc) {
+  return loc.slice(loc.lastIndexOf(NODE_MODULES) + NODE_MODULES.length);
+}
+
+/** The package's real name: `name` in the lockfile (an alias), else the installed name. @param {Record<string, any>} packages @param {string} loc */
+function realName(packages, loc) {
+  return typeof packages[loc]?.name === "string" ? packages[loc].name : installedName(loc);
+}
+
+/** True when `loc` is a node of `pkg` by either name — over-inclusive on purpose. @param {Record<string, any>} packages @param {string} loc @param {string} pkg */
+function isPackageNode(packages, loc, pkg) {
+  return loc !== "" && (installedName(loc) === pkg || realName(packages, loc) === pkg);
+}
+
+/**
+ * Every lockfile node of `pkg`, any version, by installed or real name.
+ * @param {Record<string, any>} packages @param {string} pkg
+ */
+export function packageNodes(packages, pkg) {
+  return Object.keys(packages).filter((loc) => isPackageNode(packages, loc, pkg));
+}
+
+/**
+ * Arborist's `Node.resolve(name)` over lockfile keys: the node's own
+ * node_modules child, then each ancestor's, then the root's.
+ * @param {Record<string, any>} packages
+ * @param {string} fromLoc "" for the root
+ * @param {string} name
+ * @returns {string | null}
+ */
+export function resolveDep(packages, fromLoc, name) {
+  let loc = fromLoc;
+  while (loc !== "") {
+    const candidate = `${loc}/${NODE_MODULES}${name}`;
+    if (Object.hasOwn(packages, candidate)) return candidate;
+    const cut = loc.lastIndexOf(`/${NODE_MODULES}`);
+    loc = cut === -1 ? "" : loc.slice(0, cut);
+  }
+  const top = `${NODE_MODULES}${name}`;
+  return Object.hasOwn(packages, top) ? top : null;
+}
+
+/**
+ * One node's out-edges as Arborist loads them, name -> type.
+ * @param {Record<string, any>} node @param {boolean} isRoot
+ * @returns {Map<string, "peer" | "peerOptional" | "dep" | "optional" | "dev">}
+ */
+function edgesOut(node, isRoot) {
+  /** @type {Map<string, "peer" | "peerOptional" | "dep" | "optional" | "dev">} */
+  const edges = new Map();
+  const meta = node.peerDependenciesMeta ?? {};
+  for (const name of Object.keys(node.peerDependencies ?? {})) {
+    edges.set(name, meta[name]?.optional === true ? "peerOptional" : "peer");
+  }
+  for (const name of Object.keys(node.dependencies ?? {})) edges.set(name, "dep");
+  for (const name of Object.keys(node.optionalDependencies ?? {})) edges.set(name, "optional");
+  if (isRoot) for (const name of Object.keys(node.devDependencies ?? {})) edges.set(name, "dev");
+  return edges;
+}
+
+/**
+ * Breadth-first reach from the root over production edges (never dev). A
+ * required edge (dep, peer) that resolves to nothing throws; an optional or
+ * peerOptional one is simply absent, as in calcDepFlags. `skip` removes
+ * individual edges.
+ * @param {Record<string, any>} packages
+ * @param {(loc: string, name: string, type: string) => boolean} [skip]
+ * @returns {Reach}
+ */
+export function reachProduction(packages, skip = () => false) {
+  /** @type {Map<string, { prev: string, type: string } | null>} */
+  const parent = new Map([["", null]]);
+  const queue = [""];
+  for (let i = 0; i < queue.length; i++) {
+    const loc = queue[i];
+    for (const [name, type] of edgesOut(packages[loc], loc === "")) {
+      if (type === "dev" || skip(loc, name, type)) continue;
+      const to = resolveDep(packages, loc, name);
+      if (to === null) {
+        if (type === "dep" || type === "peer") {
+          throw new Error(`package-lock.json: ${loc === "" ? "the root" : loc} requires ${name}, which does not resolve`);
+        }
+        continue;
+      }
+      if (parent.has(to)) continue;
+      parent.set(to, { prev: loc, type });
+      queue.push(to);
+    }
+  }
+  return {
+    reached: new Set(parent.keys()),
+    pathTo(loc) {
+      const parts = [];
+      let cur = loc;
+      for (let step = parent.get(cur); step; step = parent.get(cur)) {
+        parts.unshift(`-${step.type}-> ${cur}`);
+        cur = step.prev;
+      }
+      return ["root", ...parts].join(" ");
+    },
+  };
+}
+
+/**
+ * Reaches the production graph and requires it to equal npm's own non-dev
+ * set in the lockfile. Throws on any disagreement (the model, or the lockfile,
+ * cannot be trusted). Returns the reach, root included.
+ * @param {Record<string, any>} packages from `assertProjectFiles`
+ * @returns {Reach}
+ */
+export function checkProductionModel(packages) {
+  const model = reachProduction(packages);
+  const npmProd = new Set(Object.keys(packages).filter((loc) => loc !== "" && packages[loc].dev !== true));
+  const modelOnly = [...model.reached].filter((loc) => loc !== "" && !npmProd.has(loc));
+  const npmOnly = [...npmProd].filter((loc) => !model.reached.has(loc));
+  if (modelOnly.length > 0 || npmOnly.length > 0) {
+    const list = (/** @type {string[]} */ locs) => (locs.length === 0 ? "none" : locs.slice(0, 5).join(", "));
+    throw new Error(
+      `package-lock.json: the production-reach model disagrees with npm's dev flags (model-only: ${list(modelOnly)}; npm-only: ${list(npmOnly)})`,
+    );
+  }
+  return model;
+}
+
+/** "a > b, c > d" @param {OptionalPeerEdge[]} edges */
+function describeEdges(edges) {
+  return edges.map((e) => `${e.from} > ${e.peer}`).join(", ");
+}
+
+/**
+ * Proves, from the lockfile, that `entry`'s package reaches the production
+ * tree only through the entry's declared optional-peer edges. Gathers every
+ * problem and reason rather than stopping at the first.
+ * - "unprovable": the report does not bind to the lockfile (exit 2)
+ * - "exposed": a premise is broken, or a path avoids the edges (exit 1)
+ * @param {AllowlistEntry} entry carries OPTIONAL_PEER_FIELD
+ * @param {Record<string, any>} prodReport validated `npm audit --omit=dev` report
+ * @param {Record<string, any>} packages from `assertProjectFiles`
+ * @param {Reach} production from `checkProductionModel`
+ * @returns {ProofResult}
+ */
+export function proveOptionalPeerOnly(entry, prodReport, packages, production) {
+  const pkg = entry.package;
+  const edges = entry[OPTIONAL_PEER_FIELD] ?? [];
+  const gid = normalizeGhsaId(entry.id);
+  const U = production.reached;
+  /** @type {string[]} */
+  const problems = [];
+  /** @type {string[]} */
+  const reasons = [];
+  /** @type {string[]} */
+  const witnesses = [];
+
+  // (a) The report binds to the lockfile.
+  const vulnerabilities = prodReport.vulnerabilities;
+  for (const advisory of reportAdvisories(vulnerabilities)) {
+    if (advisory.id === gid && advisory.package !== pkg) {
+      problems.push(`${entry.id} appears under another package (${JSON.stringify(advisory.package)})`);
+    }
+  }
+  const vuln = Object.hasOwn(vulnerabilities, pkg) ? vulnerabilities[pkg] : undefined;
+  const reported = isPlainObject(vuln) && Array.isArray(vuln.nodes) ? vuln.nodes : null;
+  /** @type {string[]} */
+  let nodes = [];
+  if (reported === null || reported.length === 0 || !reported.every((n) => typeof n === "string")) {
+    problems.push(`npm audit --omit=dev has no node list for ${pkg}`);
+  } else {
+    nodes = reported;
+    for (const n of nodes) {
+      if (!Object.hasOwn(packages, n) || !isPackageNode(packages, n, pkg) || packages[n].dev === true || !U.has(n)) {
+        problems.push(`npm audit --omit=dev lists ${n}, which package-lock.json does not have as a production ${pkg} node`);
+      }
+    }
+  }
+
+  // (b) Targets: every node of the package, any version.
+  const targets = packageNodes(packages, pkg);
+  if (targets.length === 0) problems.push(`package-lock.json has no ${pkg} node`);
+  for (const t of targets) {
+    if (packages[t].inBundle) problems.push(`${t} is a bundled dependency`);
+  }
+  const T = new Set(targets);
+
+  // (c) The declared edges exist exactly as declared, on every production copy of `from`.
+  /** @type {Map<string, string[]>} */
+  const fromCopies = new Map();
+  for (const { from, peer } of edges) {
+    const copies = [...U].filter((loc) => loc !== "" && installedName(loc) === from);
+    fromCopies.set(from, copies);
+    if (copies.length === 0) {
+      reasons.push(`${from} is not in the production tree`);
+      continue;
+    }
+    for (const loc of copies) {
+      const node = packages[loc];
+      const name = realName(packages, loc);
+      if (name !== from) reasons.push(`${loc} is installed as ${from} but is ${name}`);
+      if (T.has(loc)) reasons.push(`${loc} is itself a ${pkg} node`);
+      if (node.inBundle) reasons.push(`${loc} is a bundled dependency`);
+      if (typeof node.peerDependencies?.[peer] !== "string" || node.peerDependenciesMeta?.[peer]?.optional !== true) {
+        reasons.push(`${loc} does not declare ${peer} as an optional peer`);
+      }
+      if (Object.hasOwn(node.dependencies ?? {}, peer) || Object.hasOwn(node.optionalDependencies ?? {}, peer)) {
+        reasons.push(`${loc} also lists ${peer} as a dependency`);
+      }
+      for (const key of ["bundleDependencies", "bundledDependencies"]) {
+        const bundled = node[key];
+        if (bundled === undefined || bundled === false) continue;
+        if (!Array.isArray(bundled) || bundled.includes(peer) || bundled.includes(pkg)) {
+          reasons.push(`${loc} bundles ${peer} or ${pkg}`);
+        }
+      }
+    }
+    if (
+      !copies.some((loc) => {
+        const to = resolveDep(packages, loc, peer);
+        return to !== null && U.has(to);
+      })
+    ) {
+      reasons.push(`${from} > ${peer} does not resolve to an installed production node`);
+    }
+  }
+
+  // (d) The proof: with exactly those edges removed, no node of the package is reachable.
+  const declared = new Set(edges.map((e) => JSON.stringify([e.from, e.peer])));
+  const restricted = reachProduction(
+    packages,
+    (loc, name, type) =>
+      type === "peerOptional" &&
+      loc !== "" &&
+      installedName(loc) === realName(packages, loc) &&
+      declared.has(JSON.stringify([installedName(loc), name])),
   );
-  return entries.filter((e) => present.has(JSON.stringify([normalizeGhsaId(e.id), e.package])));
+  for (const [from, copies] of fromCopies) {
+    if (copies.length > 0 && !copies.some((loc) => restricted.reached.has(loc))) {
+      reasons.push(`${from} is in production only through excluded edges`);
+    }
+  }
+  for (const w of targets.filter((t) => restricted.reached.has(t))) {
+    reasons.push(`${w} is reachable from production dependencies without ${describeEdges(edges)}`);
+    if (witnesses.length < 3) witnesses.push(restricted.pathTo(w));
+  }
+
+  // (e) Exposed beats unprovable.
+  if (reasons.length > 0) return { kind: "exposed", witnesses, reasons, problems };
+  if (problems.length > 0) return { kind: "unprovable", problems };
+  const proven = targets.filter((t) => U.has(t));
+  return { kind: "proven", targets: proven, nodes, paths: proven.map((t) => production.pathTo(t)) };
 }
 
 /**
@@ -543,22 +966,65 @@ export function formatResult(result) {
 /**
  * The lines the gate prints for the production-tree check: an error for each
  * allow-list entry whose advisory reached a production dependency, or one
- * line saying none did.
- * @param {AllowlistEntry[]} exposed from `productionExposedEntries`
+ * line saying none did. Entries carrying OPTIONAL_PEER_FIELD are reported
+ * through `proofs` instead (a notice when proven, an error otherwise), and
+ * `unusedField` lists such entries the production audit no longer mentions.
+ * @param {AllowlistEntry[]} exposed entries without the field, from `productionExposedEntries`
+ * @param {EntryProof[]} [proofs] one per exposed entry that carries the field
+ * @param {AllowlistEntry[]} [unusedField] entries with the field absent from the production audit
  * @returns {string[]}
  */
-export function formatProductionCheck(exposed) {
-  if (exposed.length === 0) {
-    return [
-      "npm audit gate: no allow-listed advisory reaches a production dependency (npm audit --omit=dev).",
-    ];
-  }
-  return exposed.map((entry) =>
+export function formatProductionCheck(exposed, proofs = [], unusedField = []) {
+  const lines = exposed.map((entry) =>
     annotation(
       "error",
       `npm audit: allow-listed ${entry.id} (${entry.package}) now reaches a production dependency (npm audit --omit=dev lists it); the dev-only exception no longer holds. Remove that production path, or treat the advisory as a violation and remove the entry from scripts/audit-allowlist.json.`,
     ),
   );
+  for (const proof of proofs) {
+    const { entry } = proof;
+    const edges = describeEdges(entry[OPTIONAL_PEER_FIELD] ?? []);
+    if (proof.kind === "exposed") {
+      const witness = proof.witnesses.length > 0 ? ` Witness: ${proof.witnesses.join("; ")}.` : "";
+      const unverified = proof.problems.length > 0 ? ` Also could not verify: ${proof.problems.join("; ")}.` : "";
+      lines.push(
+        annotation(
+          "error",
+          `npm audit: allow-listed ${entry.id} (${entry.package}) reaches a production dependency outside its declared optional peer edge(s) ${edges}: ${proof.reasons.join("; ")}.${witness}${unverified} The dev-only exception no longer holds. Remove that production path, or treat the advisory as a violation and remove the entry from scripts/audit-allowlist.json.`,
+        ),
+      );
+    } else if (proof.kind === "unprovable") {
+      lines.push(
+        annotation(
+          "error",
+          `npm audit --omit=dev: could not prove allow-listed ${entry.id} (${entry.package}) is limited to its declared optional peer edge(s) ${edges}: ${proof.problems.join("; ")} — could not verify advisories.`,
+        ),
+      );
+    } else {
+      lines.push(
+        annotation(
+          "notice",
+          `npm audit --omit=dev: allow-listed ${entry.id} (${entry.package}) is in the production tree only through the optional peer edge(s) ${edges} (${OPTIONAL_PEER_FIELD}, proven from package-lock.json); without them no production dependency reaches any ${entry.package} node. Reported nodes: ${proof.nodes.join(", ")}. Path: ${proof.paths[0] ?? "none"}. Reason: ${entry.reason}`,
+        ),
+      );
+    }
+  }
+  for (const entry of unusedField) {
+    lines.push(
+      annotation(
+        "warning",
+        `npm audit allow-list: ${entry.id} (${entry.package}) no longer appears in npm audit --omit=dev; remove ${OPTIONAL_PEER_FIELD} from scripts/audit-allowlist.json.`,
+      ),
+    );
+  }
+  if (exposed.length === 0 && proofs.every((p) => p.kind === "proven")) {
+    lines.push(
+      proofs.length === 0
+        ? "npm audit gate: no allow-listed advisory reaches a production dependency (npm audit --omit=dev)."
+        : `npm audit gate: no allow-listed advisory reaches a production dependency (npm audit --omit=dev) except ${proofs.length} advisory(ies) proven to come only through declared optional peer edges.`,
+    );
+  }
+  return lines;
 }
 
 /**
@@ -615,7 +1081,11 @@ async function auditWithRetry({ runAudit, args, label, sleep, print, maxAttempts
  *    `evaluateAudit`. Any violation: EXIT_VIOLATION.
  * 2. Only when that passed with at least one allow-listed finding: `npm audit
  *    --omit=dev` (NPM_AUDIT_PROD_ARGS). Any allow-listed advisory found in the
- *    production tree: EXIT_VIOLATION.
+ *    production tree: EXIT_VIOLATION, except for an entry carrying
+ *    OPTIONAL_PEER_FIELD, which is instead proven from package-lock.json
+ *    (`proveOptionalPeerOnly`): exposed is EXIT_VIOLATION, unprovable (or a
+ *    project file that cannot be read or modelled) is EXIT_UNVERIFIED, and
+ *    any plain exposed entry or exposed proof beats an unprovable one.
  *
  * @param {object} io
  * @param {(args: readonly string[]) => AuditRun} io.runAudit runs `npm <args>` once
@@ -623,6 +1093,9 @@ async function auditWithRetry({ runAudit, args, label, sleep, print, maxAttempts
  * @param {(line: string) => void} io.print
  * @param {unknown} io.allowlist parsed allow-list file
  * @param {string | Date} io.today
+ * @param {(name: "package-lock.json" | "package.json") => string} [io.readProjectFile]
+ *   returns the text of one of the two project files; read only when an
+ *   entry carrying OPTIONAL_PEER_FIELD appears in the production audit
  * @param {number} [io.maxAttempts]
  * @param {number} [io.retryDelayMs]
  * @returns {Promise<number>} the process exit code
@@ -633,6 +1106,9 @@ export async function runGate({
   print,
   allowlist,
   today,
+  readProjectFile = () => {
+    throw new Error("no project-file reader");
+  },
   maxAttempts = MAX_ATTEMPTS,
   retryDelayMs = RETRY_DELAY_MS,
 }) {
@@ -669,6 +1145,34 @@ export async function runGate({
     );
     return EXIT_UNVERIFIED;
   }
-  for (const line of formatProductionCheck(exposed)) print(line);
-  return exposed.length > 0 ? EXIT_VIOLATION : EXIT_PASS;
+  const entries = validateAllowlist(allowlist);
+  const hasField = (/** @type {AllowlistEntry} */ e) => Object.hasOwn(e, OPTIONAL_PEER_FIELD);
+  const plain = exposed.filter((e) => !hasField(e));
+  const fielded = exposed.filter(hasField);
+  const unusedField = entries.filter((e) => hasField(e) && !exposed.includes(e));
+
+  /** @type {EntryProof[]} */
+  let proofs = [];
+  if (fielded.length > 0) {
+    try {
+      const lock = JSON.parse(readProjectFile("package-lock.json"));
+      const pj = JSON.parse(readProjectFile("package.json"));
+      const packages = assertProjectFiles(lock, pj);
+      const production = checkProductionModel(packages);
+      proofs = fielded.map((entry) => ({ ...proveOptionalPeerOnly(entry, prodReport, packages, production), entry }));
+    } catch (error) {
+      if (plain.length > 0) for (const line of formatProductionCheck(plain)) print(line);
+      print(
+        annotation(
+          "error",
+          `npm audit --omit=dev: could not check ${OPTIONAL_PEER_FIELD} for ${fielded.map((e) => `${e.id} (${e.package})`).join(", ")}: ${/** @type {Error} */ (error).message} — could not verify advisories.`,
+        ),
+      );
+      return plain.length > 0 ? EXIT_VIOLATION : EXIT_UNVERIFIED;
+    }
+  }
+  for (const line of formatProductionCheck(plain, proofs, unusedField)) print(line);
+  if (plain.length > 0 || proofs.some((p) => p.kind === "exposed")) return EXIT_VIOLATION;
+  if (proofs.some((p) => p.kind === "unprovable")) return EXIT_UNVERIFIED;
+  return EXIT_PASS;
 }
