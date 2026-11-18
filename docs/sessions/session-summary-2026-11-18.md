@@ -40,4 +40,22 @@ The two low ideas.md entries left from #302's test findings.
   `production_via_optional_peer`) in all four repos; the entry's review_by is 2026-12-17.
 - Still open from earlier: #297 (page paths get the proxy's 10 MB body copy), audit LOW items N9–N19, the upstream
   MPNext review (`75d249d..aa1bc64` not yet logged).
-- Session ended 2026-11-18.
+- First session ended 2026-11-18.
+
+## Later session (2026-11-18): open items review — IN PROGRESS
+
+Picked up the older open items: #297, audit LOW findings N9–N19, and the unlogged upstream MPNext range
+`75d249d..aa1bc64`. Most of that upstream range is where N9–N19 came from, so they were reviewed together.
+
+- **Analysis** (read-only workflow, 10 analysts + critic): 50 entries with file:line evidence, measurements and
+  proposed changes in `.claude/plans/open-items-2026-11-18.md`. The critic refuted one side claim (orphan
+  `'use server'` exports are not in the current action manifest, so they are latent, not live).
+- **Owner decisions:** N17 port the lazy id_token verifier to all four apps; keep silent re-sign-in (skip
+  `/signed-out`); N16 `jwe` + strip `/get-session` token/IP/UA; add an MIT LICENSE; future audits stay in the repo.
+- **Batch 0 (docs):** upstream-sync-log entry for the range; audit table (N8 reviewed, N11 partly fixed, N15
+  confirmed fixed, N16/N17 decisions); #297 closed as accepted with the measurements; CLAUDE.md and security.md
+  #297 lines; MIT `LICENSE` (keeps MPNext's notice) and README's License section.
+- New finding not in the audit: `ContactService.updateContact` lets caller fields override `Contact_ID` (no
+  callers; same in event-manager and mp-senior-care). Batch 4 deletes it.
+- **Next:** batch 1 (N9 proxy matcher anchoring, N13 `originOf`, N14 next.config, `base-uri 'none'`), mp-charts
+  first, then the three sibling repos after a `:dev` soak.

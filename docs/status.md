@@ -12,6 +12,7 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 | Date | Work | Issues | PR |
 |------|------|--------|---|
+| 2026-11-18 | **Upstream `75d249d..aa1bc64` reviewed; audit LOW items planned; #297 accepted.** 50 per-commit/per-finding entries with evidence in `.claude/plans/open-items-2026-11-18.md`, logged in `upstream-sync-log.md`, sequenced as PR batches (1 headers/proxy, 2 auth core, 3 MP client, 4 contact logs, 5 tool-page gates, 6 auth UI, 7 session cookie, 8 401 retry, 9 tooling/deps, 10 CI). Owner decisions: port the lazy id_token verifier, keep silent re-sign-in, `jwe` cookie cache, MIT LICENSE (added). #297 closed as accepted with measurements (skipping the proxy for bodied requests only moves the cost to Next's 20 MB form-action decode) | #297 | — |
 | 2026-11-18 | **Admin tool actions hardened; ministry year rolls over on Central time** (#307, #308). Journey and compliance tool save/delete now apply the `write` rate limit, save the Zod-parsed (key-stripped) config instead of the caller's object, and clear the processing-service cache straight after the config write, so a failed feature-access step no longer leaves the old config cached. `getDashboardRange()` reads the month on the Central calendar, so the dashboard's five-year range and cache keys roll over at midnight Central on Sep 1, not 19:00 CDT on Aug 31. 14 new or inverted admin tests fail on the old actions; the range tests run under five process zones. No soak (admin-only, and a once-a-year boundary) | #307, #308 | — |
 | 2026-11-17 | **Dashboard keeps its last good data when an MP read fails** (#304, #306). All 11 `dashboardService.ts` readers log and rethrow instead of returning empty data, so a failed background refresh or warm no longer replaces cached charts with zeros for 6h; the aggregators stay all-or-nothing. Activity_Log and monthly attendance months are capped at 6 in flight and any failed month rejects. `serviceCache` warns on a failed refresh. Refresh marks entries (`markForRefresh`) instead of deleting them and the shell keeps what fails, with an inline message; failed extended/engagement stages say "could not be loaded"; a warm with failed entries retries after 1/3/5 min. Start/end spans merge into disjoint spans in any row order (#306, `dashboard-spans.ts`). Soaked on `:dev` 2026-11-18 | #304, #306 | #310 |
 | 2026-11-17 | **Dashboard counts services on the last day of a month** (#305). Every `dashboardService.ts` date filter is now half-open on MP wall-clock day strings via the new `mp-date-range.ts` (`>= start AND < day after end`), so Aug 31 / Nov 30 / May 31 services, Aug 31 milestones and activity are no longer dropped; the browser filter compares day strings too, and bucket keys are sliced from the MP string (no zone dependence); small-group months no longer skip from a 31st start; the today cap uses Central time. Callers and cache keys unchanged. Soaked on `:dev` 2026-11-18 | #305 | #310 |
@@ -23,7 +24,7 @@ Quick-reference snapshot of current project state. Read this first at session st
 
 ## Open Security Findings
 
-- The 2026-10-10 audit (`.claude/notes/security-audit-2026-10-10.md`): **N1** and **N23** fixed in #251; **N5** and **N6** closed and **N2–N4, N7** fixed 2026-10-27. The audit's MEDIUM and HIGH findings are all closed; LOW items N9–N19 remain (upstream ports, CI hardening, fetch hygiene).
+- The 2026-10-10 audit (`.claude/notes/security-audit-2026-10-10.md`): **N1** and **N23** fixed in #251; **N5** and **N6** closed and **N2–N4, N7** fixed 2026-10-27. The audit's MEDIUM and HIGH findings are all closed. N15 confirmed fixed and N8 reviewed 2026-11-18; LOW items N9–N14, N16–N19 are planned as PR batches in `.claude/plans/open-items-2026-11-18.md`.
 - The better-auth 1.6 redirect URIs were removed from TM.Widgets on 2026-10-27 (probe: old five refused, new five accepted). The obsolete `docker-compose.rollback-1.6.yml` pins were deleted the same day.
 - The audit allow-list has one entry since 2026-11-17 (#309; ported to event-manager #90, mp-senior-care #251, music-tools #204).
 - **Audit gate blocked deploys 2026-11-17, resolved the same day** (all four repos): GHSA-fc5q-39xc-vjpf, picomatch <=4.0.7
@@ -47,7 +48,7 @@ Quick-reference snapshot of current project state. Read this first at session st
 ## Key Architecture Notes
 
 - Next.js 16 with PPR/Cache Components, Better Auth, Zod v4
-- Upstream sync: reviewed through `75d249d` (#96, #97) 2026-09-29; `75d249d..aa1bc64` (#98–#107) not yet logged; upstream unchanged since `aa1bc64` as of 2026-10-21; see `.claude/notes/upstream-sync-log.md`
+- Upstream sync: reviewed through `aa1bc64` (#98–#107) 2026-11-18, ports in progress as batches; see `.claude/notes/upstream-sync-log.md`
 - Docker CI/CD via GitHub Actions → GitLab Container Registry
 - All processing features (volunteer, baptism, membership) use shared components in `src/components/processing/`
 - RBAC: Admin-managed feature-to-User-Group mapping via `data/feature-access.json` + `ADMIN_USER_GROUP_IDS` env var; server actions enforce via `requireFeatureAccess()`; admin page at `/admin`

@@ -51,16 +51,16 @@ repo visibility, protection, scanning status, open alerts and advisory data.
 | N5 | Public repo: feedback issues publish staff names + contact GUIDs | MEDIUM | **Closed 2026-10-27.** Feature removed 2026-10-23 (token pulled from all four apps, code deleted); tokens revoked and `.env` backups deleted; the contact GUID links cut from the 5 issues that had them, and those revisions deleted from edit history. Staff names in the 22 issues kept by owner decision |
 | N6 | Public repo: internal IPs/hosts in tracked docs (checklist violation) | MEDIUM (policy) / LOW (exploit) | **Closed 2026-10-27.** IPs and the SSH user removed from the 2026-04-04 and 2026-09-01 summaries; the archived 2026-02-06 note names only "a reverse proxy (Caddy)" and was left. Git history still has them (no rewrite: force-push is blocked and the repo is public, so clones already have it) |
 | N7 | `transitionMember` writes any participant's Member_Status_ID | LOW | **Fixed 2026-10-27**: participant and contact must be the same member |
-| N8 | Upstream 2026-09-28 wave unreviewed (see §3) | LOW–MEDIUM aggregate | Open |
+| N8 | Upstream 2026-09-28 wave unreviewed (see §3) | LOW–MEDIUM aggregate | **Reviewed 2026-11-18** (upstream-sync-log.md); ports planned in batches, `.claude/plans/open-items-2026-11-18.md` |
 | N9 | `proxy.ts` `/api` prefix match and unanchored matcher | LOW | Open |
 | N10 | Journey/compliance pages render tool config without a feature gate | LOW | Open |
-| N11 | Duplicate reachable action at a weaker rate tier; one orphan export | LOW | Open |
+| N11 | Duplicate reachable action at a weaker rate tier; one orphan export | LOW | Partly fixed: `getDashboardMetrics` gone; three unused contact-log actions remain (not in the current action manifest, so latent). Batch 4 |
 | N12 | Outbound fetches without timeout/redirect refusal; token refresh not single-flight; token body unvalidated | LOW | Open |
 | N13 | `originOf` allows env-controlled CSP directive injection | LOW | Open |
 | N14 | `X-Powered-By`, live `/_next/image`, dev action-arg logging | LOW | Open |
-| N15 | Three CodeQL `js/log-injection` alerts open since 2026-08-07 | LOW | Fixed on `security/n1-requirement-file-scope` (2026-10-21); confirm the alerts close on that PR's CodeQL run |
-| N16 | Cookie cache `jwt` (signed, readable) and `/get-session` returns token/IP/UA | LOW | Open |
-| N17 | id_token not signature-verified; no `exp`/`azp` check | LOW (accepted posture) | Open |
+| N15 | Three CodeQL `js/log-injection` alerts open since 2026-08-07 | LOW | **Fixed**, confirmed 2026-11-18: no open `js/log-injection` alerts. (One unrelated open alert, #37 `js/incomplete-sanitization` in a test file, batch 4) |
+| N16 | Cookie cache `jwt` (signed, readable) and `/get-session` returns token/IP/UA | LOW | Open — owner approved `jwe` + payload strip 2026-11-18 (batch 7, all four repos) |
+| N17 | id_token not signature-verified; no `exp`/`azp` check | LOW | Open — owner decided 2026-11-18 to port upstream's lazy verifier (all four repos) |
 | N18 | CI actions pinned by tag; no workflow-level `permissions`; `persist-credentials` default | LOW | Open |
 | N19 | `BETTER_AUTH_URL` / MP URL not validated at boot; localhost fallback | LOW | Open |
 | N20 | Local checkout 8 commits behind; stale `node_modules`; tests not run | INFO | Operational |

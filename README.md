@@ -715,7 +715,7 @@ src/components/
 
 ## License
 
-Private
+MIT, see [LICENSE](LICENSE). The fork keeps upstream MPNext's copyright notice.
 
 ## Support
 

@@ -11,6 +11,47 @@ git log main..upstream/main --oneline
 
 Or review PRs at: https://github.com/MinistryPlatform-Community/MPNext/pulls
 
+## Review: 2026-11-18 — upstream `75d249d..aa1bc64` (PRs #98–#107, incl. the 2026-09-28 security review wave)
+
+Reviewed every commit in the range against our tree (10 read-only analysts + a critic; full per-commit evidence and proposed changes in `.claude/plans/open-items-2026-11-18.md`). Most of the wave is the source of the 2026-10-10 audit's LOW findings N9–N19, so the ports are tracked as **batches** in that plan, not cherry-picked. Nothing below is merged yet unless it says "already done". Upstream is unchanged since `aa1bc64`.
+
+**Owner decisions (2026-11-18):** port the lazy id_token verifier (#101/#107) to all four apps; keep silent re-sign-in (do **not** adopt `/signed-out`); switch `cookieCache.strategy` to `jwe` and strip `/get-session`'s token/IP/UA; add an MIT LICENSE.
+
+| Commit(s) | What | Action | Batch / notes |
+|---|---|---|---|
+| `9b61b82` | Proxy `/api` exact match, anchored matcher | **Adapt** (N9) | 1 — upstream's matcher string would re-add `/api/auth` and drop the #252 `next-action` skip; anchor ours instead |
+| `6e160a3` | CSP origin validation, COOP/CORP, `base-uri 'none'` | **Port** originOf (N13) + `base-uri`; COOP/CORP already done (F14) | 1 |
+| `9904f67` | `poweredByHeader: false`, image optimizer off, no dev action-arg logging | **Port** (N14) | 1 |
+| `9b7b4d1` | HttpClient: no redirects, path guard, safe logging | **Adapt** (N12) | 3 |
+| `5aa0b5e` | Single-flight token refresh, validated token response, 401 retry | **Adapt** (N12) | 3 (refresh/validation), 8 (401 retry) |
+| `f2af96d` | OIDC provider + userinfo fetch hardening, session payload | **Adapt** (N12, N16) | 2 (userinfo timeout/no redirect), 7 (payload strip + `jwe`) |
+| `6616310`, `2227a80` | `src/lib/env.ts`: validate `BETTER_AUTH_URL` / MP URL | **Adapt** (N19) | 2 — keep the `next build` exemption |
+| `6ae05df`, `23660fd`, `aa1bc64` | Lazy id_token verification (#101/#107) | **Port** (N17, owner decision) | separate batch, all four apps; 60 s clock tolerance, longer JWKS cache; discovery never fetched at boot |
+| `fc224f3`, `0f7941b` (#100) | Actions pinned by SHA, least-privilege `permissions` | **Adapt** (N18); #100's bumps already done | 10 |
+| `3e9e96d` | CI build + prerendered-route check; scripts tests in `test:run` | Already done | `check:shells` / `check:standalone` |
+| `721d6e5`, `5620831` | `Cache-Control: no-store` on every auth response; path-variant tests | **Adapt** | 2 |
+| `6167cfd` | Code-flow test harness | **Adapt** | 2 — extend our `route.flow.test.ts` |
+| `6aa1633` | `/auth-error` echoes `?error=` only when code-shaped | **Adapt** | 2 |
+| `aa696f8` | global-error recovers without JS | **Port** | 2 |
+| `96ab2f5` | Raw-header Content-Type anchor | Already done | `route.ts` |
+| `a11c2a3` | Sanitizer hardening, search-term cap | **Adapt** | 4 (also delete unused `contactSearch` and `ContactService.updateContact`) |
+| `defd338`, `710dfa8`, `dc4a25b` | No caller input in logs; drop unused log actions; rendered-fields DTO; write `.pick()` | **Adapt** (N11) | 4 |
+| `02731d4`, `595ecab`, `f3cb739`, `0670531` | SessionGuard, sign-in loop cap, sign-out always available, `CurrentUserProfile` DTO | **Adapt** | 6 |
+| `ace4566`, `8393d7b` | `/signed-out` page | **Skip** (owner decision) | silent re-sign-in stays |
+| `6c0c46b`/`f1ad0c8` (#98) | Header layout shift | **Adapt** (sidebar `<Link>` part only) | 6 |
+| `7342517`/`4380b22` (#102) | Flight-promise crash in UserProvider | Not applicable | our UserProvider loads via server actions |
+| `5e1d2cc`, `66b9bf4` | Rebuild auth instance after failed boot discovery | Not applicable | we never fetch discovery at boot |
+| `e17c55e` | `unstable_rethrow` in session lookup | Not applicable | |
+| `69fa5c5`, `8370bcb`, `e775734` | Self-only profile; private role read; gate `[guid]` page | Already done | |
+| `41bba94`, `3d9ae92` | Provider path guards, procedure allowlist, trusted sender, drop `$ignorePermissions` | **Adapt** (N21) | 3 |
+| `56bd228` | Codegen escaping | **Adapt** | 9 |
+| `606dc53`, `56fffd9` | `server-only` guards; Next 16.3.7 | **Port** guards; Next already newer | 9 |
+| `7aae2ae` | `setup.ts` exact `.env.local` writes, `npm ci` | **Adapt** | 9 |
+| `b93d4c9`, `a6eb503` (#106) | Remove unused deps + Tailwind v3 config | **Port** | 9 |
+| `66b157e`, `2dbc8c6`, `2d14533` (#92) | `CommunicationType` enum (upstream port of our #220) | Already done; keep our five members | upstream narrowed to Email/SMS |
+| `1d58475` (#104) | Public-repo cleanup | **Adapt**: MIT LICENSE added 2026-11-18; ignore `.claude/worktrees/` in batch 1 | |
+| `ea3853d` (#105), `6b03e5b`, `aa1bc64` playbooks, `49d4cd7`, `b46034c`, `8eed2d4`, `571725c`, `597c213`, `4aa225e`, `d6c3dd6`, `5f7340a`, `9a0004d`, `8e90a89`, `234ae74`, `109880d`, `5c5f43e`, `2935d29`, `ba7d144` | Upstream docs, TODO bookkeeping, playbooks | Skip | `2935d29` (query-syntax doc) rides with batch 4 if the sanitizer guards are taken |
+
 ## Review: 2026-09-29 — upstream `ea2e0ad..75d249d` (PRs #96, #97): auth hardening
 
 Reviewed every auth commit upstream merged since `ea2e0ad` (through `75d249d`), against our tree, with the upstream flow tests, secret/rate-limit/restart probes and a sign-out revocation harness run on a local production build against a fake MP. The headline finding is live here: **sign-out did not revoke a copied session.** Next loads `src/lib/auth.ts` once per bundle layer (two copies on our standalone build), so the callback stored the session in one in-memory store and `handleSignOut` deleted it from the other; a `session_token` copied before sign-out stayed valid, its expiry sliding forward, until the process restarted. Adopted on branch `fix/auth-hardening`:
