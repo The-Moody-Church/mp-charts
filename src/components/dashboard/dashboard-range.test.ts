@@ -11,7 +11,7 @@ afterEach(() => {
 
 describe('getDashboardRange', () => {
   it('covers the last five ministry years, ending on Aug 31 of the current one', () => {
-    expect(getDashboardRange(new Date(2026, 10, 17, 12))).toEqual({
+    expect(getDashboardRange(new Date('2026-11-17T18:00:00Z'))).toEqual({
       currentYear: 2026,
       earliestYear: 2022,
       endDateIso: '2027-08-31',
@@ -21,32 +21,38 @@ describe('getDashboardRange', () => {
   });
 
   it('is identical every day of a ministry year (stable cache keys)', () => {
-    const first = getDashboardRange(new Date(2026, 8, 1, 0, 0, 0));
-    expect(getDashboardRange(new Date(2027, 1, 28, 12))).toEqual(first);
-    expect(getDashboardRange(new Date(2027, 7, 31, 23, 59, 59))).toEqual(first);
+    // Sep 1 00:00 CDT, Feb 28 noon CST, Aug 31 23:59:59 CDT.
+    const first = getDashboardRange(new Date('2026-09-01T05:00:00Z'));
+    expect(getDashboardRange(new Date('2027-02-28T18:00:00Z'))).toEqual(first);
+    expect(getDashboardRange(new Date('2027-09-01T04:59:59Z'))).toEqual(first);
   });
 
   it('uses the previous calendar year before September, and rolls over on Sep 1', () => {
-    expect(getDashboardRange(new Date(2026, 7, 31, 23, 59, 59)).currentYear).toBe(2025);
-    expect(getDashboardRange(new Date(2026, 8, 1, 0, 0, 0)).currentYear).toBe(2026);
+    expect(getDashboardRange(new Date('2026-09-01T04:59:59Z')).currentYear).toBe(2025);
+    expect(getDashboardRange(new Date('2026-09-01T05:00:00Z')).currentYear).toBe(2026);
   });
 
-  // The ministry year follows the SERVER's local calendar, not UTC and not Central.
-  // Production runs in Docker with TZ unset (UTC), so there the rollover, and with
-  // it every dashboard cache key, happens at Aug 31 19:00 CDT.
-  it('reads server-local time: still August in Chicago when UTC is already September', () => {
-    process.env.TZ = 'America/Chicago';
-    expect(getDashboardRange(new Date('2026-09-01T03:00:00Z')).currentYear).toBe(2025);
-  });
+  // The ministry year follows the MP (US Central) calendar whatever the server's
+  // zone. Production runs in Docker with TZ unset (UTC); before this it rolled
+  // over, with every dashboard cache key, at Aug 31 19:00 CDT.
+  for (const tz of ['UTC', 'America/Chicago', 'Asia/Tokyo', 'Pacific/Auckland', 'America/Los_Angeles']) {
+    it(`rolls over at midnight Central on Sep 1 (process TZ ${tz})`, () => {
+      process.env.TZ = tz;
+      // Aug 31 19:00 CDT: already Sep 1 in UTC, still August in Central.
+      expect(getDashboardRange(new Date('2026-09-01T00:00:00Z')).currentYear).toBe(2025);
+      // Aug 31 23:59:59 CDT.
+      expect(getDashboardRange(new Date('2026-09-01T04:59:59Z')).currentYear).toBe(2025);
+      // Sep 1 00:00 CDT.
+      expect(getDashboardRange(new Date('2026-09-01T05:00:00Z')).currentYear).toBe(2026);
+      // Aug 31 20:00 UTC is Sep 1 in Tokyo, but Aug 31 15:00 in Central.
+      expect(getDashboardRange(new Date('2026-08-31T20:00:00Z')).currentYear).toBe(2025);
+    });
+  }
 
-  it('reads server-local time: already September in Tokyo when UTC is still August', () => {
-    process.env.TZ = 'Asia/Tokyo';
-    expect(getDashboardRange(new Date('2026-08-31T20:00:00Z')).currentYear).toBe(2026);
-  });
-
-  it('rolls over at local midnight under UTC (the production container zone)', () => {
+  it('reads Central in winter too (CST, UTC-6): Jan 1 rollover does not change the year', () => {
     process.env.TZ = 'UTC';
-    expect(getDashboardRange(new Date('2026-08-31T23:59:59Z')).currentYear).toBe(2025);
-    expect(getDashboardRange(new Date('2026-09-01T00:00:00Z')).currentYear).toBe(2026);
+    // Dec 31 19:00 CST is already Jan 1 in UTC; both are in the same ministry year.
+    expect(getDashboardRange(new Date('2027-01-01T01:00:00Z')).currentYear).toBe(2026);
+    expect(getDashboardRange(new Date('2027-01-01T06:00:00Z')).currentYear).toBe(2026);
   });
 });

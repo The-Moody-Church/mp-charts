@@ -1,6 +1,7 @@
 "use server";
 
 import { requireFeatureAccess, loadFeatureAccess, saveFeatureAccess } from "@/lib/authorization";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { MPHelper } from "@/lib/providers/ministry-platform";
 import { sanitizeIds } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
 import { z } from "zod";
@@ -141,10 +142,13 @@ export async function saveComplianceToolAction(
   isNew?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await requireFeatureAccess("admin");
+    const session = await requireFeatureAccess("admin");
+    enforceRateLimit(session.user.id, "write");
 
-    // Validate with Zod
-    validateComplianceToolConfig(tool);
+    // Validate with Zod, and save the PARSED value: the parse strips keys the
+    // schema does not declare, so a caller-shaped payload cannot add fields to
+    // the config file (security.md, "the strip is the control").
+    tool = validateComplianceToolConfig(tool);
 
     const config = loadComplianceToolsConfig();
     const existingIndex = config.tools.findIndex((t) => t.slug === tool.slug);
@@ -160,6 +164,10 @@ export async function saveComplianceToolAction(
     }
 
     saveComplianceToolsConfig(config);
+    // Clear the service cache as soon as the new config is on disk, before the
+    // feature-access step: if that throws, the action reports failure but the
+    // config is already saved, and the service must not keep serving the old one.
+    ComplianceProcessingService.clearCache(tool.slug);
 
     // Register in feature-access.json if not present
     if (tool.enabled) {
@@ -174,9 +182,6 @@ export async function saveComplianceToolAction(
         saveFeatureAccess(featureConfig);
       }
     }
-
-    // Clear service cache for this slug so it picks up new config
-    ComplianceProcessingService.clearCache(tool.slug);
 
     return { success: true };
   } catch (error) {
@@ -196,11 +201,14 @@ export async function deleteComplianceToolAction(
   slug: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await requireFeatureAccess("admin");
+    const session = await requireFeatureAccess("admin");
+    enforceRateLimit(session.user.id, "write");
 
     const config = loadComplianceToolsConfig();
     config.tools = config.tools.filter((t) => t.slug !== slug);
     saveComplianceToolsConfig(config);
+    // Clear the service cache before the feature-access step (see save).
+    ComplianceProcessingService.clearCache(slug);
 
     // Remove from feature-access.json
     const featureConfig = loadFeatureAccess();
@@ -209,9 +217,6 @@ export async function deleteComplianceToolAction(
       delete featureConfig[featureKey];
       saveFeatureAccess(featureConfig);
     }
-
-    // Clear service cache
-    ComplianceProcessingService.clearCache(slug);
 
     return { success: true };
   } catch (error) {
