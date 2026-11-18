@@ -1261,6 +1261,32 @@ describe('public wiring', () => {
     expect(data.weeklyCommunityAttendanceTrends).toEqual([]);
   });
 
+  // Was wasteful: the current and previous series were fetched separately, and for
+  // the 5-year range they overlap in 48 months, so those months were queried twice
+  // (about 96 extra MP calls, each one more way to fail the all-or-nothing section).
+  it('getDashboardData queries each month of attendance once and splits it into both periods', async () => {
+    const svc = await newService();
+    stubUnrelated(svc);
+    // Today is Nov 15 2025: the full range Sep 2021 .. Aug 2026, as loadFullRangeData builds it.
+    const data = await svc.getDashboardData(new Date(2021, 8, 1), new Date(2026, 7, 31));
+
+    const monthStarts = calls('Events')
+      .filter((c) => /Event_Type_ID = 7$/.test(c.filter ?? ''))
+      .map((c) => /Event_Start_Date >= '(\d{4}-\d{2})-01 /.exec(c.filter ?? '')![1]);
+    // Sep 2020 (the previous period's start) .. Nov 2025 (capped at today): 63 months.
+    expect(monthStarts).toHaveLength(63);
+    expect(new Set(monthStarts).size).toBe(63);
+    expect(monthStarts[0]).toBe('2020-09');
+    expect(monthStarts.at(-1)).toBe('2025-11');
+
+    const current = data.monthlyAttendanceTrends.map((t) => t.month);
+    expect(current).toHaveLength(51);
+    expect([current[0], current.at(-1)]).toEqual(['2021-09', '2025-11']);
+    const previous = data.previousYearMonthlyAttendanceTrends.map((t) => t.month);
+    expect(previous).toHaveLength(60);
+    expect([previous[0], previous.at(-1)]).toEqual(['2020-09', '2025-08']);
+  });
+
   it('getDashboardData rejects when all monthly attendance fails, rather than returning data to cache', async () => {
     mockGetTableRecords.mockImplementation((p: Call) =>
       p.table === 'Events' && /Event_Type_ID = 7$/.test(p.filter ?? '')

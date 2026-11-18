@@ -93,8 +93,8 @@ vi.unstubAllGlobals();
   `scripts/audit-gate-lib.mjs`, so a file with no test counts as 0% instead of disappearing. Before this,
   only files a test imported were counted, and the report said 60.6% statements when the real figure was 45.3%.
   Do not remove `include`.
-- **Thresholds are floors, not targets**: `coverage.thresholds` in `vitest.config.ts` (statements 54, branches 45,
-  functions 44, lines 55; raised from 45/40/38/46 by #302) sit just under the measured totals, so `npm run test:coverage` fails if coverage drops.
+- **Thresholds are floors, not targets**: `coverage.thresholds` in `vitest.config.ts` (statements 57, branches 47,
+  functions 48, lines 59; raised from 45/40/38/46 by #302, then by #304-#306) sit just under the measured totals, so `npm run test:coverage` fails if coverage drops.
   Raise them when tests land; never lower them to get a change through. CI runs `test:run`, not coverage, so
   they are enforced locally only
 - Biggest untested `.ts` code (2026-11-17, after #302 brought `dashboardService.ts` and the dashboard/admin actions to

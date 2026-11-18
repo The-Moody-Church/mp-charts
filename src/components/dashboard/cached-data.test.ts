@@ -32,7 +32,7 @@ vi.mock('next/cache', () => ({
 }));
 
 import {
-  getCachedDashboardData,
+  getCachedFullRangeData,
   getCachedEngagementData,
   getCachedExtendedData,
 } from '@/components/dashboard/cached-data';
@@ -127,8 +127,8 @@ describe('cold miss (#304)', () => {
       'Activity_Log',
     ],
     [
-      'getCachedDashboardData',
-      () => getCachedDashboardData(2025),
+      'getCachedFullRangeData',
+      () => getCachedFullRangeData(2025, '2026-08-31'),
       (p) => p.table === 'Participant_Milestones',
       'Participant_Milestones',
     ],

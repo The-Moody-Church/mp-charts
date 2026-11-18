@@ -273,3 +273,22 @@ export interface DashboardData {
   engagementRawData: EngagementRawData;
   generatedAt: string;
 }
+
+/**
+ * Result of the dashboard's Refresh action (refreshDashboardCache).
+ *
+ * The action reloads each section from Ministry Platform itself and returns what
+ * reloaded, so the client never has to re-read a section to find out. A section
+ * is present only when its forced MP fetch succeeded; an absent section kept its
+ * last good value in both cache layers, and the client keeps what it shows.
+ */
+export interface DashboardRefreshResult {
+  /** True only when every section reloaded. */
+  success: boolean;
+  /** True when the refresh was refused before any MP read (authorization, rate limit). */
+  refused: boolean;
+  timestamp: Date;
+  core?: DashboardData;
+  extended?: Partial<DashboardData>;
+  engagement?: Partial<DashboardData>;
+}

@@ -1,12 +1,15 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   computePeriodMetrics,
   computeRosterVsAttendance,
   computeServingMetrics,
   computeEngagementOverlap,
   countDatesInRange,
+  filterDashboardData,
 } from '../filter-dashboard-data';
+import { getPreviousPeriodRange, shiftYearsClamped } from '../date-range-filter';
 import type {
+  DashboardData,
   MonthlyAttendanceTrend,
   RosterMemberRecord,
   ServingLeadingRecord,
@@ -247,5 +250,80 @@ describe('last day of the selected range (#305)', () => {
     const result = computeEngagementOverlap(rawData, [serving('2025-08-31T11:30:00', null, 3)], augStart, augEnd);
     expect(result.totalGroup).toBe(1);
     expect(result.totalServing).toBe(1);
+  });
+});
+
+// Ministry year 2027 runs Sep 2027 .. Aug 2028, and 2028 is a leap year. Shifting
+// Feb 29 2028 back a year with setFullYear rolled over to Mar 1 2027, putting a
+// whole extra day, and with it an extra month, into the previous period.
+describe('previous period of a range ending Feb 29 (leap year)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const local = (d: Date) => [d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes()];
+
+  it('shiftYearsClamped maps Feb 29 to Feb 28, keeps the time of day, and leaves other days alone', () => {
+    expect(local(shiftYearsClamped(new Date(2028, 1, 29, 10, 30), -1))).toEqual([2027, 2, 28, 10, 30]);
+    expect(local(shiftYearsClamped(new Date(2028, 1, 29), 1))).toEqual([2029, 2, 28, 0, 0]);
+    expect(local(shiftYearsClamped(new Date(2028, 1, 29), -4))).toEqual([2024, 2, 29, 0, 0]);
+    expect(local(shiftYearsClamped(new Date(2026, 7, 31, 23, 59), -1))).toEqual([2025, 8, 31, 23, 59]);
+    expect(local(shiftYearsClamped(new Date(2027, 2, 1), -1))).toEqual([2026, 3, 1, 0, 0]);
+  });
+
+  it('getPreviousPeriodRange ends a Feb 2028 selection on Feb 28 2027, not Mar 1', () => {
+    const { startDate, endDate } = getPreviousPeriodRange(new Date(2028, 1, 1), new Date(2028, 1, 29));
+    expect(local(startDate)).toEqual([2027, 2, 1, 0, 0]);
+    expect(local(endDate)).toEqual([2027, 2, 28, 0, 0]);
+  });
+
+  const month = (m: string): MonthlyAttendanceTrend => ({
+    month: m, monthName: '', averageInPersonAttendance: 100, averageOnlineAttendance: 0,
+    averageTotalAttendance: 100, eventCount: 4, inPersonEventCount: 4, onlineEventCount: 0,
+  });
+
+  /** Full-range data with only the fields the previous period reads filled in. */
+  function fullData(overrides: Partial<DashboardData>): DashboardData {
+    return {
+      monthlyAttendanceTrends: [], weeklyAttendanceTrends: [], communityAttendanceTrends: [],
+      weeklyCommunityAttendanceTrends: [], smallGroupTrends: [], baptismDates: [], membershipDates: [],
+      associateMemberDates: [], youthMemberDates: [], eventParticipantsByMonth: [], rosterMemberRecords: [],
+      attendanceByMonth: [], servingLeadingRecords: [],
+      engagementRawData: { activityByMonth: [], groupRecords: [], adultContactIds: [] },
+      ...overrides,
+    } as unknown as DashboardData;
+  }
+
+  it('filterDashboardData leaves Mar 1 2027 out of the previous period of Jan-Feb 2028', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2028, 5, 15, 12)); // after the selection: no today cap
+    const data = filterDashboardData(
+      fullData({
+        monthlyAttendanceTrends: ['2027-01', '2027-02', '2027-03', '2028-01', '2028-02'].map(month),
+        baptismDates: ['2027-02-14T10:00:00', '2027-03-01T10:00:00'],
+        servingLeadingRecords: [{
+          contactId: 1, roleTypeId: 3, roleTypeName: 'Servant', ministryId: 60, ministryName: 'Children',
+          startDate: '2026-06-01T00:00:00', endDate: null,
+        }],
+      }),
+      { months: [0, 1], years: [2027], compare: true },
+    );
+
+    expect(data.baptismsPreviousPeriod).toBe(1);
+    expect(data.previousYearMonthlyAttendanceTrends.map((t) => t.month)).toEqual(['2027-01', '2027-02']);
+    expect(data.previousYearServingTrends.map((t) => t.month)).toEqual(['2027-01', '2027-02']);
+    expect(data.servingTrends.map((t) => t.month)).toEqual(['2028-01', '2028-02']);
+  });
+
+  it('filterDashboardData caps the previous period at Feb 28 2027 when today is Feb 29 2028', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2028, 1, 29, 12)); // midway through ministry year 2027
+    const data = filterDashboardData(
+      fullData({ baptismDates: ['2027-02-28T09:00:00', '2027-03-01T09:00:00'] }),
+      { months: [8, 9, 10, 11, 0, 1, 2, 3, 4, 5, 6, 7], years: [2027], compare: true },
+    );
+
+    // Sep 1 2026 .. Feb 28 2027 12:00, the same elapsed part of the year.
+    expect(data.baptismsPreviousPeriod).toBe(1);
   });
 });

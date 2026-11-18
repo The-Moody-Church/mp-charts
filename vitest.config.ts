@@ -18,9 +18,9 @@ export default defineConfig({
       // to import, so a file with no test at all never enters the denominator and
       // the percentage overstates real coverage. List the source explicitly.
       include: ['src/**/*.{ts,tsx}', 'scripts/audit-gate-lib.mjs'],
-      // Floors at the measured totals (2026-11-17 after #302: 54.10 / 45.42 / 44.99 / 55.33),
+      // Floors at the measured totals (2026-11-17 after #304-#306: 57.79 / 47.66 / 48.97 / 59.18),
       // so `npm run test:coverage` fails if coverage drops. Raise them as tests land.
-      thresholds: { statements: 54, branches: 45, functions: 44, lines: 55 },
+      thresholds: { statements: 57, branches: 47, functions: 48, lines: 59 },
       // Explicit `/**` globs: since Vitest 5 these match paths relative to the
       // root, and a bare `models/` no longer excluded the generated models.
       exclude: [

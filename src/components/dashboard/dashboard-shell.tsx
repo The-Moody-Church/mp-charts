@@ -3,7 +3,7 @@
 import { useState, useEffect, useTransition, useCallback, useMemo, useRef } from 'react';
 import { RefreshCw, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { DashboardData } from '@/lib/dto';
+import { DashboardData, DashboardRefreshResult } from '@/lib/dto';
 import { DashboardMetrics } from './dashboard-metrics';
 import {
   DateRangeFilter,
@@ -11,9 +11,8 @@ import {
   getDefaultSelection,
   selectionToDateRange,
 } from './date-range-filter';
-import { refreshDashboardCache, getFullRangeDashboardMetrics, getExtendedDashboardMetrics, getEngagementDashboardMetrics } from './actions';
+import { refreshDashboardCache, getExtendedDashboardMetrics, getEngagementDashboardMetrics } from './actions';
 import { filterDashboardData, isSingleMonthSelection } from './filter-dashboard-data';
-import { useRouter } from 'next/navigation';
 
 interface DashboardShellProps {
   /** Full-range data loaded server-side, filtered client-side on selection change */
@@ -43,7 +42,6 @@ function formatSelectionDescription(selection: DateRangeSelection): string {
 }
 
 export function DashboardShell({ initialData }: DashboardShellProps) {
-  const router = useRouter();
   const [selection, setSelection] = useState<DateRangeSelection>(getDefaultSelection);
   const [fullData, setFullData] = useState<DashboardData>(initialData);
   const [extendedLoading, setExtendedLoading] = useState(true);
@@ -69,6 +67,7 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
       if (!cancelled) {
         extendedRef.current = extended;
         setFullData(prev => ({ ...prev, ...extended }));
+        setExtendedError(false); // a Refresh that failed while this was in flight may have set it
         setExtendedLoading(false);
       }
     }).catch(err => {
@@ -88,6 +87,7 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
       if (!cancelled) {
         engagementRef.current = engagement;
         setFullData(prev => ({ ...prev, ...engagement }));
+        setEngagementError(false); // a Refresh that failed while this was in flight may have set it
         setEngagementLoading(false);
       }
     }).catch(err => {
@@ -121,58 +121,51 @@ export function DashboardShell({ initialData }: DashboardShellProps) {
       // Nothing here may throw: an error escaping a transition goes to the route's
       // error boundary, which would replace data the user already has with an
       // error page. Each part that fails keeps what is on screen instead.
+      //
+      // refreshDashboardCache reloads every section from MP itself and returns the
+      // ones that reloaded, so there is no second read here: a second read would be
+      // served the old cached value of a section whose reload failed, and report
+      // success.
       setRefreshError(null);
-      const cacheResult = await refreshDashboardCache().catch((err: unknown) => {
+      const result: DashboardRefreshResult = await refreshDashboardCache().catch((err: unknown) => {
         console.error('Error refreshing dashboard cache:', err);
-        return { success: false, timestamp: new Date() };
+        return { success: false, refused: true, timestamp: new Date() };
       });
 
-      // Re-fetch core, extended, and engagement data; apply whichever succeeded.
-      const [core, extended, engagement] = await Promise.allSettled([
-        getFullRangeDashboardMetrics(),
-        getExtendedDashboardMetrics(),
-        getEngagementDashboardMetrics(),
-      ]);
-
-      if (extended.status === 'fulfilled') {
-        extendedRef.current = extended.value;
+      if (result.extended) {
+        extendedRef.current = result.extended;
         setExtendedError(false);
-      } else {
-        console.error('Error refreshing extended dashboard data:', extended.reason);
-        if (!extendedRef.current) setExtendedError(true);
+      } else if (!extendedRef.current && !result.refused) {
+        setExtendedError(true);
       }
-      if (engagement.status === 'fulfilled') {
-        engagementRef.current = engagement.value;
+      if (result.engagement) {
+        engagementRef.current = result.engagement;
         setEngagementError(false);
-      } else {
-        console.error('Error refreshing engagement dashboard data:', engagement.reason);
-        if (!engagementRef.current) setEngagementError(true);
-      }
-      if (core.status === 'rejected') {
-        console.error('Error refreshing dashboard data:', core.reason);
+      } else if (!engagementRef.current && !result.refused) {
+        setEngagementError(true);
       }
 
+      const freshCore = result.core;
       setFullData(prev => ({
-        ...(core.status === 'fulfilled' ? core.value : prev),
+        ...(freshCore ?? prev),
         ...(extendedRef.current ?? {}),
         ...(engagementRef.current ?? {}),
       }));
-      setExtendedLoading(false);
-      setEngagementLoading(false);
-
-      const anyFailed = [core, extended, engagement].some(r => r.status === 'rejected');
-      if (!cacheResult.success || anyFailed) {
-        setRefreshError(
-          anyFailed
-            ? 'Some data could not be refreshed from Ministry Platform, so the previous data is still shown. Try again in a few minutes.'
-            : 'The dashboard could not be refreshed right now, so the cached data is still shown. Try again later.'
-        );
-      } else {
-        setLastRefresh(cacheResult.timestamp);
+      // A refused refresh leaves a stage that is still loading to its own effect.
+      if (!result.refused) {
+        setExtendedLoading(false);
+        setEngagementLoading(false);
       }
-      if (core.status === 'fulfilled') router.refresh();
+
+      if (result.refused) {
+        setRefreshError('The dashboard could not be refreshed right now, so the cached data is still shown. Try again later.');
+      } else if (!result.success) {
+        setRefreshError('Some data could not be refreshed from Ministry Platform, so the previous data is still shown. Try again in a few minutes.');
+      } else {
+        setLastRefresh(result.timestamp);
+      }
     });
-  }, [router]);
+  }, []);
 
   return (
     <div className="space-y-8">

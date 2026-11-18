@@ -111,16 +111,30 @@ export function selectionToDateRange(selection: DateRangeSelection): {
   return { startDate, endDate };
 }
 
-/** Compute the previous-period date range by shifting back one year */
+/**
+ * The same calendar day `years` years earlier (or later), keeping the time of day
+ * and clamping to the last day of the target month: Feb 29 2028 minus one year is
+ * Feb 28 2027. `setFullYear` alone rolls Feb 29 over to Mar 1, which put a whole
+ * extra day, and with it an extra month, into the previous period.
+ */
+export function shiftYearsClamped(date: Date, years: number): Date {
+  const year = date.getFullYear() + years;
+  const month = date.getMonth();
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const shifted = new Date(date);
+  shifted.setFullYear(year, month, Math.min(date.getDate(), lastDay));
+  return shifted;
+}
+
+/** Compute the previous-period date range by shifting back one year (same calendar month). */
 export function getPreviousPeriodRange(startDate: Date, endDate: Date): {
   startDate: Date;
   endDate: Date;
 } {
-  const prevStart = new Date(startDate);
-  prevStart.setFullYear(prevStart.getFullYear() - 1);
-  const prevEnd = new Date(endDate);
-  prevEnd.setFullYear(prevEnd.getFullYear() - 1);
-  return { startDate: prevStart, endDate: prevEnd };
+  return {
+    startDate: shiftYearsClamped(startDate, -1),
+    endDate: shiftYearsClamped(endDate, -1),
+  };
 }
 
 /** Get the default selection: current ministry year with compare on */

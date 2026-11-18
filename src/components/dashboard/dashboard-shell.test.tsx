@@ -18,27 +18,20 @@ import type { DashboardData } from '@/lib/dto';
 
 const {
   mockRefreshDashboardCache,
-  mockGetFullRange,
   mockGetExtended,
   mockGetEngagement,
-  mockRouterRefresh,
 } = vi.hoisted(() => ({
   mockRefreshDashboardCache: vi.fn(),
-  mockGetFullRange: vi.fn(),
   mockGetExtended: vi.fn(),
   mockGetEngagement: vi.fn(),
-  mockRouterRefresh: vi.fn(),
 }));
 
+// getFullRangeDashboardMetrics is deliberately absent: the shell must not re-read
+// the core data after a Refresh (see 'Refresh Data' below).
 vi.mock('./actions', () => ({
   refreshDashboardCache: mockRefreshDashboardCache,
-  getFullRangeDashboardMetrics: mockGetFullRange,
   getExtendedDashboardMetrics: mockGetExtended,
   getEngagementDashboardMetrics: mockGetEngagement,
-}));
-
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ refresh: mockRouterRefresh }),
 }));
 
 vi.mock('./filter-dashboard-data', () => ({
@@ -89,12 +82,21 @@ const engagement = (totalActivity: number) =>
 
 const REFRESHED_AT = new Date('2026-11-17T15:00:00Z');
 
+/** What refreshDashboardCache returns: a section is present only if it reloaded. */
+const refreshed = (sections: { core?: number; extended?: number; engagement?: number }) => ({
+  success: sections.core !== undefined && sections.extended !== undefined && sections.engagement !== undefined,
+  refused: false,
+  timestamp: REFRESHED_AT,
+  ...(sections.core !== undefined && { core: core(sections.core) }),
+  ...(sections.extended !== undefined && { extended: extended(sections.extended) }),
+  ...(sections.engagement !== undefined && { engagement: engagement(sections.engagement) }),
+});
+
 beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {});
-  mockRefreshDashboardCache.mockResolvedValue({ success: true, timestamp: REFRESHED_AT });
+  mockRefreshDashboardCache.mockResolvedValue(refreshed({ core: 5, extended: 7, engagement: 42 }));
   mockGetExtended.mockResolvedValue(extended(7));
   mockGetEngagement.mockResolvedValue(engagement(42));
-  mockGetFullRange.mockResolvedValue(core(5));
 });
 
 async function renderLoaded() {
@@ -126,11 +128,11 @@ describe('Refresh Data', () => {
   const clickRefresh = () => fireEvent.click(screen.getByRole('button', { name: /refresh data/i }));
   const idle = () => waitFor(() => expect(screen.getByRole('button', { name: /refresh data/i })).not.toBeDisabled());
 
-  it('applies all three fresh results, shows the time, and refreshes the route', async () => {
+  it('applies all three sections the action returns and shows the time, with no second read', async () => {
     await renderLoaded();
-    mockGetFullRange.mockResolvedValue(core(6));
-    mockGetExtended.mockResolvedValue(extended(8));
-    mockGetEngagement.mockResolvedValue(engagement(43));
+    mockGetExtended.mockClear();
+    mockGetEngagement.mockClear();
+    mockRefreshDashboardCache.mockResolvedValue(refreshed({ core: 6, extended: 8, engagement: 43 }));
 
     clickRefresh();
     await idle();
@@ -140,16 +142,17 @@ describe('Refresh Data', () => {
     expect(screen.getByTestId('venn').textContent).toBe('43');
     expect(screen.getByText(/last refreshed/i)).toBeInTheDocument();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
-    expect(mockRouterRefresh).toHaveBeenCalledTimes(1);
+    // A second read would be served the old cached value of a section whose
+    // reload failed, and report it as refreshed.
+    expect(mockGetExtended).not.toHaveBeenCalled();
+    expect(mockGetEngagement).not.toHaveBeenCalled();
   });
 
   // Was a bug: Promise.all rejected on the extended failure, the rejection left
   // the transition, and the error boundary replaced the whole dashboard.
-  it('keeps the previous extended data when only its refresh fails, and applies the rest', async () => {
+  it('keeps the previous extended data when only its reload fails, and applies the rest', async () => {
     await renderLoaded();
-    mockGetFullRange.mockResolvedValue(core(6)); // carries placeholder serving = 0
-    mockGetExtended.mockRejectedValue(new Error('Group_Participants timeout'));
-    mockGetEngagement.mockResolvedValue(engagement(43));
+    mockRefreshDashboardCache.mockResolvedValue(refreshed({ core: 6, engagement: 43 })); // core carries serving = 0
 
     clickRefresh();
     await idle();
@@ -162,42 +165,54 @@ describe('Refresh Data', () => {
     expect(screen.queryByText(/last refreshed/i)).not.toBeInTheDocument();
   });
 
-  it('keeps everything on screen when the core refresh fails, without refreshing the route', async () => {
+  // Was a bug: the action left the core MP fetch to the page render in its own
+  // response, and the shell then re-read the core data. A failure there was
+  // already spent, so the re-read got the old cached value, the shell showed no
+  // warning and set "Last refreshed".
+  it('says the core data was not refreshed when the action reports its reload failed', async () => {
     await renderLoaded();
-    mockGetFullRange.mockRejectedValue(new Error('Event_Metrics timeout'));
+    mockRefreshDashboardCache.mockResolvedValue(refreshed({ extended: 8, engagement: 43 }));
 
     clickRefresh();
     await idle();
 
     expect(screen.getByTestId('core').textContent).toBe('3');
-    expect(screen.getByTestId('serving').textContent).toBe('7');
+    expect(screen.getByTestId('serving').textContent).toBe('8');
     expect(screen.getByRole('status').textContent).toMatch(/previous data is still shown/i);
-    expect(mockRouterRefresh).not.toHaveBeenCalled();
+    expect(screen.queryByText(/last refreshed/i)).not.toBeInTheDocument();
   });
 
-  it('survives every read failing, and the next successful Refresh clears the message', async () => {
+  it('survives the action itself failing, and the next successful Refresh clears the message', async () => {
     await renderLoaded();
     mockRefreshDashboardCache.mockRejectedValue(new Error('network'));
-    mockGetFullRange.mockRejectedValue(new Error('down'));
-    mockGetExtended.mockRejectedValue(new Error('down'));
-    mockGetEngagement.mockRejectedValue(new Error('down'));
 
     clickRefresh();
     await idle();
     expect(screen.getByTestId('core').textContent).toBe('3');
+    expect(screen.getByTestId('serving').textContent).toBe('7');
     expect(screen.getByRole('status')).toBeInTheDocument();
 
-    mockRefreshDashboardCache.mockResolvedValue({ success: true, timestamp: REFRESHED_AT });
-    mockGetFullRange.mockResolvedValue(core(6));
-    mockGetExtended.mockResolvedValue(extended(8));
-    mockGetEngagement.mockResolvedValue(engagement(43));
+    mockRefreshDashboardCache.mockResolvedValue(refreshed({ core: 6, extended: 8, engagement: 43 }));
     clickRefresh();
     await idle();
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
     expect(screen.getByTestId('core').textContent).toBe('6');
   });
 
-  it('clears a stage error once a Refresh loads that stage', async () => {
+  it('keeps everything on screen when every section fails to reload', async () => {
+    await renderLoaded();
+    mockRefreshDashboardCache.mockResolvedValue(refreshed({}));
+
+    clickRefresh();
+    await idle();
+    expect(screen.getByTestId('core').textContent).toBe('3');
+    expect(screen.getByTestId('serving').textContent).toBe('7');
+    expect(screen.getByTestId('venn').textContent).toBe('42');
+    expect(screen.getByTestId('flags').textContent).toBe('none');
+    expect(screen.getByRole('status').textContent).toMatch(/previous data is still shown/i);
+  });
+
+  it('clears a stage error once a Refresh reloads that stage', async () => {
     mockGetExtended.mockRejectedValueOnce(new Error('MP down'));
     render(<DashboardShell initialData={core(3)} />);
     await waitFor(() => expect(screen.getByTestId('flags').textContent).toBe('extended-error'));
@@ -208,23 +223,49 @@ describe('Refresh Data', () => {
     expect(screen.getByTestId('serving').textContent).toBe('7');
   });
 
-  it('keeps a stage error when its refresh fails too and nothing ever loaded', async () => {
+  it('keeps a stage error when its reload fails too and nothing ever loaded', async () => {
     mockGetExtended.mockRejectedValue(new Error('MP down'));
     render(<DashboardShell initialData={core(3)} />);
     await waitFor(() => expect(screen.getByTestId('flags').textContent).toBe('extended-error'));
+    mockRefreshDashboardCache.mockResolvedValue(refreshed({ core: 6, engagement: 43 }));
 
     clickRefresh();
     await idle();
     expect(screen.getByTestId('flags').textContent).toBe('extended-error');
   });
 
-  it('says so when the cache refresh itself is refused (e.g. rate limited)', async () => {
-    await renderLoaded();
-    mockRefreshDashboardCache.mockResolvedValue({ success: false, timestamp: REFRESHED_AT });
+  it('says so when the refresh itself is refused (e.g. rate limited), and leaves a loading stage loading', async () => {
+    let releaseEngagement!: (v: unknown) => void;
+    mockGetEngagement.mockReturnValue(new Promise((resolve) => (releaseEngagement = resolve)));
+    render(<DashboardShell initialData={core(3)} />);
+    await waitFor(() => expect(screen.getByTestId('flags').textContent).toBe('engagement-loading'));
+    mockRefreshDashboardCache.mockResolvedValue({ success: false, refused: true, timestamp: REFRESHED_AT });
 
     clickRefresh();
     await idle();
     expect(screen.getByRole('status').textContent).toMatch(/could not be refreshed right now/i);
     expect(screen.queryByText(/last refreshed/i)).not.toBeInTheDocument();
+    // Neither an error nor done: its own first load is still on the way.
+    expect(screen.getByTestId('flags').textContent).toBe('engagement-loading');
+
+    releaseEngagement(engagement(42));
+    await waitFor(() => expect(screen.getByTestId('flags').textContent).toBe('none'));
+    expect(screen.getByTestId('venn').textContent).toBe('42');
+  });
+
+  it('lets a first load that was still in flight clear the error a failed Refresh set', async () => {
+    let releaseEngagement!: (v: unknown) => void;
+    mockGetEngagement.mockReturnValue(new Promise((resolve) => (releaseEngagement = resolve)));
+    render(<DashboardShell initialData={core(3)} />);
+    await waitFor(() => expect(screen.getByTestId('flags').textContent).toBe('engagement-loading'));
+    mockRefreshDashboardCache.mockResolvedValue(refreshed({ core: 6, extended: 8 }));
+
+    clickRefresh();
+    await idle();
+    expect(screen.getByTestId('flags').textContent).toBe('engagement-error');
+
+    releaseEngagement(engagement(42));
+    await waitFor(() => expect(screen.getByTestId('flags').textContent).toBe('none'));
+    expect(screen.getByTestId('venn').textContent).toBe('42');
   });
 });

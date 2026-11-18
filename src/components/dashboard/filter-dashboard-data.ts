@@ -18,6 +18,7 @@ import {
   DateRangeSelection,
   selectionToDateRange,
   getPreviousPeriodRange,
+  shiftYearsClamped,
 } from './date-range-filter';
 
 const MONTH_NAMES = [
@@ -122,8 +123,8 @@ export function filterDashboardData(
   //   elapsed number of days (today shifted back one year).
   const { startDate: prevStart, endDate: prevEnd } = getPreviousPeriodRange(startDate, endDate);
   const today = new Date();
-  const todayPrevYear = new Date(today);
-  todayPrevYear.setFullYear(todayPrevYear.getFullYear() - 1);
+  // Clamped, so Feb 29 maps to Feb 28 rather than rolling over to Mar 1.
+  const todayPrevYear = shiftYearsClamped(today, -1);
   // Cap the previous metrics end date to the lesser of the full previous end
   // or today-minus-one-year (so partial current periods get fair comparisons)
   const prevMetricsEnd = todayPrevYear < prevEnd ? todayPrevYear : prevEnd;

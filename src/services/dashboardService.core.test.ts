@@ -1120,11 +1120,11 @@ describe('getDashboardData', () => {
     expect(console.error).toHaveBeenCalledWith(expect.stringContaining(logPrefix), expect.stringContaining('timeout'));
   });
 
-  // Was a bug: getCachedDashboardData passes Aug 31 at local midnight, and every
+  // Was a bug: the cached loaders pass Aug 31 at local midnight, and every
   // upper bound was `<=` that midnight, so an Aug 31 service fell out of the
   // weekly series, the August monthly trend and the period metrics. Rows go
   // through a fake of MP's date predicates, so this checks the rows returned.
-  it('counts an Aug 31 service when the year ends on Aug 31 at midnight (as getCachedDashboardData builds it)', async () => {
+  it('counts an Aug 31 service when the year ends on Aug 31 at midnight (as the cached loaders build it)', async () => {
     const EVENTS = [
       { Event_ID: 3, Event_Start_Date: '2026-08-31T10:00:00', Event_End_Date: '2026-08-31T11:30:00' },
       { Event_ID: 4, Event_Start_Date: '2026-09-06T10:00:00', Event_End_Date: '2026-09-06T11:30:00' }, // next year
@@ -1162,13 +1162,13 @@ describe('getDashboardData', () => {
     );
     const service = await DashboardService.getInstance();
 
-    await expect(service.getDashboardData(start, end)).rejects.toThrow(/1\/12 monthly queries failed/);
+    await expect(service.getDashboardData(start, end)).rejects.toThrow(/1\/24 monthly queries failed/);
   });
 
   it('rejects when every monthly attendance query fails (load-bearing for stale-while-revalidate)', async () => {
     dispatcher((p) => (isMonthlyEventsQuery(p) ? Promise.reject(new Error('ConnectTimeoutError')) : undefined));
     const service = await DashboardService.getInstance();
 
-    await expect(service.getDashboardData(start, end)).rejects.toThrow(/12\/12 monthly queries failed/);
+    await expect(service.getDashboardData(start, end)).rejects.toThrow(/24\/24 monthly queries failed/);
   });
 });

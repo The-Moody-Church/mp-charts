@@ -1,7 +1,7 @@
 import { cacheLife, cacheTag } from 'next/cache';
 import { MPHelper } from '@/lib/providers/ministry-platform';
 import { sanitizeIds } from '@/lib/providers/ministry-platform/utils/filter-sanitize';
-import { toMpDateRange, monthWindows } from '@/lib/providers/ministry-platform/utils/mp-date-range';
+import { toMpDateRange, monthWindows, calendarDay } from '@/lib/providers/ministry-platform/utils/mp-date-range';
 import { serviceCache, CACHE_TTL } from '@/lib/service-cache';
 import { errorForLog } from '@/lib/log-safe';
 import { mergeSpansByKey } from '@/services/dashboard-spans';
@@ -56,7 +56,7 @@ const MONTH_NAMES = [
  * Cached Group_Types lookup (24-hour revalidate, 48-hour stale window).
  * The `ids` parameter is automatically part of the cache key.
  *
- * NOTE: This function is warmed indirectly by getCachedDashboardData/getCachedFullRangeData.
+ * NOTE: This function is warmed indirectly by getCachedFullRangeData/getCachedExtendedData.
  * If you add a new 'use cache' function here, you MUST register it in
  * src/lib/cache-warming.ts so it is pre-warmed on container start.
  * See the "Cache Warming" section in CLAUDE.md.
@@ -77,6 +77,17 @@ async function getCachedGroupTypes(ids: string) {
       filter: `Group_Type_ID IN (${sanitizeIds(ids.split(',').map(Number))})`
     });
   });
+}
+
+/**
+ * The months of a monthly series ('YYYY-MM' keys) from the month containing
+ * `startDate` through the month containing `endDate`, the same whole-month
+ * windows getMonthlyAttendanceTrends queries for that range (monthWindows).
+ */
+function monthsWithin<T extends { month: string }>(series: T[], startDate: Date, endDate: Date): T[] {
+  const first = calendarDay(startDate).slice(0, 7);
+  const last = calendarDay(endDate).slice(0, 7);
+  return series.filter((m) => m.month >= first && m.month <= last);
 }
 
 /**
@@ -179,8 +190,7 @@ export class DashboardService {
       groupTypeMetrics,
       smallGroupTrends,
       communityTrends,
-      monthlyAttendanceTrends,
-      previousYearMonthlyAttendanceTrends,
+      attendanceSeries,
       weeklyAttendanceTrends,
       baptismDates,
       membershipDates,
@@ -192,14 +202,23 @@ export class DashboardService {
       this.getGroupTypeMetrics(currentYearStart, currentYearEnd),
       this.getSmallGroupTrends(currentYearStart, currentYearEnd),
       this.getCommunityAttendanceTrends(currentYearStart, currentYearEnd),
-      this.getMonthlyAttendanceTrends(currentYearStart, currentYearEnd),
-      this.getMonthlyAttendanceTrends(previousYearStart, previousYearEnd),
+      // ONE monthly series covering both periods, split below. The two periods
+      // overlap in every year but the first (for the full range: 48 of the current
+      // series' months, two MP calls each), and fetching them separately queried
+      // the overlap twice and gave the all-or-nothing section twice the calls to fail.
+      this.getMonthlyAttendanceTrends(
+        previousYearStart < currentYearStart ? previousYearStart : currentYearStart,
+        currentYearEnd > previousYearEnd ? currentYearEnd : previousYearEnd,
+      ),
       this.getWeeklyAttendanceTrends(currentYearStart, currentYearEnd),
       this.getMilestoneDates(3, currentYearStart, currentYearEnd),           // Baptism
       this.getMilestoneDates(48, currentYearStart, currentYearEnd),          // Registered Member
       this.getMilestoneDates(51, currentYearStart, currentYearEnd),          // Associate Member
       this.getMilestoneDates(52, currentYearStart, currentYearEnd),          // Youth Member
     ]);
+
+    const monthlyAttendanceTrends = monthsWithin(attendanceSeries, currentYearStart, currentYearEnd);
+    const previousYearMonthlyAttendanceTrends = monthsWithin(attendanceSeries, previousYearStart, previousYearEnd);
 
     return {
       currentPeriod,
