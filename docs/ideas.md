@@ -60,9 +60,6 @@ Ideas and enhancements for the MPNext project. This file syncs bidirectionally w
 - ~~[Reduce Activity Log Query/Cache (#97)](#reduce-activity-log-querycache-97)~~ ✅
 
 ### Technical Debt
-- [Dashboard caches empty data when one Ministry Platform read fails](#dashboard-caches-empty-data-when-one-ministry-platform-read-fails)
-- [Dashboard leaves out services held on the last day of a month](#dashboard-leaves-out-services-held-on-the-last-day-of-a-month)
-- [Dashboard can show active members and servers as having left](#dashboard-can-show-active-members-and-servers-as-having-left)
 - [Admin tool actions: write rate limit, save the validated config, clear the cache first](#admin-tool-actions-write-rate-limit-save-the-validated-config-clear-the-cache-first)
 - [Ministry year rolls over on UTC, not Central](#ministry-year-rolls-over-on-utc-not-central)
 - [Adopt TypeScript 7 once typescript-eslint supports it (#286)](#adopt-typescript-7-once-typescript-eslint-supports-it-286)
