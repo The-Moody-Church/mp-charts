@@ -60,7 +60,7 @@ Picked up the older open items: #297, audit LOW findings N9–N19, and the unlog
 - **Next:** batch 1 (N9 proxy matcher anchoring, N13 `originOf`, N14 next.config, `base-uri 'none'`), mp-charts
   first, then the three sibling repos after a `:dev` soak.
 
-### Batch 1 — headers and proxy (N9, N13, N14) — IN PROGRESS
+### Batch 1 — headers and proxy (N9, N13, N14) — COMPLETED (PR #320)
 
 Branch `security/batch1-headers-proxy`.
 - `src/proxy.ts`: `/api` public only as `/api` or `/api/...`; matcher exclusions bounded (`_next/static/`,
@@ -77,3 +77,10 @@ Branch `security/batch1-headers-proxy`.
 - Checks: tsc, lint, 1886 tests, build, `check:shells`, `check:standalone`, audit gate.
 - **Found on the way:** GHSA-fc5q-39xc-vjpf (picomatch) was **withdrawn** 2026-11-18 15:38 UTC. The gate now warns the
   allow-list entry is stale; remove it (and `production_via_optional_peer`) in all four repos as its own change.
+- PR #320: CI green; independent three-lens review on a standalone build found no defects. Soaked on `:dev`
+  (`e059fca`) 18:13 UTC: production smoke showed CSP `base-uri 'none'` with the MP origin kept, no `X-Powered-By`,
+  `/_next/image` 404, `/sw.jsx` 307, `/sw.js` 200; owner signed in and approved. Merged as `a10376b`; main CI green;
+  `:latest` deployed to TMC1 18:42 UTC (labels `branch: main`, `sha: a10376b`), cache warming on attempt 1,
+  `/` 307, `/signin` 200.
+- **Next:** port batch 1 to event-manager, mp-senior-care and music-db; then batch 2 (auth core). Separately, drop
+  the withdrawn picomatch allow-list entry in all four repos.
