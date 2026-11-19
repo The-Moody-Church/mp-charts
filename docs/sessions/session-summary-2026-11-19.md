@@ -36,7 +36,7 @@ returned to the app in all four. Merged and `:latest` deployed 16:22 UTC; cache 
 
 **Soak tip:** sign out (or wait out the hour) and sign in fresh after a swap before judging sign-out.
 
-## Batch 3 — MP client, low risk — IN PROGRESS (branch pushed, review fixed, no PR yet)
+## Batch 3 — MP client, low risk — COMPLETED (#323, merged `486c0a7`, deployed 2026-11-19)
 
 Branch `security/batch3-mp-client`. N12 (MP client half) and N21; upstream 9b7b4d1, 5aa0b5e (minus the 401 retry and
 negative cache, batch 8), 41bba94 + 3d9ae92 (minus the trusted-sender rewrite: no caller).
@@ -87,9 +87,12 @@ negative cache, batch 8), 41bba94 + 3d9ae92 (minus the trusted-sender rewrite: n
     refused with the static `invalid token response`); JWT/b64token/hex shapes accepted.
   - Mutants checked: each new test fails against the reverted line (backslash 2, GUID 1, errorName 1, token 5,
     log-site 2).
-- **Next:** PR, then a `:dev` soak with a cold dashboard warm (sign-in soak not required), then the sibling ports
-  (event-manager must pass its three procedure names through `allowedProcedures`).
+- **PR #323**, CI green. **`:dev` soak** from 17:13 UTC (rollback pin = batch 2 `57f4723` image): cold warm 4/4 on
+  attempt 1 (37 s, the full ~31-call fan-out through the single-flight token), no MP errors; owner checked the
+  dashboard, a manual refresh, a contact lookup with photo and a journey/compliance file list. Merged `486c0a7`;
+  `:latest` deployed 17:22 UTC, warm 4/4 on attempt 1.
+- **Next:** sibling ports (event-manager must pass its three procedure names through `allowedProcedures`).
 
 ## Next
 
-Batch 3 PR and soak, sibling ports, then batches 4–10 and the N17 verifier port.
+Batch 3 sibling ports, then batches 4–10 and the N17 verifier port.
