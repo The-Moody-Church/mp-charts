@@ -100,6 +100,40 @@ negative cache, batch 8), 41bba94 + 3d9ae92 (minus the trusted-sender rewrite: n
   event-manager or music-tools. All three on `:dev` from 17:40 UTC (cold warms on attempt 1, no MP errors); the owner
   tested event-manager (event creates) and chose to deploy the other two untested. `:latest` deployed 17:50 UTC.
 
+## Batch 4 — contact logs and data minimisation — IN PROGRESS (branch `security/batch4-contact-logs`, no PR yet)
+
+Scope from `.claude/plans/open-items-2026-11-18.md` (batch 4, gap 1, decision 7; N11, upstream defd338, 710dfa8,
+dc4a25b, a11c2a3; CodeQL #37). Owner decisions: delete all three orphans, keep no dead contact code, no
+`Contact_Log_Type_ID` existence check.
+
+- **N11 / defd338.** Deleted `deleteContactLog`, `getContactLogsByContactId` (general-tier duplicate of the
+  search-tier contact-lookup-details read) and `getContactLogById` (any log's Notes by ID) from
+  `contact-logs/actions.ts`, with their tests and mocks; `ContactLogService.getContactLogById` stays (update
+  ownership). The four remaining catch blocks log `errorForLog(error)`. `mp-datetime.ts` throws static messages.
+  New `src/server-action-exports.test.ts`: every export of every file-level `'use server'` module under `src/` (13
+  modules) needs a non-test importer (named imports, `ns.name`, re-exports through barrels; namespace-as-value and
+  dynamic imports refused). On the old tree it fails naming exactly the three orphans.
+- **710dfa8 (adapted).** `getContactLogsByContactId` (contact-lookup-details) builds each `ContactLogDisplay` field
+  by field: `Contact_Log_ID`, `Contact_Date`, `Notes`, `Contact_Log_Type`, `Contact_Log_Type_ID`, `Made_By`,
+  `MadeByContact` (`{ First_Name, Nickname, Last_Name }`). `dp_Users` select is `User_ID` + the three names. DTOs
+  trimmed (`ContactLogMadeBy` lost Contact_ID/Email_Address/Mobile_Phone/Image_GUID, `ContactLogDisplay` lost
+  Contact_ID). Exact-key-set tests.
+- **dc4a25b (adapted).** Service create/update use `.pick()` allowlists; create record built field by field;
+  `searchContactLogs` deleted; null link fields dropped from `contact-logs.tsx` and `createAutoContactLog`; input
+  types narrowed (`ContactLogCreateInput`/`UpdateInput` are now `Pick`s, imported by the actions). Smuggled-key
+  tests. `security.md` attribution section and the service JSDoc updated.
+- **a11c2a3 + gap 1.** Deleted `ContactService.contactSearch` and `ContactService.updateContact` and their tests.
+  `sanitizeFilterValue`/`sanitizeLikeValue`/`sanitizeGuid` refuse non-strings with fixed messages
+  (`sanitizeGuid(['<guid>'])` used to return the array). Every live caller passes a string.
+- **CodeQL #37.** `dashboardService.core.test.ts` `inList` uses a full regex-metacharacter escape incl. backslash.
+- **Checks.** New tests fail on the old source (35 failures across 6 files with the old sources swapped in, then
+  restored). `tsc`, lint clean; 100 files / 2259 tests; coverage 60.12 / 51.42 / 51.5 / 61.36 (floors 59/50/50/60
+  hold); build and `check:standalone` pass. Manifest: 80 entries = 75 actions + 5 cache; contact-lookup-details
+  `getContactLogsByContactId` present; contact-logs has only its five live actions, no read of logs.
+- **Next:** PR, then `:dev` click-through (contact lookup: logs show author names, owner-only Edit, create and edit a
+  log). Mirror to mp-senior-care as is; event-manager needs the #85 shape and `COMMUNICATION_TYPES` first; siblings
+  also need `sanitizeLikeValue` and a search cap.
+
 ## Next
 
 Batches 4–10 and the N17 verifier port.

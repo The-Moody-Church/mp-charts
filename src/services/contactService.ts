@@ -1,12 +1,12 @@
 import { ContactSearch, ContactLookupDetails, HouseholdMember, ContactBadges, ContactGroupMembership } from "@/lib/dto";
 import { MPHelper } from "@/lib/providers/ministry-platform";
-import { sanitizeLikeValue, sanitizeGuid, sanitizeIds } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
+import { sanitizeGuid, sanitizeIds } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
 
 /**
  * ContactService - Singleton service for managing contact-related operations
  * 
  * This service provides methods to interact with contact data from Ministry Platform,
- * including searching for contacts and retrieving individual contact information.
+ * including the cached-search contact list and individual contact information.
  * Uses the singleton pattern to ensure a single instance across the application.
  */
 export class ContactService {
@@ -33,25 +33,6 @@ export class ContactService {
       ContactService.instance.mp = new MPHelper();
     }
     return ContactService.instance;
-  }
-
-  /**
-   * Searches for contacts based on a search term
-   * Performs a fuzzy search across multiple contact fields including name, email, and phone
-   * 
-   * @param search - The search term to match against contact fields
-   * @returns Promise<ContactSearch[]> - Array of matching contacts (limited to 20 results)
-   */
-  public async contactSearch(search: string): Promise<ContactSearch[]> {
-    const safe = sanitizeLikeValue(search);
-    const records = await this.mp!.getTableRecords<ContactSearch>({
-      table: "Contacts",
-      filter: `First_Name LIKE '%${safe}%' OR Last_Name LIKE '%${safe}%' OR Nickname LIKE '%${safe}%' OR Email_Address LIKE '%${safe}%' OR Mobile_Phone LIKE '%${safe}%'`,
-      select: "Contact_ID, Contact_GUID,First_Name,Nickname,Last_Name,Email_Address,Mobile_Phone,dp_fileUniqueId AS Image_GUID",
-      top: 20
-    });
-    
-    return records;
   }
 
   /**
@@ -82,25 +63,6 @@ export class ContactService {
     });
 
     return records.length > 0 ? records[0] : null;
-  }
-
-  /**
-   * Updates specific fields for a contact
-   * 
-   * @param contactId - The Contact_ID of the contact to update
-   * @param fields - Partial object containing the fields to update (Email_Address, Mobile_Phone)
-   * @returns Promise<void>
-   */
-  public async updateContact(
-    contactId: number,
-    fields: Partial<Pick<ContactSearch, "Email_Address" | "Mobile_Phone">>
-  ): Promise<void> {
-    const record = { Contact_ID: contactId, ...fields };
-
-    await this.mp!.updateTableRecords(
-      "Contacts",
-      [record]
-    );
   }
 
   public async getHouseholdMembers(householdId: number): Promise<HouseholdMember[]> {

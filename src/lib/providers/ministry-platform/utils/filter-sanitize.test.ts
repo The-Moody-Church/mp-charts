@@ -168,3 +168,49 @@ describe('sanitizeId safe-integer bounds', () => {
     expect(() => sanitizeId('9007199254740993')).toThrow('Invalid ID');
   });
 });
+
+/**
+ * upstream a11c2a3 (adapted): React Flight args are type-erased, so a
+ * "string" can arrive as an array or object. Each string sanitizer throws a
+ * fixed message rather than coercing it. Before this, sanitizeGuid(['<guid>'])
+ * passed (RegExp.test coerces the array to its one element) and returned the
+ * array.
+ */
+describe('string sanitizers refuse non-strings', () => {
+  const GUID = '12345678-1234-4234-8234-123456789abc';
+  const nonStrings: unknown[] = [[GUID], ["O'Brien"], { toString: () => 'x' }, 42, null, undefined, true];
+
+  it.each(nonStrings)('sanitizeFilterValue throws for %o', (value) => {
+    expect(() => sanitizeFilterValue(value as string)).toThrow('Invalid filter value');
+  });
+
+  it.each(nonStrings)('sanitizeLikeValue throws for %o', (value) => {
+    expect(() => sanitizeLikeValue(value as string)).toThrow('Invalid filter value');
+  });
+
+  it.each(nonStrings)('sanitizeGuid throws for %o', (value) => {
+    expect(() => sanitizeGuid(value as string)).toThrow('Invalid GUID format');
+  });
+
+  it("sanitizeGuid(['<guid>']) throws instead of returning the array", () => {
+    expect(() => sanitizeGuid([GUID] as unknown as string)).toThrow('Invalid GUID format');
+  });
+
+  it('the messages never echo the value', () => {
+    const marker = { toString: () => 'MARKER-VALUE' };
+    for (const fn of [sanitizeFilterValue, sanitizeLikeValue, sanitizeGuid]) {
+      try {
+        fn(marker as unknown as string);
+        expect.unreachable();
+      } catch (error) {
+        expect((error as Error).message).not.toContain('MARKER');
+      }
+    }
+  });
+
+  it('still accepts real strings', () => {
+    expect(sanitizeFilterValue("O'Brien")).toBe("O''Brien");
+    expect(sanitizeLikeValue('50%')).toBe('50[%]');
+    expect(sanitizeGuid(GUID)).toBe(GUID);
+  });
+});

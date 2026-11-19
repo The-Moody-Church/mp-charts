@@ -8,6 +8,7 @@ const {
   mockGetHouseholdMembers,
   mockGetContactBadges,
   mockGetContactGroupMemberships,
+  mockMpGetTableRecords,
 } = vi.hoisted(() => ({
   mockRequireFeatureAccess: vi.fn(),
   mockEnforceRateLimit: vi.fn(),
@@ -16,6 +17,7 @@ const {
   mockGetHouseholdMembers: vi.fn(),
   mockGetContactBadges: vi.fn(),
   mockGetContactGroupMemberships: vi.fn(),
+  mockMpGetTableRecords: vi.fn(),
 }));
 
 vi.mock('@/lib/authorization', () => ({
@@ -42,6 +44,12 @@ vi.mock('@/services/contactService', () => ({
       getContactBadges: mockGetContactBadges,
       getContactGroupMemberships: mockGetContactGroupMemberships,
     }),
+  },
+}));
+
+vi.mock('@/lib/providers/ministry-platform', () => ({
+  MPHelper: class {
+    getTableRecords = mockMpGetTableRecords;
   },
 }));
 
@@ -106,5 +114,108 @@ describe('type-erased ID rejection (sanitizeId at the action boundary)', () => {
 
     await getHouseholdMembers('7' as unknown as number);
     expect(mockGetHouseholdMembers).toHaveBeenCalledWith(7);
+  });
+});
+
+/**
+ * upstream 710dfa8 (adapted): the contact-log read returns only what
+ * contact-logs.tsx renders or needs. A spread of the MP row, or a wider
+ * dp_Users select, would put the link/flag columns and each staff author's
+ * email, phone and Contact_ID back into the browser; these exact key sets
+ * fail if either comes back.
+ */
+describe('getContactLogsByContactId returns minimal DTOs', () => {
+  const fullRow = {
+    Contact_Log_ID: 11,
+    Contact_ID: 42,
+    Contact_Date: '2026-11-01T12:00:00',
+    Made_By: 7,
+    Notes: 'Visited',
+    Contact_Log_Type_ID: 3,
+    Planned_Contact_ID: 501,
+    Contact_Successful: true,
+    Original_Contact_Log_Entry: 9,
+    Feedback_Entry_ID: 77,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRequireFeatureAccess.mockResolvedValue({ user: { id: 'user-1' } });
+    mockGetContactLogsByContactId.mockResolvedValue([
+      fullRow,
+      { ...fullRow, Contact_Log_ID: 12, Made_By: 8, Contact_Log_Type_ID: null },
+    ]);
+    mockGetContactLogTypes.mockResolvedValue([
+      { Contact_Log_Type_ID: 3, Contact_Log_Type: 'Visit' },
+    ]);
+    // What MP would return if the select were wide: the extra columns must
+    // still not be copied into the DTO.
+    mockMpGetTableRecords.mockResolvedValue([
+      {
+        User_ID: 7,
+        Contact_ID: 900,
+        First_Name: 'Pat',
+        Nickname: 'P',
+        Last_Name: 'Pastor',
+        Email_Address: 'pat@example.org',
+        Mobile_Phone: '555-0100',
+        Image_GUID: 'img',
+      },
+    ]);
+  });
+
+  it('returns each log with exactly the rendered fields', async () => {
+    const logs = await getContactLogsByContactId(42);
+
+    expect(logs).toHaveLength(2);
+    for (const log of logs) {
+      expect(Object.keys(log).sort()).toEqual([
+        'Contact_Date',
+        'Contact_Log_ID',
+        'Contact_Log_Type',
+        'Contact_Log_Type_ID',
+        'MadeByContact',
+        'Made_By',
+        'Notes',
+      ]);
+    }
+    expect(logs[0]).toEqual({
+      Contact_Log_ID: 11,
+      Contact_Date: '2026-11-01T12:00:00',
+      Notes: 'Visited',
+      Contact_Log_Type: 'Visit',
+      Contact_Log_Type_ID: 3,
+      Made_By: 7,
+      MadeByContact: [{ First_Name: 'Pat', Nickname: 'P', Last_Name: 'Pastor' }],
+    });
+    // Author not found: no name, but the log and its Made_By still come back.
+    expect(logs[1].MadeByContact).toBeUndefined();
+    expect(logs[1].Made_By).toBe(8);
+    expect(logs[1].Contact_Log_Type).toBeNull();
+  });
+
+  it('gives MadeByContact only the three name fields', async () => {
+    const [log] = await getContactLogsByContactId(42);
+
+    expect(Object.keys(log.MadeByContact![0]).sort()).toEqual([
+      'First_Name',
+      'Last_Name',
+      'Nickname',
+    ]);
+  });
+
+  it('selects only User_ID and the three name columns from dp_Users', async () => {
+    await getContactLogsByContactId(42);
+
+    expect(mockMpGetTableRecords).toHaveBeenCalledTimes(1);
+    const params = mockMpGetTableRecords.mock.calls[0][0];
+    expect(params.table).toBe('dp_Users');
+    expect(params.filter).toBe('User_ID IN (7,8)');
+    expect(params.select.split(',').sort()).toEqual([
+      'Contact_ID_TABLE.First_Name',
+      'Contact_ID_TABLE.Last_Name',
+      'Contact_ID_TABLE.Nickname',
+      'User_ID',
+    ]);
   });
 });

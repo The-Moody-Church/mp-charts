@@ -7,8 +7,6 @@ const {
   mockGetContactLogTypes,
   mockCreateContactLog,
   mockUpdateContactLog,
-  mockDeleteContactLog,
-  mockGetContactLogsByContactId,
   mockGetContactLogById,
 } = vi.hoisted(() => ({
   mockRequireFeatureAccess: vi.fn(),
@@ -17,8 +15,6 @@ const {
   mockGetContactLogTypes: vi.fn(),
   mockCreateContactLog: vi.fn(),
   mockUpdateContactLog: vi.fn(),
-  mockDeleteContactLog: vi.fn(),
-  mockGetContactLogsByContactId: vi.fn(),
   mockGetContactLogById: vi.fn(),
 }));
 
@@ -40,20 +36,16 @@ vi.mock('@/services/contactLogService', () => ({
       getContactLogTypes: mockGetContactLogTypes,
       createContactLog: mockCreateContactLog,
       updateContactLog: mockUpdateContactLog,
-      deleteContactLog: mockDeleteContactLog,
-      getContactLogsByContactId: mockGetContactLogsByContactId,
       getContactLogById: mockGetContactLogById,
     }),
   },
 }));
 
+import * as actions from './actions';
 import {
   getContactLogTypes,
   createContactLog,
   updateContactLog,
-  deleteContactLog,
-  getContactLogsByContactId,
-  getContactLogById,
   createAutoContactLog,
 } from './actions';
 
@@ -95,10 +87,6 @@ describe('contact-logs actions', () => {
       Contact_Date: '2024-01-15T10:00:00Z',
       Notes: 'Test note',
       Contact_Log_Type_ID: 1,
-      Planned_Contact_ID: null,
-      Contact_Successful: null,
-      Original_Contact_Log_Entry: null,
-      Feedback_Entry_ID: null,
     };
 
     it('should enforce write rate limit', async () => {
@@ -147,10 +135,6 @@ describe('contact-logs actions', () => {
           Contact_Date: '',
           Notes: '',
           Contact_Log_Type_ID: null as unknown as number,
-          Planned_Contact_ID: null,
-          Contact_Successful: null,
-          Original_Contact_Log_Entry: null,
-          Feedback_Entry_ID: null,
         })
       ).rejects.toThrow('Failed to create contact log');
     });
@@ -201,82 +185,6 @@ describe('contact-logs actions', () => {
       mockGetContactLogById.mockResolvedValueOnce(null);
 
       await expect(updateContactLog(1, { Notes: 'Updated' })).rejects.toThrow('Failed to update contact log');
-    });
-  });
-
-  describe('deleteContactLog', () => {
-    it('should enforce write rate limit', async () => {
-      mockGetContactLogById.mockResolvedValueOnce({ Contact_Log_ID: 1, Made_By: 99 });
-      mockDeleteContactLog.mockResolvedValueOnce(undefined);
-      await deleteContactLog(1);
-      expect(mockEnforceRateLimit).toHaveBeenCalledWith('user-1', 'write');
-    });
-
-    it('should throw for invalid contactLogId', async () => {
-      await expect(deleteContactLog(0)).rejects.toThrow('Failed to delete contact log');
-    });
-
-    it('should verify ownership before deleting', async () => {
-      mockGetContactLogById.mockResolvedValueOnce({ Contact_Log_ID: 42, Made_By: 99 });
-      mockDeleteContactLog.mockResolvedValueOnce(undefined);
-      await deleteContactLog(42);
-      expect(mockGetContactLogById).toHaveBeenCalledWith(42);
-      expect(mockDeleteContactLog).toHaveBeenCalledWith(42, 99);
-    });
-
-    it('should throw when user does not own the log entry', async () => {
-      mockGetContactLogById.mockResolvedValueOnce({ Contact_Log_ID: 42, Made_By: 42 });
-      await expect(deleteContactLog(42)).rejects.toThrow(
-        'You can only delete contact logs that you created'
-      );
-      expect(mockDeleteContactLog).not.toHaveBeenCalled();
-    });
-
-    it('should throw when log entry not found', async () => {
-      mockGetContactLogById.mockResolvedValueOnce(null);
-      await expect(deleteContactLog(42)).rejects.toThrow('Failed to delete contact log');
-      expect(mockDeleteContactLog).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('getContactLogsByContactId', () => {
-    it('should require feature access', async () => {
-      mockGetContactLogsByContactId.mockResolvedValueOnce([]);
-      await getContactLogsByContactId(42);
-      expect(mockRequireFeatureAccess).toHaveBeenCalledWith('contact-lookup');
-    });
-
-    it('should throw for invalid contactId', async () => {
-      await expect(getContactLogsByContactId(0)).rejects.toThrow('Failed to fetch contact logs');
-    });
-
-    it('should return logs when valid', async () => {
-      const mockLogs = [{ Contact_Log_ID: 1, Contact_ID: 42 }];
-      mockGetContactLogsByContactId.mockResolvedValueOnce(mockLogs);
-
-      const result = await getContactLogsByContactId(42);
-      expect(result).toEqual(mockLogs);
-    });
-  });
-
-  describe('getContactLogById', () => {
-    it('should throw for invalid contactLogId', async () => {
-      await expect(getContactLogById(0)).rejects.toThrow('Failed to fetch contact log');
-    });
-
-    it('should return log when found', async () => {
-      const mockLog = { Contact_Log_ID: 1, Notes: 'Test' };
-      mockGetContactLogById.mockResolvedValueOnce(mockLog);
-
-      const result = await getContactLogById(1);
-      expect(result).toEqual(mockLog);
-    });
-
-    it('should return null when not found', async () => {
-      mockGetContactLogById.mockResolvedValueOnce(null);
-
-      const result = await getContactLogById(999);
-      expect(result).toBeNull();
     });
   });
 
@@ -347,24 +255,86 @@ describe('type-erased ID rejection (sanitizeId at the action boundary)', () => {
     mockGetMpUserId.mockReturnValue(77);
   });
 
-  it('deleteContactLog rejects an injection string without touching the service', async () => {
-    await expect(
-      deleteContactLog('1 OR 1=1' as unknown as number)
-    ).rejects.toThrow('Failed to delete contact log');
-    expect(mockGetContactLogById).not.toHaveBeenCalled();
-    expect(mockDeleteContactLog).not.toHaveBeenCalled();
-  });
-
   it('updateContactLog rejects an injection string without touching the service', async () => {
     await expect(
       updateContactLog('2; DROP TABLE Contact_Log' as unknown as number, {})
     ).rejects.toThrow('Failed to update contact log');
     expect(mockUpdateContactLog).not.toHaveBeenCalled();
   });
+});
 
-  it('getContactLogsByContactId coerces a purely numeric string id', async () => {
-    mockGetContactLogsByContactId.mockResolvedValue([]);
-    await getContactLogsByContactId('42' as unknown as number);
-    expect(mockGetContactLogsByContactId).toHaveBeenCalledWith(42);
+/**
+ * N11 / upstream defd338: the module exposes exactly the actions the UI
+ * imports. deleteContactLog, getContactLogsByContactId (a general-tier
+ * duplicate of the search-tier contact-lookup-details read) and
+ * getContactLogById (any log's Notes by sequential ID) were removed; every
+ * export of a 'use server' module is a potential POST endpoint.
+ */
+describe('module surface', () => {
+  it('exports exactly the actions the UI uses', () => {
+    expect(Object.keys(actions).sort()).toEqual([
+      'createAutoContactLog',
+      'createContactLog',
+      'getContactLogTypes',
+      'getCurrentUserMpUserId',
+      'updateContactLog',
+    ]);
+  });
+});
+
+/**
+ * upstream defd338 (adapted): catch blocks log errorForLog(error), one line
+ * with control characters stripped, never the raw Error (CodeQL
+ * js/log-injection; .claude/rules/security.md "Log caught errors").
+ */
+describe('error logging is one safe line', () => {
+  const forged = new Error('boom\r\n[forged] admin signed in');
+
+  beforeEach(() => {
+    mockRequireFeatureAccess.mockResolvedValue(mockSession);
+    mockGetMpUserId.mockReturnValue(99);
+  });
+
+  function expectSafeLog(spy: ReturnType<typeof vi.spyOn>) {
+    expect(spy).toHaveBeenCalledTimes(1);
+    const args = spy.mock.calls[0];
+    expect(args).toHaveLength(2);
+    // A string, not the Error object (which would print its stack).
+    expect(typeof args[1]).toBe('string');
+    expect(args[1]).toBe('Error: boom[forged] admin signed in');
+    expect(String(args[1])).not.toMatch(/[\r\n]/);
+  }
+
+  it.each([
+    ['getContactLogTypes', () => {
+      mockGetContactLogTypes.mockRejectedValueOnce(forged);
+      return getContactLogTypes();
+    }],
+    ['createContactLog', () => {
+      mockCreateContactLog.mockRejectedValueOnce(forged);
+      return createContactLog({
+        Contact_ID: 42,
+        Contact_Date: '2024-01-15T10:00:00Z',
+        Notes: 'n',
+        Contact_Log_Type_ID: 1,
+      });
+    }],
+    ['updateContactLog', () => {
+      mockGetContactLogById.mockResolvedValueOnce({ Contact_Log_ID: 1, Made_By: 99 });
+      mockUpdateContactLog.mockRejectedValueOnce(forged);
+      return updateContactLog(1, { Notes: 'n' });
+    }],
+    ['createAutoContactLog', () => {
+      mockCreateContactLog.mockRejectedValueOnce(forged);
+      return createAutoContactLog(42, 1, 'User did a thing');
+    }],
+  ])('%s logs errorForLog(error), not the raw Error', async (_name, run) => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await (run() as Promise<unknown>).catch(() => undefined);
+      expectSafeLog(spy);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

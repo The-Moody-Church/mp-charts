@@ -6,11 +6,24 @@
  */
 
 /**
+ * Server-action arguments are React Flight wire data with their types erased, so
+ * a parameter typed `string` can arrive as an array or object. The string
+ * sanitizers refuse anything that is not a string with a fixed message (never
+ * the value). Upstream MPNext a11c2a3, adapted.
+ */
+function assertString(value: unknown, message: string): asserts value is string {
+  if (typeof value !== 'string') {
+    throw new Error(message);
+  }
+}
+
+/**
  * Escapes a string value for safe interpolation inside a single-quoted filter value.
  * Doubles single quotes (SQL standard escaping) so that input like O'Brien
  * becomes O''Brien and cannot break out of the quoted context.
  */
 export function sanitizeFilterValue(value: string): string {
+  assertString(value, 'Invalid filter value');
   return value.replace(/'/g, "''");
 }
 
@@ -25,6 +38,7 @@ export function sanitizeFilterValue(value: string): string {
  * are not re-escaped.
  */
 export function sanitizeLikeValue(value: string): string {
+  assertString(value, 'Invalid filter value');
   return value
     .replace(/'/g, "''")
     .replace(/\[/g, '[[]')
@@ -89,6 +103,9 @@ export function sanitizeId(value: unknown): number {
  * Throws if the value does not match the expected UUID v4 pattern.
  */
 export function sanitizeGuid(guid: string): string {
+  // A one-element array such as ['<guid>'] would otherwise pass: RegExp.test
+  // coerces its argument to a string. Return only a real string.
+  assertString(guid, 'Invalid GUID format');
   const guidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!guidRegex.test(guid)) {
     throw new Error('Invalid GUID format');

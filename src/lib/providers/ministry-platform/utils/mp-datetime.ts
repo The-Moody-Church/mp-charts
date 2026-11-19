@@ -125,7 +125,9 @@ export function toMpSqlDatetime(value: string | Date): string {
 
   const instant = new Date(value);
   if (Number.isNaN(instant.getTime())) {
-    throw new Error(`toMpSqlDatetime: cannot parse "${value}"`);
+    // Static message: never echo the value (security.md, "Error messages the app
+    // throws must be static"). A caller-shaped string could carry a newline.
+    throw new Error("toMpSqlDatetime: cannot parse value");
   }
   return formatSql(partsInTimeZone(instant, MP_TIMEZONE));
 }
@@ -172,5 +174,6 @@ export function parseMpDatetime(value: string): Date {
     );
   }
 
-  throw new Error(`parseMpDatetime: expected an MP wall-clock string, got "${value}"`);
+  // Static message: never echo the value (see toMpSqlDatetime above).
+  throw new Error("parseMpDatetime: expected an MP wall-clock string");
 }

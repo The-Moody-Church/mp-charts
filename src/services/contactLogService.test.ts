@@ -58,46 +58,6 @@ describe('ContactLogService', () => {
     });
   });
 
-  describe('searchContactLogs', () => {
-    it('should search with contactId filter when provided', async () => {
-      mockGetTableRecords.mockResolvedValueOnce([]);
-
-      const service = await ContactLogService.getInstance();
-      await service.searchContactLogs(42);
-
-      expect(mockGetTableRecords).toHaveBeenCalledWith(
-        expect.objectContaining({
-          table: 'Contact_Log',
-          filter: 'Contact_ID = 42',
-          top: 50,
-          orderBy: 'Contact_Date DESC',
-        })
-      );
-    });
-
-    it('should search with empty filter when no contactId', async () => {
-      mockGetTableRecords.mockResolvedValueOnce([]);
-
-      const service = await ContactLogService.getInstance();
-      await service.searchContactLogs();
-
-      expect(mockGetTableRecords).toHaveBeenCalledWith(
-        expect.objectContaining({ filter: '' })
-      );
-    });
-
-    it('should respect custom limit', async () => {
-      mockGetTableRecords.mockResolvedValueOnce([]);
-
-      const service = await ContactLogService.getInstance();
-      await service.searchContactLogs(42, 10);
-
-      expect(mockGetTableRecords).toHaveBeenCalledWith(
-        expect.objectContaining({ top: 10 })
-      );
-    });
-  });
-
   describe('getContactLogById', () => {
     it('should return contact log when found', async () => {
       const mockLog = { Contact_Log_ID: 1, Contact_ID: 42, Notes: 'Test' };
@@ -159,10 +119,6 @@ describe('ContactLogService', () => {
         Contact_Date: '2024-01-15T16:30:00.000Z',
         Contact_Log_Type_ID: 1,
         Notes: 'Test note',
-        Planned_Contact_ID: null,
-        Contact_Successful: null,
-        Original_Contact_Log_Entry: null,
-        Feedback_Entry_ID: null,
       }, 100);
 
       // Verify the date was converted from UTC to Central Time SQL format
@@ -200,10 +156,6 @@ describe('ContactLogService', () => {
           Contact_Date: '2024-01-15T16:30:00.000Z',
           Contact_Log_Type_ID: 1,
           Notes: 'Test',
-          Planned_Contact_ID: null,
-          Contact_Successful: null,
-          Original_Contact_Log_Entry: null,
-          Feedback_Entry_ID: null,
         }, 100)
       ).rejects.toThrow('Failed to create contact log record');
     });
@@ -268,10 +220,6 @@ describe('ContactLogService', () => {
       Contact_Date: '2024-01-15T16:30:00.000Z',
       Contact_Log_Type_ID: 1,
       Notes: 'Test note',
-      Planned_Contact_ID: null,
-      Contact_Successful: null,
-      Original_Contact_Log_Entry: null,
-      Feedback_Entry_ID: null,
     };
 
     it('ignores a caller-supplied Made_By on create and stamps the acting user', async () => {
@@ -305,6 +253,53 @@ describe('ContactLogService', () => {
       await service.updateContactLog(1, { Notes: 'x', Contact_ID: 999 } as never, 500);
 
       expect(mockUpdateTableRecords.mock.calls[0][1][0]).not.toHaveProperty('Contact_ID');
+    });
+
+    // dc4a25b (adapted): the create payload is an allowlist. A crafted POST
+    // could otherwise link a note to another contact's planned contact or
+    // feedback entry, or set the success flag, none of which the UI edits.
+    it('sends exactly the allowlisted fields on create, dropping smuggled link/flag fields', async () => {
+      mockCreateTableRecords.mockResolvedValueOnce([{ Contact_Log_ID: 1 }]);
+      const service = await ContactLogService.getInstance();
+
+      await service.createContactLog(
+        {
+          ...validCreate,
+          Planned_Contact_ID: 7,
+          Feedback_Entry_ID: 9,
+          Original_Contact_Log_Entry: 8,
+          Contact_Successful: true,
+          Contact_Log_ID: 123,
+          Made_By: 999,
+        } as never,
+        4242
+      );
+
+      const record = mockCreateTableRecords.mock.calls[0][1][0];
+      expect(Object.keys(record).sort()).toEqual(
+        ['Contact_Date', 'Contact_ID', 'Contact_Log_Type_ID', 'Made_By', 'Notes']
+      );
+      expect(record).not.toHaveProperty('Planned_Contact_ID');
+      expect(record).not.toHaveProperty('Feedback_Entry_ID');
+      expect(record).not.toHaveProperty('Original_Contact_Log_Entry');
+      expect(record).not.toHaveProperty('Contact_Successful');
+      expect(record).not.toHaveProperty('Contact_Log_ID');
+      expect(record.Made_By).toBe(4242);
+    });
+
+    it('drops a smuggled Contact_Successful (and Contact_ID/Made_By) on update', async () => {
+      mockUpdateTableRecords.mockResolvedValueOnce([{ Contact_Log_ID: 1 }]);
+      const service = await ContactLogService.getInstance();
+
+      await service.updateContactLog(
+        1,
+        { Notes: 'x', Contact_Successful: true, Contact_ID: 999, Made_By: 999 } as never,
+        500
+      );
+
+      const record = mockUpdateTableRecords.mock.calls[0][1][0];
+      expect(record).toEqual({ Contact_Log_ID: 1, Notes: 'x' });
+      expect(record).not.toHaveProperty('Contact_Successful');
     });
 
     it('strips the linkage FKs on update', async () => {
@@ -367,7 +362,7 @@ describe('ContactLogService', () => {
       }
     );
 
-    // Negative controls — prove the omits do not over-strip.
+    // Negative controls — prove the picks do not over-strip.
     it('still passes a legitimate positive Contact_ID through unchanged', async () => {
       mockCreateTableRecords.mockResolvedValueOnce([{ Contact_Log_ID: 1 }]);
       const service = await ContactLogService.getInstance();

@@ -91,6 +91,7 @@ still fails if the server build ships any npm file outside the production graph 
 - **Actions**:
   - Feature-specific actions: co-locate in component folder as `actions.ts`
   - Shared actions: place in `src/components/shared-actions/`
+  - Every export of a file-level `'use server'` module is a POST endpoint: `src/server-action-exports.test.ts` fails if one has no non-test importer (N11). Delete unused actions; DTOs a browser receives are built field by field, never a spread MP row behind a cast (see `.claude/rules/security.md`)
 - **Ministry Platform Structure**:
   - Database models (generated): `src/lib/providers/ministry-platform/models/` - auto-generated from DBMS
   - Zod schemas (generated): `src/lib/providers/ministry-platform/models/*Schema.ts` - for optional runtime validation
