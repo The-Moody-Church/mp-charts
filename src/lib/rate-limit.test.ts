@@ -69,11 +69,15 @@ describe("enforceRateLimit", () => {
     for (let i = 0; i < RATE_LIMITS.write.limit; i++) {
       enforceRateLimit("user-1", "write");
     }
+    // Capture outside the try: asserting inside the catch passed when nothing threw.
+    let thrown: unknown;
     try {
       enforceRateLimit("user-1", "write");
     } catch (e) {
-      expect((e as Error).message).toMatch(/Try again in \d+ seconds/);
+      thrown = e;
     }
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toMatch(/Try again in \d+ seconds/);
   });
 });
 

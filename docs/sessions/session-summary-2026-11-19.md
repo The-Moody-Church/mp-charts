@@ -158,6 +158,29 @@ dc4a25b, a11c2a3; CodeQL #37). Owner decisions: delete all three orphans, keep n
 - **Next:** mirror to mp-senior-care as is; event-manager needs the #85 shape and `COMMUNICATION_TYPES` first; siblings
   also need `sanitizeLikeValue` and a search cap.
 
+## Batch 4 follow-ups — COMPLETED on branch `chore/batch4-followups` (PR not opened by this step)
+
+- **Owner decisions taken today (sibling batch 4 ports):** 8-word search cap accepted in the siblings; the F9
+  search tier is NOT ported to the sibling contact-lookup-details reads (each card makes 4 reads, ~7 cards/min,
+  and the badges/groups reads swallow errors); the service `deleteContactLog` is deleted in all three
+  (mp-charts, event-manager, mp-senior-care); event-manager's events-list `q` is blocked over 75 characters;
+  music-db's unused `sanitizeFilterValue` is deleted.
+- **Service delete removed.** `ContactLogService.deleteContactLog` and its two tests deleted; grep confirms no
+  caller (the orphan action that used it went in #324). New "service surface" test in `contactLogService.test.ts`
+  pins the prototype's method list; with the method restored it fails naming `deleteContactLog`. `security.md`
+  attribution paragraph no longer mentions "the service's delete" and says no contact-log delete exists at any layer.
+- **Weak echo test fixed.** `filter-sanitize.test.ts` "the messages never echo the value" put `expect.unreachable()`
+  inside the `try`, so the `catch` swallowed it: with `sanitizeGuid` mutated to `return guid` the old test passed.
+  It now captures the error outside the `try`, asserts `toBeInstanceOf(Error)` (labelled with `fn.name`), then the
+  message; the same mutant fails it (`sanitizeGuid: expected undefined to be an instance of Error`). Same fix,
+  same shape, in `guards.test.ts` (already failed under a non-throwing mutant via `toBe`, but brittle) and
+  `rate-limit.test.ts` "retry-after" (passed with the throw removed; now fails). `mp-datetime.test.ts` checked:
+  both echo tests call `toThrow` first and pin `expect.assertions(4)`, so they were sound and are unchanged.
+  New rule in `.claude/rules/testing.md`. All mutants restored (`git diff` on the sources empty).
+- **Checks.** `tsc`, lint clean; coverage run 100 files / 2271 tests (2272 − 2 delete tests + 1 surface test);
+  coverage 60.12 / 51.42 / 51.48 / 61.36 (floors 59/50/50/60 hold); build, `check:standalone` (102 lockfile nodes)
+  and `check:shells` (18 shells) pass; manifest 80 entries (75 actions + 5 cache), unchanged.
+
 ## Next
 
 Batches 4–10 and the N17 verifier port.

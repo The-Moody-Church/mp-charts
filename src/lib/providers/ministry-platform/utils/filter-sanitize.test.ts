@@ -198,13 +198,17 @@ describe('string sanitizers refuse non-strings', () => {
 
   it('the messages never echo the value', () => {
     const marker = { toString: () => 'MARKER-VALUE' };
+    // Capture outside the try: an expect.unreachable() inside it was caught by
+    // the same catch, so a sanitizer that stopped throwing still passed.
     for (const fn of [sanitizeFilterValue, sanitizeLikeValue, sanitizeGuid]) {
+      let thrown: unknown;
       try {
         fn(marker as unknown as string);
-        expect.unreachable();
       } catch (error) {
-        expect((error as Error).message).not.toContain('MARKER');
+        thrown = error;
       }
+      expect(thrown, fn.name).toBeInstanceOf(Error);
+      expect((thrown as Error).message).not.toContain('MARKER');
     }
   });
 

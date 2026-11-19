@@ -46,11 +46,14 @@ describe('sanitizeIdentifier', () => {
   });
 
   it('never echoes the rejected value', () => {
+    // Capture outside the try, so the assertion cannot be swallowed by the catch.
+    let thrown: unknown;
     try {
       sanitizeIdentifier('../SECRET\nforged', 'table name');
-      expect.unreachable();
     } catch (error) {
-      expect((error as Error).message).toBe('Invalid table name');
+      thrown = error;
     }
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toBe('Invalid table name');
   });
 });
