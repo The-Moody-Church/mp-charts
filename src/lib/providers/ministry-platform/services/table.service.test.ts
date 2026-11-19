@@ -346,4 +346,58 @@ describe('TableService', () => {
       expect(mockClient.ensureValidToken).toHaveBeenCalledTimes(4);
     });
   });
+
+  // Batch 3 (upstream MPNext 41bba94): table names and delete IDs are checked
+  // before any token or network work, with fixed messages.
+  describe('input guards', () => {
+    const anyHttpCall = () =>
+      [mockHttpClient.get, mockHttpClient.post, mockHttpClient.put, mockHttpClient.delete].some(
+        (fn) => (fn as ReturnType<typeof vi.fn>).mock.calls.length > 0
+      );
+
+    it.each([
+      ['a traversal', '../procs/x'],
+      ['a dot-segment', '..'],
+      ['a slash', 'Contacts/1'],
+      ['an encoded dot', '%2e%2e'],
+      ['a non-string', 42],
+    ])('every method refuses %s as a table name', async (_label, table) => {
+      const t = table as string;
+      await expect(tableService.getTableRecords(t)).rejects.toThrow('Invalid table name');
+      await expect(tableService.createTableRecords(t, [{}])).rejects.toThrow('Invalid table name');
+      await expect(tableService.updateTableRecords(t, [{}])).rejects.toThrow('Invalid table name');
+      await expect(tableService.deleteTableRecords(t, [1])).rejects.toThrow('Invalid table name');
+      expect(mockClient.ensureValidToken).not.toHaveBeenCalled();
+      expect(anyHttpCall()).toBe(false);
+    });
+
+    it.each([
+      ['a float', [1.5]],
+      ['zero', [0]],
+      ['a negative', [-3]],
+      ['an injection string', ['1 OR 1=1']],
+      ['NaN', [NaN]],
+      ['one bad ID among good ones', [1, 2, 'x']],
+      ['an empty list', []],
+      ['a non-array', '1,2'],
+    ])('deleteTableRecords refuses %s before any request', async (_label, ids) => {
+      await expect(tableService.deleteTableRecords('Contacts', ids as number[])).rejects.toThrow(/Invalid (ID|record IDs)/);
+      expect(mockClient.ensureValidToken).not.toHaveBeenCalled();
+      expect(mockHttpClient.delete).not.toHaveBeenCalled();
+    });
+
+    it('deleteTableRecords sends digit-string IDs as numbers', async () => {
+      (mockHttpClient.delete as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+      await tableService.deleteTableRecords('Contact_Log', ['7' as unknown as number, 8]);
+      expect(mockHttpClient.delete).toHaveBeenCalledWith('/tables/Contact_Log', { id: [7, 8] });
+    });
+
+    it('logs failures without the table name, through errorForLog', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      (mockHttpClient.get as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('boom\nforged'));
+      await tableService.getTableRecords('Participant_Milestones').catch(() => {});
+      expect(errorSpy).toHaveBeenCalledWith('Error fetching table records:', 'Error: boomforged');
+      expect(JSON.stringify(errorSpy.mock.calls)).not.toContain('Participant_Milestones');
+    });
+  });
 });

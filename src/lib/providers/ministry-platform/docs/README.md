@@ -111,6 +111,11 @@ mp.executeProcedure(procedure, params?)
 mp.executeProcedureWithBody(procedure, parameters)
 ```
 
+Execution is **deny-all**: `ALLOWED_PROCEDURES` (`services/procedure.service.ts`) is empty, and a call is refused
+before any token or network work unless the name is listed there or on the helper instance,
+`new MPHelper({ allowedProcedures: ['api_X'] })`. Names must be plain identifiers and match exactly. Never build the
+list from request input. `getProcedures` (metadata) is not gated.
+
 ### Communications
 
 ```typescript

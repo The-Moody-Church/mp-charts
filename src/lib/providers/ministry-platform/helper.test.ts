@@ -610,7 +610,7 @@ describe('MPHelper', () => {
 
       expect(mockExecuteProcedure).toHaveBeenCalledWith('api_Get_Contact_Info', {
         ContactID: 1,
-      });
+      }, undefined);
       expect(result).toEqual(procedureResult);
     });
 
@@ -620,7 +620,7 @@ describe('MPHelper', () => {
 
       const result = await mpHelper.executeProcedure('api_Get_Stats');
 
-      expect(mockExecuteProcedure).toHaveBeenCalledWith('api_Get_Stats', undefined);
+      expect(mockExecuteProcedure).toHaveBeenCalledWith('api_Get_Stats', undefined, undefined);
       expect(result).toEqual(procedureResult);
     });
 
@@ -641,7 +641,8 @@ describe('MPHelper', () => {
 
       expect(mockExecuteProcedureWithBody).toHaveBeenCalledWith(
         'api_Create_Contact_Log',
-        parameters
+        parameters,
+        undefined
       );
       expect(result).toEqual(procedureResult);
     });
@@ -652,6 +653,45 @@ describe('MPHelper', () => {
       await expect(
         mpHelper.executeProcedure('NonExistent')
       ).rejects.toThrow('Procedure not found');
+    });
+
+    // Batch 3 (upstream MPNext 3d9ae92): per-instance procedure allowlist.
+    it('forwards its allowedProcedures option to both execute methods', async () => {
+      mockExecuteProcedure.mockResolvedValueOnce([]);
+      mockExecuteProcedureWithBody.mockResolvedValueOnce([]);
+      const helper = new MPHelper({ allowedProcedures: ['api_Custom_Get_Stats'] });
+
+      await helper.executeProcedure('api_Custom_Get_Stats');
+      await helper.executeProcedureWithBody('api_Custom_Get_Stats', { a: 1 });
+
+      const list = mockExecuteProcedure.mock.calls[0][2];
+      expect(list).toEqual(['api_Custom_Get_Stats']);
+      expect(Object.isFrozen(list)).toBe(true);
+      expect(mockExecuteProcedureWithBody.mock.calls[0][2]).toBe(list);
+    });
+
+    it('copies the list, so a later change to the caller array widens nothing', async () => {
+      mockExecuteProcedure.mockResolvedValueOnce([]);
+      const names = ['api_A'];
+      const helper = new MPHelper({ allowedProcedures: names });
+      names.push('api_B');
+
+      await helper.executeProcedure('api_A');
+      expect(mockExecuteProcedure.mock.calls[0][2]).toEqual(['api_A']);
+    });
+
+    it.each([
+      ['a traversal', ['../tables/Contacts']],
+      ['a space', ['My Proc']],
+      ['a non-string', [42]],
+    ])('refuses %s in allowedProcedures at construction', (_label, names) => {
+      expect(() => new MPHelper({ allowedProcedures: names as string[] })).toThrow('Invalid allowed procedure name');
+    });
+
+    it('refuses a non-array allowedProcedures at construction', () => {
+      expect(() => new MPHelper({ allowedProcedures: 'api_A' as unknown as string[] })).toThrow(
+        'Invalid allowed procedure list'
+      );
     });
   });
 

@@ -36,6 +36,42 @@ returned to the app in all four. Merged and `:latest` deployed 16:22 UTC; cache 
 
 **Soak tip:** sign out (or wait out the hour) and sign in fresh after a swap before judging sign-out.
 
+## Batch 3 — MP client, low risk — IN PROGRESS (branch pushed, no PR yet)
+
+Branch `security/batch3-mp-client`. N12 (MP client half) and N21; upstream 9b7b4d1, 5aa0b5e (minus the 401 retry and
+negative cache, batch 8), 41bba94 + 3d9ae92 (minus the trusted-sender rewrite: no caller).
+
+- **`utils/http-client.ts`**: `redirect: 'error'` on all six fetches; `assertSafeEndpoint` first in `buildUrl`
+  (upstream's regex + resolved-URL root check, fixed message); 60 s for `postFormData`/`putFormData`, 30 s kept
+  elsewhere; `readJson` (204 or `Content-Length: 0` → `undefined`, bad JSON → `<METHOD> <endpoint> failed: invalid
+  JSON response`); GUIDs redacted to `{uniqueId}` in messages. No content-type check, no refactor, no extra log line.
+- **`utils/timeouts.ts`** (new): `MP_API_TIMEOUT_MS` 30 s, `MP_UPLOAD_TIMEOUT_MS` 60 s, `MP_TOKEN_TIMEOUT_MS` 10 s.
+- **`auth/client-credentials.ts`**: 10 s timeout, `redirect: "error"`, fetch failure → `...: <error name>`, `!ok` →
+  `...: <status> <statusText>`, bad JSON → static message, non-empty string `access_token` required, `token_type`
+  optional (bearer in any case if present, else refused). No message carries the secret, the token or the body.
+- **`client.ts`**: single-flight `inflight` (cleared in `finally`; a failed refresh rejects every waiter, the next
+  call retries); `expires_in` clamped to [30 s, 3600 s] with the 3600 default for absent/NaN/zero/negative and the
+  5-min margin kept; `errorForLog`. User-token mode kept (batch 8).
+- **`services/guards.ts`** (new) `sanitizeIdentifier`; table/procedure/file services check before `ensureValidToken`;
+  file IDs `sanitizeId`, GUIDs `sanitizeGuid`, each segment encoded (`uploadFiles` used to interpolate raw);
+  `getFileContentByUniqueId` gets `redirect: 'error'` + 30 s and no longer echoes the ID; `ALLOWED_PROCEDURES` empty,
+  `allowedProcedures` threaded through `MPHelper` → provider (per-call `ProcedureService`); `$ignorePermissions`
+  removed and `DomainService` forwards only a validated `$userId`; all provider services log `errorForLog`.
+- **Live-caller check before the guards:** 32 distinct table literals across `src/` and `scripts/` plus the dynamic
+  ones (`uploadDocument` literals, `REQUIREMENT_RECORDS`, `batchGetTableRecords` literals, the audit script's
+  `dp_Audit_Log`/`Audit_Log`/`dp_Audit_Detail`) all match the identifier rule, as do all 278 tables in
+  `ministryplatform.schema.md` (the generator's sampling path). No procedure caller. File callers pass literal tables
+  and `sanitizeId`'d IDs; no app caller of the GUID methods.
+- **Deviation:** delete IDs go through `sanitizeId` per ID rather than `sanitizeIds`, which silently drops bad IDs and
+  admits floats; a bad ID now refuses the whole delete. The only caller (`deleteContactLog`) already passes
+  `sanitizeId(contactLogId)`.
+- **Tests:** new `guards.test.ts`, `provider-guards.wiring.test.ts` (real helper → provider → services); additions in
+  http-client, client, client-credentials, table/procedure/file service, helper and provider tests. Reverting each
+  source file to `main` fails the new tests (http-client 36, client 9, credentials 19, table 15, file 17, procedure
+  ≥8, domain 3).
+- **Next:** PR, then a `:dev` soak with a cold dashboard warm (sign-in soak not required), then the sibling ports
+  (event-manager must pass its three procedure names through `allowedProcedures`).
+
 ## Next
 
-Batch 3 (MP client) per `.claude/plans/open-items-2026-11-18.md`, then batches 4–10 and the N17 verifier port.
+Batch 3 PR and soak, sibling ports, then batches 4–10 and the N17 verifier port.

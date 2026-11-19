@@ -1,3 +1,4 @@
+import { errorForLog } from "@/lib/log-safe";
 import { MinistryPlatformClient } from "../client";
 import { CommunicationInfo, Communication, MessageInfo, COMMUNICATION_TYPES } from "../types";
 
@@ -28,7 +29,7 @@ export class CommunicationService {
                 return await this.client.getHttpClient().post<Communication>('/communications', { ...communication });
             }
         } catch (error) {
-            console.error('Error creating communication:', error);
+            console.error('Error creating communication:', errorForLog(error));
             throw error;
         }
     }
@@ -48,7 +49,7 @@ export class CommunicationService {
                 return await this.client.getHttpClient().post<Communication>('/messages', { ...message });
             }
         } catch (error) {
-            console.error('Error sending message:', error);
+            console.error('Error sending message:', errorForLog(error));
             throw error;
         }
     }

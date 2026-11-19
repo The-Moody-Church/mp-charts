@@ -153,8 +153,11 @@ export interface GlobalFilterItem {
   Value: string;
 }
 
+/**
+ * `$ignorePermissions` was removed (audit N21, upstream MPNext 3d9ae92): it asked
+ * MP to skip permission checks, and DomainService now forwards `$userId` only.
+ */
 export interface GlobalFilterParams {
-  $ignorePermissions?: boolean;
   $userId?: number;
 }
 

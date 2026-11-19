@@ -133,33 +133,62 @@ describe('MinistryPlatformClient', () => {
       await expect(client.ensureValidToken()).rejects.toThrow('OAuth server unavailable');
     });
 
-    it('should handle concurrent ensureValidToken calls', async () => {
-      let resolveToken: (value: unknown) => void;
-      const tokenPromise = new Promise((resolve) => {
-        resolveToken = resolve;
-      });
-
-      mockGetClientCredentialsToken.mockImplementation(() => tokenPromise);
+    // Batch 3 (audit N12, upstream MPNext 5aa0b5e): single-flight refresh.
+    it('shares one refresh among concurrent callers (31-call cold dashboard)', async () => {
+      let resolveToken!: (value: unknown) => void;
+      mockGetClientCredentialsToken.mockImplementation(
+        () => new Promise((resolve) => { resolveToken = resolve; })
+      );
 
       const client = new MinistryPlatformClient();
+      const calls = Array.from({ length: 31 }, () => client.ensureValidToken());
 
-      // Start multiple concurrent calls
-      const promise1 = client.ensureValidToken();
-      const promise2 = client.ensureValidToken();
-      const promise3 = client.ensureValidToken();
+      resolveToken({ access_token: 'concurrent-token', expires_in: 3600, token_type: 'Bearer' });
+      await Promise.all(calls);
 
-      // Resolve the token
-      resolveToken!({
-        access_token: 'concurrent-token',
-        expires_in: 3600,
-        token_type: 'Bearer',
-      });
+      expect(mockGetClientCredentialsToken).toHaveBeenCalledTimes(1);
+    });
 
-      await Promise.all([promise1, promise2, promise3]);
+    it('shares one refresh at the expiry boundary too', async () => {
+      mockGetClientCredentialsToken.mockResolvedValue({ access_token: 't', expires_in: 3600 });
+      const client = new MinistryPlatformClient();
+      await client.ensureValidToken();
+      vi.advanceTimersByTime(56 * 60 * 1000);
 
-      // Each call triggers getClientCredentialsToken because there's no deduplication
-      // This is current behavior - could be optimized in the future
-      expect(mockGetClientCredentialsToken).toHaveBeenCalled();
+      await Promise.all(Array.from({ length: 10 }, () => client.ensureValidToken()));
+      expect(mockGetClientCredentialsToken).toHaveBeenCalledTimes(2);
+    });
+
+    it('rejects every waiter when the shared refresh fails, and the next call retries', async () => {
+      let rejectToken!: (reason: unknown) => void;
+      mockGetClientCredentialsToken.mockImplementationOnce(
+        () => new Promise((_resolve, reject) => { rejectToken = reject; })
+      );
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const client = new MinistryPlatformClient();
+      const waiters = Array.from({ length: 5 }, () => client.ensureValidToken());
+      rejectToken(new Error('token endpoint down'));
+
+      const results = await Promise.allSettled(waiters);
+      expect(results.every((r) => r.status === 'rejected')).toBe(true);
+      expect(mockGetClientCredentialsToken).toHaveBeenCalledTimes(1);
+
+      // The slot is cleared: no negative cache, the next call fetches again.
+      mockGetClientCredentialsToken.mockResolvedValueOnce({ access_token: 'ok', expires_in: 3600 });
+      await expect(client.ensureValidToken()).resolves.toBeUndefined();
+      expect(mockGetClientCredentialsToken).toHaveBeenCalledTimes(2);
+    });
+
+    it('logs a failed refresh through errorForLog (one line, no raw Error)', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockGetClientCredentialsToken.mockRejectedValueOnce(new Error('line one\nforged line'));
+
+      const client = new MinistryPlatformClient();
+      await expect(client.ensureValidToken()).rejects.toThrow('line one');
+
+      expect(errorSpy).toHaveBeenCalledWith('Failed to refresh MP access token:', 'Error: line oneforged line');
+      for (const arg of errorSpy.mock.calls[0]) expect(typeof arg).toBe('string');
     });
   });
 
@@ -271,6 +300,48 @@ describe('MinistryPlatformClient', () => {
       vi.advanceTimersByTime(54 * 60 * 1000);
       await client.ensureValidToken();
       expect(mockGetClientCredentialsToken).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // Batch 3 (audit N12, upstream MPNext 5aa0b5e): expires_in clamped to
+  // [30 s, 3600 s]; absent, non-numeric, zero or negative uses the 3600 default.
+  describe('Token lifetime clamp', () => {
+    const lifetimeMs = async (expires_in: unknown): Promise<number> => {
+      mockGetClientCredentialsToken.mockResolvedValue({ access_token: 't', expires_in });
+      const client = new MinistryPlatformClient();
+      const start = Date.now();
+      await client.ensureValidToken();
+      const expiresAt = (client as unknown as { expiresAt: Date }).expiresAt.getTime();
+      return expiresAt - start;
+    };
+
+    it.each([
+      ['1e13', 1e13, 55 * 60 * 1000],
+      ['Number.MAX_VALUE', Number.MAX_VALUE, 55 * 60 * 1000],
+      ['7200 (above the ceiling)', 7200, 55 * 60 * 1000],
+      ['"1e13" (numeric string)', '1e13', 55 * 60 * 1000],
+      ['Infinity', Infinity, 55 * 60 * 1000],
+      ['-1', -1, 55 * 60 * 1000],
+      ['0', 0, 55 * 60 * 1000],
+      ['"abc"', 'abc', 55 * 60 * 1000],
+      ['absent', undefined, 55 * 60 * 1000],
+      ['null', null, 55 * 60 * 1000],
+      ['an object', { a: 1 }, 55 * 60 * 1000],
+      ['1 (below the floor)', 1, 30 * 1000],
+      ['1800', 1800, 25 * 60 * 1000],
+    ])('expires_in %s gives a finite expiry inside [30 s, 55 min]', async (_label, value, expected) => {
+      const ms = await lifetimeMs(value);
+      expect(Number.isFinite(ms)).toBe(true);
+      expect(ms).toBe(expected);
+    });
+
+    it('refreshes again after a huge expires_in (no Invalid Date that never expires)', async () => {
+      mockGetClientCredentialsToken.mockResolvedValue({ access_token: 't', expires_in: 1e13 });
+      const client = new MinistryPlatformClient();
+      await client.ensureValidToken();
+      vi.advanceTimersByTime(56 * 60 * 1000);
+      await client.ensureValidToken();
+      expect(mockGetClientCredentialsToken).toHaveBeenCalledTimes(2);
     });
   });
 

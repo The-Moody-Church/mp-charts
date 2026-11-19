@@ -2,6 +2,7 @@ import { MinistryPlatformClient } from "./client";
 import {
     TableService,
     ProcedureService,
+    ALLOWED_PROCEDURES,
     CommunicationService,
     MetadataService,
     DomainService,
@@ -210,26 +211,48 @@ export class MinistryPlatformProvider {
      * Executes the requested stored procedure retrieving parameters from the query string.
      * @param procedure Stored procedure name
      * @param params Query parameters to pass to the procedure
+     * @param allowedProcedures Extra procedure names this call may run, on top of
+     *   {@link ALLOWED_PROCEDURES}. Supplied by `MPHelper` from its constructor
+     *   option; it must be a fixed list in code, never derived from request input.
      * @returns Promise with the procedure results
      */
     public async executeProcedure(
-        procedure: string, 
-        params?: QueryParams
+        procedure: string,
+        params?: QueryParams,
+        allowedProcedures?: Iterable<string>
     ): Promise<unknown[][]> {
-        return this.procedureService.executeProcedure(procedure, params);
+        return this.procedureServiceFor(allowedProcedures).executeProcedure(procedure, params);
     }
 
     /**
      * Executes the requested stored procedure with provided parameters in the request body.
      * @param procedure Stored procedure name
      * @param parameters Parameters to be used for calling stored procedure
+     * @param allowedProcedures As for {@link executeProcedure}
      * @returns Promise with the procedure results
      */
     public async executeProcedureWithBody(
-        procedure: string, 
-        parameters: Record<string, unknown>
+        procedure: string,
+        parameters: Record<string, unknown>,
+        allowedProcedures?: Iterable<string>
     ): Promise<unknown[][]> {
-        return this.procedureService.executeProcedureWithBody(procedure, parameters);
+        return this.procedureServiceFor(allowedProcedures).executeProcedureWithBody(procedure, parameters);
+    }
+
+    /**
+     * The shared ProcedureService (built-in allowlist only) when no extra names
+     * are given; otherwise a short-lived one whose allowlist is the built-in list
+     * plus those names (upstream MPNext 3d9ae92). ProcedureService holds only the
+     * shared client and a Set, so one per call is cheap, and one caller's list
+     * never widens another's.
+     */
+    private procedureServiceFor(allowedProcedures?: Iterable<string>): ProcedureService {
+        if (allowedProcedures === undefined) {
+            return this.procedureService;
+        }
+        return new ProcedureService(this.client, {
+            allowedProcedures: [...ALLOWED_PROCEDURES, ...allowedProcedures],
+        });
     }
 
     // Communication Service Methods
