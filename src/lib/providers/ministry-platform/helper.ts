@@ -15,12 +15,28 @@ import {
   TableMetadata,
   QueryParams,
 } from "./types";
+import { sanitizeIdentifier } from "./services/guards";
 import { z } from "zod";
 
 export interface MPHelperOptions {
   /** Pre-authenticated user access token (from OIDC session). When provided,
    *  all API calls authenticate as the user instead of the API Client User. */
   accessToken?: string;
+  /**
+   * Stored procedures this helper instance may execute, in addition to the
+   * built-in `ALLOWED_PROCEDURES` (empty, so by default every execute call is
+   * refused). Upstream MPNext 3d9ae92.
+   *
+   * The service class that calls a procedure constructs its own helper with a
+   * fixed, module-level list, e.g.
+   * `new MPHelper({ allowedProcedures: ['api_MyChurch_Get_Stats'] })`, so the
+   * name is reviewed next to its caller and no other helper instance gains it.
+   * Never build this list from request input: it is what stops a caller-chosen
+   * name from reaching a mutating procedure on the admin-level service account.
+   * Names must be plain identifiers and match exactly (case-sensitive); an
+   * invalid name throws at construction.
+   */
+  allowedProcedures?: readonly string[];
 }
 
 /**
@@ -43,13 +59,24 @@ export interface MPHelperOptions {
  */
 export class MPHelper {
   private provider: MinistryPlatformProvider;
+  private allowedProcedures?: readonly string[]; // Extra procedures this instance may execute
 
   /**
    * Creates a new MPHelper instance
    * @param options Optional configuration. Pass `accessToken` to authenticate as the
-   *               logged-in user instead of the API Client User.
+   *               logged-in user instead of the API Client User, and
+   *               `allowedProcedures` to enable stored procedures (see {@link MPHelperOptions}).
+   * @throws Error if `options.allowedProcedures` holds a name that is not a plain identifier
    */
   constructor(options?: MPHelperOptions) {
+    if (options?.allowedProcedures !== undefined) {
+      if (!Array.isArray(options.allowedProcedures)) {
+        throw new Error('Invalid allowed procedure list');
+      }
+      this.allowedProcedures = Object.freeze(
+        options.allowedProcedures.map((name) => sanitizeIdentifier(name, 'allowed procedure name'))
+      );
+    }
     if (options?.accessToken) {
       this.provider = MinistryPlatformProvider.withAccessToken(options.accessToken);
     } else {
@@ -401,7 +428,6 @@ export class MPHelper {
    * Retrieves available global filters for the domain
    * Global filters provide domain-wide data filtering capabilities
    * @param params - Optional parameters for the global filters request
-   * @param params.$ignorePermissions - Whether to ignore user permissions when retrieving filters
    * @param params.$userId - User context for permission-based filter access
    * @returns Promise resolving to array of global filter items with keys and display values
    * @throws Error if authentication fails or filters are inaccessible
@@ -475,6 +501,7 @@ export class MPHelper {
   // Procedure Service Methods
   /**
    * Returns the list of procedures available to the current user with basic metadata.
+   * Metadata only, so it is not subject to the procedure allowlist.
    * @param search Optional search term to filter procedures
    * @returns Promise with an array of ProcedureInfo objects
    */
@@ -484,28 +511,39 @@ export class MPHelper {
 
   /**
    * Executes the requested stored procedure retrieving parameters from the query string.
+   *
+   * Refused unless `procedure` is on the built-in `ALLOWED_PROCEDURES` or on
+   * this instance's `allowedProcedures` option (see {@link MPHelperOptions}).
    * @param procedure Stored procedure name
    * @param params Query parameters to pass to the procedure
    * @returns Promise with the procedure results
+   * @throws Error if the name is not a plain identifier or not on the allowlist
    */
   public async executeProcedure(
     procedure: string,
     params?: QueryParams
   ): Promise<unknown[][]> {
-    return await this.provider.executeProcedure(procedure, params);
+    return await this.provider.executeProcedure(procedure, params, this.allowedProcedures);
   }
 
   /**
    * Executes the requested stored procedure with provided parameters in the request body.
+   *
+   * Allowlisted exactly as {@link executeProcedure} is.
    * @param procedure Stored procedure name
    * @param parameters Parameters to be used for calling stored procedure
    * @returns Promise with the procedure results
+   * @throws Error if the name is not a plain identifier or not on the allowlist
    */
   public async executeProcedureWithBody(
     procedure: string,
     parameters: Record<string, unknown>
   ): Promise<unknown[][]> {
-    return await this.provider.executeProcedureWithBody(procedure, parameters);
+    return await this.provider.executeProcedureWithBody(
+      procedure,
+      parameters,
+      this.allowedProcedures
+    );
   }
 
   // Communication Service Methods

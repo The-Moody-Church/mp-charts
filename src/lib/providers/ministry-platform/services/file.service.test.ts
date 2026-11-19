@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { FileService } from './file.service';
 
 const mockGet = vi.fn();
@@ -7,6 +7,8 @@ const mockPutFormData = vi.fn();
 const mockDelete = vi.fn();
 const mockBuildUrl = vi.fn();
 const mockEnsureValidToken = vi.fn();
+
+const GUID = '0f8fad5b-d9cb-469f-a165-70867728950e';
 
 function createService() {
   const client = {
@@ -27,6 +29,12 @@ describe('FileService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockEnsureValidToken.mockResolvedValue(undefined);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   describe('getFilesByRecord', () => {
@@ -40,27 +48,22 @@ describe('FileService', () => {
     });
 
     // SECURITY regression: buildUrl concatenates the endpoint without encoding and
-    // fetch() then normalizes dot-segments, so an unencoded `../..` here would
+    // fetch() then normalizes dot-segments, so an unchecked `../..` here would
     // retarget the request to an arbitrary MP endpoint under the service account.
-    it('percent-encodes the recordId so a traversal cannot escape /files', async () => {
-      mockGet.mockResolvedValueOnce([]);
+    // Since batch 3 the segment is validated and refused, before any token work.
+    it('refuses a traversal recordId before any request', async () => {
       const service = createService();
-      await service.getFilesByRecord('Participant_Milestones', '../../tables/Contacts' as unknown as number);
-
-      const endpoint = mockGet.mock.calls[0][0] as string;
-      expect(endpoint).not.toContain('../');
-      expect(endpoint).toBe('/files/Participant_Milestones/..%2F..%2Ftables%2FContacts');
-
-      // The decisive check: resolving against a base must stay under /files.
-      const resolved = new URL(endpoint, 'https://mp.example.com/ministryplatformapi/');
-      expect(resolved.pathname.startsWith('/files/')).toBe(true);
+      await expect(
+        service.getFilesByRecord('Participant_Milestones', '../../tables/Contacts' as unknown as number)
+      ).rejects.toThrow('Invalid ID');
+      expect(mockEnsureValidToken).not.toHaveBeenCalled();
+      expect(mockGet).not.toHaveBeenCalled();
     });
 
-    it('percent-encodes the table segment too', async () => {
-      mockGet.mockResolvedValueOnce([]);
+    it('refuses a traversal table segment too', async () => {
       const service = createService();
-      await service.getFilesByRecord('../../procs/Evil', 42);
-      expect(mockGet.mock.calls[0][0]).toBe('/files/..%2F..%2Fprocs%2FEvil/42');
+      await expect(service.getFilesByRecord('../../procs/Evil', 42)).rejects.toThrow('Invalid table name');
+      expect(mockGet).not.toHaveBeenCalled();
     });
 
     it('passes defaultOnly param', async () => {
@@ -73,7 +76,7 @@ describe('FileService', () => {
     it('propagates errors', async () => {
       mockGet.mockRejectedValueOnce(new Error('Not found'));
       const service = createService();
-      await expect(service.getFilesByRecord('X', 1)).rejects.toThrow('Not found');
+      await expect(service.getFilesByRecord('Contacts', 1)).rejects.toThrow('Not found');
     });
   });
 
@@ -114,7 +117,7 @@ describe('FileService', () => {
     it('propagates errors', async () => {
       mockPostFormData.mockRejectedValueOnce(new Error('Upload failed'));
       const service = createService();
-      await expect(service.uploadFiles('X', 1, [])).rejects.toThrow('Upload failed');
+      await expect(service.uploadFiles('Contacts', 1, [])).rejects.toThrow('Upload failed');
     });
   });
 
@@ -191,36 +194,41 @@ describe('FileService', () => {
   });
 
   describe('getFileContentByUniqueId', () => {
-    it('fetches file content as blob', async () => {
+    it('fetches file content as blob, refusing redirects with the API timeout', async () => {
       const blob = new Blob(['image data'], { type: 'image/jpeg' });
-      mockBuildUrl.mockReturnValue('https://mp.example.com/files/abc-123');
+      mockBuildUrl.mockReturnValue(`https://mp.example.com/files/${GUID}`);
+      const timeoutSpy = vi.spyOn(AbortSignal, 'timeout');
       vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({
         ok: true,
         blob: () => Promise.resolve(blob),
       }));
 
       const service = createService();
-      const result = await service.getFileContentByUniqueId('abc-123');
+      const result = await service.getFileContentByUniqueId(GUID);
       expect(result).toBe(blob);
-      expect(mockBuildUrl).toHaveBeenCalledWith('/files/abc-123', {});
-      vi.unstubAllGlobals();
+      expect(mockBuildUrl).toHaveBeenCalledWith(`/files/${GUID}`, {});
+      expect(fetch).toHaveBeenCalledWith(`https://mp.example.com/files/${GUID}`, {
+        method: 'GET',
+        redirect: 'error',
+        signal: expect.any(AbortSignal),
+      });
+      expect(timeoutSpy).toHaveBeenCalledWith(30_000);
     });
 
     it('passes thumbnail param', async () => {
-      mockBuildUrl.mockReturnValue('https://mp.example.com/files/abc?$thumbnail=true');
+      mockBuildUrl.mockReturnValue(`https://mp.example.com/files/${GUID}?$thumbnail=true`);
       vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({
         ok: true,
         blob: () => Promise.resolve(new Blob()),
       }));
 
       const service = createService();
-      await service.getFileContentByUniqueId('abc', true);
-      expect(mockBuildUrl).toHaveBeenCalledWith('/files/abc', { $thumbnail: 'true' });
-      vi.unstubAllGlobals();
+      await service.getFileContentByUniqueId(GUID, true);
+      expect(mockBuildUrl).toHaveBeenCalledWith(`/files/${GUID}`, { $thumbnail: 'true' });
     });
 
-    it('throws on non-OK response', async () => {
-      mockBuildUrl.mockReturnValue('https://mp.example.com/files/bad');
+    it('throws on non-OK response without echoing the unique ID', async () => {
+      mockBuildUrl.mockReturnValue(`https://mp.example.com/files/${GUID}`);
       vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({
         ok: false,
         status: 404,
@@ -228,8 +236,23 @@ describe('FileService', () => {
       }));
 
       const service = createService();
-      await expect(service.getFileContentByUniqueId('bad')).rejects.toThrow('failed: 404 Not Found');
-      vi.unstubAllGlobals();
+      const error = await service.getFileContentByUniqueId(GUID).catch((e: Error) => e);
+      expect((error as Error).message).toBe('GET /files/{uniqueId} failed: 404 Not Found');
+      expect((error as Error).message).not.toContain(GUID);
+    });
+
+    it.each([
+      ['a short id', 'abc-123'],
+      ['a traversal', '../procs/Evil'],
+      ['a GUID with a suffix', `${GUID}/metadata`],
+      ['a non-string', 42],
+    ])('refuses %s before any fetch', async (_label, id) => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      const service = createService();
+      await expect(service.getFileContentByUniqueId(id as string)).rejects.toThrow('Invalid GUID format');
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(mockBuildUrl).not.toHaveBeenCalled();
     });
   });
 
@@ -255,15 +278,52 @@ describe('FileService', () => {
       const meta = { FileId: 1, FileName: 'test.jpg' };
       mockGet.mockResolvedValueOnce(meta);
       const service = createService();
-      const result = await service.getFileMetadataByUniqueId('abc-123');
-      expect(mockGet).toHaveBeenCalledWith('/files/abc-123/metadata');
+      const result = await service.getFileMetadataByUniqueId(GUID);
+      expect(mockGet).toHaveBeenCalledWith(`/files/${GUID}/metadata`);
       expect(result).toEqual(meta);
     });
 
     it('propagates errors', async () => {
       mockGet.mockRejectedValueOnce(new Error('Not found'));
       const service = createService();
-      await expect(service.getFileMetadataByUniqueId('bad')).rejects.toThrow('Not found');
+      await expect(service.getFileMetadataByUniqueId(GUID)).rejects.toThrow('Not found');
+    });
+  });
+
+  // Batch 3 (upstream MPNext 41bba94): every path segment is validated for its
+  // shape and encoded, before any token or network work.
+  describe('path segment guards', () => {
+    it('encodes valid segments (uploadFiles used to interpolate them raw)', async () => {
+      mockPostFormData.mockResolvedValueOnce([]);
+      const service = createService();
+      await service.uploadFiles('Participant_Milestones', '17' as unknown as number, []);
+      expect(mockPostFormData.mock.calls[0][0]).toBe('/files/Participant_Milestones/17');
+    });
+
+    it.each([
+      ['getFilesByRecord table', (s: FileService) => s.getFilesByRecord('Contacts/..', 1), 'Invalid table name'],
+      ['getFilesByRecord id', (s: FileService) => s.getFilesByRecord('Contacts', 1.5), 'Invalid ID'],
+      ['uploadFiles table', (s: FileService) => s.uploadFiles('../procs/x', 1, []), 'Invalid table name'],
+      ['uploadFiles id', (s: FileService) => s.uploadFiles('Contacts', '../1' as unknown as number, []), 'Invalid ID'],
+      ['updateFile id', (s: FileService) => s.updateFile('1/../2' as unknown as number), 'Invalid ID'],
+      ['deleteFile id', (s: FileService) => s.deleteFile(0), 'Invalid ID'],
+      ['getFileMetadata id', (s: FileService) => s.getFileMetadata(-1), 'Invalid ID'],
+      ['getFileMetadataByUniqueId guid', (s: FileService) => s.getFileMetadataByUniqueId('../x'), 'Invalid GUID format'],
+    ])('%s: refuses a bad value before any request', async (_label, call, message) => {
+      const service = createService();
+      await expect(call(service)).rejects.toThrow(message);
+      expect(mockEnsureValidToken).not.toHaveBeenCalled();
+      for (const fn of [mockGet, mockPostFormData, mockPutFormData, mockDelete]) {
+        expect(fn).not.toHaveBeenCalled();
+      }
+    });
+
+    it('logs failures through errorForLog, not the raw error', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockGet.mockRejectedValueOnce(new Error('x\nforged'));
+      const service = createService();
+      await service.getFileMetadata(5).catch(() => {});
+      expect(errorSpy).toHaveBeenCalledWith('Error getting file metadata:', 'Error: xforged');
     });
   });
 });

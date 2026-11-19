@@ -425,8 +425,10 @@ await mp.updateTableRecords('Contact_Log', records, {
   partial: true  // Allow partial updates
 });
 
-// Execute stored procedures
-const results = await mp.executeProcedureWithBody('api_Custom_Procedure', {
+// Execute stored procedures: deny-all unless the helper lists the name
+// (a fixed list next to the caller, never request input)
+const procs = new MPHelper({ allowedProcedures: ['api_Custom_Procedure'] });
+const results = await procs.executeProcedureWithBody('api_Custom_Procedure', {
   '@ContactID': 12345
 });
 
@@ -442,7 +444,7 @@ const files = await mp.getFilesByRecord({
 | Service | Purpose | Key Methods |
 |---------|---------|-------------|
 | **Table Service** | CRUD operations | `getTableRecords`, `createTableRecords`, `updateTableRecords`, `deleteTableRecords` |
-| **Procedure Service** | Stored procedures | `getProcedures`, `executeProcedure`, `executeProcedureWithBody` |
+| **Procedure Service** | Stored procedures (deny-all; enable per helper with `allowedProcedures`) | `getProcedures`, `executeProcedure`, `executeProcedureWithBody` |
 | **Communication Service** | Email/SMS | `createCommunication`, `sendMessage` |
 | **File Service** | File management | `getFilesByRecord`, `uploadFiles`, `updateFile`, `deleteFile` |
 | **Metadata Service** | Schema info | `getTables`, `refreshMetadata` |

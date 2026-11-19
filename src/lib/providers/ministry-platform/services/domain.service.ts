@@ -1,5 +1,7 @@
+import { errorForLog } from "@/lib/log-safe";
 import { MinistryPlatformClient } from "../client";
 import { DomainInfo, GlobalFilterItem, GlobalFilterParams, QueryParams } from "../types";
+import { sanitizeId } from "../utils/filter-sanitize";
 
 export class DomainService {
     private client: MinistryPlatformClient;
@@ -17,7 +19,7 @@ export class DomainService {
             await this.client.ensureValidToken();
             return await this.client.getHttpClient().get('/domain');
         } catch (error) {
-            console.error('Error getting domain info:', error);
+            console.error('Error getting domain info:', errorForLog(error));
             throw error;
         }
     }
@@ -30,11 +32,15 @@ export class DomainService {
      * @returns Promise with an array of global filter items
      */
     public async getGlobalFilters(params?: GlobalFilterParams): Promise<GlobalFilterItem[]> {
+        // Forward `$userId` only, validated. Anything else on `params` (such as a
+        // cast-in `$ignorePermissions`, audit N21) is dropped, never sent.
+        const query: QueryParams | undefined =
+            params?.$userId !== undefined ? { $userId: sanitizeId(params.$userId) } : undefined;
         try {
             await this.client.ensureValidToken();
-            return await this.client.getHttpClient().get('/domain/filters', params as QueryParams);
+            return await this.client.getHttpClient().get('/domain/filters', query);
         } catch (error) {
-            console.error('Error getting global filters:', error);
+            console.error('Error getting global filters:', errorForLog(error));
             throw error;
         }
     }

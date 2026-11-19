@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { HttpClient } from '@/lib/providers/ministry-platform/utils/http-client';
+import { MP_API_TIMEOUT_MS, MP_UPLOAD_TIMEOUT_MS } from '@/lib/providers/ministry-platform/utils/timeouts';
 
 /**
  * HttpClient Tests
@@ -13,7 +16,8 @@ import { HttpClient } from '@/lib/providers/ministry-platform/utils/http-client'
  * - FormData handling
  */
 
-// Mock global fetch
+// Mock global fetch (the real one is kept for the tests that talk to a local server)
+const nodeFetch = globalThis.fetch;
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
@@ -37,15 +41,21 @@ describe('HttpClient', () => {
     // SECURITY regression: thrown messages propagate to ~40 console.error sites and
     // Node prints error.message verbatim, so a newline in the endpoint would let a
     // caller forge a second log line.
-    it('produces a single-line message for a newline-bearing endpoint', async () => {
-      mockFetch.mockResolvedValue({ ok: false, status: 404, statusText: 'Not Found' });
+    it('refuses a newline-bearing endpoint before any request, without echoing it', async () => {
       const evil = '/files/X/1\nforged-log-line';
 
       const error = await httpClient.get(evil).catch((e: Error) => e);
       expect(error).toBeInstanceOf(Error);
-      expect((error as Error).message).not.toContain('\n');
-      expect((error as Error).message).toContain('forged-log-line');
-      expect((error as Error).message.split('\n')).toHaveLength(1);
+      expect((error as Error).message).toBe('Refusing unsafe MP API endpoint');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('keeps a non-JSON error out of the message and redacts file GUIDs', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 404, statusText: 'Not Found' });
+      const guid = '0f8fad5b-d9cb-469f-a165-70867728950e';
+
+      const error = await httpClient.get(`/files/${guid}/metadata`).catch((e: Error) => e);
+      expect((error as Error).message).toBe('GET /files/{uniqueId}/metadata failed: 404 Not Found');
     });
 
     it('leaves a normal endpoint untouched in the message', async () => {
@@ -55,7 +65,7 @@ describe('HttpClient', () => {
     });
 
     it('does not alter the URL actually requested', async () => {
-      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+      mockFetch.mockResolvedValueOnce({ ok: true, text: async () => '{}' });
       await httpClient.get('/tables/Contact_Log');
       expect(mockFetch.mock.calls[0][0]).toBe('https://api.ministryplatform.com/tables/Contact_Log');
     });
@@ -128,7 +138,7 @@ describe('HttpClient', () => {
     it('should make GET request with authorization header', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve([{ Contact_ID: 1, Display_Name: 'John Doe' }]),
+        text: () => Promise.resolve(JSON.stringify([{ Contact_ID: 1, Display_Name: 'John Doe' }])),
       });
 
       const result = await httpClient.get('/tables/Contacts');
@@ -141,6 +151,7 @@ describe('HttpClient', () => {
             'Authorization': 'Bearer test-access-token-123',
             'Accept': 'application/json',
           },
+          redirect: 'error',
           signal: expect.any(AbortSignal),
         }
       );
@@ -150,7 +161,7 @@ describe('HttpClient', () => {
     it('should make GET request with query parameters', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve([]),
+        text: () => Promise.resolve(JSON.stringify([])),
       });
 
       await httpClient.get('/tables/Contacts', { $top: 10, $filter: 'Active=1' });
@@ -207,7 +218,7 @@ describe('HttpClient', () => {
       const newRecord = { First_Name: 'John', Last_Name: 'Doe' };
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve([{ Contact_ID: 1, ...newRecord }]),
+        text: () => Promise.resolve(JSON.stringify([{ Contact_ID: 1, ...newRecord }])),
       });
 
       const result = await httpClient.post('/tables/Contacts', newRecord);
@@ -222,6 +233,7 @@ describe('HttpClient', () => {
             'Accept': 'application/json',
           },
           body: JSON.stringify(newRecord),
+          redirect: 'error',
           signal: expect.any(AbortSignal),
         }
       );
@@ -231,7 +243,7 @@ describe('HttpClient', () => {
     it('should make POST request without body', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ success: true }),
+        text: () => Promise.resolve(JSON.stringify({ success: true })),
       });
 
       await httpClient.post('/some/endpoint');
@@ -246,6 +258,7 @@ describe('HttpClient', () => {
             'Accept': 'application/json',
           },
           body: undefined,
+          redirect: 'error',
           signal: expect.any(AbortSignal),
         }
       );
@@ -254,7 +267,7 @@ describe('HttpClient', () => {
     it('should make POST request with query parameters', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve([]),
+        text: () => Promise.resolve(JSON.stringify([])),
       });
 
       await httpClient.post('/tables/Contacts', { Name: 'Test' }, { $userId: 1 });
@@ -285,7 +298,7 @@ describe('HttpClient', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ FileId: 1 }),
+        text: () => Promise.resolve(JSON.stringify({ FileId: 1 })),
       });
 
       const result = await httpClient.postFormData('/files', formData);
@@ -300,6 +313,7 @@ describe('HttpClient', () => {
             // No Content-Type for FormData
           },
           body: formData,
+          redirect: 'error',
           signal: expect.any(AbortSignal),
         }
       );
@@ -325,7 +339,7 @@ describe('HttpClient', () => {
       const updatedRecord = { Contact_ID: 1, First_Name: 'Jane' };
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve([updatedRecord]),
+        text: () => Promise.resolve(JSON.stringify([updatedRecord])),
       });
 
       const result = await httpClient.put('/tables/Contacts', updatedRecord);
@@ -340,6 +354,7 @@ describe('HttpClient', () => {
             'Accept': 'application/json',
           },
           body: JSON.stringify(updatedRecord),
+          redirect: 'error',
           signal: expect.any(AbortSignal),
         }
       );
@@ -367,7 +382,7 @@ describe('HttpClient', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ FileId: 1, FileName: 'updated.txt' }),
+        text: () => Promise.resolve(JSON.stringify({ FileId: 1, FileName: 'updated.txt' })),
       });
 
       const result = await httpClient.putFormData('/files/1', formData);
@@ -381,6 +396,7 @@ describe('HttpClient', () => {
             'Accept': 'application/json',
           },
           body: formData,
+          redirect: 'error',
           signal: expect.any(AbortSignal),
         }
       );
@@ -392,7 +408,7 @@ describe('HttpClient', () => {
     it('should make DELETE request', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve([{ Contact_ID: 1 }]),
+        text: () => Promise.resolve(JSON.stringify([{ Contact_ID: 1 }])),
       });
 
       const result = await httpClient.delete('/tables/Contacts', { id: [1] });
@@ -405,6 +421,7 @@ describe('HttpClient', () => {
             'Authorization': 'Bearer test-access-token-123',
             'Accept': 'application/json',
           },
+          redirect: 'error',
           signal: expect.any(AbortSignal),
         }
       );
@@ -431,7 +448,7 @@ describe('HttpClient', () => {
 
       mockFetch.mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve([]),
+        text: () => Promise.resolve(JSON.stringify([])),
       });
 
       await dynamicClient.get('/test');
@@ -468,13 +485,234 @@ describe('HttpClient', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve([{ Contact_ID: 1, Display_Name: 'Test' }]),
+        text: () => Promise.resolve(JSON.stringify([{ Contact_ID: 1, Display_Name: 'Test' }])),
       });
 
       const result = await httpClient.get<Contact[]>('/tables/Contacts');
 
       expect(result[0].Contact_ID).toBe(1);
       expect(result[0].Display_Name).toBe('Test');
+    });
+  });
+
+  // Batch 3 (audit N12, upstream MPNext 9b7b4d1): the endpoint is appended to the
+  // service account's base URL, so anything that could leave the API root or
+  // name a different path is refused before fetch, with a fixed message.
+  describe('Endpoint path guard', () => {
+    const mpBase = 'https://mp.example.com/ministryplatformapi';
+    let mpClient: HttpClient;
+    beforeEach(() => {
+      mpClient = new HttpClient(mpBase, getToken);
+    });
+
+    it.each([
+      ['a dot-segment', '/tables/..'],
+      ['an encoded dot-segment (%2e%2e)', '/tables/%2e%2e'],
+      ['an upper-case encoded dot (%2E)', '/tables/%2E%2E/procs'],
+      ['an encoded slash (%2F)', '/tables/a%2Fb'],
+      ['an encoded backslash (%5c)', '/tables/a%5cb'],
+      ['a backslash', '/tables\\..\\procs'],
+      ['a backslash without a dot-segment', '/tables\\Contacts'],
+      ['a backslash in a file path', '/files\\1'],
+      ['a query smuggled into the path', '/tables/Contacts?$filter=1=1'],
+      ['a fragment', '/tables/Contacts#x'],
+      ['a tab (the URL parser strips it, so .\t. becomes ..)', '/tables/.\t./procs'],
+      ['a newline', '/tables/Contacts\n'],
+      ['a DEL character', '/tables/Contacts\x7f'],
+      ['no leading slash', 'tables/Contacts'],
+      ['the empty string', ''],
+    ])('refuses %s before fetch', async (_label, endpoint) => {
+      await expect(mpClient.get(endpoint)).rejects.toThrow('Refusing unsafe MP API endpoint');
+      expect(() => mpClient.buildUrl(endpoint)).toThrow('Refusing unsafe MP API endpoint');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('refuses a non-string endpoint (types are erased at runtime)', () => {
+      expect(() => mpClient.buildUrl(42 as unknown as string)).toThrow('Refusing unsafe MP API endpoint');
+    });
+
+    it('never echoes the refused endpoint', async () => {
+      const error = await mpClient.get('/tables/../SECRET-PATH').catch((e: Error) => e);
+      expect((error as Error).message).not.toContain('SECRET-PATH');
+    });
+
+    it.each(['/tables/Contacts', '/tables/dp_Users', '/procs', '/files/123/metadata', '/files/Participant_Milestones/42', '/domain/filters', '/refreshMetadata'])(
+      'accepts the real endpoint %s and keeps the base path',
+      (endpoint) => {
+        expect(mpClient.buildUrl(endpoint)).toBe(`${mpBase}${endpoint}`);
+      }
+    );
+
+    it('checks every method, uploads included', async () => {
+      const fd = new FormData();
+      await expect(mpClient.post('/tables/..', {})).rejects.toThrow('Refusing unsafe');
+      await expect(mpClient.put('/tables/..', {})).rejects.toThrow('Refusing unsafe');
+      await expect(mpClient.delete('/tables/..')).rejects.toThrow('Refusing unsafe');
+      await expect(mpClient.postFormData('/files/../x', fd)).rejects.toThrow('Refusing unsafe');
+      await expect(mpClient.putFormData('/files/../x', fd)).rejects.toThrow('Refusing unsafe');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('reports an unparseable base URL with a fixed message', () => {
+      const broken = new HttpClient('not a url', getToken);
+      expect(() => broken.buildUrl('/tables/Contacts')).toThrow('Invalid MP API base URL');
+    });
+  });
+
+  describe('Redirect refusal and timeouts', () => {
+    const ok = () => ({ ok: true, text: () => Promise.resolve('[]') });
+
+    it('sets redirect: "error" on every method', async () => {
+      mockFetch.mockResolvedValue(ok());
+      const fd = new FormData();
+      await httpClient.get('/a');
+      await httpClient.post('/a', { x: 1 });
+      await httpClient.postFormData('/a', fd);
+      await httpClient.put('/a', { x: 1 });
+      await httpClient.putFormData('/a', fd);
+      await httpClient.delete('/a');
+      expect(mockFetch).toHaveBeenCalledTimes(6);
+      for (const [, init] of mockFetch.mock.calls) {
+        expect(init.redirect).toBe('error');
+      }
+    });
+
+    it('surfaces a refused redirect (fetch TypeError) to the caller', async () => {
+      mockFetch.mockRejectedValueOnce(new TypeError('fetch failed'));
+      await expect(httpClient.get('/tables/Contacts')).rejects.toThrow(TypeError);
+    });
+
+    it('gives JSON calls the API timeout and multipart uploads the upload timeout', async () => {
+      expect(MP_API_TIMEOUT_MS).toBe(30_000);
+      expect(MP_UPLOAD_TIMEOUT_MS).toBe(60_000);
+      const timeoutSpy = vi.spyOn(AbortSignal, 'timeout');
+      mockFetch.mockResolvedValue(ok());
+      const fd = new FormData();
+
+      await httpClient.get('/a');
+      await httpClient.post('/a', {});
+      await httpClient.put('/a', {});
+      await httpClient.delete('/a');
+      expect(timeoutSpy.mock.calls.map(([ms]) => ms)).toEqual([30_000, 30_000, 30_000, 30_000]);
+
+      timeoutSpy.mockClear();
+      await httpClient.postFormData('/a', fd);
+      await httpClient.putFormData('/a', fd);
+      expect(timeoutSpy.mock.calls.map(([ms]) => ms)).toEqual([60_000, 60_000]);
+    });
+  });
+
+  describe('Response body handling', () => {
+    it.each(['get', 'delete'] as const)('%s returns undefined for a 204 without reading the body', async (method) => {
+      const text = vi.fn();
+      const json = vi.fn();
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 204, text, json });
+      await expect(httpClient[method]('/files/1')).resolves.toBeUndefined();
+      expect(text).not.toHaveBeenCalled();
+      expect(json).not.toHaveBeenCalled();
+    });
+
+    // Batch 3 review: an empty body without Content-Length (a chunked 200, or a
+    // 205) threw "invalid JSON response" even though MP had succeeded.
+    it.each([
+      ['an empty-string 200', () => new Response('', { status: 200 })],
+      ['a null-body 200', () => new Response(null, { status: 200 })],
+      ['a 205', () => new Response(null, { status: 205 })],
+      ['a whitespace-only 200', () => new Response(' \r\n', { status: 200 })],
+    ])('returns undefined for %s (no Content-Length)', async (_label, make) => {
+      const response = make();
+      expect(response.headers.get('content-length')).toBeNull();
+      mockFetch.mockResolvedValueOnce(response);
+      await expect(httpClient.delete('/tables/Contacts')).resolves.toBeUndefined();
+    });
+
+    it('returns undefined for an empty chunked 200 from a real server', async () => {
+      const server = createServer((_req, res) => {
+        res.writeHead(200);
+        res.end();
+      });
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+      const { port } = server.address() as AddressInfo;
+      try {
+        let contentLength: string | null = 'unset';
+        mockFetch.mockImplementationOnce(async (url: string, init: RequestInit) => {
+          const response = await nodeFetch(url, init);
+          contentLength = response.headers.get('content-length');
+          return response;
+        });
+        const local = new HttpClient(`http://127.0.0.1:${port}`, getToken);
+        await expect(local.delete('/tables/Contacts')).resolves.toBeUndefined();
+        expect(contentLength).toBeNull();
+      } finally {
+        await new Promise((resolve) => server.close(resolve));
+      }
+    });
+
+    it('lets a body-read failure through instead of calling it invalid JSON', async () => {
+      const timeout = new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 200, text: () => Promise.reject(timeout) });
+      await expect(httpClient.get('/tables/Contacts')).rejects.toBe(timeout);
+    });
+
+    it('returns undefined for Content-Length: 0', async () => {
+      mockFetch.mockResolvedValueOnce(new Response(null, { status: 200, headers: { 'content-length': '0' } }));
+      await expect(httpClient.put('/tables/Contacts', {})).resolves.toBeUndefined();
+    });
+
+    it('returns undefined for a real 204 Response', async () => {
+      mockFetch.mockResolvedValueOnce(new Response(null, { status: 204 }));
+      await expect(httpClient.delete('/files/1')).resolves.toBeUndefined();
+    });
+
+    it('parses a real JSON Response', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response('[{"Contact_ID":1}]', { status: 200, headers: { 'content-type': 'application/json' } })
+      );
+      await expect(httpClient.get('/tables/Contacts')).resolves.toEqual([{ Contact_ID: 1 }]);
+    });
+
+    it('does not check Content-Type (no outage on a JSON body labelled otherwise)', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response('{"a":1}', { status: 200, headers: { 'content-type': 'text/plain' } })
+      );
+      await expect(httpClient.get('/domain')).resolves.toEqual({ a: 1 });
+    });
+
+    it.each([
+      ['get', 'GET'],
+      ['post', 'POST'],
+      ['put', 'PUT'],
+      ['delete', 'DELETE'],
+    ] as const)('%s turns a non-JSON body into a fixed message that quotes none of it', async (method, verb) => {
+      mockFetch.mockResolvedValueOnce(
+        new Response('<html>member@example.org</html>', { status: 200, headers: { 'content-type': 'text/html' } })
+      );
+      const call =
+        method === 'get' || method === 'delete'
+          ? httpClient[method]('/tables/Contacts')
+          : httpClient[method]('/tables/Contacts', {});
+      const error = await call.catch((e: Error) => e);
+      expect((error as Error).message).toBe(`${verb} /tables/Contacts failed: invalid JSON response`);
+      expect((error as Error).message).not.toContain('member@example.org');
+    });
+
+    it('redacts a file GUID in the invalid-JSON message too', async () => {
+      mockFetch.mockResolvedValueOnce(new Response('x', { status: 200 }));
+      const error = await httpClient
+        .get('/files/0a1b2c3d-1111-2222-3333-444455556666/metadata')
+        .catch((e: Error) => e);
+      expect((error as Error).message).toBe('GET /files/{uniqueId}/metadata failed: invalid JSON response');
+    });
+
+    it('uploads turn a non-JSON body into the fixed message too', async () => {
+      mockFetch.mockResolvedValueOnce(new Response('not json', { status: 200 }));
+      await expect(httpClient.postFormData('/files/Contacts/1', new FormData())).rejects.toThrow(
+        'POST /files/Contacts/1 failed: invalid JSON response'
+      );
+      mockFetch.mockResolvedValueOnce(new Response('not json', { status: 200 }));
+      await expect(httpClient.putFormData('/files/1', new FormData())).rejects.toThrow(
+        'PUT /files/1 failed: invalid JSON response'
+      );
     });
   });
 });

@@ -12,6 +12,7 @@ const mockProcedureService = {
   executeProcedure: vi.fn(),
   executeProcedureWithBody: vi.fn(),
 };
+const procedureServiceOptions: unknown[] = [];
 
 const mockDomainService = {
   getDomainInfo: vi.fn(),
@@ -39,7 +40,13 @@ vi.mock('./client', () => ({
 
 vi.mock('./services', () => ({
   TableService: class { getTableRecords = mockTableService.getTableRecords; createTableRecords = mockTableService.createTableRecords; updateTableRecords = mockTableService.updateTableRecords; deleteTableRecords = mockTableService.deleteTableRecords; },
-  ProcedureService: class { getProcedures = mockProcedureService.getProcedures; executeProcedure = mockProcedureService.executeProcedure; executeProcedureWithBody = mockProcedureService.executeProcedureWithBody; },
+  ALLOWED_PROCEDURES: ['api_Builtin'],
+  ProcedureService: class {
+    getProcedures = mockProcedureService.getProcedures;
+    executeProcedure = mockProcedureService.executeProcedure;
+    executeProcedureWithBody = mockProcedureService.executeProcedureWithBody;
+    constructor(_client: unknown, options?: unknown) { procedureServiceOptions.push(options); }
+  },
   CommunicationService: class {},
   MetadataService: class { refreshMetadata = mockMetadataService.refreshMetadata; getTables = mockMetadataService.getTables; },
   DomainService: class { getDomainInfo = mockDomainService.getDomainInfo; getGlobalFilters = mockDomainService.getGlobalFilters; },
@@ -128,6 +135,27 @@ describe('MinistryPlatformProvider', () => {
 
       expect(mockProcedureService.executeProcedureWithBody).toHaveBeenCalledWith('api_MyProc', { '@Param': 42 });
       expect(result).toEqual([[{ result: 1 }]]);
+    });
+
+    // Batch 3 (upstream MPNext 3d9ae92)
+    it('uses the shared service (built-in list only) when no extra names are given', async () => {
+      const provider = MinistryPlatformProvider.getInstance();
+      const built = procedureServiceOptions.length;
+      await provider.executeProcedure('api_MyProc');
+      await provider.executeProcedureWithBody('api_MyProc', {});
+      expect(procedureServiceOptions.length).toBe(built);
+    });
+
+    it('builds a per-call service whose list is the built-in list plus the extra names', async () => {
+      const provider = MinistryPlatformProvider.getInstance();
+      procedureServiceOptions.length = 0;
+      await provider.executeProcedure('api_Extra', undefined, ['api_Extra']);
+      await provider.executeProcedureWithBody('api_Extra', {}, ['api_Extra']);
+      expect(procedureServiceOptions).toEqual([
+        { allowedProcedures: ['api_Builtin', 'api_Extra'] },
+        { allowedProcedures: ['api_Builtin', 'api_Extra'] },
+      ]);
+      expect(mockProcedureService.executeProcedure).toHaveBeenCalledWith('api_Extra', undefined);
     });
   });
 

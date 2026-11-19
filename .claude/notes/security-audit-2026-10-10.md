@@ -55,7 +55,7 @@ repo visibility, protection, scanning status, open alerts and advisory data.
 | N9 | `proxy.ts` `/api` prefix match and unanchored matcher | LOW | **Fixed 2026-11-18** (batch 1): exact `/api` public path; every matcher exclusion bounded |
 | N10 | Journey/compliance pages render tool config without a feature gate | LOW | Open |
 | N11 | Duplicate reachable action at a weaker rate tier; one orphan export | LOW | Partly fixed: `getDashboardMetrics` gone; three unused contact-log actions remain (not in the current action manifest, so latent). Batch 4 |
-| N12 | Outbound fetches without timeout/redirect refusal; token refresh not single-flight; token body unvalidated | LOW | Partly fixed 2026-11-18 (batch 2): the userinfo fetch has a 10 s timeout and `redirect: "error"` (upstream f2af96d). The MP client part is batch 3 |
+| N12 | Outbound fetches without timeout/redirect refusal; token refresh not single-flight; token body unvalidated | LOW | **Fixed** on `security/batch3-mp-client` (2026-11-19), userinfo part in batch 2: every MP fetch refuses redirects; the token request has a 10 s timeout, a status-bearing static error and a required non-empty `access_token`; the refresh is single-flight; `expires_in` is clamped to [30 s, 3600 s]; `HttpClient` refuses unsafe endpoints (`assertSafeEndpoint`) and uploads get 60 s. `feedbackService.ts` was deleted in 36b5d25. The 401 refresh-and-retry is batch 8 |
 | N13 | `originOf` allows env-controlled CSP directive injection | LOW | **Fixed 2026-11-18** (batch 1): http(s) only, `[a-z0-9.-]` hostname; also `base-uri 'none'` |
 | N14 | `X-Powered-By`, live `/_next/image`, dev action-arg logging | LOW | **Fixed 2026-11-18** (batch 1): `poweredByHeader: false`, `images.unoptimized`, `logging.serverFunctions: false` |
 | N15 | Three CodeQL `js/log-injection` alerts open since 2026-08-07 | LOW | **Fixed**, confirmed 2026-11-18: no open `js/log-injection` alerts. (One unrelated open alert, #37 `js/incomplete-sanitization` in a test file, batch 4) |
@@ -64,7 +64,7 @@ repo visibility, protection, scanning status, open alerts and advisory data.
 | N18 | CI actions pinned by tag; no workflow-level `permissions`; `persist-credentials` default | LOW | Open |
 | N19 | `BETTER_AUTH_URL` / MP URL not validated at boot; localhost fallback | LOW | **Fixed 2026-11-18** (batch 2): `src/lib/env.ts` validates both under the secret guard's rule and `next build` exemption; no `NEXTAUTH_URL` or localhost fallback; the `!` reads in `client.ts` / `client-credentials.ts` are gone |
 | N20 | Local checkout 8 commits behind; stale `node_modules`; tests not run | INFO | Operational |
-| N21 | `$ignorePermissions` still declared (unused) | INFO | Open |
+| N21 | `$ignorePermissions` still declared (unused) | INFO | **Fixed** on `security/batch3-mp-client` (2026-11-19): removed from `GlobalFilterParams` and the helper JSDoc; `DomainService.getGlobalFilters` forwards only a validated `$userId`, so a cast-in value is dropped |
 | N22 | `main` has no branch protection; `.claude/settings.local.json` tracked (benign) | INFO | Branch part fixed 2026-10-21: ruleset `main` (id 25566298) blocks deletion and force pushes; no PR or status-check requirement, so docs-direct pushes and the Issues ↔ Ideas sync still work |
 | N23 | (added 2026-10-21) `getParticipantDetail` never tied `contactId` / `groupParticipantId` to the scoped `participantId`, in both the compliance and journey services | **HIGH** | Fixed on `security/n1-requirement-file-scope` (2026-10-21) |
 
@@ -343,8 +343,8 @@ Upstream's own triage block was run against our tree. Results, with the fork's d
 | P6 body cap, raw Content-Type, `callbackURL` ≤ 2048, IP config | ✓ done | #244 |
 | P6 `no-store` on every auth-route response | ✓ done | batch 2 (2026-11-18): `withNoStore` on every return path, 404s included |
 | P7 fail-closed role gate | n/a | RBAC groups; `ADMIN_USER_GROUP_IDS` empty → nobody is admin (fail-closed) |
-| P8 timeouts / `redirect: "error"` / path guard / single-flight / token validation / 401 retry | ✓ timeouts only | N12 |
-| P9 identifier guards, procedure allowlist, trusted sender, `$ignorePermissions` removal, codegen escaping | mostly n/a | no procedures/communications called; `$ignorePermissions` type remains (N21); codegen escaping not checked |
+| P8 timeouts / `redirect: "error"` / path guard / single-flight / token validation / 401 retry | ✓ all but the 401 retry (batch 3, 2026-11-19) | N12; 401 retry is batch 8 |
+| P9 identifier guards, procedure allowlist, trusted sender, `$ignorePermissions` removal, codegen escaping | ✓ guards, deny-all allowlist, `$ignorePermissions` removal (batch 3, 2026-11-19) | trusted sender deferred (no caller); codegen escaping is batch 9 |
 | P10 `pick` not `omit`; `Made_By` preserved | partial | we `.omit()` but tests pin the smuggled-key strip; `Made_By` already not re-stamped |
 | P10 sanitizers refuse non-strings/control chars; search term cap | ✗ open | low: all callers pass typed strings; search runs in-memory over a cached list, not in a filter |
 | P10 self-only `getUserProfile`; unused actions removed | ✓ / partial | N11 |

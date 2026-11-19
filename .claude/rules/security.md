@@ -287,6 +287,46 @@ Dependabot PR would otherwise merge with the field left behind).
 Do **not** add `continue-on-error`, `|| true` or a raw `npm audit` call back to either workflow; the
 "CI wiring" tests in `scripts/audit-gate-lib.test.ts` fail if you do.
 
+## MP Client Guards (provider layer) — batch 3, 2026-11-19
+
+The MP client runs as an admin-level service account, so the provider layer
+(`src/lib/providers/ministry-platform/`) checks every value it puts in a request path itself, whatever the caller
+did. Types are erased at runtime. Each check runs **before `ensureValidToken()`** (no token or network work for a
+doomed call) and throws a **fixed message that never echoes the value**. Upstream MPNext 9b7b4d1, 41bba94, 3d9ae92,
+5aa0b5e, adapted (audit N12, N21).
+
+- **`sanitizeIdentifier(value, field)`** (`services/guards.ts`): `/^[A-Za-z_][A-Za-z0-9_]*$/`, at most 128
+  characters, strings only; throws `Invalid <field>`. Every table name (`table.service.ts`, `file.service.ts`) and
+  procedure name goes through it. All 278 MP tables in `ministryplatform.schema.md` and every live caller's table name
+  pass (checked 2026-11-19). `encodeURIComponent` alone is not enough: it leaves `..` intact.
+- **File segments**: table via `sanitizeIdentifier`, record/file IDs via `sanitizeId`, unique IDs via `sanitizeGuid`,
+  then `encodeURIComponent`. Delete IDs (`deleteTableRecords`) go through `sanitizeId` one by one; one bad ID refuses
+  the whole call.
+- **Stored procedures are deny-all.** `ALLOWED_PROCEDURES` (`services/procedure.service.ts`) is empty: mp-charts
+  calls none. To enable one, pass a fixed, module-level list next to its caller,
+  `new MPHelper({ allowedProcedures: ['api_X'] })`, or add it to `ALLOWED_PROCEDURES` in the same change as the
+  caller. Never build the list from request input. Matching is exact and case-sensitive; one helper's list never
+  widens another's. `getProcedures` (metadata) is not gated.
+- **`HttpClient.assertSafeEndpoint`**, first in `buildUrl`: the endpoint must start with `/` and contain no `..`,
+  `?`, `#`, `\`, `%2e`, `%2f`, `%5c` or control character, and must resolve under the base URL. It is the net under
+  every caller, not a replacement for the guards above.
+- **Redirects are refused** (`redirect: 'error'`) on every MP fetch: the six `HttpClient` methods, the
+  client-credentials token POST (a 307/308 would re-send `client_secret`), `getFileContentByUniqueId` and the userinfo
+  call. A refused redirect is a `TypeError` the caller logs and rethrows.
+- **Timeouts** live in `utils/timeouts.ts`: API 30 s, upload 60 s, token 10 s (userinfo's 10 s is in `auth.ts`).
+- **The token response is validated**: a header-safe `access_token` is required (visible ASCII `0x21-0x7E` only: a
+  NUL or CR/LF would make undici's invalid-header error quote the whole `Bearer <token>`); `token_type` may be absent, and
+  if present must be `bearer` in any case. Errors carry only a status or an error class name, never the body, the
+  secret or the token. The refresh is single-flight and `expires_in` is clamped to [30 s, 3600 s].
+- **No `$ignorePermissions`** (N21): removed from `GlobalFilterParams`; `DomainService` forwards only a `sanitizeId`'d
+  `$userId`. Do not add it back.
+- **Logging**: provider services log a fixed message plus `errorForLog(error)`, never a table, procedure or ID in
+  the message and never the raw Error. `HttpClient` error messages redact file GUIDs to `{uniqueId}`.
+  `services/log-sites.test.ts` pins every log line in `services/` and `client.ts` to
+  `console.error('<fixed text>', errorForLog(error));` and each service catch to log-then-rethrow.
+- **Empty bodies**: `readJson` returns `undefined` for a 204 or any empty/whitespace body (an empty chunked 200 has
+  no Content-Length); a body-read failure propagates unchanged, only a JSON parse failure becomes the fixed message.
+
 ## File Upload Validation
 
 All file upload endpoints must validate MIME type **and** file size on the server side. Limits match Ministry Platform: **20 MB max**, standard file formats (PNG, JPG, BMP, GIF, PDF, TXT, CSV):
@@ -351,7 +391,10 @@ console.log("HTTP PUT:", JSON.stringify(body, null, 2)); // leaks request payloa
 
 **Log caught errors with `errorForLog(error)`** (`src/lib/log-safe.ts`), not the raw Error, wherever the error
 can carry caller-shaped text (CodeQL `js/log-injection`). It returns one `name: message` line with control
-characters stripped. Keep its first `.replace(/\n|\r/g, "")` verbatim: that is the form CodeQL recognises.
+characters stripped, plus ` (cause: <name> <code>)` when the error has an object `cause` (`causeForLog`): undici's
+`TypeError: fetch failed` keeps ECONNREFUSED, `UND_ERR_CONNECT_TIMEOUT` or a refused redirect only there. Name and code
+are each kept only if they match `^[A-Za-z0-9_]{1,64}$`; the cause's message is never copied (undici's
+"unexpected redirect" becomes the fixed label `redirect refused`). Keep its first `.replace(/\n|\r/g, "")` verbatim: that is the form CodeQL recognises.
 Error messages the app throws must be static, never echoing a slug, type or other argument.
 
 ## Better Auth Endpoint Exposure — MANDATORY
