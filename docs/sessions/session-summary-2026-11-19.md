@@ -91,8 +91,15 @@ negative cache, batch 8), 41bba94 + 3d9ae92 (minus the trusted-sender rewrite: n
   attempt 1 (37 s, the full ~31-call fan-out through the single-flight token), no MP errors; owner checked the
   dashboard, a manual refresh, a contact lookup with photo and a journey/compliance file list. Merged `486c0a7`;
   `:latest` deployed 17:22 UTC, warm 4/4 on attempt 1.
-- **Next:** sibling ports (event-manager must pass its three procedure names through `allowedProcedures`).
+- **Sibling ports — COMPLETED.** A workflow ported, independently reviewed (production paths, parity, mutants) and
+  fixed each: event-manager #95 (`469dce8`; per-service `allowedProcedures`: `EventService` →
+  `api_Tools_GetRecordSequenceId`, `api_Tools_GetSequenceRecords`; `EventSeriesService` → `api_Custom_CreateEventSequence`;
+  `taskService`'s direct `DELETE /tasks` hardened; its HttpClient gained the 30 s/60 s deadlines it lacked),
+  mp-senior-care #255 (`283c7eb`; one nit fixed: a one-off script no longer puts MP response bodies in errors),
+  music-tools #211 (`abd285d`; gained `sanitizeId`). Each copies `src/lib/log-safe.ts`. Reviews: no findings in
+  event-manager or music-tools. All three on `:dev` from 17:40 UTC (cold warms on attempt 1, no MP errors); the owner
+  tested event-manager (event creates) and chose to deploy the other two untested. `:latest` deployed 17:50 UTC.
 
 ## Next
 
-Batch 3 sibling ports, then batches 4–10 and the N17 verifier port.
+Batches 4–10 and the N17 verifier port.
