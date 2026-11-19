@@ -45,6 +45,19 @@ describe("toMpSqlDatetime", () => {
   it("throws on an unparseable string", () => {
     expect(() => toMpSqlDatetime("not-a-date")).toThrow();
   });
+
+  it("never echoes the input in its error message", () => {
+    const input = "evil\n[forged] log line";
+    expect(() => toMpSqlDatetime(input)).toThrow("toMpSqlDatetime: cannot parse value");
+    try {
+      toMpSqlDatetime(input);
+    } catch (error) {
+      expect((error as Error).message).not.toContain("evil");
+      expect((error as Error).message).not.toContain("forged");
+      expect((error as Error).message).not.toContain("\n");
+    }
+    expect.assertions(4);
+  });
 });
 
 describe("parseMpDatetime", () => {
@@ -94,5 +107,18 @@ describe("parseMpDatetime", () => {
 
   it("throws on a string with a zone marker (caller should pass to new Date instead)", () => {
     expect(() => parseMpDatetime("2026-05-17T03:33:00.000Z")).toThrow();
+  });
+
+  it("never echoes the input in its error message", () => {
+    const input = "evil\n[forged] log line";
+    expect(() => parseMpDatetime(input)).toThrow("parseMpDatetime: expected an MP wall-clock string");
+    try {
+      parseMpDatetime(input);
+    } catch (error) {
+      expect((error as Error).message).not.toContain("evil");
+      expect((error as Error).message).not.toContain("forged");
+      expect((error as Error).message).not.toContain("\n");
+    }
+    expect.assertions(4);
   });
 });

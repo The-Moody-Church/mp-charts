@@ -92,7 +92,9 @@ function callsFor(table: string, select?: string): QueryParams[] {
 
 /** Extracts the comma-separated list inside `<column> IN (...)`. */
 function inList(filter: string | undefined, column: string): number[] {
-  const escaped = column.replace(/[.[\]]/g, '\\$&');
+  // Full regex-metacharacter escape, backslash included (CodeQL #37,
+  // js/incomplete-sanitization).
+  const escaped = column.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = new RegExp(`${escaped} IN \\(([^)]*)\\)`).exec(filter ?? '');
   if (!match) throw new Error(`no "${column} IN (...)" in filter: ${filter}`);
   return match[1].split(',').map(Number);

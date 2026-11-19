@@ -8,6 +8,7 @@ import { ContactLogService } from '@/services/contactLogService';
 import { MPHelper } from '@/lib/providers/ministry-platform';
 import { sanitizeId, sanitizeIds } from '@/lib/providers/ministry-platform/utils/filter-sanitize';
 import { uploadContactPhoto } from '@/components/shared-actions/processing';
+import { errorForLog } from '@/lib/log-safe';
 
 export async function getContactDetails(guid: string): Promise<ContactLookupDetails> {
   try {
@@ -50,42 +51,41 @@ export async function getContactLogsByContactId(contactId: number): Promise<Cont
     if (uniqueUserIds.length > 0) {
       try {
         const mp = new MPHelper();
+        // Only the three name columns the UI renders (contact-logs.tsx), plus
+        // User_ID to match each log's Made_By. No email, phone, Contact_ID or
+        // image: the browser never shows them (upstream 710dfa8, adapted).
         const userRecords = await mp.getTableRecords<{
           User_ID: number;
-          Contact_ID: number;
           First_Name: string;
-          Last_Name: string;
           Nickname: string | null;
-          Email_Address: string | null;
-          Mobile_Phone: string | null;
-          Image_GUID: string | null;
+          Last_Name: string;
         }>({
           table: "dp_Users",
           filter: `User_ID IN (${sanitizeIds(uniqueUserIds)})`,
-          select: "User_ID,Contact_ID_TABLE.Contact_ID,Contact_ID_TABLE.First_Name,Contact_ID_TABLE.Nickname,Contact_ID_TABLE.Last_Name,Contact_ID_TABLE.Email_Address,Contact_ID_TABLE.Mobile_Phone,Contact_ID_TABLE.dp_fileUniqueId AS Image_GUID",
+          select: "User_ID,Contact_ID_TABLE.First_Name,Contact_ID_TABLE.Nickname,Contact_ID_TABLE.Last_Name",
         });
 
         for (const rec of userRecords) {
           madeByMap.set(rec.User_ID, {
-            Contact_ID: rec.Contact_ID,
             First_Name: rec.First_Name,
-            Last_Name: rec.Last_Name,
             Nickname: rec.Nickname,
-            Email_Address: rec.Email_Address,
-            Mobile_Phone: rec.Mobile_Phone,
-            Image_GUID: rec.Image_GUID,
+            Last_Name: rec.Last_Name,
           });
         }
       } catch (err) {
         // Non-fatal: logs still display, just without "Made By" names
-        console.error("Error fetching Made_By contact info:", err);
+        console.error("Error fetching Made_By contact info:", errorForLog(err));
       }
     }
 
     // Get log types once (not per-log)
     const types = await contactLogService.getContactLogTypes();
 
-    // Transform to ContactLogDisplay with type information and Made By contact
+    // Built field by field: only what contact-logs.tsx renders or needs.
+    // Made_By stays (the owner-only Edit button compares it to the session's
+    // User_ID). No spread of the MP row and no cast, so a column added to the
+    // service's select never reaches the browser by accident (upstream
+    // 710dfa8, adapted: upstream drops Made_By, our UI needs it).
     const logsWithDetails: ContactLogDisplay[] = logs.map((log) => {
       const logType = log.Contact_Log_Type_ID
         ? types.find(t => t.Contact_Log_Type_ID === log.Contact_Log_Type_ID)?.Contact_Log_Type ?? null
@@ -94,15 +94,19 @@ export async function getContactLogsByContactId(contactId: number): Promise<Cont
       const madeByContact = madeByMap.get(log.Made_By);
 
       return {
-        ...log,
+        Contact_Log_ID: log.Contact_Log_ID,
+        Contact_Date: log.Contact_Date,
+        Notes: log.Notes,
         Contact_Log_Type: logType,
+        Contact_Log_Type_ID: log.Contact_Log_Type_ID ?? null,
+        Made_By: log.Made_By,
         MadeByContact: madeByContact ? [madeByContact] : undefined,
-      } as ContactLogDisplay;
+      };
     });
 
     return logsWithDetails;
   } catch (error) {
-    console.error('Error fetching contact logs:', error);
+    console.error('Error fetching contact logs:', errorForLog(error));
     throw new Error('Failed to fetch contact logs');
   }
 }

@@ -139,10 +139,6 @@ export function ContactLogs({
         Contact_Date: `${data.contactDate}T12:00:00.000Z`,
         Notes: data.notes,
         Contact_Log_Type_ID: selectedLogType?.Contact_Log_Type_ID || null,
-        Planned_Contact_ID: null,
-        Contact_Successful: null,
-        Original_Contact_Log_Entry: null,
-        Feedback_Entry_ID: null,
       };
 
       await createContactLog(contactLogData);

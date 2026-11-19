@@ -1,46 +1,68 @@
 import { ContactLog } from "@/lib/providers/ministry-platform/models/ContactLog";
 import { ContactLogTypes } from "@/lib/providers/ministry-platform/models/ContactLogTypes";
 import { ContactLogSchema, ContactLogInput } from "@/lib/providers/ministry-platform/models/ContactLogSchema";
-
-/**
- * What a caller may supply when creating a contact log.
- *
- * `Made_By` is absent because attribution is server-authoritative (F4) — it
- * comes from the acting session, passed as a separate argument so it can never
- * arrive inside a caller-shaped payload object. The type is documentation and
- * compile-time help only; the runtime guard is the Zod `.omit()` in the
- * service.
- */
-export type ContactLogCreateInput = Omit<ContactLogInput, "Contact_Log_ID" | "Made_By">;
-
-/**
- * What a caller may supply when updating a contact log.
- *
- * Beyond `Made_By`, `Contact_ID` is absent so a log cannot be re-parented onto
- * a different contact, and the three linkage FKs are absent because the edit
- * form never sends them — accepting them would only widen what a crafted
- * request can reach.
- */
-export type ContactLogUpdateInput = Partial<
-  Omit<
-    ContactLogInput,
-    | "Contact_Log_ID"
-    | "Made_By"
-    | "Contact_ID"
-    | "Planned_Contact_ID"
-    | "Original_Contact_Log_Entry"
-    | "Feedback_Entry_ID"
-  >
->;
 import { MPHelper } from "@/lib/providers/ministry-platform";
 import { sanitizeId } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
 import { toMpSqlDatetime } from "@/lib/providers/ministry-platform/utils/mp-datetime";
 
 /**
+ * What a caller may supply when creating a contact log: exactly the four
+ * fields the form edits.
+ *
+ * `Made_By` is absent because attribution is server-authoritative (F4) — it
+ * comes from the acting session, passed as a separate argument so it can never
+ * arrive inside a caller-shaped payload object. The link and flag fields
+ * (`Planned_Contact_ID`, `Contact_Successful`, `Original_Contact_Log_Entry`,
+ * `Feedback_Entry_ID`) are absent because no UI sets them. The type is
+ * documentation and compile-time help only; the runtime guard is the Zod
+ * `.pick()` allowlist in the service.
+ */
+export type ContactLogCreateInput = Pick<
+  ContactLogInput,
+  "Contact_ID" | "Contact_Date" | "Contact_Log_Type_ID" | "Notes"
+>;
+
+/**
+ * What a caller may supply when updating a contact log: the three fields the
+ * edit form changes, each optional.
+ *
+ * `Made_By` and `Contact_ID` are absent so the original author is preserved
+ * and a log cannot be re-parented onto a different contact; the link and flag
+ * fields are absent because the edit form never sends them.
+ */
+export type ContactLogUpdateInput = Partial<
+  Pick<ContactLogInput, "Contact_Date" | "Contact_Log_Type_ID" | "Notes">
+>;
+
+/**
+ * The runtime allowlists. A `z.object` parse STRIPS keys the schema does not
+ * declare, so anything outside these picks (a smuggled `Made_By`, `Contact_ID`
+ * on update, or a link field) is dropped, not merely untyped. Do not add
+ * `.passthrough()`/`z.looseObject` to `ContactLogSchema` or to these picks —
+ * the strip is the control (upstream MPNext dc4a25b, adapted). Exported only
+ * so contactLogService.test.ts can pin their exact key sets: the payload
+ * tests alone cannot tell a pick from an `.omit()` blocklist, because the
+ * create record literal below limits the payload either way.
+ */
+export const ContactLogCreateSchema = ContactLogSchema.pick({
+  Contact_ID: true,
+  Contact_Date: true,
+  Contact_Log_Type_ID: true,
+  Notes: true,
+});
+
+export const ContactLogUpdateSchema = ContactLogSchema.pick({
+  Contact_Date: true,
+  Contact_Log_Type_ID: true,
+  Notes: true,
+}).partial();
+
+
+/**
  * ContactLogService - Singleton service for managing contact log operations
  * 
  * This service provides methods to interact with contact log data from Ministry Platform,
- * including searching, retrieving, creating, updating, and deleting contact log records.
+ * including retrieving, creating, updating, and deleting contact log records.
  * Uses the singleton pattern to ensure a single instance across the application.
  */
 export class ContactLogService {
@@ -82,31 +104,6 @@ export class ContactLogService {
       orderBy: "Contact_Log_Type"
     });
 
-    return records;
-  }
-
-  /**
-   * Searches for contact log records based on contact ID
-   * 
-   * @param contactId - The contact ID to search for logs
-   * @param limit - Maximum number of records to return (default: 50)
-   * @returns Promise<ContactLog[]> - Array of matching contact log records
-   */
-  public async searchContactLogs(contactId?: number, limit: number = 50): Promise<ContactLog[]> {
-    let filter = "";
-    
-    if (contactId) {
-      filter = `Contact_ID = ${sanitizeId(contactId)}`;
-    }
-
-    const records = await this.mp!.getTableRecords<ContactLog>({
-      table: "Contact_Log",
-      filter: filter,
-      select: "Contact_Log_ID,Contact_ID,Contact_Date,Made_By,Notes,Contact_Log_Type_ID,Planned_Contact_ID,Contact_Successful,Original_Contact_Log_Entry,Feedback_Entry_ID",
-      top: limit,
-      orderBy: "Contact_Date DESC"
-    });
-    
     return records;
   }
 
@@ -153,14 +150,17 @@ export class ContactLogService {
    * never from `contactLogData`. A server action is a POST endpoint whose
    * payload shape the caller controls, and TypeScript types are erased at
    * runtime, so a narrow parameter type guards nothing on its own. The Zod
-   * `.omit()` below is what actually strips a smuggled key: a `z.object`
-   * parse drops keys the schema does not declare. **That omit is the control**
-   * — the spread order in the record literal is only defense in depth.
+   * `.pick()` allowlist (`ContactLogCreateSchema`) is what actually strips a
+   * smuggled key: a `z.object` parse drops keys the schema does not declare,
+   * and the pick declares only `Contact_ID`, `Contact_Date`,
+   * `Contact_Log_Type_ID` and `Notes`. **That pick is the control** — the
+   * explicit record literal below is only defense in depth.
    *
    * | Field | Create | Update |
    * |---|---|---|
-   * | `Made_By` | this `madeBy` argument, spread LAST | never sent — MP preserves the original author |
+   * | `Made_By` | this `madeBy` argument | never sent — MP preserves the original author |
    * | `Contact_ID` | caller's subject contact, `sanitizeId`'d | never sent — a log cannot be re-parented |
+   * | link/flag fields | never sent | never sent |
    *
    * (Adapted from upstream MPNext d7adaf8 / PR #85. Upstream stamps the
    * EDITOR on update because any role-holder may edit any log; our policy is
@@ -169,7 +169,8 @@ export class ContactLogService {
    * and omitting stays correct if admins are ever allowed to edit others'
    * logs.)
    *
-   * @param contactLogData - The contact log data. `Made_By` is not accepted.
+   * @param contactLogData - The four form fields. `Made_By` and the link/flag
+   *   fields are not accepted (dropped by the pick if smuggled).
    * @param madeBy - Acting MP `User_ID`, from the session. The only source of
    *   `Made_By`, and the `$userId` for MP's audit trail.
    */
@@ -180,12 +181,10 @@ export class ContactLogService {
     // Fail before touching MP if the caller could not supply an acting user.
     const actingUserId = sanitizeId(madeBy);
 
-    // `.omit({ Made_By })` STRIPS a smuggled Made_By rather than merely
-    // leaving it untyped. Do not add `.passthrough()`/`z.looseObject` to this
-    // schema — the strip is the control.
-    const validatedData = ContactLogSchema
-      .omit({ Contact_Log_ID: true, Made_By: true })
-      .parse(contactLogData);
+    // The `.pick()` allowlist STRIPS a smuggled Made_By or link field rather
+    // than merely leaving it untyped. Do not add `.passthrough()`/
+    // `z.looseObject` — the strip is the control.
+    const validatedData = ContactLogCreateSchema.parse(contactLogData);
 
     // React Flight args are type-erased, so a "number" can arrive as a string.
     const contactId = sanitizeId(validatedData.Contact_ID);
@@ -196,15 +195,13 @@ export class ContactLogService {
       ? toMpSqlDatetime(validatedData.Contact_Date)
       : validatedData.Contact_Date;
 
+    // Built field by field, never spread, so the payload is exactly what is
+    // listed here even if the pick is ever widened by mistake.
     const record = {
-      ...validatedData,
       Contact_ID: contactId,
       Contact_Date: contactDate,
-      // Spread last as defense in depth, NOT as the control: the `.omit()`
-      // above already removes Made_By from `validatedData`, so ordering has no
-      // observable effect today (verified by mutation — reordering this breaks
-      // no test). It matters only if the omit is ever weakened, which is why
-      // both are here.
+      Contact_Log_Type_ID: validatedData.Contact_Log_Type_ID,
+      Notes: validatedData.Notes,
       Made_By: actingUserId,
     };
 
@@ -226,12 +223,14 @@ export class ContactLogService {
    *
    * Neither `Made_By` nor `Contact_ID` is ever sent (F4) — MP preserves both.
    * That keeps the original author intact and makes a log un-re-parentable.
-   * The three linkage FKs are omitted for the same reason: the edit form never
-   * sends them, so accepting them only widens what a crafted request can do.
+   * The `.pick()` allowlist (`ContactLogUpdateSchema`) admits only
+   * `Contact_Date`, `Contact_Log_Type_ID` and `Notes`; the link and flag
+   * fields are dropped too, because the edit form never sends them and
+   * accepting them would only widen what a crafted request can do.
    *
    * @param contactLogId - The record to update.
-   * @param contactLogData - Partial data. `Made_By`, `Contact_ID` and the
-   *   linkage FKs are not accepted.
+   * @param contactLogData - Partial data: `Contact_Date`, `Contact_Log_Type_ID`
+   *   and `Notes` only; anything else is dropped by the pick.
    * @param actorUserId - Acting MP `User_ID`, from the session, for `$userId`.
    */
   public async updateContactLog(
@@ -241,18 +240,9 @@ export class ContactLogService {
   ): Promise<ContactLog> {
     const actingUserId = sanitizeId(actorUserId);
 
-    // Strips Made_By, Contact_ID and the linkage FKs if a caller smuggles them.
-    const validatedData = ContactLogSchema
-      .omit({
-        Contact_Log_ID: true,
-        Made_By: true,
-        Contact_ID: true,
-        Planned_Contact_ID: true,
-        Original_Contact_Log_Entry: true,
-        Feedback_Entry_ID: true,
-      })
-      .partial()
-      .parse(contactLogData);
+    // The pick allowlist strips Made_By, Contact_ID and the link/flag fields if
+    // a caller smuggles them.
+    const validatedData = ContactLogUpdateSchema.parse(contactLogData);
 
     // Convert ISO date to SQL format in Central Time after validation
     if (validatedData.Contact_Date) {

@@ -11,7 +11,7 @@ src/components/
 ├── processing/                 # Shared processing UI components (9 components)
 ├── admin/                      # Admin settings (journey tools, compliance tools, permissions)
 ├── compliance-processing/      # Compliance applicant workflow (background checks, certifications)
-├── contact-logs/               # Contact log CRUD feature
+├── contact-logs/               # Contact log create/edit feature
 ├── contact-lookup/             # Contact search feature
 ├── contact-lookup-details/     # Contact details view
 ├── dashboard/                  # Executive dashboard feature
@@ -46,7 +46,7 @@ src/components/
 |--------|---------|-------------|
 | `admin/` | Admin settings page with sub-pages for journey tools, compliance tools, permissions | Yes |
 | `compliance-processing/` | Compliance applicant tracking with background checks, certifications, group assignment | Yes |
-| `contact-logs/` | Contact log CRUD with modal forms | Yes |
+| `contact-logs/` | Contact log create/edit with modal forms (no delete UI) | Yes |
 | `contact-lookup/` | Contact search with results display | Yes |
 | `contact-lookup-details/` | Contact profile and logs view | Yes |
 | `dashboard/` | Executive dashboard with charts and filters | Yes |
@@ -128,7 +128,7 @@ Actions are co-located with their feature components:
 |---------|--------------|-----------|
 | admin | `admin/actions.ts` | Admin settings operations |
 | compliance-processing | `compliance-processing/actions.ts` | Compliance applicant CRUD, milestone operations |
-| contact-logs | `contact-logs/actions.ts` | `getContactLogTypes`, `createContactLog`, `updateContactLog`, `deleteContactLog` |
+| contact-logs | `contact-logs/actions.ts` | `getContactLogTypes`, `createContactLog`, `updateContactLog`, `getCurrentUserMpUserId`, `createAutoContactLog` |
 | contact-lookup | `contact-lookup/actions.ts` | `searchContacts` |
 | contact-lookup-details | `contact-lookup-details/actions.ts` | `getContactDetails`, `getContactLogsByContactId` |
 | dashboard | `dashboard/actions.ts` | `getFullRangeDashboardMetrics`, `getExtendedDashboardMetrics`, `getEngagementDashboardMetrics`, `refreshDashboardCache` |

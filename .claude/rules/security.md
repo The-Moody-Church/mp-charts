@@ -58,6 +58,8 @@ filter: `Contact_ID IN (${ids.join(',')})`       // no numeric validation
 filter: `User_GUID = '${profile.sub}'`           // no format validation
 ```
 
+**Non-strings are refused** (batch 4, upstream a11c2a3 adapted): `sanitizeFilterValue`, `sanitizeLikeValue` and `sanitizeGuid` throw a fixed message (`Invalid filter value` / `Invalid GUID format`) for anything that is not a string. A type-erased Flight argument can be an array, and `sanitizeGuid(['<guid>'])` used to pass (RegExp coerces the array) and return the array.
+
 **Rule**: Every string interpolated into a `filter:` parameter MUST pass through a sanitization function from `filter-sanitize.ts`. This applies to:
 - User search input in LIKE clauses -> `sanitizeLikeValue()`
 - User input in other quoted-string comparisons -> `sanitizeFilterValue()`
@@ -395,7 +397,9 @@ characters stripped, plus ` (cause: <name> <code>)` when the error has an object
 `TypeError: fetch failed` keeps ECONNREFUSED, `UND_ERR_CONNECT_TIMEOUT` or a refused redirect only there. Name and code
 are each kept only if they match `^[A-Za-z0-9_]{1,64}$`; the cause's message is never copied (undici's
 "unexpected redirect" becomes the fixed label `redirect refused`). Keep its first `.replace(/\n|\r/g, "")` verbatim: that is the form CodeQL recognises.
-Error messages the app throws must be static, never echoing a slug, type or other argument.
+Error messages the app throws must be static, never echoing a slug, type or other argument. That includes
+`mp-datetime.ts` (`toMpSqlDatetime: cannot parse value`, `parseMpDatetime: expected an MP wall-clock string`;
+static since batch 4, upstream defd338 adapted), whose tests assert the message does not contain the input.
 
 ## Better Auth Endpoint Exposure — MANDATORY
 
@@ -449,20 +453,26 @@ For contact logs (`src/services/contactLogService.ts`):
 |---|---|---|
 | `Made_By` | the service's `madeBy` argument, from the session | **never sent** — MP preserves the original author |
 | `Contact_ID` | caller's subject contact, `sanitizeId`'d | **never sent** — a log cannot be re-parented |
+| `Planned_Contact_ID`, `Contact_Successful`, `Original_Contact_Log_Entry`, `Feedback_Entry_ID` | **never sent** — no UI sets them | **never sent** |
 
-The runtime control is the Zod **`.omit()`** in the service: a `z.object` parse *strips* keys the schema does not declare, so a smuggled key is dropped rather than merely untyped. A narrow TypeScript parameter type guards nothing — types are erased at runtime and a server action is a POST endpoint whose payload shape the caller controls.
+The runtime control is the Zod **`.pick()` allowlist** in the service (since batch 4, 2026-11-19, upstream dc4a25b adapted; it was an `.omit()` blocklist before): create parses with `ContactLogSchema.pick({ Contact_ID, Contact_Date, Contact_Log_Type_ID, Notes })`, update with `.pick({ Contact_Date, Contact_Log_Type_ID, Notes }).partial()`. A `z.object` parse *strips* keys the schema does not declare, so a smuggled key is dropped rather than merely untyped, and with a pick a column added to `ContactLogSchema` later stays unwritable until someone adds it on purpose. The create record is then built field by field (no spread) as defense in depth. A narrow TypeScript parameter type guards nothing — types are erased at runtime and a server action is a POST endpoint whose payload shape the caller controls. `contactLogService.test.ts` pins the exact create payload key set, the key sets of both picks themselves (`ContactLogCreateSchema`/`ContactLogUpdateSchema` are exported for this: the create record literal limits the payload on its own, so a payload test cannot tell a pick from an `.omit()`), a create with wrongly-typed smuggled fields that must still succeed (a pick never sees them; an omit would validate and throw), and the smuggled-key cases (`Planned_Contact_ID`, `Feedback_Entry_ID`, `Original_Contact_Log_Entry`, `Contact_Successful` on create; `Contact_Successful`, `Contact_ID`, `Made_By` on update). `Contact_Log_Type_ID` is not checked against `Contact_Log_Types` (owner decision, 2026-11-19): a bad ID is an MP FK error, nothing more.
 
 Two rules that follow:
 - **Pass the acting user as a separate argument**, never as a field inside the data object. One source of attribution; two layers stamping it could drift.
-- **Do not add `.passthrough()` or `z.looseObject`** to `ContactLogSchema`, and do not regenerate it into that shape — the strip is the control, and the smuggled-key tests are what would catch it.
+- **Do not add `.passthrough()` or `z.looseObject`** to `ContactLogSchema` or to the picks, and do not regenerate it into that shape — the strip is the control, and the smuggled-key tests are what would catch it.
 
-All three writes pass `{ $userId }` so MP's audit trail names the staff member rather than the API service account.
+Every write (create, update, and the service's delete) passes `{ $userId }` so MP's audit trail names the staff member rather than the API service account.
+
+### Contact-log reads are minimised
+
+`getContactLogsByContactId` (`src/components/contact-lookup-details/actions.ts`, search tier) returns `ContactLogDisplay` objects built field by field (upstream 710dfa8, adapted): `Contact_Log_ID`, `Contact_Date`, `Notes`, `Contact_Log_Type`, `Contact_Log_Type_ID`, `Made_By` (the owner-only Edit button needs it, which is why upstream's narrower set does not fit) and `MadeByContact`, which is `{ First_Name, Nickname, Last_Name }` only. Its `dp_Users` select is `User_ID` plus those three names. The MP row's link and flag columns, `Contact_ID`, and each staff author's email, mobile, Contact_ID and photo never reach the browser. **No spread of an MP row and no `as` cast in a DTO a browser receives**: a column added to the service's select would ride along unseen. `actions.test.ts` pins the exact key sets. The same goes for a write action's return value, which React Flight sends to the browser whether or not the client reads it: `createContactLog` and `updateContactLog` resolve to nothing rather than MP's POST/PUT response (the whole `Contact_Log` row). The general-tier duplicate of this read and a read of any log by ID (`contact-logs/actions.ts`, N11) were deleted in batch 4.
 
 ## Authentication & Authorization
 
 - **The auth environment is checked when `src/lib/auth.ts` loads** (`assertAuthEnvironment`): a missing/empty `BETTER_AUTH_SECRET`, better-auth's public default secret, one shorter than 32 characters, any `BETTER_AUTH_SECRETS`, or a truthy `TEST` with `NODE_ENV=production` all throw, and the message never contains the value. "Truthy" is better-auth's own reading — anything but unset, empty or exactly `false`, so **`TEST=0` is refused too**; confirm a deploy target's `.env` has no such line before promoting a build. There is no `NEXTAUTH_SECRET` fallback. `next build` is exempt (`NEXT_PHASE=phase-production-build`). Next loads route modules lazily, so on a running server this shows as a **500 and a logged `[auth] …` reason on the first request that needs auth**, not a process exit — check the log, not just whether the container is up. `advanced.disableOriginCheck: false` is pinned so a stray `TEST` cannot switch off the Origin check
 - **`BETTER_AUTH_URL` and `MINISTRY_PLATFORM_BASE_URL` are validated by the same load-time guard** (`src/lib/env.ts`, audit N19, 2026-11-18), with the same `next build` exemption and the same failure mode (500 plus `[env] …` in the log, process up). `BETTER_AUTH_URL`: required, no `NEXTAUTH_URL` or localhost fallback, an origin only, https except loopback http (allowed in production, since a loopback origin never leaves the machine). `MINISTRY_PLATFORM_BASE_URL`: https (loopback http only outside production), path kept. Both refuse credentials, query and fragment, and the message never contains the value. Read them only through `getAuthBaseUrl()` / `getMpBaseUrl()`, never `process.env.X!` or `|| "http://localhost:3000"`. The one deliberate exception is the CSP `form-action` source in `src/proxy.ts`, which reads the MP URL through `originOf`: the proxy runs on every page, so it fails soft (drops the source) instead of throwing. Before promoting a build, confirm both are https in the target `.env`
 - Every server action MUST call `requireSession()` before any data access
+- **Every export of a file-level `'use server'` module is a Server Action, so it must have a non-test importer.** `src/server-action-exports.test.ts` fails on any export nothing in the app imports (N11: three such contact-log actions sat unreviewed until batch 4). Test importers do not count, a named re-export inside a `'use server'` module needs its own importer, and `export *` there is refused; fixture self-checks pin each rule. Delete an unused action rather than keeping it "for later"; a file of helpers that should not be endpoints is not `'use server'` (`shared-actions/processing.ts`)
 - Use `getMpUserId(session)` for audit attribution on write operations
 - The proxy (`src/proxy.ts`) protects routes but only checks session presence — it does not check roles. It does not run on Server Action requests at all (since 2026-11-09, #252), so an action's own `requireSession()` is its only gate
 - IDOR risk: server actions accept record IDs from clients without per-record authorization. When adding new endpoints that access sensitive data, consider whether the requesting user should have access to that specific record
