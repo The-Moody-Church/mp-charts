@@ -116,7 +116,7 @@ conflicts. event-manager and music-tools status.md pruned to 7 days per their ru
   development scope; it is not an npm audit finding.
 - **Next:** batch 2 (auth core), per `.claude/plans/open-items-2026-11-18.md`.
 
-### Batch 2 — auth core (N19, f2af96d userinfo, 721d6e5/5620831, 6167cfd, 6aa1633, aa696f8) — COMMITTED, not pushed
+### Batch 2 — auth core (N19, f2af96d userinfo, 721d6e5/5620831, 6167cfd, 6aa1633, aa696f8) — COMPLETED (merged #322, deployed 2026-11-19; see session-summary-2026-11-19.md)
 
 Branch `security/batch2-auth-core` from `1f9fa24`. One commit, no push, no PR yet. No pinned setting changed
 (`pkce: false`, no `discoveryUrl`, providerId `ministryplatform`, session/cookieCache, `allowedAuthRoutes`,
