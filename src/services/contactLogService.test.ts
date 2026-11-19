@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ContactLogService } from '@/services/contactLogService';
+import {
+  ContactLogService,
+  ContactLogCreateSchema,
+  ContactLogUpdateSchema,
+} from '@/services/contactLogService';
 
 const mockGetTableRecords = vi.fn();
 const mockCreateTableRecords = vi.fn();
@@ -285,6 +289,47 @@ describe('ContactLogService', () => {
       expect(record).not.toHaveProperty('Contact_Successful');
       expect(record).not.toHaveProperty('Contact_Log_ID');
       expect(record.Made_By).toBe(4242);
+    });
+
+    // The pick is the documented control; the create record literal is only
+    // defense in depth and limits the payload on its own, so the payload test
+    // above cannot tell a pick from an `.omit()` blocklist. Pin the parse
+    // layer itself.
+    it('the create allowlist is exactly the four form fields', () => {
+      expect(Object.keys(ContactLogCreateSchema.shape).sort()).toEqual(
+        ['Contact_Date', 'Contact_ID', 'Contact_Log_Type_ID', 'Notes']
+      );
+    });
+
+    it('the update allowlist is exactly the three editable fields, all optional', () => {
+      expect(Object.keys(ContactLogUpdateSchema.shape).sort()).toEqual(
+        ['Contact_Date', 'Contact_Log_Type_ID', 'Notes']
+      );
+      expect(ContactLogUpdateSchema.parse({})).toEqual({});
+    });
+
+    it('strips, rather than validates, wrongly-typed smuggled fields on create', async () => {
+      // A pick never sees these keys, so their types cannot matter. An
+      // `.omit()` blocklist or a widened pick would validate them and throw.
+      mockCreateTableRecords.mockResolvedValueOnce([{ Contact_Log_ID: 1 }]);
+      const service = await ContactLogService.getInstance();
+
+      await expect(
+        service.createContactLog(
+          {
+            ...validCreate,
+            Contact_Successful: 'yes',
+            Planned_Contact_ID: 'x',
+            Original_Contact_Log_Entry: 'x',
+            Feedback_Entry_ID: 'x',
+            Made_By: 'x',
+          } as never,
+          4242
+        )
+      ).resolves.toEqual({ Contact_Log_ID: 1 });
+      expect(Object.keys(mockCreateTableRecords.mock.calls[0][1][0]).sort()).toEqual(
+        ['Contact_Date', 'Contact_ID', 'Contact_Log_Type_ID', 'Made_By', 'Notes']
+      );
     });
 
     it('drops a smuggled Contact_Successful (and Contact_ID/Made_By) on update', async () => {

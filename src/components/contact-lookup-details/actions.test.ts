@@ -204,6 +204,42 @@ describe('getContactLogsByContactId returns minimal DTOs', () => {
     ]);
   });
 
+  // Both catches log errorForLog(error): one line, control characters
+  // stripped, never the raw Error (CodeQL js/log-injection).
+  describe('error logging is one safe line', () => {
+    const forged = new Error('boom\r\n[forged] admin signed in');
+
+    function expectSafeLog(spy: ReturnType<typeof vi.spyOn>, label: string) {
+      expect(spy).toHaveBeenCalledTimes(1);
+      const args = spy.mock.calls[0];
+      expect(args).toEqual([label, 'Error: boom[forged] admin signed in']);
+    }
+
+    it('the Made_By name lookup (non-fatal)', async () => {
+      mockMpGetTableRecords.mockRejectedValueOnce(forged);
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const logs = await getContactLogsByContactId(42);
+        expect(logs).toHaveLength(2);
+        expect(logs[0].MadeByContact).toBeUndefined();
+        expectSafeLog(spy, 'Error fetching Made_By contact info:');
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it('the outer catch', async () => {
+      mockGetContactLogsByContactId.mockRejectedValueOnce(forged);
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        await expect(getContactLogsByContactId(42)).rejects.toThrow('Failed to fetch contact logs');
+        expectSafeLog(spy, 'Error fetching contact logs:');
+      } finally {
+        spy.mockRestore();
+      }
+    });
+  });
+
   it('selects only User_ID and the three name columns from dp_Users', async () => {
     await getContactLogsByContactId(42);
 

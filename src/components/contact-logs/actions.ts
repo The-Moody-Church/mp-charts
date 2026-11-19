@@ -1,6 +1,5 @@
 "use server";
 
-import { ContactLog } from "@/lib/providers/ministry-platform/models/ContactLog";
 import { ContactLogTypes } from "@/lib/providers/ministry-platform/models/ContactLogTypes";
 import {
   ContactLogService,
@@ -27,9 +26,15 @@ export async function getContactLogTypes(): Promise<ContactLogTypes[]> {
   }
 }
 
+/**
+ * Creates a contact log. Resolves to nothing: a Server Action's return value
+ * is serialised to the browser whether or not the client reads it, and MP's
+ * POST response is the whole Contact_Log row (Contact_ID, Made_By and the
+ * link/flag fields). The form only needs to know it succeeded.
+ */
 export async function createContactLog(
   contactLogData: ContactLogCreateInput
-): Promise<ContactLog> {
+): Promise<void> {
   try {
     const session = await requireFeatureAccess("contact-lookup");
     enforceRateLimit(session.user.id, "write");
@@ -48,19 +53,21 @@ export async function createContactLog(
     // stamping it could drift, and a caller value could slip past whichever
     // was checked second.
     const contactLogService = await ContactLogService.getInstance();
-    const contactLog = await contactLogService.createContactLog(contactLogData, userId);
-
-    return contactLog;
+    await contactLogService.createContactLog(contactLogData, userId);
   } catch (error) {
     console.error("Error creating contact log:", errorForLog(error));
     throw new Error("Failed to create contact log");
   }
 }
 
+/**
+ * Updates a contact log the current user created. Resolves to nothing, for the
+ * same reason as `createContactLog`: MP's PUT response is the whole row.
+ */
 export async function updateContactLog(
   contactLogId: number,
   contactLogData: ContactLogUpdateInput
-): Promise<ContactLog> {
+): Promise<void> {
   try {
     const session = await requireFeatureAccess("contact-lookup");
     enforceRateLimit(session.user.id, "write");
@@ -88,13 +95,11 @@ export async function updateContactLog(
     // Made_By is never sent on update — MP preserves the original author, and
     // the service's `.pick()` allowlist drops any caller-supplied Made_By,
     // Contact_ID or link field (F4).
-    const contactLog = await contactLogService.updateContactLog(
+    await contactLogService.updateContactLog(
       contactLogId,
       contactLogData,
       userId
     );
-
-    return contactLog;
   } catch (error) {
     console.error("Error updating contact log:", errorForLog(error));
     if (error instanceof Error && error.message === "You can only edit contact logs that you created") {

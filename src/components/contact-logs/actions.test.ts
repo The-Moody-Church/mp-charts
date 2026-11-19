@@ -115,12 +115,23 @@ describe('contact-logs actions', () => {
 
     it('forwards a smuggled Made_By unchanged for the service to strip', async () => {
       // The action deliberately does not sanitise the payload — the service's
-      // Zod omit is the single strip point. This pins that the action does not
+      // Zod pick is the single strip point. This pins that the action does not
       // quietly start stamping it again.
       mockCreateContactLog.mockResolvedValueOnce({ Contact_Log_ID: 1 });
       await createContactLog({ ...validInput, Made_By: 999 } as never);
 
       expect(mockCreateContactLog).toHaveBeenCalledWith(expect.anything(), 99);
+    });
+
+    it('returns nothing to the browser, not the MP row', async () => {
+      // A Server Action's return value is serialised to the client whether or
+      // not it is read; MP's POST response is the whole Contact_Log row.
+      mockCreateContactLog.mockResolvedValueOnce({
+        Contact_Log_ID: 1, Contact_ID: 42, Made_By: 99, Notes: 'Test note',
+        Planned_Contact_ID: 7, Contact_Successful: true,
+        Original_Contact_Log_Entry: 3, Feedback_Entry_ID: 5,
+      });
+      await expect(createContactLog(validInput)).resolves.toBeUndefined();
     });
 
     it('should throw when MP user ID is unavailable', async () => {
@@ -171,6 +182,16 @@ describe('contact-logs actions', () => {
         expect.objectContaining({ Notes: 'Updated' }),
         99
       );
+    });
+
+    it('returns nothing to the browser, not the MP row', async () => {
+      mockGetContactLogById.mockResolvedValueOnce({ Contact_Log_ID: 1, Made_By: 99 });
+      mockUpdateContactLog.mockResolvedValueOnce({
+        Contact_Log_ID: 1, Contact_ID: 42, Made_By: 99, Notes: 'Updated',
+        Planned_Contact_ID: 7, Contact_Successful: true,
+        Original_Contact_Log_Entry: 3, Feedback_Entry_ID: 5,
+      });
+      await expect(updateContactLog(1, { Notes: 'Updated' })).resolves.toBeUndefined();
     });
 
     it('should throw when user does not own the log entry', async () => {

@@ -39,16 +39,19 @@ export type ContactLogUpdateInput = Partial<
  * declare, so anything outside these picks (a smuggled `Made_By`, `Contact_ID`
  * on update, or a link field) is dropped, not merely untyped. Do not add
  * `.passthrough()`/`z.looseObject` to `ContactLogSchema` or to these picks —
- * the strip is the control (upstream MPNext dc4a25b, adapted).
+ * the strip is the control (upstream MPNext dc4a25b, adapted). Exported only
+ * so contactLogService.test.ts can pin their exact key sets: the payload
+ * tests alone cannot tell a pick from an `.omit()` blocklist, because the
+ * create record literal below limits the payload either way.
  */
-const ContactLogCreateSchema = ContactLogSchema.pick({
+export const ContactLogCreateSchema = ContactLogSchema.pick({
   Contact_ID: true,
   Contact_Date: true,
   Contact_Log_Type_ID: true,
   Notes: true,
 });
 
-const ContactLogUpdateSchema = ContactLogSchema.pick({
+export const ContactLogUpdateSchema = ContactLogSchema.pick({
   Contact_Date: true,
   Contact_Log_Type_ID: true,
   Notes: true,

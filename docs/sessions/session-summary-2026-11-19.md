@@ -130,6 +130,27 @@ dc4a25b, a11c2a3; CodeQL #37). Owner decisions: delete all three orphans, keep n
   restored). `tsc`, lint clean; 100 files / 2259 tests; coverage 60.12 / 51.42 / 51.5 / 61.36 (floors 59/50/50/60
   hold); build and `check:standalone` pass. Manifest: 80 entries = 75 actions + 5 cache; contact-lookup-details
   `getContactLogsByContactId` present; contact-logs has only its five live actions, no read of logs.
+- **Review (5 findings + 1 nit), all fixed, each with a test that fails without it (mutants run, then restored).**
+  - *Medium: guard had no self-check that a test importer does not count.* `server-action-exports.test.ts` now runs
+    its scan through `analyse(files)` and records importers per export. New self-checks: no recorded importer is a
+    test file (`actions.test.ts` asserted to be one), and fixtures run the real scan in a temp dir: an export imported
+    only by `actions.test.ts` / `__tests__/` is an orphan (the N11 shape), barrels are followed, namespace-as-value
+    and dynamic imports are refused. The reviewer's mutant (drop `if (info.test) continue;`) now fails 2 tests; the
+    old tree still fails naming exactly the three orphans.
+  - *Low: named and star re-exports inside a 'use server' module were unchecked.* A named re-export
+    (`export { a as b } from "…"`) is now a declared export `b` needing its own importer; `export *` in a 'use
+    server' module is refused. Fixture tests for both.
+  - *Low: the create `.pick()` was not pinned.* `ContactLogCreateSchema`/`ContactLogUpdateSchema` are exported and
+    their exact key sets tested; a create smuggling wrongly-typed `Contact_Successful`/link fields/`Made_By` must
+    succeed with the five-key payload. The reviewer's `.omit()` mutant now fails 2 tests.
+  - *Low: `createContactLog`/`updateContactLog` returned MP's whole row to the browser via `as ContactLog`.* Both now
+    resolve to `void` (the form discards the result); tests assert `resolves.toBeUndefined()` with a full-row mock.
+    `$select` on the service writes not added (unverifiable without an MP write). `security.md` read-minimisation
+    paragraph extended to write-action return values.
+  - *Nit: contact-lookup-details `errorForLog` catches untested.* Both (Made_By lookup, outer) now asserted to log
+    one stripped line; the rest of that file's catches are left to a later batch.
+  - Re-run: `tsc`, lint clean; `test:run` 100 files / 2272 tests; coverage 60.12 / 51.42 / 51.5 / 61.36 (floors
+    hold); build and `check:standalone` pass (102 lockfile nodes); manifest still 80 entries (75 actions + 5 cache).
 - **Next:** PR, then `:dev` click-through (contact lookup: logs show author names, owner-only Edit, create and edit a
   log). Mirror to mp-senior-care as is; event-manager needs the #85 shape and `COMMUNICATION_TYPES` first; siblings
   also need `sanitizeLikeValue` and a search cap.
