@@ -203,14 +203,41 @@ function relativeAuthPath(request: NextRequest): string {
   return withoutTrailingSlashes === "" ? "/" : withoutTrailingSlashes;
 }
 
-const NOT_FOUND = () => new Response("Not Found", { status: 404 });
+/**
+ * Marks a response from this route as uncacheable (upstream MPNext 721d6e5).
+ * Every response here is session-bearing or about the session: the OAuth
+ * callback's 302 sets the session cookies, `/get-session` returns the user, and
+ * `/sign-in/social` sets the `oauth_state` cookie. better-auth 1.7.18 sets
+ * `no-store` only on `/get-session` (dist/api/routes/session.mjs), so it is set
+ * here on every return path, 404s included. Cloudflare sits in front of every
+ * endpoint: one cache rule changed later must not be able to hand one user's
+ * Set-Cookie to another.
+ *
+ * Set in place where possible. A response whose headers are immutable (one
+ * built with `Response.redirect()`, say) throws on `set`, so it is copied
+ * first: status, status text, headers (Set-Cookie included) and body stream.
+ * Exported for the copy-path test.
+ */
+export function withNoStore(response: Response): Response {
+  try {
+    response.headers.set("Cache-Control", "no-store");
+    return response;
+  } catch {
+    const copy = new Response(response.body, response);
+    copy.headers.set("Cache-Control", "no-store");
+    return copy;
+  }
+}
+
+const NOT_FOUND = () =>
+  new Response("Not Found", { status: 404, headers: { "Cache-Control": "no-store" } });
 
 export async function GET(request: NextRequest) {
   const path = relativeAuthPath(request);
   if (!(allowedAuthRoutes.GET as readonly string[]).includes(path)) {
     return NOT_FOUND();
   }
-  return betterAuthGET(request);
+  return withNoStore(await betterAuthGET(request));
 }
 
 export async function POST(request: NextRequest) {
@@ -221,5 +248,5 @@ export async function POST(request: NextRequest) {
   if (path === "/sign-in/social" && !(await isAllowedSignInSocialBody(request))) {
     return NOT_FOUND();
   }
-  return betterAuthPOST(request);
+  return withNoStore(await betterAuthPOST(request));
 }

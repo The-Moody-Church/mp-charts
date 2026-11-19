@@ -12,9 +12,8 @@ import type { MPUserProfile } from "@/lib/providers/ministry-platform/types";
 import { sanitizeGuid } from "@/lib/providers/ministry-platform/utils/filter-sanitize";
 import { rememberIdToken } from "@/lib/id-token-store";
 import { MP_PROVIDER_ID } from "@/lib/auth-endsession";
-
-const mpBaseUrl = process.env.MINISTRY_PLATFORM_BASE_URL;
-const mpOauthUrl = `${mpBaseUrl}/oauth`;
+import { errorForLog } from "@/lib/log-safe";
+import { getAuthBaseUrl, getMpBaseUrl } from "@/lib/env";
 
 /**
  * better-auth's built-in fallback secret (`DEFAULT_SECRET`,
@@ -98,10 +97,40 @@ export function assertAuthEnvironment(env: Readonly<Record<string, string | unde
  * on a standalone production build. Fail-closed either way: nothing is ever
  * signed with a bad secret.
  */
-if (process.env.NEXT_PHASE !== "phase-production-build") {
+const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
+if (!isBuildPhase) {
   assertAuthEnvironment(process.env);
 }
 const betterAuthSecret = process.env.BETTER_AUTH_SECRET;
+
+/**
+ * Stands in for BETTER_AUTH_URL during `next build` only. It never serves a
+ * request: it keeps `createAuth` (which runs at module load through
+ * `sharedInstance`) from logging better-auth's "Base URL is not set" warning in
+ * a build that has no URL env. Exported for the build-phase test.
+ */
+export const BUILD_PHASE_PLACEHOLDER_ORIGIN = "http://localhost:3000";
+
+/**
+ * The two auth-critical URLs, validated under the same rule and exemption as
+ * the secret above (audit N19, src/lib/env.ts): https (loopback http only for
+ * BETTER_AUTH_URL, or for the MP URL outside production), no credentials,
+ * query or fragment, no trailing slash, and BETTER_AUTH_URL an origin. There
+ * is no fallback for either: an unset BETTER_AUTH_URL used to become
+ * `http://localhost:3000` (non-Secure cookies, a wrong redirect_uri), and an
+ * unset MP URL `undefined/oauth`. A bad value shows as a 500 plus a logged
+ * `[env] ...` reason on the first auth request, like the secret guard.
+ */
+const mpBaseUrl = isBuildPhase ? "" : getMpBaseUrl();
+const authBaseUrl = isBuildPhase ? BUILD_PHASE_PLACEHOLDER_ORIGIN : getAuthBaseUrl();
+const mpOauthUrl = `${mpBaseUrl}/oauth`;
+
+/**
+ * Deadline for the userinfo request made during the OAuth callback (upstream
+ * MPNext f2af96d, userinfo part). Without one, a hung MP held the callback,
+ * and the user's browser, until the platform's own socket timeout.
+ */
+export const USERINFO_TIMEOUT_MS = 10_000;
 
 /**
  * Fetch the OIDC userinfo from Ministry Platform and enrich it with
@@ -122,9 +151,24 @@ export async function getMpUserInfo(accessToken: string | undefined) {
   try {
     response = await fetch(`${mpOauthUrl}/connect/userinfo`, {
       headers: { Authorization: `Bearer ${accessToken}` },
+      // A hung MP must not hold the callback open (TimeoutError), and the
+      // user's bearer token must never follow a redirect anywhere (TypeError).
+      signal: AbortSignal.timeout(USERINFO_TIMEOUT_MS),
+      redirect: "error",
     });
-  } catch {
-    console.error(JSON.stringify({ event: "auth.userinfo.fetch_failed" }));
+  } catch (error) {
+    // The error's name only (TimeoutError, TypeError, AbortError), never its
+    // message or the URL.
+    console.error(
+      JSON.stringify({
+        event: "auth.userinfo.fetch_failed",
+        // Not `instanceof Error`: a DOMException from another realm fails it.
+        errName:
+          typeof (error as { name?: unknown } | null)?.name === "string"
+            ? String((error as { name: string }).name).slice(0, 64)
+            : typeof error,
+      })
+    );
     return null;
   }
 
@@ -178,7 +222,7 @@ export async function getMpUserInfo(accessToken: string | undefined) {
       mpNickname = records[0].Nickname;
     }
   } catch (error) {
-    console.error("Auth: Error fetching MP user profile during login:", error);
+    console.error("Auth: Error fetching MP user profile during login:", errorForLog(error));
   }
 
   return {
@@ -523,7 +567,7 @@ export const authRateLimitCustomRules = {
 
 function createAuth() {
   return betterAuth({
-    baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
+    baseURL: authBaseUrl,
     secret: betterAuthSecret,
 
     disabledPaths: disabledAuthPaths,
@@ -534,6 +578,16 @@ function createAuth() {
       // Origin and callbackURL checks (context/create-context.mjs). See
       // assertAuthEnvironment above.
       disableOriginCheck: false,
+      // `Secure` + `__Secure-` cookies for an https origin in production,
+      // stated rather than inferred (upstream MPNext 6616310 + 2227a80). A pure
+      // restatement today: better-auth 1.7.18 derives the same from the
+      // baseURL's scheme (dist/cookies/index.mjs, its only reader of this
+      // option), and getAuthBaseUrl requires https for every real host. It pins
+      // the behaviour if that derivation ever changes. A loopback http origin
+      // (a local `next start`) is left to the derivation, so it keeps working.
+      // Pinned by src/lib/auth.secret-guard.test.ts.
+      ...(process.env.NODE_ENV === "production" &&
+        authBaseUrl.startsWith("https:") && { useSecureCookies: true }),
       // Which header the rate limiter takes the client IP from. See
       // parseIpAddressOptions above.
       ipAddress: parseIpAddressOptions(process.env),

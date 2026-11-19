@@ -25,7 +25,7 @@ const { fetchSpy } = vi.hoisted(() => {
   return { fetchSpy };
 });
 
-import { GET, POST, allowedAuthRoutes, allowedSignInSocialKeys } from "./route";
+import { GET, POST, allowedAuthRoutes, allowedSignInSocialKeys, withNoStore } from "./route";
 import { MP_PROVIDER_ID } from "@/lib/auth-endsession";
 import { auth } from "@/lib/auth";
 import { MAX_CALLBACK_URL_LENGTH, MAX_SIGN_IN_CALLBACK_URL_LENGTH } from "@/lib/auth-callback-url";
@@ -468,6 +468,23 @@ describe("better-auth route allowlist", () => {
       }
     );
 
+    // Upstream MPNext 5620831: the mount point itself, and a pathname outside
+    // the mount (Next never routes one here, but relativeAuthPath must not
+    // turn it into an allowlisted path).
+    it.each(["", "/"])("refuses the mount point %j without touching better-auth", async (path) => {
+      const handler = vi.spyOn(auth, "handler");
+      expect(await refusedByUs(await GET(req(path, "GET")))).toBe(true);
+      expect(handler).not.toHaveBeenCalled();
+      handler.mockRestore();
+    });
+
+    it("matches a pathname outside the /api/auth mount as-is, so /other/get-session is refused", async () => {
+      const handler = vi.spyOn(auth, "handler");
+      expect(await refusedByUs(await GET(new NextRequest("http://localhost:3000/other/get-session")))).toBe(true);
+      expect(handler).not.toHaveBeenCalled();
+      handler.mockRestore();
+    });
+
     it("resolves traversal before matching, so it cannot reach a disallowed path", async () => {
       // NextRequest/URL normalize this to /api/auth/list-accounts before our
       // handler sees it, so it is refused as the real path it resolves to.
@@ -485,5 +502,104 @@ describe("better-auth route allowlist", () => {
       expect(res.status).toBe(404);
       expect(await res.text()).toBe("");
     });
+  });
+});
+
+/**
+ * Upstream MPNext 721d6e5: every /api/auth response is session-bearing or about
+ * the session, so every one carries `Cache-Control: no-store`, our own 404s
+ * included. better-auth 1.7.18 sets it on /get-session only.
+ */
+describe("Cache-Control: no-store on every auth response", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const noStore = (res: Response) => res.headers.get("cache-control") === "no-store";
+
+  it.each([
+    ["GET", "/list-accounts"],
+    ["GET", "/sign-in/social"],
+    ["GET", ""],
+    ["POST", "/update-user"],
+    ["POST", "/get-session"],
+  ] as const)("our 404 for %s %j", async (method, path) => {
+    const res = await (method === "GET" ? GET : POST)(req(path, method));
+    expect(await refusedByUs(res.clone())).toBe(true);
+    expect(noStore(res)).toBe(true);
+  });
+
+  it("our 404 for a /sign-in/social body the filter refuses", async () => {
+    const res = await POST(req("/sign-in/social", "POST", { provider: "google", callbackURL: "/" }));
+    expect(await refusedByUs(res.clone())).toBe(true);
+    expect(noStore(res)).toBe(true);
+  });
+
+  it("GET /get-session", async () => {
+    expect(noStore(await GET(req("/get-session", "GET")))).toBe(true);
+  });
+
+  it("the callback's 302 (here a state error)", async () => {
+    const res = await GET(req("/callback/ministryplatform", "GET"));
+    expect(res.status).toBe(302);
+    expect(noStore(res)).toBe(true);
+  });
+
+  it("POST /sign-in/social, with its oauth_state Set-Cookie intact", async () => {
+    const res = await POST(req("/sign-in/social", "POST", { provider: MP_PROVIDER_ID, callbackURL: "/" }));
+    expect(res.status).toBe(200);
+    expect(noStore(res)).toBe(true);
+    expect(res.headers.getSetCookie().some((c) => /^better-auth\.oauth_state=/.test(c))).toBe(true);
+  });
+
+  it("better-auth's own 404 (a trailing slash on an allowed path)", async () => {
+    const res = await GET(req("/get-session/", "GET"));
+    expect(res.status).toBe(404);
+    expect(noStore(res)).toBe(true);
+  });
+
+  it("copies a response whose headers are immutable, keeping status, body and every Set-Cookie", async () => {
+    // What better-auth would hand back if it ever built a response with
+    // Response.redirect(): headers that throw on set().
+    const immutable = new Response("body", {
+      status: 302,
+      statusText: "Found",
+      headers: [
+        ["location", "/dash"],
+        ["set-cookie", "better-auth.session_token=a; Path=/; HttpOnly"],
+        ["set-cookie", "better-auth.session_data=b; Path=/; HttpOnly"],
+      ],
+    });
+    vi.spyOn(immutable.headers, "set").mockImplementation(() => {
+      throw new TypeError("immutable");
+    });
+    vi.spyOn(auth, "handler").mockResolvedValue(immutable);
+
+    const res = await GET(req("/get-session", "GET"));
+
+    expect(res).not.toBe(immutable);
+    expect(res.status).toBe(302);
+    expect(res.statusText).toBe("Found");
+    expect(res.headers.get("location")).toBe("/dash");
+    expect(res.headers.getSetCookie()).toEqual([
+      "better-auth.session_token=a; Path=/; HttpOnly",
+      "better-auth.session_data=b; Path=/; HttpOnly",
+    ]);
+    expect(noStore(res)).toBe(true);
+    expect(await res.text()).toBe("body");
+  });
+
+  it("copies a real Response.redirect(), whose headers are immutable", () => {
+    const res = withNoStore(Response.redirect("http://localhost:3000/dash", 302));
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("http://localhost:3000/dash");
+    expect(noStore(res)).toBe(true);
+  });
+
+  it("sets the header in place when it can (no copy)", () => {
+    const original = new Response(null, { status: 204, headers: { "cache-control": "public, max-age=60" } });
+    const res = withNoStore(original);
+    expect(res).toBe(original);
+    expect(noStore(res)).toBe(true);
   });
 });

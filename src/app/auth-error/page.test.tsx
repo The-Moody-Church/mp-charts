@@ -1,13 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { render, screen, act } from "@testing-library/react";
 import AuthErrorPage from "./page";
+import { CODE_SHAPE, ERROR_MESSAGES } from "./error-codes";
 
 /**
  * F7 — this app owns the OAuth failure page rather than better-auth's
  * built-in /api/auth/error (which the route allowlist no longer exposes).
  */
 describe("AuthErrorPage", () => {
-  const renderWith = async (query: { error?: string }) => {
+  const renderWith = async (query: { error?: string | string[] }) => {
     await act(async () => {
       render(<AuthErrorPage searchParams={Promise.resolve(query)} />);
     });
@@ -50,6 +51,71 @@ describe("AuthErrorPage", () => {
       expect(screen.getByText(code)).toBeDefined();
     }
   );
+
+  // Upstream MPNext 6aa1633, adapted: echo only something shaped like a code.
+  describe("echoes ?error= only when it looks like a machine code", () => {
+    const FALLBACK = /could not complete your Ministry Platform sign-in/i;
+    const echoed = () => document.querySelector("code");
+
+    it.each([
+      ["a sentence", "Your account is locked. Call 555-0100"],
+      ["a hyphen", "state-mismatch"],
+      ["a dot", "state.mismatch"],
+      ["a space", "state mismatch"],
+      ["markup", "<b>hi</b>"],
+      ["a known code with a trailing newline", "state_mismatch\n"],
+      ["65 characters", "a".repeat(65)],
+    ])("does not echo %s, and shows the fallback", async (_label, value) => {
+      await renderWith({ error: value });
+
+      expect(screen.getByText(FALLBACK)).toBeDefined();
+      expect(echoed()).toBeNull();
+      expect(document.body.textContent).not.toContain("555-0100");
+    });
+
+    it("does not echo a repeated parameter (an array), even of known codes", async () => {
+      await renderWith({ error: ["state_mismatch", "invalid_code"] });
+
+      expect(screen.getByText(FALLBACK)).toBeDefined();
+      expect(echoed()).toBeNull();
+      expect(document.body.textContent).not.toContain("state_mismatch");
+    });
+
+    it("does not echo a one-element array, which only the typeof guard stops", async () => {
+      // RegExp.test(["state_mismatch"]) coerces to "state_mismatch" and passes
+      // CODE_SHAPE, so this case fails if the string check is removed.
+      await renderWith({ error: ["state_mismatch"] });
+
+      expect(screen.getByText(FALLBACK)).toBeDefined();
+      expect(echoed()).toBeNull();
+      expect(document.body.textContent).not.toContain("state_mismatch");
+    });
+
+    it("still echoes an unknown but well-formed code, so support can see it", async () => {
+      const code = `future_code_${"x".repeat(52)}`; // exactly 64 characters
+      expect(code).toHaveLength(64);
+      await renderWith({ error: code });
+
+      expect(screen.getByText(FALLBACK)).toBeDefined();
+      expect(echoed()?.textContent).toBe(code);
+    });
+
+    it("maps and echoes our own upper-case MISSING_FIELD", async () => {
+      await renderWith({ error: "MISSING_FIELD" });
+
+      expect(screen.getByText(/missing a required identifier/i)).toBeDefined();
+      expect(echoed()?.textContent).toBe("MISSING_FIELD");
+    });
+
+    it.each(Object.keys(ERROR_MESSAGES))("every mapped code matches CODE_SHAPE: %s", (code) => {
+      expect(CODE_SHAPE.test(code)).toBe(true);
+    });
+
+    it("pins CODE_SHAPE itself", () => {
+      expect(CODE_SHAPE.source).toBe("^[A-Za-z0-9_]{1,64}$");
+      expect(CODE_SHAPE.flags).toBe("");
+    });
+  });
 
   it("renders without any error code at all", async () => {
     await renderWith({});

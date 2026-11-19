@@ -329,13 +329,11 @@ Both tools work together for comprehensive security:
 Required environment variables (see [.env.example](.env.example)):
 
 ```env
-# NextAuth Configuration
-OIDC_PROVIDER_NAME="MinistryPlatform"
-OIDC_CLIENT_ID=your_client_id
+# Better Auth + MP sign-in (the TM.Widgets OIDC client)
+OIDC_CLIENT_ID=TM.Widgets
 OIDC_CLIENT_SECRET=your_client_secret
-OIDC_WELL_KNOWN_URL=https://your-mp-instance.com/ministryplatformapi/oauth/.well-known/openid-configuration
-NEXTAUTH_SECRET=your_generated_secret
-NEXTAUTH_URL=http://localhost:3000  # Update for production
+BETTER_AUTH_SECRET=your_generated_secret   # openssl rand -base64 32; at least 32 characters
+BETTER_AUTH_URL=https://your-app.example.org  # origin only; https except http://localhost
 
 # Ministry Platform API
 MINISTRY_PLATFORM_CLIENT_ID=your_client_id
@@ -346,6 +344,12 @@ MINISTRY_PLATFORM_BASE_URL=https://your-mp-instance.com/ministryplatformapi
 NEXT_PUBLIC_MINISTRY_PLATFORM_FILE_URL=https://your-mp-instance.com/ministryplatformapi/files
 NEXT_PUBLIC_APP_NAME=MP Tools
 ```
+
+There is no `NEXTAUTH_*` or `OIDC_WELL_KNOWN_URL` variable: the app reads none of them (explicit OAuth
+endpoints, no discovery). `BETTER_AUTH_URL` and `MINISTRY_PLATFORM_BASE_URL` are validated by `src/lib/env.ts`
+when the auth module loads, like the secret (`next build` is exempt). A bad value does not stop the container:
+every auth request returns 500 and the log names the variable (`[env] BETTER_AUTH_URL is not set.`, never the
+value), so check the log after a deploy, not just whether the container is up.
 
 `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` does not belong here: it is a build-time GitHub Actions secret only (see [Server Actions encryption key](#server-actions-encryption-key)).
 

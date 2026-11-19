@@ -1,3 +1,5 @@
+import { getMpBaseUrl } from "@/lib/env";
+
 /**
  * Shape of the OAuth2 client-credentials token response returned by the
  * Ministry Platform `/oauth/connect/token` endpoint.
@@ -13,7 +15,9 @@ export interface ClientCredentialsToken {
 }
 
 export async function getClientCredentialsToken(): Promise<ClientCredentialsToken> {
-  const mpBaseUrl = process.env.MINISTRY_PLATFORM_BASE_URL!;
+  // Validated (https, no credentials/query, no trailing slash; src/lib/env.ts):
+  // this request carries the client secret. Throws before any fetch.
+  const mpBaseUrl = getMpBaseUrl();
   const mpOauthUrl = `${mpBaseUrl}/oauth`;
 
   const params = new URLSearchParams({

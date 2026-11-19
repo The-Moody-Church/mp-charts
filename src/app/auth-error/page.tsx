@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { CODE_SHAPE, ERROR_MESSAGES } from "./error-codes";
 
 /**
  * Landing page for a failed Ministry Platform OAuth callback.
@@ -15,54 +16,10 @@ import Link from "next/link";
  * (F7, upstream MPNext 91d226f.)
  */
 
-/**
- * Error codes better-auth 1.7.18's core OAuth callback emits
- * (dist/oauth2/errors.mjs, api/routes/callback.mjs, oauth2/callback.mjs,
- * oauth2/state.mjs, oauth2/link-account.mjs), plus `sign_in_start_failed`, which is OURS
- * (src/components/sign-in/sign-in.tsx, when the flow cannot even start).
- * NOTE: `unable_to_get_user_info` covers several causes — getMpUserInfo
- * returning null (userinfo down, bad sub, id_token/userinfo sub mismatch) and
- * an empty account subject. The server log line tells them apart.
- */
-const ERROR_MESSAGES: Record<string, string> = {
-  unable_to_get_user_info:
-    "Ministry Platform signed you in, but we could not read a usable user record. Your account may be missing its User GUID, or Ministry Platform may be briefly unavailable.",
-  sign_in_start_failed: "We could not start the Ministry Platform sign-in. Please try again in a minute.",
-  oauth_provider_not_found: "Sign-in is temporarily unavailable. Please try again in a few minutes.",
-  invalid_code:
-    "We could not complete the sign-in with Ministry Platform. The sign-in link may have expired — please try again.",
-  no_code: "The sign-in did not complete. Please start again.",
-  nonce_binding_missing: "The sign-in did not complete. Please start again.",
-  invalid_callback_request: "The sign-in response could not be read. Please try again.",
-  state_not_found: "Your sign-in session expired before it completed. Please try again.",
-  state_mismatch:
-    "Your sign-in was started in another tab or window, or it expired. Please close other sign-in tabs and try again.",
-  state_invalid: "Your sign-in session could not be verified. Please try again.",
-  no_callback_url: "The sign-in did not know where to return you. Please start again.",
-  issuer_mismatch:
-    "The response did not come from the expected Ministry Platform server. Please contact your administrator.",
-  email_not_found: "Ministry Platform did not return enough profile information to complete sign-in.",
-  email_not_verified: "Ministry Platform has not verified this account's email address.",
-  email_does_not_match: "This Ministry Platform account does not match the one you are signed in with.",
-  account_not_linked:
-    "This Ministry Platform account could not be matched to its record in this app. Please contact your administrator.",
-  account_already_linked_to_different_user:
-    "This Ministry Platform account is already linked to a different user in this app.",
-  unable_to_link_account: "We could not link your Ministry Platform account. Please try signing in again.",
-  unable_to_update_account: "We could not update your account record. Please try signing in again.",
-  signup_disabled: "New accounts cannot be created in this app right now. Please contact your administrator.",
-  unable_to_create_user: "We could not create your user record. Please try again.",
-  unable_to_create_session: "We could not start your session. Please try again.",
-  MISSING_FIELD:
-    "Ministry Platform signed you in, but your account is missing a required identifier. Please contact your administrator.",
-  access_denied: "Sign-in was cancelled.",
-  internal_server_error: "Something went wrong while signing you in.",
-};
-
 const FALLBACK_MESSAGE =
   "We could not complete your Ministry Platform sign-in. Please try again.";
 
-type Props = { searchParams: Promise<{ error?: string }> };
+type Props = { searchParams: Promise<{ error?: string | string[] }> };
 
 /**
  * Sync wrapper so the shell prerenders. `cacheComponents` is on in this repo,
@@ -96,15 +53,21 @@ async function AuthErrorContent({ searchParams }: Props) {
   // directly; script tags stayed balanced). So the guarantee is "not rendered
   // and not executable", not "absent from the response".
   //
-  // `error` is untrusted query input and ERROR_MESSAGES is a plain object, so
-  // only OWN keys are looked up: `?error=__proto__` would otherwise resolve to
+  // `error` is untrusted query input. It is used only if it is ONE string of
+  // the code shape: a repeated `?error=a&error=b` arrives as an array, and
+  // free text is a phishing aid on our own origin (CODE_SHAPE above). The
+  // same validated value drives both the lookup and the echo.
+  const code = typeof error === "string" && CODE_SHAPE.test(error) ? error : undefined;
+
+  // ERROR_MESSAGES is a plain object, so only OWN keys are looked up:
+  // `?error=__proto__` (which matches CODE_SHAPE) would otherwise resolve to
   // Object.prototype (render throws) and `?error=constructor` to a function
   // (empty message, fallback skipped). Pinned by page.test.tsx.
   const message =
-    (error && Object.hasOwn(ERROR_MESSAGES, error) ? ERROR_MESSAGES[error] : undefined) ||
+    (code && Object.hasOwn(ERROR_MESSAGES, code) ? ERROR_MESSAGES[code] : undefined) ||
     FALLBACK_MESSAGE;
 
-  return <AuthErrorShell message={message} code={error} />;
+  return <AuthErrorShell message={message} code={code} />;
 }
 
 function AuthErrorShell({ message, code }: { message: string; code?: string }) {
