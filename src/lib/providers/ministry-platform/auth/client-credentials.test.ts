@@ -98,6 +98,25 @@ describe('getClientCredentialsToken', () => {
       ['a refused redirect / network error', new TypeError('fetch failed: https://u:test-client-secret@x'), 'TypeError'],
       ['a timeout', new DOMException('The operation was aborted due to timeout', 'TimeoutError'), 'TimeoutError'],
       ['a non-Error rejection', 'boom test-client-secret', 'string'],
+      // The name filter: an error name that is not a plain class name is not copied.
+      [
+        'an error whose name carries text',
+        Object.assign(new Error('x'), { name: 'secret test-client-secret\n' }),
+        'object',
+      ],
+      // The cause's class and code are added (never its message).
+      [
+        'a refused connection',
+        new TypeError('fetch failed', {
+          cause: Object.assign(new Error('connect ECONNREFUSED test-client-secret'), { code: 'ECONNREFUSED' }),
+        }),
+        'TypeError (cause: Error ECONNREFUSED)',
+      ],
+      [
+        'a refused redirect',
+        new TypeError('fetch failed', { cause: new Error('unexpected redirect') }),
+        'TypeError (cause: Error redirect refused)',
+      ],
     ])('reports %s by error name only', async (_label, rejection, name) => {
       vi.stubGlobal('fetch', vi.fn().mockRejectedValueOnce(rejection));
       const error = await getClientCredentialsToken().catch((e: Error) => e);
@@ -135,6 +154,12 @@ describe('getClientCredentialsToken', () => {
       ['null', null],
       ['an array', []],
       ['a string', 'token'],
+      // Header-safe: undici's invalid-header TypeError would quote the token.
+      ['a token containing NUL', { access_token: 'tok\u0000abc', token_type: 'Bearer' }],
+      ['a token containing CR/LF', { access_token: 'tok\r\nX-Injected: 1', token_type: 'Bearer' }],
+      ['a token containing a space', { access_token: 'tok abc', token_type: 'Bearer' }],
+      ['a whitespace-padded token', { access_token: ' tok-abc ', token_type: 'Bearer' }],
+      ['a non-ASCII token', { access_token: 'tok\u00e9', token_type: 'Bearer' }],
     ])('rejects %s', async (_label, body) => {
       respond(body);
       await expect(getClientCredentialsToken()).rejects.toThrow(
@@ -151,6 +176,15 @@ describe('getClientCredentialsToken', () => {
     ])('accepts token_type %s', async (_label, body) => {
       respond(body);
       await expect(getClientCredentialsToken()).resolves.toMatchObject({ access_token: 'tok-abc' });
+    });
+
+    it.each([
+      'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl',
+      'A1b2-._~+/xyz==',
+      '0123456789ABCDEF0123456789ABCDEF',
+    ])('accepts a header-safe token (%s)', async (accessToken) => {
+      respond({ access_token: accessToken, token_type: 'Bearer' });
+      await expect(getClientCredentialsToken()).resolves.toMatchObject({ access_token: accessToken });
     });
 
     it.each([

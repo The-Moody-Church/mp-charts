@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { HttpClient } from '@/lib/providers/ministry-platform/utils/http-client';
 import { MP_API_TIMEOUT_MS, MP_UPLOAD_TIMEOUT_MS } from '@/lib/providers/ministry-platform/utils/timeouts';
 
@@ -14,7 +16,8 @@ import { MP_API_TIMEOUT_MS, MP_UPLOAD_TIMEOUT_MS } from '@/lib/providers/ministr
  * - FormData handling
  */
 
-// Mock global fetch
+// Mock global fetch (the real one is kept for the tests that talk to a local server)
+const nodeFetch = globalThis.fetch;
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
@@ -62,7 +65,7 @@ describe('HttpClient', () => {
     });
 
     it('does not alter the URL actually requested', async () => {
-      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+      mockFetch.mockResolvedValueOnce({ ok: true, text: async () => '{}' });
       await httpClient.get('/tables/Contact_Log');
       expect(mockFetch.mock.calls[0][0]).toBe('https://api.ministryplatform.com/tables/Contact_Log');
     });
@@ -135,7 +138,7 @@ describe('HttpClient', () => {
     it('should make GET request with authorization header', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve([{ Contact_ID: 1, Display_Name: 'John Doe' }]),
+        text: () => Promise.resolve(JSON.stringify([{ Contact_ID: 1, Display_Name: 'John Doe' }])),
       });
 
       const result = await httpClient.get('/tables/Contacts');
@@ -158,7 +161,7 @@ describe('HttpClient', () => {
     it('should make GET request with query parameters', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve([]),
+        text: () => Promise.resolve(JSON.stringify([])),
       });
 
       await httpClient.get('/tables/Contacts', { $top: 10, $filter: 'Active=1' });
@@ -215,7 +218,7 @@ describe('HttpClient', () => {
       const newRecord = { First_Name: 'John', Last_Name: 'Doe' };
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve([{ Contact_ID: 1, ...newRecord }]),
+        text: () => Promise.resolve(JSON.stringify([{ Contact_ID: 1, ...newRecord }])),
       });
 
       const result = await httpClient.post('/tables/Contacts', newRecord);
@@ -240,7 +243,7 @@ describe('HttpClient', () => {
     it('should make POST request without body', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ success: true }),
+        text: () => Promise.resolve(JSON.stringify({ success: true })),
       });
 
       await httpClient.post('/some/endpoint');
@@ -264,7 +267,7 @@ describe('HttpClient', () => {
     it('should make POST request with query parameters', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve([]),
+        text: () => Promise.resolve(JSON.stringify([])),
       });
 
       await httpClient.post('/tables/Contacts', { Name: 'Test' }, { $userId: 1 });
@@ -295,7 +298,7 @@ describe('HttpClient', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ FileId: 1 }),
+        text: () => Promise.resolve(JSON.stringify({ FileId: 1 })),
       });
 
       const result = await httpClient.postFormData('/files', formData);
@@ -336,7 +339,7 @@ describe('HttpClient', () => {
       const updatedRecord = { Contact_ID: 1, First_Name: 'Jane' };
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve([updatedRecord]),
+        text: () => Promise.resolve(JSON.stringify([updatedRecord])),
       });
 
       const result = await httpClient.put('/tables/Contacts', updatedRecord);
@@ -379,7 +382,7 @@ describe('HttpClient', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ FileId: 1, FileName: 'updated.txt' }),
+        text: () => Promise.resolve(JSON.stringify({ FileId: 1, FileName: 'updated.txt' })),
       });
 
       const result = await httpClient.putFormData('/files/1', formData);
@@ -405,7 +408,7 @@ describe('HttpClient', () => {
     it('should make DELETE request', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve([{ Contact_ID: 1 }]),
+        text: () => Promise.resolve(JSON.stringify([{ Contact_ID: 1 }])),
       });
 
       const result = await httpClient.delete('/tables/Contacts', { id: [1] });
@@ -445,7 +448,7 @@ describe('HttpClient', () => {
 
       mockFetch.mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve([]),
+        text: () => Promise.resolve(JSON.stringify([])),
       });
 
       await dynamicClient.get('/test');
@@ -482,7 +485,7 @@ describe('HttpClient', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve([{ Contact_ID: 1, Display_Name: 'Test' }]),
+        text: () => Promise.resolve(JSON.stringify([{ Contact_ID: 1, Display_Name: 'Test' }])),
       });
 
       const result = await httpClient.get<Contact[]>('/tables/Contacts');
@@ -509,6 +512,8 @@ describe('HttpClient', () => {
       ['an encoded slash (%2F)', '/tables/a%2Fb'],
       ['an encoded backslash (%5c)', '/tables/a%5cb'],
       ['a backslash', '/tables\\..\\procs'],
+      ['a backslash without a dot-segment', '/tables\\Contacts'],
+      ['a backslash in a file path', '/files\\1'],
       ['a query smuggled into the path', '/tables/Contacts?$filter=1=1'],
       ['a fragment', '/tables/Contacts#x'],
       ['a tab (the URL parser strips it, so .\t. becomes ..)', '/tables/.\t./procs'],
@@ -555,7 +560,7 @@ describe('HttpClient', () => {
   });
 
   describe('Redirect refusal and timeouts', () => {
-    const ok = () => ({ ok: true, json: () => Promise.resolve([]) });
+    const ok = () => ({ ok: true, text: () => Promise.resolve('[]') });
 
     it('sets redirect: "error" on every method', async () => {
       mockFetch.mockResolvedValue(ok());
@@ -599,10 +604,54 @@ describe('HttpClient', () => {
 
   describe('Response body handling', () => {
     it.each(['get', 'delete'] as const)('%s returns undefined for a 204 without reading the body', async (method) => {
+      const text = vi.fn();
       const json = vi.fn();
-      mockFetch.mockResolvedValueOnce({ ok: true, status: 204, json });
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 204, text, json });
       await expect(httpClient[method]('/files/1')).resolves.toBeUndefined();
+      expect(text).not.toHaveBeenCalled();
       expect(json).not.toHaveBeenCalled();
+    });
+
+    // Batch 3 review: an empty body without Content-Length (a chunked 200, or a
+    // 205) threw "invalid JSON response" even though MP had succeeded.
+    it.each([
+      ['an empty-string 200', () => new Response('', { status: 200 })],
+      ['a null-body 200', () => new Response(null, { status: 200 })],
+      ['a 205', () => new Response(null, { status: 205 })],
+      ['a whitespace-only 200', () => new Response(' \r\n', { status: 200 })],
+    ])('returns undefined for %s (no Content-Length)', async (_label, make) => {
+      const response = make();
+      expect(response.headers.get('content-length')).toBeNull();
+      mockFetch.mockResolvedValueOnce(response);
+      await expect(httpClient.delete('/tables/Contacts')).resolves.toBeUndefined();
+    });
+
+    it('returns undefined for an empty chunked 200 from a real server', async () => {
+      const server = createServer((_req, res) => {
+        res.writeHead(200);
+        res.end();
+      });
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+      const { port } = server.address() as AddressInfo;
+      try {
+        let contentLength: string | null = 'unset';
+        mockFetch.mockImplementationOnce(async (url: string, init: RequestInit) => {
+          const response = await nodeFetch(url, init);
+          contentLength = response.headers.get('content-length');
+          return response;
+        });
+        const local = new HttpClient(`http://127.0.0.1:${port}`, getToken);
+        await expect(local.delete('/tables/Contacts')).resolves.toBeUndefined();
+        expect(contentLength).toBeNull();
+      } finally {
+        await new Promise((resolve) => server.close(resolve));
+      }
+    });
+
+    it('lets a body-read failure through instead of calling it invalid JSON', async () => {
+      const timeout = new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 200, text: () => Promise.reject(timeout) });
+      await expect(httpClient.get('/tables/Contacts')).rejects.toBe(timeout);
     });
 
     it('returns undefined for Content-Length: 0', async () => {
@@ -645,6 +694,14 @@ describe('HttpClient', () => {
       const error = await call.catch((e: Error) => e);
       expect((error as Error).message).toBe(`${verb} /tables/Contacts failed: invalid JSON response`);
       expect((error as Error).message).not.toContain('member@example.org');
+    });
+
+    it('redacts a file GUID in the invalid-JSON message too', async () => {
+      mockFetch.mockResolvedValueOnce(new Response('x', { status: 200 }));
+      const error = await httpClient
+        .get('/files/0a1b2c3d-1111-2222-3333-444455556666/metadata')
+        .catch((e: Error) => e);
+      expect((error as Error).message).toBe('GET /files/{uniqueId}/metadata failed: invalid JSON response');
     });
 
     it('uploads turn a non-JSON body into the fixed message too', async () => {

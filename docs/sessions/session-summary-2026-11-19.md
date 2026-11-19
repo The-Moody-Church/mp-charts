@@ -36,14 +36,14 @@ returned to the app in all four. Merged and `:latest` deployed 16:22 UTC; cache 
 
 **Soak tip:** sign out (or wait out the hour) and sign in fresh after a swap before judging sign-out.
 
-## Batch 3 — MP client, low risk — IN PROGRESS (branch pushed, no PR yet)
+## Batch 3 — MP client, low risk — IN PROGRESS (branch pushed, review fixed, no PR yet)
 
 Branch `security/batch3-mp-client`. N12 (MP client half) and N21; upstream 9b7b4d1, 5aa0b5e (minus the 401 retry and
 negative cache, batch 8), 41bba94 + 3d9ae92 (minus the trusted-sender rewrite: no caller).
 
 - **`utils/http-client.ts`**: `redirect: 'error'` on all six fetches; `assertSafeEndpoint` first in `buildUrl`
   (upstream's regex + resolved-URL root check, fixed message); 60 s for `postFormData`/`putFormData`, 30 s kept
-  elsewhere; `readJson` (204 or `Content-Length: 0` → `undefined`, bad JSON → `<METHOD> <endpoint> failed: invalid
+  elsewhere; `readJson` (204 or an empty body → `undefined`, bad JSON → `<METHOD> <endpoint> failed: invalid
   JSON response`); GUIDs redacted to `{uniqueId}` in messages. No content-type check, no refactor, no extra log line.
 - **`utils/timeouts.ts`** (new): `MP_API_TIMEOUT_MS` 30 s, `MP_UPLOAD_TIMEOUT_MS` 60 s, `MP_TOKEN_TIMEOUT_MS` 10 s.
 - **`auth/client-credentials.ts`**: 10 s timeout, `redirect: "error"`, fetch failure → `...: <error name>`, `!ok` →
@@ -69,6 +69,24 @@ negative cache, batch 8), 41bba94 + 3d9ae92 (minus the trusted-sender rewrite: n
   http-client, client, client-credentials, table/procedure/file service, helper and provider tests. Reverting each
   source file to `main` fails the new tests (http-client 36, client 9, credentials 19, table 15, file 17, procedure
   ≥8, domain 3).
+- **Review outcome (8 verified findings: 6 low, 2 nit; all fixed in a follow-up commit):**
+  - `readJson` empty bodies (low + duplicate nit): any empty or whitespace body now returns `undefined` (read with
+    `text()`, then `JSON.parse` under the same fixed message); a 204 still skips the read; a body-read failure
+    propagates unchanged. Tests: empty-string/null-body 200, 205, whitespace 200, and an empty chunked 200 from a real
+    local `node:http` server (Content-Length null).
+  - Log sites (low, 17 of 20 unpinned): new `services/log-sites.test.ts` scans `services/*.ts` and `client.ts`; every
+    console call must be `console.error('<fixed text>', errorForLog(error));` and every service catch log-then-rethrow.
+  - Backslash guard (low): `/tables\Contacts`, `/files\1` added (no `..`), so dropping `\` from the regex fails.
+  - GUID redaction in the invalid-JSON message (low): exact-message test on `/files/<guid>/metadata`.
+  - Network cause lost from logs (low): `causeForLog` in `src/lib/log-safe.ts`, appended by `errorForLog` and the token
+    error: ` (cause: <name> <code>)`, each `^[A-Za-z0-9_]{1,64}$`, never the cause message; undici's
+    "unexpected redirect" → `redirect refused`. Tested with synthetic causes and real undici rejections (a 307 under
+    `redirect: 'error'`, a closed port). The stale log-safe.ts docstring is corrected.
+  - `errorName` filter (nit): a test with a name carrying text and a newline expects `...: object`.
+  - Header-unsafe token (nit): `access_token` must match `^[\x21-\x7E]+$` (NUL, CR/LF, space, padding, non-ASCII
+    refused with the static `invalid token response`); JWT/b64token/hex shapes accepted.
+  - Mutants checked: each new test fails against the reverted line (backslash 2, GUID 1, errorName 1, token 5,
+    log-site 2).
 - **Next:** PR, then a `:dev` soak with a cold dashboard warm (sign-in soak not required), then the sibling ports
   (event-manager must pass its three procedure names through `allowedProcedures`).
 

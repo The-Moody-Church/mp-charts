@@ -36,20 +36,28 @@ const UNSAFE_ENDPOINT_MESSAGE = "Refusing unsafe MP API endpoint";
 /**
  * Parses a successful response body as JSON.
  *
- * - 204, or `Content-Length: 0`, yields `undefined` (a successful delete or
- *   metadata refresh may answer with no body; `response.json()` threw on it).
+ * - A 204, or any empty (or whitespace-only) body, yields `undefined`: a
+ *   successful delete or metadata refresh may answer with no body, and an empty
+ *   chunked 200 carries no Content-Length to say so. `response.json()` threw on
+ *   all of these.
  * - A body that is not JSON throws a fixed message. V8's `SyntaxError` quotes a
- *   fragment of the body, and every caller logs the error.
+ *   fragment of the body, and every caller logs the error. A failure while
+ *   reading the body (a timeout, a dropped connection) propagates as it is: it
+ *   quotes no body, and calling it "invalid JSON" would mislead.
  *
  * Deliberately no Content-Type check: an MP endpoint answering 200 JSON with an
  * unexpected type would turn into an outage for no security gain.
  */
 async function readJson<T>(response: Response, method: string, endpoint: string): Promise<T> {
-    if (response.status === 204 || response.headers?.get("content-length") === "0") {
+    if (response.status === 204) {
+        return undefined as T;
+    }
+    const text = await response.text();
+    if (text.trim() === '') {
         return undefined as T;
     }
     try {
-        return (await response.json()) as T;
+        return JSON.parse(text) as T;
     } catch {
         throw new Error(`${method} ${safeEndpoint(endpoint)} failed: invalid JSON response`);
     }
@@ -59,7 +67,8 @@ async function readJson<T>(response: Response, method: string, endpoint: string)
  * Every fetch below sets `redirect: 'error'`. MP's API never redirects, and a
  * followed 307/308 would re-send the service bearer and the request body (member
  * data, uploaded files) to wherever the Location header points. A refused
- * redirect rejects with a TypeError, which the caller's catch logs and rethrows.
+ * redirect rejects with a TypeError, which the caller's catch logs and rethrows
+ * (errorForLog names it: "TypeError: fetch failed (cause: Error redirect refused)").
  */
 
 export class HttpClient {

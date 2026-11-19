@@ -1,4 +1,5 @@
 import { getMpBaseUrl } from "@/lib/env";
+import { causeForLog } from "@/lib/log-safe";
 import { MP_TOKEN_TIMEOUT_MS } from "../utils/timeouts";
 
 /**
@@ -17,6 +18,9 @@ export interface ClientCredentialsToken {
 }
 
 const ERROR_PREFIX = "Failed to get client credentials token";
+
+/** Visible ASCII only (0x21-0x7E): no space, control character or non-ASCII. */
+const HEADER_SAFE_TOKEN = /^[\x21-\x7E]+$/;
 
 /**
  * A caught error's class name only (`TypeError`, `TimeoutError`, ...), never its
@@ -60,7 +64,9 @@ export async function getClientCredentialsToken(): Promise<ClientCredentialsToke
       signal: AbortSignal.timeout(MP_TOKEN_TIMEOUT_MS),
     });
   } catch (error) {
-    throw new Error(`${ERROR_PREFIX}: ${errorName(error)}`);
+    // Plus the cause's class and code (never its message), so a network failure
+    // still says ECONNREFUSED, a connect timeout or a refused redirect.
+    throw new Error(`${ERROR_PREFIX}: ${errorName(error)}${causeForLog(error)}`);
   }
 
   if (!response.ok) {
@@ -77,13 +83,17 @@ export async function getClientCredentialsToken(): Promise<ClientCredentialsToke
   }
 
   // A 200 without a usable access token used to be cached for 55 minutes and
-  // sent as "Authorization: Bearer undefined" on every MP call.
+  // sent as "Authorization: Bearer undefined" on every MP call. The token must
+  // also be header-safe (visible ASCII, no spaces): it goes into
+  // `Authorization: Bearer <token>`, and undici's "invalid header value"
+  // TypeError quotes the whole header, so a NUL or CR/LF in it would put the
+  // token into every logged fetch error.
   const candidate = token as Partial<Record<keyof ClientCredentialsToken, unknown>> | null;
   if (
     typeof candidate !== "object" ||
     candidate === null ||
     typeof candidate.access_token !== "string" ||
-    candidate.access_token.trim() === ""
+    !HEADER_SAFE_TOKEN.test(candidate.access_token)
   ) {
     throw new Error(`${ERROR_PREFIX}: invalid token response`);
   }
