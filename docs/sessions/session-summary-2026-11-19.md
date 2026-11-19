@@ -18,7 +18,24 @@ Continuation of the 2026-11-18 session (open items plan, `.claude/plans/open-ite
 - **Merged** as `57f4723`; main build green; **deployed `:latest` 15:43 UTC** (labels `main` / `57f4723`). Cache warm
   on attempt 1; `/` 307, `/signin` 200, `get-session` 200 with `no-store`.
 
+## Batch 2 sibling ports — COMPLETED
+
+event-manager #93 (`6d4700e`), mp-senior-care #254 (`71b0222`), music-tools #210 (`d93172a`), each prepared by a
+parallel agent and reviewed here. Differences from mp-charts: `app-url.ts` (event-manager, mp-senior-care) goes through
+`getAuthBaseUrl()` with no production-hostname fallback (every caller sits in a notification try/catch);
+event-manager's `taskService.resolveTask` validates the MP URL before its reassign write (was `?? ""`); the profile
+log uses each repo's `logError` (no `errorForLog` there); music-tools gained `client.ts`/`client-credentials.ts` tests.
+
+All three soaked on `:dev` from 16:01 UTC (rollback pins = the batch 1 images). Live checks matched mp-charts. **Sign-out
+finding:** the owner's first sign-out in all four apps (mptools included) landed on MP's `/oauth/account/profile`,
+each logging `[signout] id_token_hint omitted (no-mp-account)`. Cause: the session cookie predated the container
+restart (cookie cache valid up to 1h), so no sign-in ran in the new process and the in-memory token store and account
+row were empty. The known post-restart gap, not a batch 2 regression: the redirect URI is unchanged (all four
+`BETTER_AUTH_URL`s are bare origins) and `route.flow.test.ts` pins the token being stored. After a fresh sign-in, sign-out
+returned to the app in all four. Merged and `:latest` deployed 16:22 UTC; cache warm, no `[env]`/`[auth]` lines.
+
+**Soak tip:** sign out (or wait out the hour) and sign in fresh after a swap before judging sign-out.
+
 ## Next
 
-Port batch 2 to event-manager, mp-senior-care and music-tools (route `lib/app-url.ts` through `getAuthBaseUrl` in
-event-manager and mp-senior-care, or document its production fallback). Then batches 3–10 and the N17 verifier port.
+Batch 3 (MP client) per `.claude/plans/open-items-2026-11-18.md`, then batches 4–10 and the N17 verifier port.
