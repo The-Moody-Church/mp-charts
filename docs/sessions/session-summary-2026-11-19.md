@@ -100,7 +100,7 @@ negative cache, batch 8), 41bba94 + 3d9ae92 (minus the trusted-sender rewrite: n
   event-manager or music-tools. All three on `:dev` from 17:40 UTC (cold warms on attempt 1, no MP errors); the owner
   tested event-manager (event creates) and chose to deploy the other two untested. `:latest` deployed 17:50 UTC.
 
-## Batch 4 — contact logs and data minimisation — IN PROGRESS (branch `security/batch4-contact-logs`, no PR yet)
+## Batch 4 — contact logs and data minimisation — COMPLETED in mp-charts (#324, deployed 21:18 UTC); sibling ports pending
 
 Scope from `.claude/plans/open-items-2026-11-18.md` (batch 4, gap 1, decision 7; N11, upstream defd338, 710dfa8,
 dc4a25b, a11c2a3; CodeQL #37). Owner decisions: delete all three orphans, keep no dead contact code, no
@@ -151,8 +151,11 @@ dc4a25b, a11c2a3; CodeQL #37). Owner decisions: delete all three orphans, keep n
     one stripped line; the rest of that file's catches are left to a later batch.
   - Re-run: `tsc`, lint clean; `test:run` 100 files / 2272 tests; coverage 60.12 / 51.42 / 51.5 / 61.36 (floors
     hold); build and `check:standalone` pass (102 lockfile nodes); manifest still 80 entries (75 actions + 5 cache).
-- **Next:** PR, then `:dev` click-through (contact lookup: logs show author names, owner-only Edit, create and edit a
-  log). Mirror to mp-senior-care as is; event-manager needs the #85 shape and `COMMUNICATION_TYPES` first; siblings
+- **Shipped.** PR #324 (CI green), merged as `619ddc3`, `:latest` deployed 21:18 UTC. **No `:dev` soak**: the owner
+  chose to merge and deploy directly. Rollback pin rewritten first to the batch 3 image (`486c0a7`, by digest). Cold
+  warm on attempt 1, no `[env]`/`[auth]` errors, `/` 307, `/signin` 200. (A first `/deploy` at 21:17 pulled
+  `40da6f2`, docs-only over batch 3, because the CI check matched the CodeQL run; redeployed once the build finished.)
+- **Next:** mirror to mp-senior-care as is; event-manager needs the #85 shape and `COMMUNICATION_TYPES` first; siblings
   also need `sanitizeLikeValue` and a search cap.
 
 ## Next
