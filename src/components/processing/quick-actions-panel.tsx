@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { MAX_FILE_SIZE } from "@/lib/processing-utils";
+import { useUnsavedChanges } from "@/lib/unsaved-changes";
 
 interface QuickActionItem {
   key: string;
@@ -87,6 +88,14 @@ export function QuickActionsPanel({
   expanded,
   onExpandedChange,
 }: QuickActionsPanelProps) {
+  // SessionGuard (batch 6): the notes textarea is shown only while an item is
+  // selected (and, in compliance, only for an item type that takes notes), so
+  // choosing "Select..." or a form item unmounts it while the typed notes are
+  // still unsaved in the parent's state. Declare them while the panel is open.
+  // Both callers clear `notes` after a successful submit and on close, and the
+  // panel unmounts with its dialog, so the claim ends with the edit.
+  useUnsavedChanges(expanded && availableItems.length > 0 && notes.trim() !== "");
+
   const handleClose = () => {
     onExpandedChange(false);
     onSelectedKeyChange("");

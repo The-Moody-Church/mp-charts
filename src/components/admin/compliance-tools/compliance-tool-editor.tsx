@@ -7,8 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { RequirementPicker } from "./requirement-picker";
-import { MilestonePicker } from "@/components/admin/journey-tools/milestone-picker";
+import { RequirementPicker, requirementEditState } from "./requirement-picker";
+import { MilestonePicker, milestoneEditState } from "@/components/admin/journey-tools/milestone-picker";
+import { useUnsavedChanges } from "@/lib/unsaved-changes";
 import {
   getDeduplicatedRequirements,
   saveComplianceToolAction,
@@ -88,6 +89,28 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
   const [loadingRequirements, setLoadingRequirements] = useState(false);
   const [loadingMilestones, setLoadingMilestones] = useState(false);
 
+  // SessionGuard (batch 6): this editor holds unsaved changes while its form
+  // differs from what it loaded. Typed-field tracking alone is not enough here:
+  // "Refresh from MP" and every group-role toggle (both through
+  // fetchAndMergeRequirements), and the milestone refresh, swap a picker for a
+  // loading line and back, so a typed label returns in a NEW input the tracker
+  // never saw; and checkboxes, selects and reordering are not typed at all.
+  // `editState` is every field handleSave sends (raw, before its trims and
+  // pause nulling), with the role IDs sorted (a toggle off and on again
+  // reorders them) and the pickers' editable fields. The baseline is taken
+  // when the reference-data load ends, so an untouched editor holds nothing.
+  // The claim ends when the editor unmounts (Cancel, or the admin page closing
+  // it after a successful save) and is reset on a successful save in case a
+  // parent ever keeps the editor mounted.
+  const editState = () =>
+    JSON.stringify([
+      toolName, slug, description, enabled, [...selectedGroupRoleIds].sort((a, b) => a - b),
+      requirementEditState(requirements), journeyId, milestoneEditState(journeyMilestones), programId,
+      trackingGroupId, defaultGroupRoleId, supportsPause, pausedGroupId, pauseMilestoneId,
+    ]);
+  const [loadedEditState, setLoadedEditState] = useState<string | null>(null);
+  useUnsavedChanges(loadedEditState !== null && editState() !== loadedEditState);
+
   const fieldErrorClass = (field: string) =>
     errorFields.has(field) ? "border-red-500 ring-1 ring-red-500" : "";
 
@@ -140,6 +163,9 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
         console.error("Failed to load reference data:", err);
         setError("Failed to load configuration data from Ministry Platform.");
       } finally {
+        // This closure belongs to the first render, so `editState` reads the
+        // initial form (the load changes none of it).
+        setLoadedEditState(editState());
         setLoadingRef(false);
       }
     }
@@ -358,6 +384,7 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
         setErrorFields(serverFields);
         return;
       }
+      setLoadedEditState(editState());
       onSaved();
     } catch (err) {
       console.error("Save failed:", err);

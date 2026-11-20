@@ -1,19 +1,25 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import type { ComplianceToolConfig } from "@/lib/compliance-tools-config-types";
+import { hasUnsavedChanges, trackTypedInput } from "@/lib/unsaved-changes";
 
 const {
   mockGetJourneyMilestones,
   mockGetAvailableJourneys,
   mockSaveComplianceToolAction,
+  mockGetDeduplicatedRequirements,
+  mockGetAvailableGroupRoles,
 } = vi.hoisted(() => ({
   mockGetJourneyMilestones: vi.fn(),
   mockGetAvailableJourneys: vi.fn(),
   mockSaveComplianceToolAction: vi.fn(),
+  mockGetDeduplicatedRequirements: vi.fn(),
+  mockGetAvailableGroupRoles: vi.fn(),
 }));
 
 vi.mock("./actions", () => ({
-  getDeduplicatedRequirements: vi.fn().mockResolvedValue([]),
+  getDeduplicatedRequirements: mockGetDeduplicatedRequirements,
   saveComplianceToolAction: mockSaveComplianceToolAction,
 }));
 
@@ -24,7 +30,7 @@ vi.mock("@/components/admin/journey-tools/actions", () => ({
   getProgramsByIds: vi.fn().mockResolvedValue([]),
   getAvailableGroups: vi.fn().mockResolvedValue([]),
   getGroupsByIds: vi.fn().mockResolvedValue([]),
-  getAvailableGroupRoles: vi.fn().mockResolvedValue([]),
+  getAvailableGroupRoles: mockGetAvailableGroupRoles,
   getActiveMinistries: vi.fn().mockResolvedValue([]),
 }));
 
@@ -87,6 +93,8 @@ describe("ComplianceToolEditor — journey selection", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetDeduplicatedRequirements.mockResolvedValue([]);
+    mockGetAvailableGroupRoles.mockResolvedValue([]);
     mockGetAvailableJourneys.mockResolvedValue([
       { Journey_ID: SAVED_JOURNEY_ID, Journey_Name: "Volunteer Journey", Description: null, Active: true },
       { Journey_ID: OTHER_JOURNEY_ID, Journey_Name: "Membership Journey", Description: null, Active: true },
@@ -170,5 +178,188 @@ describe("ComplianceToolEditor — journey selection", () => {
       journeyId: null,
       journeyMilestones: [],
     });
+  });
+});
+
+/**
+ * SessionGuard (batch 6) and the compliance tool editor. Both "Refresh from
+ * MP" buttons and every group-role toggle swap a picker for a loading line
+ * and back, so a typed label returns in a new input the typed-field tracker
+ * never saw. The editor therefore declares useUnsavedChanges while its form
+ * differs from what it loaded: false for an untouched editor (also across a
+ * refresh), true after any edit (also across a refresh or a role toggle), and
+ * over once the admin page unmounts it (Cancel, successful save).
+ */
+describe("ComplianceToolEditor unsaved changes (SessionGuard)", () => {
+  // Saved in the opposite order to MP's: a refresh rebuilds both lists in
+  // MP's order, which is not an edit.
+  const savedTool: ComplianceToolConfig = {
+    slug: "volunteer-compliance",
+    toolName: "Volunteer Compliance",
+    description: "",
+    enabled: true,
+    groupRoleIds: [5],
+    journeyId: 10,
+    journeyMilestones: [
+      { milestoneId: 101, label: "Orientation", sortOrder: 2, visible: true },
+      { milestoneId: 100, label: "Renamed by admin", sortOrder: 1, visible: true },
+    ],
+    requirements: [
+      { requirementId: 2, label: "Child Safety Form", type: "form", sortOrder: 2, visible: true },
+      { requirementId: 1, label: "Background Check", type: "background_check", sortOrder: 1, visible: true },
+    ],
+    programId: 7,
+    trackingGroupId: null,
+    defaultGroupRoleId: 2,
+    supportsPause: false,
+    pausedGroupId: null,
+    pauseMilestoneId: null,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+
+  let stopTracking: () => void;
+  beforeEach(() => {
+    mockGetAvailableJourneys.mockResolvedValue([
+      { Journey_ID: 10, Journey_Name: "Volunteer Journey", Description: null, Active: true },
+    ]);
+    mockGetAvailableGroupRoles.mockResolvedValue([
+      { Group_Role_ID: 5, Role_Title: "Volunteer", Ministry_ID: null },
+      { Group_Role_ID: 6, Role_Title: "Leader", Ministry_ID: null },
+    ]);
+    mockGetJourneyMilestones.mockResolvedValue([
+      { Milestone_ID: 100, Milestone_Title: "MP Title For 100", Sort_Order: 1, Discontinued: false },
+      { Milestone_ID: 101, Milestone_Title: "Orientation", Sort_Order: 2, Discontinued: false },
+    ]);
+    mockGetDeduplicatedRequirements.mockImplementation((roleIds: number[]) =>
+      Promise.resolve([
+        { requirementId: 1, label: "Background Check", type: "background_check" },
+        { requirementId: 2, label: "Child Safety Form", type: "form" },
+        ...(roleIds.includes(6) ? [{ requirementId: 3, label: "Leader Cert", type: "certification" }] : []),
+      ]),
+    );
+    mockSaveComplianceToolAction.mockResolvedValue({ success: true });
+    stopTracking = trackTypedInput();
+  });
+  afterEach(() => {
+    stopTracking();
+    vi.restoreAllMocks();
+  });
+
+  /** The admin page's own shape: the editor is shown until saved or cancelled. */
+  function AdminHarness() {
+    const [show, setShow] = useState(true);
+    return show ? (
+      <ComplianceToolEditor
+        existingTool={savedTool}
+        existingSlugs={["volunteer-compliance"]}
+        usedJourneyIds={[]}
+        onSaved={() => setShow(false)}
+        onCancel={() => setShow(false)}
+      />
+    ) : (
+      <p>Editor closed</p>
+    );
+  }
+
+  const renderEditor = async () => {
+    render(<AdminHarness />);
+    return (await screen.findByDisplayValue("Background Check")) as HTMLInputElement;
+  };
+
+  const settle = async (loadingText: string) => {
+    await screen.findByText(loadingText);
+    await waitFor(() => expect(screen.queryByText(loadingText)).toBeNull());
+  };
+  const refreshRequirements = async () => {
+    fireEvent.click(screen.getAllByRole("button", { name: /refresh from mp/i })[0]);
+    await settle("Loading requirements...");
+  };
+  const refreshMilestones = async () => {
+    fireEvent.click(screen.getAllByRole("button", { name: /refresh from mp/i })[1]);
+    await settle("Loading milestones...");
+  };
+  const toggleLeader = async () => {
+    fireEvent.click(screen.getByRole("checkbox", { name: /Leader/ }));
+    await settle("Loading requirements...");
+  };
+
+  it("holds nothing for an untouched editor, also after either Refresh from MP", async () => {
+    await renderEditor();
+    expect(hasUnsavedChanges()).toBe(false);
+
+    await refreshRequirements();
+    await refreshMilestones();
+    expect(mockGetDeduplicatedRequirements).toHaveBeenCalledWith([5]);
+    expect(mockGetJourneyMilestones).toHaveBeenCalledWith(10);
+    expect(hasUnsavedChanges()).toBe(false);
+  });
+
+  it("holds nothing after a role is toggled on and off again", async () => {
+    await renderEditor();
+    await toggleLeader();
+    expect(screen.getByDisplayValue("Leader Cert")).toBeDefined();
+    expect(hasUnsavedChanges()).toBe(true);
+
+    await toggleLeader();
+    expect(screen.queryByDisplayValue("Leader Cert")).toBeNull();
+    expect(hasUnsavedChanges()).toBe(false);
+  });
+
+  it("keeps holding a typed requirement label after Refresh from MP remounts its input", async () => {
+    const typedInto = await renderEditor();
+    fireEvent.input(typedInto, { target: { value: "Background Check (adult)" } });
+    expect(hasUnsavedChanges()).toBe(true);
+
+    await refreshRequirements();
+    expect(screen.getByDisplayValue("Background Check (adult)")).not.toBe(typedInto);
+    expect(typedInto.isConnected).toBe(false);
+    expect(hasUnsavedChanges()).toBe(true);
+  });
+
+  it("keeps holding a typed requirement label across a role toggled on and off", async () => {
+    const typedInto = await renderEditor();
+    fireEvent.input(typedInto, { target: { value: "Background Check (adult)" } });
+
+    await toggleLeader();
+    await toggleLeader();
+    // The roles are back to the saved set; only the label differs, and its
+    // input is not the one the tracker saw.
+    expect(screen.getByDisplayValue("Background Check (adult)")).not.toBe(typedInto);
+    expect(hasUnsavedChanges()).toBe(true);
+  });
+
+  it("keeps holding a typed milestone label after its Refresh from MP", async () => {
+    await renderEditor();
+    const typedInto = screen.getByDisplayValue("Renamed by admin");
+    fireEvent.input(typedInto, { target: { value: "Renamed twice" } });
+
+    await refreshMilestones();
+    expect(screen.getByDisplayValue("Renamed twice")).not.toBe(typedInto);
+    expect(hasUnsavedChanges()).toBe(true);
+  });
+
+  it("holds nothing once Cancel closes the editor", async () => {
+    await renderEditor();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Tool Enabled" }));
+    expect(hasUnsavedChanges()).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await screen.findByText("Editor closed");
+    expect(hasUnsavedChanges()).toBe(false);
+  });
+
+  it("holds nothing after a successful save closes the editor, and keeps holding after a refused one", async () => {
+    mockSaveComplianceToolAction.mockResolvedValueOnce({ success: false, error: "Unauthorized" });
+    await renderEditor();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Tool Enabled" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Update" }));
+    await screen.findByText("Unauthorized");
+    expect(hasUnsavedChanges()).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Update" }));
+    await screen.findByText("Editor closed");
+    expect(hasUnsavedChanges()).toBe(false);
   });
 });

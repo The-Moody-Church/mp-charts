@@ -128,10 +128,65 @@ adapted. ace4566 not adopted.
     59/50/50/60 unchanged), build, `check:standalone`, `check:shells`. Mutants, each reverted: navigate even when
     hidden (3 fail); no visibility-listener cleanup (1 fail); no listener removal on navigation (1 fail); no
     `user.id` fallback (1 fail).
+- **Typed-form audit (same day, working tree):** every form with a typed field, checked for (a) a field that stays
+  mounted and filled after a successful save (would read as unsaved forever and keep PII on screen) and (b) a step
+  that unmounts a textarea while its text is still unsaved in state (tracking lost).
+  | Component | After a successful save | Verdict | Fix |
+  |---|---|---|---|
+  | Journey / compliance tool editors (+ milestone/requirement pickers) | `onSaved` → admin page unmounts the editor | ~~Fine~~ **Hazard (b), found in review:** "Refresh from MP" (and in compliance every group-role toggle, via `fetchAndMergeRequirements`) swaps the picker for a loading line and back, so a typed label returns in a new, untracked input; checkbox/select/reorder edits were never held | `useUnsavedChanges(loadedEditState !== null && editState(…) !== loadedEditState)`: the form against the state it loaded (see "Form audit, second round") |
+  | Permissions admin | only an ignored filter box; checkboxes | Fine (checkbox-only edits not held) | none |
+  | `MilestoneEditForm` (both modals) | `setEditingKey(null)` unmounts it; failure keeps it | Fine | none |
+  | `QuickActionsPanel` (both modals) | notes/date/item cleared, fields unmounted | Hazard (b): "Select..." or a compliance form item unmounts the notes textarea with notes still in state | `useUnsavedChanges(expanded && availableItems.length > 0 && notes.trim() !== "")` |
+  | Journey modal pause reason | dialog closes; a FAILED pause hid the step in `finally` | Hazard (b) on failure (a pause failing because the session ended dropped the reason); **also, found in review:** Cancel keeps `pauseNotes`, and "Pause Process" brings it back pre-filled in a new, untracked textarea | step closes only on success, and `useUnsavedChanges(open && showPauseConfirm && pauseNotes.trim() !== "")` like the compliance twin |
+  | Compliance modal pause reason | same as journey, plus "Remove from Tracking Group" hides the pause controls | Hazard (b) twice | step closes only on success, and `useUnsavedChanges(open && showPauseConfirm && pauseNotes.trim() !== "")` (the modal stays mounted while closed) |
+  | Contact-log create / edit dialogs | dialog closed and form `reset()`; failure keeps it open | Fine | none |
+  | Transition dialog | fields reset and dialog closed; failure keeps it | Fine | none |
+  | `DetailModalPhotoUpload`, member detail modal, Summer Blast intake modal | file input / select only | Not tracked (no typed text) | none |
+  | Search boxes (10 marks, unchanged) | n/a | ignored by design | none |
+  - Tests: `quick-actions-panel.test.tsx` (+4), new `journey-detail-modal.test.tsx` (4) and
+    `compliance-detail-modal.test.tsx` (6) rendering the real modals, new `src/lib/session-guard-unsaved-wiring.test.ts`
+    (7: exact calls before the early return, no unlisted call, both callers clear notes on success, pause step closes
+    only on success). Mutants, each reverted: panel declaration removed (6 fail); compliance declaration
+    removed (4 fail); compliance claim without `open` (1 fail); panel claim without the `availableItems` term (1 fail);
+    journey pause step hidden in `finally` again (3 fail); compliance likewise (2 fail); journey quick action no longer
+    clearing notes on success (1 fail).
+  - Checks: lint clean, tsc clean, 114 files / 2443 tests, coverage 62.18 / 53.5 / 54.34 / 63.4 (floors 59/50/50/60
+    unchanged), build, `check:standalone`, `check:shells`, audit gate 0 violations.
+  - `route.ts`'s `/get-session` caller table now names `session-guard.tsx` (`useSession`, `refetch()` at
+    `expiresAt` + 5 s and "check again") and the client-wide `refetchInterval` poll.
+- **Form audit, second round (same day, working tree):** two defects in the audit above, both "text returns in a
+  field the tracker never saw":
+  - **Tool editors.** Each now computes `editState` (every field `handleSave` sends, raw, plus
+    `milestoneEditState` / `requirementEditState`, new exports of the two pickers: label, visibility, sort order and
+    discontinue config, sorted by ID because a refresh rebuilds the lists in MP's order; compliance also sorts the role
+    IDs) and takes `loadedEditState` in the reference-data load's `finally` (in the journey editor after its milestone
+    reconcile, so a milestone MP added since the save is part of the baseline, not an edit). `useUnsavedChanges` runs
+    while the two differ: false untouched (also across a refresh or a role toggled on and off), true after any typed,
+    checkbox, select or picker edit (also across a refresh), false again when an edit is undone; it ends when the
+    admin page unmounts the editor (Cancel, successful save) and the baseline is reset on a successful save in case a
+    parent ever keeps the editor mounted. A refused save keeps it.
+  - **Journey pause reason.** Same declaration as compliance. The modal stays mounted while closed, so `open` is in
+    the claim.
+  - Tests: new `journey-tool-editor.test.tsx` (7) and `compliance-tool-editor.test.tsx` (+7) render the real editors
+    in an admin-page harness (untouched → Refresh → no hold; typed label → Refresh → new input, still holds; checkbox
+    edit and undo; picker visibility; role toggled on/off with and without a typed label; Cancel; successful and
+    refused save). `journey-detail-modal.test.tsx` (+2: type → Cancel → reopen → new pre-filled textarea → refused
+    confirm → still holds; dialog closed → nothing). The wiring test lists five declarations.
+  - Mutants, each reverted: journey editor declaration removed (4 fail); journey baseline taken before the reconcile
+    (2 fail); compliance editor declaration removed (6 fail); `requirementEditState` unsorted (2 fail);
+    `milestoneEditState` unsorted (1 fail); milestone labels left out of the state (2 fail); requirement labels left
+    out (2 fail); journey modal declaration removed (3 fail, incl. the wiring test); journey claim without `open`
+    (1 fail).
+  - Checks: lint clean, tsc clean, 115 files / 2462 tests; the full suite run 6 times: 5 clean, 1 with an unrelated
+    flake in `manage-members-shell.test.tsx` ("refetches the detail when the SAME member is reopened", which imports
+    none of the changed code; 15/15 clean alone). Coverage 64.11 / 54.94 / 56.68 / 65.36 (floors 59/50/50/60
+    unchanged), build, `check:standalone`, `check:shells`, audit gate 0 violations.
+  - Docs: CLAUDE.md and security.md (five declarations; a pre-filled remount needs one), ui-standards.md (editor
+    pattern row), components.md.
 - **Trade-off to confirm in the soak:** while holding, the page is dimmed and not interactive (the AlertDialog is
   modal), so the edits cannot be copied out until the session is back. Before, the banner left the page usable but
   failed over an open Dialog.
 - **Not ported yet:** event-manager, mp-senior-care, music-db (the plan says check music-db's header first).
-- **Follow-up candidates:** wire `useUnsavedChanges` into the journey/compliance tool editors (their pickers and
-  checkboxes are not text); the soak should include a deploy mid-session with an unsaved contact-log note.
+- **Follow-up candidates:** wire `useUnsavedChanges` into permissions (its checkboxes are not text, so those edits
+  are not held; it needs a dirty flag against the loaded state, as the tool editors now have); the soak should include a deploy mid-session with an unsaved contact-log note.
 
