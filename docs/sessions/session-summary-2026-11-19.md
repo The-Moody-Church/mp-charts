@@ -193,7 +193,8 @@ dc4a25b, a11c2a3; CodeQL #37). Owner decisions: delete all three orphans, keep n
   mp-senior-care #256 `d2b4467`, music-tools #212 `b99403b`. `:latest` deployed 2026-11-20 13:58 UTC to mp-charts, event-manager and
   mp-senior-care (each warmed on attempt 1, `/` 307, `/signin` 200). **music-tools not deployed:** its `main` build
   failed the audit gate on GHSA-7589-6fvf-x4pw (`effect`, published 2026-11-19, via `prisma` → `@prisma/config`'s
-  exact `effect@3.20.0` pin); fix is music-tools #213 (`overrides` `effect` ^3.22.1). The other three have no `effect`.
+  exact `effect@3.20.0` pin); fixed by music-tools #213 (`overrides` `effect` ^3.22.1, merged `422d239`), and music-tools `:latest` deployed
+  15:45 UTC (`/` 307, `/signin` 200, no `[env]`/`[auth]` errors). The other three have no `effect`.
 
 ## Next
 
