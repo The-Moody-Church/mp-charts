@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import Link from "next/link";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { HomeIcon, UsersIcon, UserGroupIcon, ChartBarIcon, ShieldCheckIcon, MapIcon, CheckBadgeIcon, SunIcon } from "@heroicons/react/24/outline";
 import { useAuthorization } from "@/hooks/use-authorization";
@@ -82,16 +83,23 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
       <nav className="mt-4">
         <ul className="space-y-1 px-2">
+          {/*
+            next/link, not a plain <a> (upstream MPNext f1ad0c8): a plain anchor
+            reloaded the whole document on every click, flashing the layout's
+            Loading fallback and re-running AuthWrapper plus both UserProvider
+            server actions. Pages and actions gate themselves, so a client-side
+            navigation skips no protection.
+          */}
           {visibleItems.map((item) => (
             <li key={item.name}>
-              <a
+              <Link
                 href={item.href}
                 className="flex items-center px-3 py-2 text-sm font-medium text-white rounded-md hover:bg-[#2d3a5f] hover:text-gray-200"
                 onClick={onClose}
               >
                 <item.icon className="mr-3 h-5 w-5 text-white" />
                 {item.name}
-              </a>
+              </Link>
             </li>
           ))}
         </ul>

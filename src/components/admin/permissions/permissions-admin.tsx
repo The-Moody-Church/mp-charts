@@ -144,6 +144,7 @@ export function PermissionsAdmin() {
               <div className="space-y-2">
                 <p className="text-sm font-medium">Allowed User Groups</p>
                 <Input
+                  data-session-guard-ignore
                   placeholder="Filter groups..."
                   value={searchTerms[feature] || ""}
                   onChange={(e) =>

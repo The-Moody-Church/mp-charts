@@ -5,6 +5,29 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { JourneyMilestoneConfig } from "@/lib/journey-tools-config-types";
 
+/**
+ * The picker's editable state as a comparable string, for an editor's
+ * unsaved-changes check (SessionGuard, batch 6). Only what an edit here can
+ * change: label, visibility, sort order and the discontinue config. Sorted by
+ * ID, because the array order carries no meaning (the picker sorts by
+ * `sortOrder`) and "Refresh from MP" rebuilds the array in MP's order. A badge
+ * is only meaningful while the milestone discontinues the journey, and an
+ * unset one displays as "discontinued", so both read that way here.
+ */
+export function milestoneEditState(milestones: JourneyMilestoneConfig[]): string {
+  return JSON.stringify(
+    [...milestones]
+      .sort((a, b) => a.milestoneId - b.milestoneId)
+      .map((m) => [
+        m.milestoneId,
+        m.label,
+        m.sortOrder,
+        m.visible,
+        m.discontinuesJourney === true ? (m.completionBadge ?? "discontinued") : null,
+      ]),
+  );
+}
+
 interface MilestonePickerProps {
   milestones: JourneyMilestoneConfig[];
   onChange: (milestones: JourneyMilestoneConfig[]) => void;

@@ -35,7 +35,13 @@ export function Header() {
 
           {/* Right side - User avatar */}
           <div className="relative">
-            {!isLoading && userProfile ? (
+            {/*
+              Once loading ends the menu is ALWAYS mounted, profile or not
+              (upstream MPNext f3cb739, adapted). It is the only sign-out
+              control in the shell, and the profile is missing when MP has no
+              dp_Users row for the user or failed to load it.
+            */}
+            {!isLoading ? (
               <UserMenu userProfile={userProfile}>
                 <button
                   className="p-1 rounded-full text-white hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-300"

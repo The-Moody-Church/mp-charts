@@ -70,6 +70,7 @@ The **Journey Tools** admin (`src/components/admin/journey-tools/`) and **Compli
 | **Form sections** | `<fieldset>` with `<legend>` for visual grouping |
 | **Used journey filtering** | `usedJourneyIds` prop filters journey dropdown to prevent duplicates |
 | **Default group role** | Defaults to "Member" (ID: 2) for new tools |
+| **Unsaved changes (SessionGuard)** | `editState` (every field the save sends + `milestoneEditState`/`requirementEditState`) vs `loadedEditState` (set when the reference-data load ends) → `useUnsavedChanges`; a new form field belongs in `editState` |
 
 **IMPORTANT**: When making changes to validation, error handling, form layout, or UX patterns in **either** editor, check whether the same change should be applied to the other. Always ask the user if unsure. The two editors are intentionally parallel — shared actions like `getAvailableJourneys`, `getAvailableGroups`, etc. live in the journey tools actions and are imported by the compliance editor.
 

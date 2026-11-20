@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { JourneyCard as JourneyCardData, JourneyDetail, JourneyChecklistItem, JourneyMilestoneFileInfo, JourneyMilestoneDetail } from "@/lib/dto";
 import { getDisplayName, formatDate, MAX_FILE_SIZE } from "@/lib/processing-utils";
 import { quickActionErrorMessage } from "@/components/processing/quick-action-error";
+import { useUnsavedChanges } from "@/lib/unsaved-changes";
 import {
   DetailModalPhotoUpload,
   ContactLinks,
@@ -99,6 +100,16 @@ export function JourneyDetailModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+
+  // SessionGuard (batch 6): a typed pause reason holds the page while its
+  // textarea is the one the user typed into. Cancel unmounts the step but
+  // keeps the text in `pauseNotes`, and "Pause Process" brings it back in a
+  // NEW textarea, pre-filled, that the typed-field tracker never saw. Declare
+  // it for as long as the pause step is open with a reason in it, as the
+  // compliance twin does. It ends on Cancel, on a successful pause (which
+  // closes the step) and when the dialog closes: this component stays mounted
+  // while closed, so `open` is part of the claim.
+  useUnsavedChanges(open && showPauseConfirm && pauseNotes.trim() !== "");
 
   // Load the detail. The thirteen hand-resets that used to open this effect are
   // gone: the parent bumps a per-open counter used as this component's `key`, so
@@ -300,6 +311,12 @@ export function JourneyDetailModal({
         setFileError(result.error || "Pause failed");
         return;
       }
+      // Only a successful pause leaves the confirm step. A failed one keeps
+      // the reason textarea on screen with the text the user typed, so it can
+      // be retried, and so SessionGuard still sees it: a pause that failed
+      // because the session ended must not unmount the only copy of the
+      // reason and let the guard leave the page as if nothing were unsaved.
+      setShowPauseConfirm(false);
       onUpdate();
       onOpenChange(false);
     } catch (err) {
@@ -307,7 +324,6 @@ export function JourneyDetailModal({
       setFileError("Failed to pause participant");
     } finally {
       setActionLoading(null);
-      setShowPauseConfirm(false);
     }
   };
 

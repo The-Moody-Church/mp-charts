@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { MilestonePicker } from "./milestone-picker";
+import { MilestonePicker, milestoneEditState } from "./milestone-picker";
+import { useUnsavedChanges } from "@/lib/unsaved-changes";
 import {
   getAvailableJourneys,
   getJourneyMilestones,
@@ -65,6 +66,25 @@ export function JourneyToolEditor({ existingTool, existingSlugs, usedJourneyIds,
   const [errorFields, setErrorFields] = useState<Set<string>>(new Set());
   const [loadingMilestones, setLoadingMilestones] = useState(false);
 
+  // SessionGuard (batch 6): this editor holds unsaved changes while its form
+  // differs from what it loaded. Typed-field tracking alone is not enough here:
+  // "Refresh from MP" swaps the MilestonePicker for a loading line and back, so
+  // a typed label returns in a NEW input the tracker never saw, and checkboxes,
+  // selects and reordering are not typed at all. `editState` is every field
+  // handleSave sends (raw, before its trims and group-mode nulling), plus the
+  // picker's editable milestone fields. The baseline is taken when the
+  // reference-data load ends, after its milestone reconcile, so an untouched
+  // editor holds nothing. The claim ends when the editor unmounts (Cancel, or
+  // the admin page closing it after a successful save) and is reset on a
+  // successful save in case a parent ever keeps the editor mounted.
+  const editState = (ms: JourneyMilestoneConfig[]) =>
+    JSON.stringify([
+      selectedJourneyId, slug, journeyName, description, enabled, milestoneEditState(ms), programId,
+      trackingGroupId, pausedGroupId, defaultGroupRoleId, supportsPause, pauseMilestoneId,
+    ]);
+  const [loadedEditState, setLoadedEditState] = useState<string | null>(null);
+  useUnsavedChanges(loadedEditState !== null && editState(milestones) !== loadedEditState);
+
   const fieldErrorClass = (field: string) =>
     errorFields.has(field) ? "border-red-500 ring-1 ring-red-500" : "";
 
@@ -77,6 +97,9 @@ export function JourneyToolEditor({ existingTool, existingSlugs, usedJourneyIds,
   // Load reference data, ensuring existing selections are present in dropdowns
   useEffect(() => {
     async function load() {
+      // This closure belongs to the first render, so `editState` reads the
+      // initial form; only the milestone reconcile below changes it.
+      let loadedMilestones = milestones;
       try {
         const [j, p, g, gr, mpMilestones] = await Promise.all([
           getAvailableJourneys(),
@@ -118,12 +141,14 @@ export function JourneyToolEditor({ existingTool, existingSlugs, usedJourneyIds,
 
         // Reconcile the saved milestone list against MP's current one.
         if (mpMilestones) {
-          setMilestones(mergeSavedMilestones(mpMilestones, existingTool?.milestones ?? []));
+          loadedMilestones = mergeSavedMilestones(mpMilestones, existingTool?.milestones ?? []);
+          setMilestones(loadedMilestones);
         }
       } catch (err) {
         console.error("Failed to load reference data:", err);
         setError("Failed to load configuration data from Ministry Platform.");
       } finally {
+        setLoadedEditState(editState(loadedMilestones));
         setLoadingRef(false);
       }
     }
@@ -277,6 +302,7 @@ export function JourneyToolEditor({ existingTool, existingSlugs, usedJourneyIds,
         setErrorFields(serverFields);
         return;
       }
+      setLoadedEditState(editState(milestones));
       onSaved();
     } catch (err) {
       console.error("Save failed:", err);
@@ -377,6 +403,7 @@ export function JourneyToolEditor({ existingTool, existingSlugs, usedJourneyIds,
             <Label>Program (required — for milestone writes)</Label>
             <div className="flex gap-2">
               <Input
+                data-session-guard-ignore
                 value={programSearch}
                 onChange={(e) => setProgramSearch(e.target.value)}
                 placeholder="Search programs..."
@@ -415,6 +442,7 @@ export function JourneyToolEditor({ existingTool, existingSlugs, usedJourneyIds,
             </p>
             <div className="flex gap-2">
               <Input
+                data-session-guard-ignore
                 value={groupSearch}
                 onChange={(e) => setGroupSearch(e.target.value)}
                 placeholder="Search groups..."
@@ -485,6 +513,7 @@ export function JourneyToolEditor({ existingTool, existingSlugs, usedJourneyIds,
                       <Label>Paused Group</Label>
                       <div className="flex gap-2">
                         <Input
+                          data-session-guard-ignore
                           value={pausedGroupSearch}
                           onChange={(e) => setPausedGroupSearch(e.target.value)}
                           placeholder="Search groups..."

@@ -5,6 +5,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { ComplianceRequirementConfig } from "@/lib/compliance-tools-config-types";
 
+/**
+ * The picker's editable state as a comparable string, for the editor's
+ * unsaved-changes check (SessionGuard, batch 6): label, visibility and sort
+ * order per requirement, sorted by type and ID because the array order
+ * carries no meaning and a refresh rebuilds it in MP's order.
+ */
+export function requirementEditState(requirements: ComplianceRequirementConfig[]): string {
+  return JSON.stringify(
+    requirements
+      .map((r) => [`${r.type}:${r.requirementId}`, r.label, r.sortOrder, r.visible] as const)
+      .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)),
+  );
+}
+
 interface RequirementPickerProps {
   requirements: ComplianceRequirementConfig[];
   onChange: (requirements: ComplianceRequirementConfig[]) => void;

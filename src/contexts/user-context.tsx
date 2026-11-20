@@ -2,12 +2,12 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { authClient } from "@/lib/auth-client";
-import { MPUserProfile } from "@/lib/providers/ministry-platform/types";
+import type { CurrentUserProfile } from "@/lib/dto/user-profile";
 import { getCurrentUserProfile, getUserAuthorization, type JourneyToolMeta, type ComplianceToolMeta } from "@/components/shared-actions/user";
 import type { Feature } from "@/lib/authorization";
 
 interface UserContextValue {
-  userProfile: MPUserProfile | null;
+  userProfile: CurrentUserProfile | null;
   accessibleFeatures: Feature[];
   journeyTools: JourneyToolMeta[];
   complianceTools: ComplianceToolMeta[];
@@ -19,7 +19,7 @@ interface UserContextValue {
 
 /** Everything a single load produces. */
 interface UserBootstrap {
-  userProfile: MPUserProfile | null;
+  userProfile: CurrentUserProfile | null;
   accessibleFeatures: Feature[];
   journeyTools: JourneyToolMeta[];
   complianceTools: ComplianceToolMeta[];

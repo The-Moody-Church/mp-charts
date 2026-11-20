@@ -20,10 +20,17 @@
  * either one silently reverts the fix.
  */
 
-import { useEffect, useRef, Suspense } from "react";
+import { useEffect, useRef, useSyncExternalStore, Suspense } from "react";
+import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
 import { MP_PROVIDER_ID } from "@/lib/auth-endsession";
 import { MAX_SIGN_IN_CALLBACK_URL_LENGTH } from "@/lib/auth-callback-url";
+import {
+  clearSignInLoop,
+  isSignInLoopStopped,
+  recordAutomaticSignInNavigation,
+  subscribeSignInLoopStop,
+} from "@/lib/sign-in-loop";
 import { useSearchParams } from "next/navigation";
 
 /** Exported for src/components/sign-in/safe-callback-url.test.ts. */
@@ -60,21 +67,30 @@ export function getSafeCallbackUrl(url: string | null): string {
 function SignInContent() {
   const searchParams = useSearchParams();
   const callbackUrl = getSafeCallbackUrl(searchParams?.get("callbackUrl"));
+  // Set once this page has started an automatic navigation, so a re-run of
+  // the effect (the session object changing) cannot start a second one.
   const isRedirecting = useRef(false);
   const { data: session, isPending } = authClient.useSession();
+  // The loop cap (upstream MPNext 595ecab, adapted; see @/lib/sign-in-loop).
+  const loopStopped = useSyncExternalStore(subscribeSignInLoopStop, isSignInLoopStopped, () => false);
 
   useEffect(() => {
-    if (isPending) return;
+    if (isPending || isRedirecting.current) return;
+
+    // Both branches below navigate WITHOUT a click, so both count toward the
+    // cap. The third inside the window is refused: the page shows the stop
+    // state below instead of hammering MP SSO. Storage that throws allows.
+    if (!recordAutomaticSignInNavigation()) return;
+    isRedirecting.current = true;
 
     if (session) {
       // User is already signed in, redirect to callback URL
       window.location.href = callbackUrl;
-    } else if (!isRedirecting.current) {
+    } else {
       // User is not signed in, initiate sign in. `provider` is typed as any
       // string, so a wrong id compiles and 404s at runtime — use the constant.
       // A failure to START the flow (rate limit, network, provider missing)
       // must not leave the user on an endless spinner.
-      isRedirecting.current = true;
       authClient.signIn
         .social({ provider: MP_PROVIDER_ID, callbackURL: callbackUrl })
         .then(({ error }) => {
@@ -85,6 +101,39 @@ function SignInContent() {
         .catch(() => window.location.assign("/auth-error?error=sign_in_start_failed"));
     }
   }, [callbackUrl, session, isPending]);
+
+  if (loopStopped) {
+    return (
+      <div className="flex items-center justify-center min-h-screen px-4">
+        <div className="max-w-md text-center" role="alert">
+          <h2 className="text-2xl font-semibold mb-3">Sign-in keeps restarting</h2>
+          <p className="text-gray-600 mb-6">
+            This tab started signing in several times in a row without finishing, so we stopped it
+            instead of trying again automatically.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Link
+              href="/auth-error?error=sign_in_loop"
+              className="inline-flex items-center justify-center rounded-md bg-[#344767] px-5 py-2.5 text-white font-medium hover:bg-[#2d3a5f] focus:outline-none focus:ring-2 focus:ring-blue-300"
+            >
+              What to do next
+            </Link>
+            {/* A person clicking is not a loop: clear the cap and start over. */}
+            <button
+              type="button"
+              onClick={() => {
+                clearSignInLoop();
+                window.location.reload();
+              }}
+              className="inline-flex items-center justify-center rounded-md border px-5 py-2.5 font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-300"
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-center min-h-screen">

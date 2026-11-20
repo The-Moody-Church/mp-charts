@@ -24,7 +24,8 @@ src/components/
     ├── index.ts                # Barrel export for all layout components
     ├── auth-wrapper.tsx        # Authentication wrapper (Server Component)
     ├── header.tsx              # App header with navigation
-    ├── sidebar.tsx             # Navigation sidebar
+    ├── sidebar.tsx             # Navigation sidebar (next/link entries)
+    ├── session-guard.tsx       # Leaves (or warns and waits) when the browser sees the session end
     └── dynamic-breadcrumb.tsx  # Breadcrumb navigation
 ```
 
@@ -36,25 +37,26 @@ src/components/
 |------|------|---------|
 | `layout/index.ts` | Barrel | Re-exports all layout components |
 | `layout/auth-wrapper.tsx` | Server | Wraps app to enforce authentication, redirects unauthenticated users |
-| `layout/header.tsx` | Client | Top navigation bar with hamburger menu and user menu |
-| `layout/sidebar.tsx` | Client | Slide-out navigation menu with page links |
+| `layout/header.tsx` | Client | Top navigation bar with hamburger menu and user menu; the menu is mounted once loading ends, profile or not (always a sign-out) |
+| `layout/sidebar.tsx` | Client | Slide-out navigation menu; entries are `next/link` (no full reload per click) |
+| `layout/session-guard.tsx` | Client | Wraps the (web) shell. When `authClient.useSession()` goes from a live session to a settled null, sends the tab to `/signin?callbackUrl=<page>`; if the page holds unsaved edits (`@/lib/unsaved-changes`: a typed field still on the page, or a form's `useUnsavedChanges` declaration, today `QuickActionsPanel`'s notes, both detail modals' pause reason and both admin tool editors), shows an always-open Radix `AlertDialog` warning above any open Dialog and waits instead, re-checking the edits every 2 s and leaving once they are gone. Reloads on a live session for a different user (`userGuid`, else `user.id`); refetches at the session's `expiresAt` + 5 s. A hidden tab drops the page at once but navigates to `/signin` only on its first `visibilitychange` to visible. Clears the `/signin` loop counter on a live session |
 | `layout/dynamic-breadcrumb.tsx` | Client | Auto-generates breadcrumbs from URL or custom segments |
 
 ### Feature Components
 
 | Folder | Purpose | Has Actions |
 |--------|---------|-------------|
-| `admin/` | Admin settings page with sub-pages for journey tools, compliance tools, permissions | Yes |
-| `compliance-processing/` | Compliance applicant tracking with background checks, certifications, group assignment | Yes |
+| `admin/` | Admin settings page with sub-pages for journey tools, compliance tools, permissions. The journey and compliance tool editors declare `useUnsavedChanges` while their form differs from what they loaded (`milestoneEditState` / `requirementEditState` from the pickers), so a picker edit or a label typed before "Refresh from MP" holds the page for SessionGuard | Yes |
+| `compliance-processing/` | Compliance applicant tracking with background checks, certifications, group assignment. The detail modal declares a typed pause reason (`useUnsavedChanges`) while the pause step is open, and keeps the step open after a failed pause | Yes |
 | `contact-logs/` | Contact log create/edit with modal forms (no delete UI) | Yes |
 | `contact-lookup/` | Contact search with results display | Yes |
 | `contact-lookup-details/` | Contact profile and logs view | Yes |
 | `dashboard/` | Executive dashboard with charts and filters | Yes |
 | `home/` | Home page feature cards (RBAC-filtered) | No |
-| `journey-processing/` | Journey applicant milestone tracking with pause/resume | Yes |
+| `journey-processing/` | Journey applicant milestone tracking with pause/resume. The detail modal declares a typed pause reason (`useUnsavedChanges`) while the pause step is open, and keeps the step open after a failed pause | Yes |
 | `manage-members/` | Member management with tabs, status transitions, detail modals | Yes |
 | `pwa/` | PWA install prompt banner | No |
-| `user-menu/` | User dropdown with sign-out | Yes |
+| `user-menu/` | User dropdown with sign-out; works without a profile ("Your profile couldn't be loaded") | Yes |
 
 ### Shared Processing Components (`processing/` folder)
 
@@ -85,7 +87,7 @@ processing/
 | `FileTypeIcon` | PDF/image/generic file icon | Milestone expanded view, milestone edit form |
 | `MilestoneExpandedView` | Read-only milestone detail: notes + downloadable file list | Processing detail modals |
 | `MilestoneEditForm` | Edit mode: date picker, notes textarea, file input, save/cancel | Processing detail modals |
-| `QuickActionsPanel` | Milestone dropdown + date/notes/file/submit for quick creation; `submitError` shows why the last submit failed (message from `quick-action-error.ts`) | Processing detail modals |
+| `QuickActionsPanel` | Milestone dropdown + date/notes/file/submit for quick creation; `submitError` shows why the last submit failed (message from `quick-action-error.ts`); declares typed notes (`useUnsavedChanges`) while open, since choosing "Select..." or a form item unmounts the textarea | Processing detail modals |
 
 **Import**: `import { PersonAvatar, ProcessingGrid, MilestoneEditForm } from '@/components/processing';`
 
@@ -135,7 +137,7 @@ Actions are co-located with their feature components:
 | journey-processing | `journey-processing/actions.ts` | Journey applicant CRUD, milestone operations, pause/resume |
 | manage-members | `manage-members/actions.ts` | Member listing, status transitions, detail operations |
 | user-menu | `user-menu/actions.ts` | `handleSignOut` |
-| **shared** | `shared-actions/user.ts` | `getCurrentUserProfile` |
+| **shared** | `shared-actions/user.ts` | `getCurrentUserProfile` (returns the `CurrentUserProfile` DTO, `@/lib/dto/user-profile`), `getUserAuthorization` |
 | **shared** | `shared-actions/processing.ts` | `extractValidatedFiles`, `extractValidatedFilesResult`, `uploadContactPhoto` |
 
 **Shared Actions Folder**: `src/components/shared-actions/` contains actions used across multiple features.

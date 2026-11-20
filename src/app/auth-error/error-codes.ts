@@ -7,8 +7,10 @@
 /**
  * Error codes better-auth 1.7.18's core OAuth callback emits
  * (dist/oauth2/errors.mjs, api/routes/callback.mjs, oauth2/callback.mjs,
- * oauth2/state.mjs, oauth2/link-account.mjs), plus `sign_in_start_failed`, which is OURS
- * (src/components/sign-in/sign-in.tsx, when the flow cannot even start).
+ * oauth2/state.mjs, oauth2/link-account.mjs), plus two of OURS from
+ * src/components/sign-in/sign-in.tsx: `sign_in_start_failed` (the flow cannot
+ * even start) and `sign_in_loop` (the stop state's link, after the tab's third
+ * automatic sign-in navigation inside two minutes; see @/lib/sign-in-loop).
  * NOTE: `unable_to_get_user_info` covers several causes — getMpUserInfo
  * returning null (userinfo down, bad sub, id_token/userinfo sub mismatch) and
  * an empty account subject. The server log line tells them apart.
@@ -17,6 +19,8 @@ export const ERROR_MESSAGES: Record<string, string> = {
   unable_to_get_user_info:
     "Ministry Platform signed you in, but we could not read a usable user record. Your account may be missing its User GUID, or Ministry Platform may be briefly unavailable.",
   sign_in_start_failed: "We could not start the Ministry Platform sign-in. Please try again in a minute.",
+  sign_in_loop:
+    "Signing in kept restarting without finishing, so we stopped it. Close any other tabs of this app, wait two minutes, then try again.",
   oauth_provider_not_found: "Sign-in is temporarily unavailable. Please try again in a few minutes.",
   invalid_code:
     "We could not complete the sign-in with Ministry Platform. The sign-in link may have expired — please try again.",

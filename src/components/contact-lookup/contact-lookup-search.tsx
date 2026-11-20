@@ -95,6 +95,7 @@ export const ContactLookupSearch: React.FC<ContactLookupSearchProps> = ({
         <div className="relative flex-1">
           <Input
             type="text"
+            data-session-guard-ignore
             value={searchTerm}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}

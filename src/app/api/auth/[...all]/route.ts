@@ -14,7 +14,7 @@ const { GET: betterAuthGET, POST: betterAuthPOST } = toNextJsHandler(auth);
  *
  * | Method | Path                        | Caller                                               |
  * |--------|-----------------------------|------------------------------------------------------|
- * | GET    | /get-session                | `authClient.useSession()` — src/components/sign-in/sign-in.tsx, src/contexts/user-context.tsx, src/contexts/session-context.tsx; `authClient.getSession()` — src/components/user-menu/user-menu.tsx (re-mints the cookie cache before sign-out) |
+ * | GET    | /get-session                | `authClient.useSession()` — src/components/sign-in/sign-in.tsx, src/contexts/user-context.tsx, src/contexts/session-context.tsx, src/components/layout/session-guard.tsx (plus its `refetch()` at the session's `expiresAt` + 5 s, and "check again"); `sessionOptions.refetchInterval` in src/lib/auth-client.ts (client-wide poll: one GET per tab every 300 s while a session is held); `authClient.getSession()` — src/components/user-menu/user-menu.tsx (re-mints the cookie cache before sign-out) |
  * | POST   | /sign-in/social             | `authClient.signIn.social()` — src/components/sign-in/sign-in.tsx |
  * | GET    | /callback/ministryplatform  | Ministry Platform's redirect after login              |
  *

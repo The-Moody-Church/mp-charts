@@ -2,7 +2,7 @@
 
 import { requireSession, getUserGuid } from "@/lib/auth-helpers";
 import { getAccessibleFeatures, isSuperAdmin, type Feature } from "@/lib/authorization";
-import { MPUserProfile } from "@/lib/providers/ministry-platform/types";
+import { toCurrentUserProfile, type CurrentUserProfile } from "@/lib/dto/user-profile";
 import { UserService } from '@/services/userService';
 import { getEnabledJourneyTools } from "@/lib/journey-tools-config";
 import { getEnabledComplianceTools } from "@/lib/compliance-tools-config";
@@ -26,14 +26,20 @@ export interface ComplianceToolMeta {
  * from a client argument. Accepting a client-supplied GUID here let any logged-in
  * user read another user's PII (and probe who is a super-admin). The legacy
  * parameter is retained for call-site compatibility but is intentionally ignored.
- * @returns The current user's profile data
+ *
+ * Returns the `CurrentUserProfile` DTO, built field by field (upstream MPNext
+ * 0670531, adapted): only what the header and user menu render. The MP row's
+ * IDs, GUID, mobile phone and group IDs stay on the server. user.test.ts pins
+ * the exact key set.
+ * @returns The current user's display profile, or undefined when MP has no dp_Users row
  */
-export async function getCurrentUserProfile(_requestedId?: string): Promise<MPUserProfile | undefined> {
+export async function getCurrentUserProfile(_requestedId?: string): Promise<CurrentUserProfile | undefined> {
   const session = await requireSession();
   const id = getUserGuid(session);
   if (!id) return undefined;
   const userService = await UserService.getInstance();
-  return userService.getUserProfile(id);
+  const profile = await userService.getUserProfile(id);
+  return profile ? toCurrentUserProfile(profile) : undefined;
 }
 
 /**

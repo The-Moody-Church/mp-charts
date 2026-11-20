@@ -84,23 +84,14 @@ export class UserService {
       return undefined;
     }
 
-    // Fetch roles and groups in parallel
-    const [rolesRecords, groupsRecords] = await Promise.all([
-      this.mp!.getTableRecords<{ Role_Name: string }>({
-        table: "dp_User_Roles",
-        filter: `User_ID = ${sanitizeIds([profile.User_ID])}`,
-        select: "Role_ID_TABLE.Role_Name",
-      }),
-      this.mp!.getTableRecords<{ User_Group_ID: number; User_Group_Name: string }>({
-        table: "dp_User_User_Groups",
-        filter: `User_ID = ${sanitizeIds([profile.User_ID])}`,
-        select: "User_Group_ID_TABLE.User_Group_ID, User_Group_ID_TABLE.User_Group_Name",
-      }),
-    ]);
+    const groupsRecords = await this.mp!.getTableRecords<{ User_Group_ID: number; User_Group_Name: string }>({
+      table: "dp_User_User_Groups",
+      filter: `User_ID = ${sanitizeIds([profile.User_ID])}`,
+      select: "User_Group_ID_TABLE.User_Group_ID, User_Group_ID_TABLE.User_Group_Name",
+    });
 
     const result: MPUserProfile = {
       ...profile,
-      roles: rolesRecords.map((r) => r.Role_Name),
       userGroups: groupsRecords.map((g) => g.User_Group_Name),
       userGroupIds: groupsRecords.map((g) => g.User_Group_ID),
     };

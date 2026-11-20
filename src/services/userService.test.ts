@@ -48,33 +48,25 @@ describe('UserService', () => {
   });
 
   describe('getUserProfile', () => {
-    it('should return profile with roles, groups, and group IDs', async () => {
+    const groups = [
+      { User_Group_ID: 29, User_Group_Name: 'Editors' },
+      { User_Group_ID: 45, User_Group_Name: 'Volunteers' },
+    ];
+
+    it('should return the profile with groups and group IDs', async () => {
       mockGetTableRecords
-        // First call: user profile
         .mockResolvedValueOnce([mockProfile])
-        // Second call (Promise.all): roles
-        .mockResolvedValueOnce([
-          { Role_Name: 'Admin' },
-          { Role_Name: 'Staff' },
-        ])
-        // Third call (Promise.all): groups with IDs
-        .mockResolvedValueOnce([
-          { User_Group_ID: 29, User_Group_Name: 'Editors' },
-          { User_Group_ID: 45, User_Group_Name: 'Volunteers' },
-        ]);
+        .mockResolvedValueOnce(groups);
 
       const service = await UserService.getInstance();
       const result = await service.getUserProfile('12345678-1234-1234-1234-123456789abc');
 
       expect(result).toEqual({
         ...mockProfile,
-        roles: ['Admin', 'Staff'],
         userGroups: ['Editors', 'Volunteers'],
         userGroupIds: [29, 45],
       });
-
-      // Verify 3 API calls were made
-      expect(mockGetTableRecords).toHaveBeenCalledTimes(3);
+      expect(result).not.toHaveProperty('roles');
 
       // Verify user profile query includes User_ID in select
       expect(mockGetTableRecords.mock.calls[0][0]).toMatchObject({
@@ -84,23 +76,29 @@ describe('UserService', () => {
       const selectArg = mockGetTableRecords.mock.calls[0][0].select;
       expect(selectArg).toContain('User_ID');
 
-      // Verify roles query
-      expect(mockGetTableRecords.mock.calls[1][0]).toMatchObject({
-        table: 'dp_User_Roles',
-      });
-
       // Verify groups query selects User_Group_ID
-      expect(mockGetTableRecords.mock.calls[2][0]).toMatchObject({
+      expect(mockGetTableRecords.mock.calls[1][0]).toMatchObject({
         table: 'dp_User_User_Groups',
       });
-      const groupSelect = mockGetTableRecords.mock.calls[2][0].select;
+      const groupSelect = mockGetTableRecords.mock.calls[1][0].select;
       expect(groupSelect).toContain('User_Group_ID');
     });
 
-    it('should return empty roles, groups, and group IDs when none exist', async () => {
+    it('queries only dp_Users and dp_User_User_Groups (no dp_User_Roles read, upstream 0670531)', async () => {
       mockGetTableRecords
         .mockResolvedValueOnce([mockProfile])
-        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce(groups);
+
+      const service = await UserService.getInstance();
+      await service.getUserProfile('12345678-1234-1234-1234-123456789abc');
+
+      const tables = mockGetTableRecords.mock.calls.map((call) => call[0].table);
+      expect(tables).toEqual(['dp_Users', 'dp_User_User_Groups']);
+    });
+
+    it('should return empty groups and group IDs when none exist', async () => {
+      mockGetTableRecords
+        .mockResolvedValueOnce([mockProfile])
         .mockResolvedValueOnce([]);
 
       const service = await UserService.getInstance();
@@ -108,7 +106,6 @@ describe('UserService', () => {
 
       expect(result).toEqual({
         ...mockProfile,
-        roles: [],
         userGroups: [],
         userGroupIds: [],
       });
@@ -121,7 +118,7 @@ describe('UserService', () => {
       const result = await service.getUserProfile('12345678-1234-1234-1234-123456789abc');
 
       expect(result).toBeUndefined();
-      // Should not make roles/groups queries
+      // Should not make the groups query
       expect(mockGetTableRecords).toHaveBeenCalledTimes(1);
     });
 
@@ -134,37 +131,34 @@ describe('UserService', () => {
     it('should return cached profile on subsequent calls', async () => {
       mockGetTableRecords
         .mockResolvedValueOnce([mockProfile])
-        .mockResolvedValueOnce([{ Role_Name: 'Admin' }])
-        .mockResolvedValueOnce([{ User_Group_ID: 29, User_Group_Name: 'Editors' }]);
+        .mockResolvedValueOnce([groups[0]]);
 
       const service = await UserService.getInstance();
       const first = await service.getUserProfile('12345678-1234-1234-1234-123456789abc');
       const second = await service.getUserProfile('12345678-1234-1234-1234-123456789abc');
 
       expect(first).toEqual(second);
-      // Only 3 API calls (first fetch), not 6 (cached on second)
-      expect(mockGetTableRecords).toHaveBeenCalledTimes(3);
+      // Only 2 API calls (first fetch), not 4 (cached on second)
+      expect(mockGetTableRecords).toHaveBeenCalledTimes(2);
     });
 
     it('should refetch after cache flush', async () => {
       mockGetTableRecords
         .mockResolvedValueOnce([mockProfile])
-        .mockResolvedValueOnce([{ Role_Name: 'Admin' }])
-        .mockResolvedValueOnce([{ User_Group_ID: 29, User_Group_Name: 'Editors' }])
+        .mockResolvedValueOnce([groups[0]])
         // Second fetch after flush
         .mockResolvedValueOnce([mockProfile])
-        .mockResolvedValueOnce([{ Role_Name: 'Admin' }, { Role_Name: 'Staff' }])
-        .mockResolvedValueOnce([{ User_Group_ID: 29, User_Group_Name: 'Editors' }]);
+        .mockResolvedValueOnce(groups);
 
       const service = await UserService.getInstance();
       const first = await service.getUserProfile('12345678-1234-1234-1234-123456789abc');
-      expect(first?.roles).toEqual(['Admin']);
+      expect(first?.userGroupIds).toEqual([29]);
 
       UserService.flushProfileCache();
 
       const second = await service.getUserProfile('12345678-1234-1234-1234-123456789abc');
-      expect(second?.roles).toEqual(['Admin', 'Staff']);
-      expect(mockGetTableRecords).toHaveBeenCalledTimes(6);
+      expect(second?.userGroupIds).toEqual([29, 45]);
+      expect(mockGetTableRecords).toHaveBeenCalledTimes(4);
     });
   });
 });
