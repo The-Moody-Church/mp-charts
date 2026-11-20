@@ -8,7 +8,6 @@ export interface MPUserProfile {
   Email_Address: string | null;
   Mobile_Phone: string | null;
   Image_GUID: string | null;
-  roles: string[];
   userGroups: string[];
   userGroupIds: number[];
 }

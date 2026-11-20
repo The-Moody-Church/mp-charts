@@ -4,7 +4,25 @@ import { useEffect } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { handleSignOut } from "@/components/user-menu/actions";
 import Link from "next/link";
+
+/**
+ * Sign-out from the error page (upstream MPNext f3cb739, adapted). When this
+ * boundary renders, the header's user menu may be gone with the rest of the
+ * page, and a staff member on a shared PC must still be able to leave. It calls
+ * the same server action as the user menu; `handleSignOut` keeps its
+ * `redirect()` outside any catch, so nothing here needs to rethrow it.
+ * Upstream also added sign-out to the ROOT error boundary; ours covers only
+ * /signin, /auth-error and /session-error, which have no session to end.
+ */
+function SignOutButton() {
+  return (
+    <Button variant="outline" className="mt-4" onClick={() => handleSignOut()}>
+      Sign out
+    </Button>
+  );
+}
 
 export default function WebError({
   error,
@@ -50,9 +68,12 @@ export default function WebError({
             Contact your administrator if you believe this is an error.
           </AlertDescription>
         </Alert>
-        <Link href="/">
-          <Button className="mt-4">Return Home</Button>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/">
+            <Button className="mt-4">Return Home</Button>
+          </Link>
+          <SignOutButton />
+        </div>
       </div>
     );
   }
@@ -65,9 +86,12 @@ export default function WebError({
           {"An unexpected error occurred. Please try again."}
         </AlertDescription>
       </Alert>
-      <Button onClick={retry} className="mt-4">
-        Try Again
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={retry} className="mt-4">
+          Try Again
+        </Button>
+        <SignOutButton />
+      </div>
     </div>
   );
 }

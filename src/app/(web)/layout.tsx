@@ -3,7 +3,7 @@ import type { Metadata, Viewport } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { Providers } from "@/app/providers";
-import { AuthWrapper, Header, DynamicBreadcrumb, BreadcrumbOverrideProvider } from "@/components/layout";
+import { AuthWrapper, Header, DynamicBreadcrumb, BreadcrumbOverrideProvider, SessionGuard } from "@/components/layout";
 import { InstallPrompt } from "@/components/pwa";
 import type { RuntimeConfig } from "@/contexts";
 
@@ -54,17 +54,25 @@ export default function WebLayout({
     }>
       <AuthWrapper>
         <Providers runtimeConfig={runtimeConfig}>
-          <BreadcrumbOverrideProvider>
-            <div className={`flex flex-col ${GeistSans.variable} ${GeistMono.variable}`}>
-              <Header />
-              <main className="flex-1 mt-16">
-                <div className="px-4 py-3 border-b bg-muted/30">
-                  <DynamicBreadcrumb />
-                </div>
-                {children}
-              </main>
-            </div>
-          </BreadcrumbOverrideProvider>
+          {/*
+            SessionGuard leaves the page when the browser sees the session end
+            (sign-out elsewhere, the 12h cap, a restart), or warns and waits
+            when the page holds unsaved edits. Only the (web) shell is guarded:
+            /signin, /auth-error and /session-error sit outside this group.
+          */}
+          <SessionGuard>
+            <BreadcrumbOverrideProvider>
+              <div className={`flex flex-col ${GeistSans.variable} ${GeistMono.variable}`}>
+                <Header />
+                <main className="flex-1 mt-16">
+                  <div className="px-4 py-3 border-b bg-muted/30">
+                    <DynamicBreadcrumb />
+                  </div>
+                  {children}
+                </main>
+              </div>
+            </BreadcrumbOverrideProvider>
+          </SessionGuard>
           <InstallPrompt />
         </Providers>
       </AuthWrapper>

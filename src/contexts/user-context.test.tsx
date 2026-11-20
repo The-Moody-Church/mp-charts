@@ -55,13 +55,11 @@ describe('UserContext', () => {
   describe('UserProvider', () => {
     it('should load profile and authorization when session has userGuid', async () => {
       const mockProfile = {
-        User_ID: 1,
-        User_GUID: 'guid-123',
         First_Name: 'John',
+        Nickname: null,
         Last_Name: 'Doe',
-        roles: ['Staff'],
-        userGroups: ['Editors'],
-        userGroupIds: [29],
+        Email_Address: 'john@example.com',
+        Image_GUID: null,
       };
 
       mockUseSession.mockReturnValue({
@@ -132,8 +130,8 @@ describe('UserContext', () => {
     });
 
     it('should refresh profile when refreshUserProfile is called', async () => {
-      const mockProfile = { User_ID: 1, User_GUID: 'guid-123', First_Name: 'John' };
-      const updatedProfile = { User_ID: 1, User_GUID: 'guid-123', First_Name: 'Jane' };
+      const mockProfile = { First_Name: 'John', Nickname: null, Last_Name: 'Doe', Email_Address: null, Image_GUID: null };
+      const updatedProfile = { First_Name: 'Jane', Nickname: null, Last_Name: 'Doe', Email_Address: null, Image_GUID: null };
 
       mockUseSession.mockReturnValue({
         data: { user: { id: 'internal-id', userGuid: 'guid-123' } },
@@ -201,8 +199,8 @@ describe('UserContext', () => {
     });
 
     it('should reload the profile when userGuid changes to a different user', async () => {
-      const profileA = { User_ID: 1, User_GUID: 'guid-A', First_Name: 'Ann', Last_Name: 'A', roles: [], userGroups: [], userGroupIds: [1] };
-      const profileB = { User_ID: 2, User_GUID: 'guid-B', First_Name: 'Bob', Last_Name: 'B', roles: [], userGroups: [], userGroupIds: [2] };
+      const profileA = { First_Name: 'Ann', Nickname: null, Last_Name: 'A', Email_Address: null, Image_GUID: null };
+      const profileB = { First_Name: 'Bob', Nickname: null, Last_Name: 'B', Email_Address: null, Image_GUID: null };
 
       mockUseSession.mockReturnValue({
         data: { user: { id: 'id-A', userGuid: 'guid-A' } },
@@ -227,7 +225,7 @@ describe('UserContext', () => {
     });
 
     it('should not refetch when re-rendered with an unchanged session', async () => {
-      const profile = { User_ID: 1, User_GUID: 'guid-123', First_Name: 'John', Last_Name: 'Doe', roles: [], userGroups: [], userGroupIds: [29] };
+      const profile = { First_Name: 'John', Nickname: null, Last_Name: 'Doe', Email_Address: null, Image_GUID: null };
 
       mockUseSession.mockReturnValue({
         data: { user: { id: 'internal-id', userGuid: 'guid-123' } },
@@ -261,7 +259,7 @@ describe('UserContext', () => {
     // ---------------------------------------------------------------------
 
     it('should not serve the previous user\'s data while the next user loads', async () => {
-      const profileA = { User_ID: 1, User_GUID: 'guid-A', First_Name: 'Ann', Last_Name: 'A', roles: [], userGroups: [], userGroupIds: [1] };
+      const profileA = { First_Name: 'Ann', Nickname: null, Last_Name: 'A', Email_Address: null, Image_GUID: null };
 
       mockUseSession.mockReturnValue({
         data: { user: { id: 'id-A', userGuid: 'guid-A' } },
@@ -288,7 +286,7 @@ describe('UserContext', () => {
     });
 
     it('should not flash loading when the session refetches with data already held', async () => {
-      const profile = { User_ID: 1, User_GUID: 'guid-123', First_Name: 'John', Last_Name: 'Doe', roles: [], userGroups: [], userGroupIds: [29] };
+      const profile = { First_Name: 'John', Nickname: null, Last_Name: 'Doe', Email_Address: null, Image_GUID: null };
       const sessionData = { user: { id: 'internal-id', userGuid: 'guid-123' } };
 
       mockUseSession.mockReturnValue({ data: sessionData, isPending: false });
@@ -308,7 +306,7 @@ describe('UserContext', () => {
     });
 
     it('should clear a previously loaded profile when the session goes away', async () => {
-      const profile = { User_ID: 1, User_GUID: 'guid-123', First_Name: 'John', Last_Name: 'Doe', roles: [], userGroups: [], userGroupIds: [29] };
+      const profile = { First_Name: 'John', Nickname: null, Last_Name: 'Doe', Email_Address: null, Image_GUID: null };
 
       mockUseSession.mockReturnValue({
         data: { user: { id: 'internal-id', userGuid: 'guid-123' } },

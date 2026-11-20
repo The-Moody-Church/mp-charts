@@ -263,6 +263,7 @@ export function ManageMembersShell({
       {/* Search + Refresh */}
       <div className="flex flex-col sm:flex-row gap-2">
         <Input
+          data-session-guard-ignore
           placeholder="Search by name, email, or phone..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}

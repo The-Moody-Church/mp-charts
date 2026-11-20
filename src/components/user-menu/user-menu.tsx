@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRightOnRectangleIcon } from "@heroicons/react/24/outline";
-import { MPUserProfile } from "@/lib/providers/ministry-platform/types";
+import type { CurrentUserProfile } from "@/lib/dto/user-profile";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,7 +40,13 @@ async function refreshSessionCookie(): Promise<void> {
 
 interface UserMenuProps {
   onClose?: () => void;
-  userProfile: MPUserProfile;
+  /**
+   * Optional (upstream MPNext f3cb739, adapted). The profile is missing when
+   * the user has no dp_Users row, or when Ministry Platform failed while
+   * loading it. This menu is the shell's only sign-out control, so it must
+   * still open, and still offer Sign out, without one.
+   */
+  userProfile?: CurrentUserProfile | null;
   children: React.ReactNode;
 }
 
@@ -71,13 +77,19 @@ export function UserMenu({ onClose, userProfile, children }: UserMenuProps) {
         align="end"
       >
         <DropdownMenuLabel className="text-white">
-          <div className="flex flex-col space-y-1">
-            <p className="font-medium text-white">
-              {userProfile.Nickname || userProfile.First_Name}{" "}
-              {userProfile.Last_Name}
+          {userProfile ? (
+            <div className="flex flex-col space-y-1">
+              <p className="font-medium text-white">
+                {userProfile.Nickname || userProfile.First_Name}{" "}
+                {userProfile.Last_Name}
+              </p>
+              <p className="text-sm text-gray-300">{userProfile.Email_Address}</p>
+            </div>
+          ) : (
+            <p className="font-normal text-gray-300">
+              Your profile couldn&apos;t be loaded
             </p>
-            <p className="text-sm text-gray-300">{userProfile.Email_Address}</p>
-          </div>
+          )}
         </DropdownMenuLabel>
         <DropdownMenuSeparator className="bg-gray-500" />
         {userMenuItems.map((item) => (

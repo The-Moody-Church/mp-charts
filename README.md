@@ -482,8 +482,9 @@ Built with Radix UI primitives and styled with Tailwind CSS. Located in `src/com
 
 ### Layout Components (`src/components/layout/`)
 - **AuthWrapper**: Server component for route protection with session validation
-- **Header**: Application header with sidebar toggle and user menu
-- **Sidebar**: Navigation sidebar with feature-gated route links
+- **Header**: Application header with sidebar toggle and user menu (the menu, and its Sign out, stays available even when the MP profile could not be loaded)
+- **Sidebar**: Navigation sidebar with feature-gated `next/link` route links
+- **SessionGuard**: When the browser sees the session end (signed out in another tab, the 12h cap, a restart), removes the page and sends the tab back through `/signin`; if the page holds unsaved typed edits it warns and waits instead (a modal warning that works above an open dialog), so the user can sign in again in a new tab and then save. Tabs re-check every 5 minutes and at the session's expiry; a sign-out in this browser and the 12h cap show then, but a server restart shows only once the 1h session cookie cache lapses. A hidden tab removes the page at once but starts sign-in only when it is next shown, so tabs in the same window no longer start sign-in together (two windows both on screen still can, and one of them then lands on the sign-in error page)
 - **DynamicBreadcrumb**: Auto-generated breadcrumbs from URL path
 
 ### Feature Components
@@ -513,7 +514,7 @@ Application services provide business logic abstraction over the Ministry Platfo
 | **JourneyProcessingService** | `journeyProcessingService.ts` | Journey workflow step processing |
 | **ComplianceProcessingService** | `complianceProcessingService.ts` | Compliance workflow processing |
 | **MemberService** | `memberService.ts` | Membership status management, milestones, transitions |
-| **UserService** | `userService.ts` | User profile and roles retrieval |
+| **UserService** | `userService.ts` | User profile and User Group retrieval (the browser gets only the `CurrentUserProfile` DTO) |
 
 Most services follow the singleton pattern and use `MPHelper` for API communication.
 

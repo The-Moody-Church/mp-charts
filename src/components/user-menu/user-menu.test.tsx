@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
-import type { MPUserProfile } from "@/lib/providers/ministry-platform/types";
+import type { CurrentUserProfile } from "@/lib/dto/user-profile";
 
 /**
  * UserMenu: the app's only sign-out control.
@@ -75,25 +75,18 @@ async function captureUnhandledRejections(run: () => Promise<void>): Promise<unk
   }
 }
 
-const profile: MPUserProfile = {
-  User_ID: 7,
-  User_GUID: "ab12cd34-ef56-7890-abcd-ef1234567890",
-  Contact_ID: 42,
+const profile: CurrentUserProfile = {
   First_Name: "Samuel",
   Nickname: "Sam",
   Last_Name: "Ortiz",
   Email_Address: "sam@example.com",
-  Mobile_Phone: null,
   Image_GUID: null,
-  roles: [],
-  userGroups: [],
-  userGroupIds: [],
 };
 
 /** Renders the menu, opens it, and returns its menu scope. */
-async function openMenu(onClose?: () => void) {
+async function openMenu(onClose?: () => void, userProfile: CurrentUserProfile | null = profile) {
   render(
-    <UserMenu userProfile={profile} onClose={onClose}>
+    <UserMenu userProfile={userProfile} onClose={onClose}>
       <button type="button">Open user menu</button>
     </UserMenu>
   );
@@ -126,6 +119,28 @@ describe("UserMenu", () => {
 
     expect(menu.getByText("Sam Ortiz")).toBeInTheDocument();
     expect(menu.getByRole("menuitem", { name: /sign out/i })).toBeInTheDocument();
+  });
+
+  // Upstream MPNext f3cb739, adapted: the menu is the shell's only sign-out
+  // control, so a missing profile (no dp_Users row, or MP down) must not take
+  // Sign out away with it.
+  it.each([
+    ["null", () => openMenu(undefined, null)],
+    ["missing", () => {
+      render(
+        <UserMenu>
+          <button type="button">Open user menu</button>
+        </UserMenu>
+      );
+      fireEvent.pointerDown(screen.getByRole("button", { name: /open user menu/i }), { button: 0, ctrlKey: false });
+      return screen.findByRole("menu").then((m) => within(m));
+    }],
+  ] as const)("still opens and offers Sign out with a %s profile", async (_label, open) => {
+    const menu = await open();
+
+    expect(menu.getByText("Your profile couldn't be loaded")).toBeInTheDocument();
+    fireEvent.click(menu.getByRole("menuitem", { name: /sign out/i }));
+    await waitFor(() => expect(mockHandleSignOut).toHaveBeenCalledTimes(1));
   });
 
   it("does nothing merely by opening the menu", async () => {

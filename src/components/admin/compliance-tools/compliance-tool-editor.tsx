@@ -604,6 +604,7 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
             <Label>Program (for milestone writes)</Label>
             <div className="flex gap-2">
               <Input
+                data-session-guard-ignore
                 value={programSearch}
                 onChange={(e) => setProgramSearch(e.target.value)}
                 placeholder="Search programs..."
@@ -639,6 +640,7 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
             <Label>Tracking Group (filter participants by group membership)</Label>
             <div className="flex gap-2">
               <Input
+                data-session-guard-ignore
                 value={groupSearch}
                 onChange={(e) => setGroupSearch(e.target.value)}
                 placeholder="Search groups..."
@@ -709,6 +711,7 @@ export function ComplianceToolEditor({ existingTool, existingSlugs, usedJourneyI
                       <Label>Paused Group</Label>
                       <div className="flex gap-2">
                         <Input
+                          data-session-guard-ignore
                           value={pausedGroupSearch}
                           onChange={(e) => setPausedGroupSearch(e.target.value)}
                           placeholder="Search groups..."

@@ -24,7 +24,8 @@ src/components/
     ├── index.ts                # Barrel export for all layout components
     ├── auth-wrapper.tsx        # Authentication wrapper (Server Component)
     ├── header.tsx              # App header with navigation
-    ├── sidebar.tsx             # Navigation sidebar
+    ├── sidebar.tsx             # Navigation sidebar (next/link entries)
+    ├── session-guard.tsx       # Leaves (or warns and waits) when the browser sees the session end
     └── dynamic-breadcrumb.tsx  # Breadcrumb navigation
 ```
 
@@ -36,8 +37,9 @@ src/components/
 |------|------|---------|
 | `layout/index.ts` | Barrel | Re-exports all layout components |
 | `layout/auth-wrapper.tsx` | Server | Wraps app to enforce authentication, redirects unauthenticated users |
-| `layout/header.tsx` | Client | Top navigation bar with hamburger menu and user menu |
-| `layout/sidebar.tsx` | Client | Slide-out navigation menu with page links |
+| `layout/header.tsx` | Client | Top navigation bar with hamburger menu and user menu; the menu is mounted once loading ends, profile or not (always a sign-out) |
+| `layout/sidebar.tsx` | Client | Slide-out navigation menu; entries are `next/link` (no full reload per click) |
+| `layout/session-guard.tsx` | Client | Wraps the (web) shell. When `authClient.useSession()` goes from a live session to a settled null, sends the tab to `/signin?callbackUrl=<page>`; if the page holds unsaved edits (`@/lib/unsaved-changes`), shows an always-open Radix `AlertDialog` warning above any open Dialog and waits instead, re-checking the edits every 2 s and leaving once they are gone. Reloads on a live session for a different user (`userGuid`, else `user.id`); refetches at the session's `expiresAt` + 5 s. A hidden tab drops the page at once but navigates to `/signin` only on its first `visibilitychange` to visible. Clears the `/signin` loop counter on a live session |
 | `layout/dynamic-breadcrumb.tsx` | Client | Auto-generates breadcrumbs from URL or custom segments |
 
 ### Feature Components
@@ -54,7 +56,7 @@ src/components/
 | `journey-processing/` | Journey applicant milestone tracking with pause/resume | Yes |
 | `manage-members/` | Member management with tabs, status transitions, detail modals | Yes |
 | `pwa/` | PWA install prompt banner | No |
-| `user-menu/` | User dropdown with sign-out | Yes |
+| `user-menu/` | User dropdown with sign-out; works without a profile ("Your profile couldn't be loaded") | Yes |
 
 ### Shared Processing Components (`processing/` folder)
 
@@ -135,7 +137,7 @@ Actions are co-located with their feature components:
 | journey-processing | `journey-processing/actions.ts` | Journey applicant CRUD, milestone operations, pause/resume |
 | manage-members | `manage-members/actions.ts` | Member listing, status transitions, detail operations |
 | user-menu | `user-menu/actions.ts` | `handleSignOut` |
-| **shared** | `shared-actions/user.ts` | `getCurrentUserProfile` |
+| **shared** | `shared-actions/user.ts` | `getCurrentUserProfile` (returns the `CurrentUserProfile` DTO, `@/lib/dto/user-profile`), `getUserAuthorization` |
 | **shared** | `shared-actions/processing.ts` | `extractValidatedFiles`, `extractValidatedFilesResult`, `uploadContactPhoto` |
 
 **Shared Actions Folder**: `src/components/shared-actions/` contains actions used across multiple features.

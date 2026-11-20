@@ -30,6 +30,7 @@ export function ProcessingSearchBar({
       </svg>
       <input
         type="text"
+        data-session-guard-ignore
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}

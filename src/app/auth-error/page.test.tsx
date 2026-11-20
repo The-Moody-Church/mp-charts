@@ -21,7 +21,7 @@ describe("AuthErrorPage", () => {
     expect(screen.getByText("unable_to_get_user_info")).toBeDefined();
   });
 
-  it.each(["oauth_provider_not_found", "sign_in_start_failed", "state_mismatch", "invalid_code"])(
+  it.each(["oauth_provider_not_found", "sign_in_start_failed", "sign_in_loop", "state_mismatch", "invalid_code"])(
     "maps %s to a specific (non-fallback) message",
     async (code) => {
       await renderWith({ error: code });

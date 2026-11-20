@@ -377,6 +377,7 @@ export function JourneyToolEditor({ existingTool, existingSlugs, usedJourneyIds,
             <Label>Program (required — for milestone writes)</Label>
             <div className="flex gap-2">
               <Input
+                data-session-guard-ignore
                 value={programSearch}
                 onChange={(e) => setProgramSearch(e.target.value)}
                 placeholder="Search programs..."
@@ -415,6 +416,7 @@ export function JourneyToolEditor({ existingTool, existingSlugs, usedJourneyIds,
             </p>
             <div className="flex gap-2">
               <Input
+                data-session-guard-ignore
                 value={groupSearch}
                 onChange={(e) => setGroupSearch(e.target.value)}
                 placeholder="Search groups..."
@@ -485,6 +487,7 @@ export function JourneyToolEditor({ existingTool, existingSlugs, usedJourneyIds,
                       <Label>Paused Group</Label>
                       <div className="flex gap-2">
                         <Input
+                          data-session-guard-ignore
                           value={pausedGroupSearch}
                           onChange={(e) => setPausedGroupSearch(e.target.value)}
                           placeholder="Search groups..."
