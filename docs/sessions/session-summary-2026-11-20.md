@@ -5,7 +5,7 @@
 Recorded in `session-summary-2026-11-19.md`: #325 and the sibling ports merged after the overnight `:dev` soak and
 deployed; music-tools needed #213 (`effect` override) first.
 
-## Batch 5: feature page gates (N10) — IN PROGRESS on branch `security/batch5-feature-page-gates`
+## Batch 5: feature page gates (N10) — COMPLETED (#326)
 
 - **Owner decisions:** do batch 5; include the menu filtering (plan's optional follow-up). Keep `/admin`'s
   semantics: any failure in the gate redirects home.
@@ -30,3 +30,5 @@ deployed; music-tools needed #213 (`effect` override) first.
 - **Soak plan:** a user without a tool's groups is sent home from `/journey/<slug>`, `/compliance/<slug>` and
   `/summer-blast-volunteers` (and the page source carries no config); a member sees the pages as before, including
   `?applicant=` deep links; a super-admin gets a 404 on an unknown slug.
+- **Soak:** `:dev` (`b632f5a`) on mptools from 17:01 UTC 2026-11-20; owner confirmed it passed. Merged as #326, then
+  `:latest` deployed.
