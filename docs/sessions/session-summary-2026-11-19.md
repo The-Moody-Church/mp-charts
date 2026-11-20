@@ -158,7 +158,7 @@ dc4a25b, a11c2a3; CodeQL #37). Owner decisions: delete all three orphans, keep n
 - **Next:** mirror to mp-senior-care as is; event-manager needs the #85 shape and `COMMUNICATION_TYPES` first; siblings
   also need `sanitizeLikeValue` and a search cap.
 
-## Batch 4 follow-ups — COMPLETED on branch `chore/batch4-followups` (PR not opened by this step)
+## Batch 4 follow-ups — COMPLETED (PR #325, merged 2026-11-20 as `c88c241`)
 
 - **Owner decisions taken today (sibling batch 4 ports):** 8-word search cap accepted in the siblings; the F9
   search tier is NOT ported to the sibling contact-lookup-details reads (each card makes 4 reads, ~7 cards/min,
@@ -181,6 +181,21 @@ dc4a25b, a11c2a3; CodeQL #37). Owner decisions: delete all three orphans, keep n
   coverage 60.12 / 51.42 / 51.48 / 61.36 (floors 59/50/50/60 hold); build, `check:standalone` (102 lockfile nodes)
   and `check:shells` (18 shells) pass; manifest 80 entries (75 actions + 5 cache), unchanged.
 
+## Batch 4 sibling ports and soak — COMPLETED
+
+- **PRs:** event-manager #97 (also catches up #85 server-authoritative attribution and #220 `COMMUNICATION_TYPES`;
+  events-list search blocked over 75 characters), mp-senior-care #256 (7 orphan actions deleted; `contactSearch` on
+  `sanitizeLikeValue`, capped at 100 characters / 8 words; volunteer search on the `search` tier), music-tools #212
+  (`server-action-exports.test.ts`, `sanitizeGuid` non-string guard, unused `sanitizeFilterValue` deleted). The
+  service `deleteContactLog` is gone in all three contact-log apps.
+- **`:dev` soak** of all four from 2026-11-19 23:36 UTC (rollback pins = the `:latest` running before). The owner
+  clicked through and approved on 2026-11-20. Merged: mp-charts #325 `c88c241`, event-manager #97 `8e0fef3`,
+  mp-senior-care #256 `d2b4467`, music-tools #212 `b99403b`. `:latest` deployed 2026-11-20 13:58 UTC to mp-charts, event-manager and
+  mp-senior-care (each warmed on attempt 1, `/` 307, `/signin` 200). **music-tools not deployed:** its `main` build
+  failed the audit gate on GHSA-7589-6fvf-x4pw (`effect`, published 2026-11-19, via `prisma` → `@prisma/config`'s
+  exact `effect@3.20.0` pin); fix is music-tools #213 (`overrides` `effect` ^3.22.1). The other three have no `effect`.
+
 ## Next
 
-Batches 4–10 and the N17 verifier port.
+Batches 5–10 and the N17 verifier port. Still open: the 401 retry (batch 8), deleting the user-token mode, the
+`CommunicationType` enum, and `assertSendable` echoing an invalid type in its message (not reachable from input).
