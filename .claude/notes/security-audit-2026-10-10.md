@@ -53,7 +53,7 @@ repo visibility, protection, scanning status, open alerts and advisory data.
 | N7 | `transitionMember` writes any participant's Member_Status_ID | LOW | **Fixed 2026-10-27**: participant and contact must be the same member |
 | N8 | Upstream 2026-09-28 wave unreviewed (see §3) | LOW–MEDIUM aggregate | **Reviewed 2026-11-18** (upstream-sync-log.md); ports planned in batches, `.claude/plans/open-items-2026-11-18.md` |
 | N9 | `proxy.ts` `/api` prefix match and unanchored matcher | LOW | **Fixed 2026-11-18** (batch 1): exact `/api` public path; every matcher exclusion bounded |
-| N10 | Journey/compliance pages render tool config without a feature gate | LOW | Open |
+| N10 | Journey/compliance pages render tool config without a feature gate | LOW | Fixed 2026-11-20 (batch 5) |
 | N11 | Duplicate reachable action at a weaker rate tier; one orphan export | LOW | **Fixed** 2026-11-19 (batch 4, #324): `getDashboardMetrics` gone (5d95f60); `deleteContactLog`, `getContactLogsByContactId` and `getContactLogById` deleted from `contact-logs/actions.ts`; `src/server-action-exports.test.ts` fails on any `'use server'` export without a non-test importer. Build manifest: 75 actions, no contact-logs read action |
 | N12 | Outbound fetches without timeout/redirect refusal; token refresh not single-flight; token body unvalidated | LOW | **Fixed** on `security/batch3-mp-client` (2026-11-19), userinfo part in batch 2: every MP fetch refuses redirects; the token request has a 10 s timeout, a status-bearing static error and a required non-empty `access_token`; the refresh is single-flight; `expires_in` is clamped to [30 s, 3600 s]; `HttpClient` refuses unsafe endpoints (`assertSafeEndpoint`) and uploads get 60 s. `feedbackService.ts` was deleted in 36b5d25. The 401 refresh-and-retry is batch 8 |
 | N13 | `originOf` allows env-controlled CSP directive injection | LOW | **Fixed 2026-11-18** (batch 1): http(s) only, `[a-z0-9.-]` hostname; also `base-uri 'none'` |
@@ -174,6 +174,10 @@ today). Matcher exclusions `_next/static|_next/image|favicon.ico|...` are unanch
 (group/program/milestone IDs, names) into a client component for any signed-in user; only `notFound()` on an
 unknown slug. All data actions are gated, so only configuration metadata leaks. Same class as the 2026-06-23 F11
 (`/admin`), which has since been fixed with a layout gate.
+
+**Fixed 2026-11-20 (batch 5):** `requireFeaturePageAccess` (`src/lib/authorization.ts`) gates the journey, compliance
+and Summer Blast pages before their config is read, and the `/admin` layout uses the same helper. `getUserAuthorization`
+now sends only the tools a user can open, so other tools' names and descriptions no longer reach the browser either.
 
 ### N11 — Duplicate action at a weaker tier; orphan export (LOW)
 
@@ -354,7 +358,7 @@ Upstream's own triage block was run against our tree. Results, with the fork's d
 | P11 `base-uri 'none'`; `originOf` validation | ✗ open | `'self'` today; N13 |
 | P12 `/auth-error` `Object.hasOwn` | ✓ done | #242; code-shape regex adopted in batch 2 (2026-11-18) as `/^[A-Za-z0-9_]{1,64}$/` (keeps `MISSING_FIELD`): the threat is content spoofing, not XSS |
 | P12 `/signed-out`, `SessionGuard`, cross-tab broadcast, sign-in loop cap, no-JS global-error | partial | UX/safety hardening; shared-PC sign-back-in risk is real but MP SSO-level. No-JS global-error done in batch 2 (2026-11-18); `/signed-out` declined; the rest batch 6 |
-| P12 every page self-gates | partial | `/admin` yes; tool pages no (N10) |
+| P12 every page self-gates | yes (2026-11-20) | `/admin`, journey, compliance, Summer Blast via `requireFeaturePageAccess` (N10) |
 | P13 Flight-promise `.catch` crash | n/a | our `UserProvider` loads client-side via server actions, not a streamed promise |
 | P14 `server-only` guards | ✗ open | would fail the build on a client import of a service |
 | P14 Next ≥ 16.3.7 | ✓ done | 16.3.8 |

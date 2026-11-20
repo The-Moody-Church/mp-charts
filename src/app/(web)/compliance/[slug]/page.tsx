@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
+import { requireFeaturePageAccess } from '@/lib/authorization';
 import { getComplianceToolBySlug } from '@/lib/compliance-tools-config';
 import { ComplianceProcessing } from '@/components/compliance-processing';
 
@@ -22,6 +23,11 @@ export default function CompliancePage({ params, searchParams }: CompliancePageP
 
 async function CompliancePageContent({ params, searchParams }: CompliancePageProps) {
   const { slug } = await params;
+  // N10: gate BEFORE the config lookup. The config (program, group, role,
+  // milestone and requirement IDs) is serialised to the browser, so only
+  // feature holders may load it. Unknown, disabled and forbidden slugs all
+  // redirect home alike; a super-admin still gets notFound() below.
+  await requireFeaturePageAccess(`compliance:${slug}`);
   const sp = await searchParams;
 
   const config = getComplianceToolBySlug(slug);

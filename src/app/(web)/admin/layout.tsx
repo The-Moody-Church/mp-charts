@@ -1,6 +1,5 @@
 import { connection } from "next/server";
-import { redirect } from "next/navigation";
-import { requireFeatureAccess } from "@/lib/authorization";
+import { requireFeaturePageAccess } from "@/lib/authorization";
 
 /**
  * Server-side access gate for the entire /admin subtree (F11).
@@ -19,17 +18,8 @@ export default async function AdminLayout({
   // so this segment must not be statically prerendered (Cache Components / PPR).
   await connection();
 
-  let allowed = false;
-  try {
-    await requireFeatureAccess("admin");
-    allowed = true;
-  } catch {
-    // Unauthenticated or non-admin — fall through to redirect. (Keep redirect()
-    // OUT of the try/catch: it signals via a thrown control-flow error.)
-    allowed = false;
-  }
-
-  if (!allowed) redirect("/");
+  // Unauthenticated or non-admin: redirected home (see requireFeaturePageAccess).
+  await requireFeaturePageAccess("admin");
 
   return <>{children}</>;
 }

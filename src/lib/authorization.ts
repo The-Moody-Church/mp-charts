@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join } from "path";
+import { redirect } from "next/navigation";
 import { type Session } from "@/lib/auth";
 import { requireSession, getUserGuid } from "@/lib/auth-helpers";
 import { UserService } from "@/services/userService";
@@ -230,4 +231,29 @@ export async function requireFeatureAccess(feature: Feature): Promise<Session> {
     throw new Error("Forbidden: insufficient permissions");
   }
   return session;
+}
+
+/**
+ * Page-level gate (N10): sends the user home unless they may use `feature`.
+ *
+ * For server components (pages and layouts), not server actions: actions call
+ * `requireFeatureAccess` and let it throw. Every failure redirects the same way
+ * (no session, no access, a rate limit, an MP error), as the /admin layout has
+ * since F11. Call it BEFORE reading anything feature-specific, such as a tool's
+ * config: `hasFeatureAccess` is false for any feature key it does not know, so an
+ * unknown, a disabled and a forbidden slug all redirect identically and the gate
+ * is not an existence oracle. A super-admin passes for any key, so a page should
+ * still `notFound()` an unknown slug after the gate.
+ *
+ * `redirect()` stays outside the try: it works by throwing a control-flow error.
+ */
+export async function requireFeaturePageAccess(feature: Feature): Promise<void> {
+  let allowed = false;
+  try {
+    await requireFeatureAccess(feature);
+    allowed = true;
+  } catch {
+    allowed = false;
+  }
+  if (!allowed) redirect("/");
 }
