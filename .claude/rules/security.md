@@ -461,7 +461,7 @@ Two rules that follow:
 - **Pass the acting user as a separate argument**, never as a field inside the data object. One source of attribution; two layers stamping it could drift.
 - **Do not add `.passthrough()` or `z.looseObject`** to `ContactLogSchema` or to the picks, and do not regenerate it into that shape — the strip is the control, and the smuggled-key tests are what would catch it.
 
-Every write (create, update, and the service's delete) passes `{ $userId }` so MP's audit trail names the staff member rather than the API service account.
+Every write (create and update) passes `{ $userId }` so MP's audit trail names the staff member rather than the API service account. **There is no contact-log delete at any layer**: the orphan `deleteContactLog` action went in batch 4 (N11) and the service method that backed it in the batch 4 follow-up (2026-11-19), since there is no delete UI. `contactLogService.test.ts` ("service surface") pins the service's method list, so a delete comes back only as a deliberate change; it would need the `Made_By` ownership check, the write tier and `$userId` again.
 
 ### Contact-log reads are minimised
 

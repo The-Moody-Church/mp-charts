@@ -264,19 +264,4 @@ export class ContactLogService {
     
     return result[0] as ContactLog;
   }
-
-  /**
-   * Deletes a contact log record.
-   *
-   * @param contactLogId - The record to delete.
-   * @param actorUserId - Acting MP `User_ID`, from the session, for `$userId`
-   *   so MP's audit trail names the staff member rather than the API client.
-   */
-  public async deleteContactLog(contactLogId: number, actorUserId: number): Promise<void> {
-    await this.mp!.deleteTableRecords(
-      "Contact_Log",
-      [sanitizeId(contactLogId)],
-      { $userId: sanitizeId(actorUserId) }
-    );
-  }
 }

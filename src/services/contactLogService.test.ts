@@ -428,21 +428,25 @@ describe('ContactLogService', () => {
     });
   });
 
-  describe('deleteContactLog', () => {
-    it('should delete by ID', async () => {
-      mockDeleteTableRecords.mockResolvedValueOnce(undefined);
-
-      const service = await ContactLogService.getInstance();
-      await service.deleteContactLog(42, 500);
-
-      expect(mockDeleteTableRecords).toHaveBeenCalledWith('Contact_Log', [42], { $userId: 500 });
-    });
-
-    it('should propagate delete errors', async () => {
-      mockDeleteTableRecords.mockRejectedValueOnce(new Error('Record not found'));
-
-      const service = await ContactLogService.getInstance();
-      await expect(service.deleteContactLog(999, 500)).rejects.toThrow('Record not found');
+  /**
+   * Batch 4 follow-up (2026-11-19): `deleteContactLog` was removed. Its only
+   * caller, the orphan `deleteContactLog` server action, went in batch 4 (N11),
+   * there is no delete UI, and a service method that deletes MP records with
+   * no caller is one server action away from being reachable. Re-adding a
+   * delete is a deliberate change to this list.
+   */
+  describe('service surface', () => {
+    it('has exactly the read/create/update methods the app uses, and no delete', () => {
+      const methods = Object.getOwnPropertyNames(ContactLogService.prototype)
+        .filter((name) => name !== 'constructor')
+        .sort();
+      expect(methods).toEqual([
+        'createContactLog',
+        'getContactLogById',
+        'getContactLogTypes',
+        'getContactLogsByContactId',
+        'updateContactLog',
+      ]);
     });
   });
 });
