@@ -59,14 +59,20 @@ export async function getUserAuthorization(_requestedId?: string): Promise<{
     return { accessibleFeatures: [], isSuperAdmin: false, journeyTools: [], complianceTools: [] };
   }
 
-  const enabledJourneys = getEnabledJourneyTools();
+  // N10 follow-up: send only the tools this user may open. The sidebar and home
+  // cards already hide the rest with canAccess(); filtering here keeps the other
+  // tools' names and descriptions out of the browser too.
+  const accessibleFeatures = getAccessibleFeatures(profile.userGroupIds);
+  const accessible = new Set<string>(accessibleFeatures);
+
+  const enabledJourneys = getEnabledJourneyTools().filter((t) => accessible.has(`journey:${t.slug}`));
   const journeyTools: JourneyToolMeta[] = enabledJourneys.map((t) => ({
     slug: t.slug,
     name: t.journeyName,
     description: t.description,
   }));
 
-  const enabledCompliance = getEnabledComplianceTools();
+  const enabledCompliance = getEnabledComplianceTools().filter((t) => accessible.has(`compliance:${t.slug}`));
   const complianceTools: ComplianceToolMeta[] = enabledCompliance.map((t) => ({
     slug: t.slug,
     name: t.toolName,
@@ -74,7 +80,7 @@ export async function getUserAuthorization(_requestedId?: string): Promise<{
   }));
 
   return {
-    accessibleFeatures: getAccessibleFeatures(profile.userGroupIds),
+    accessibleFeatures,
     isSuperAdmin: isSuperAdmin(profile.userGroupIds),
     journeyTools,
     complianceTools,

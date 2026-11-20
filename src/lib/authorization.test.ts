@@ -8,6 +8,7 @@ import {
   hasFeatureAccess,
   getAccessibleFeatures,
   requireFeatureAccess,
+  requireFeaturePageAccess,
 } from "@/lib/authorization";
 import type { Feature } from "@/lib/authorization";
 
@@ -48,6 +49,14 @@ vi.mock(import("@/lib/auth-helpers"), async (importOriginal) => {
   };
 });
 
+// next/navigation's redirect() throws a control-flow error; mimic that so a
+// test can tell "redirected" from "returned".
+vi.mock("next/navigation", () => ({
+  redirect: vi.fn((url: string) => {
+    throw new Error(`NEXT_REDIRECT:${url}`);
+  }),
+}));
+
 vi.mock(import("@/services/userService"), async (importOriginal) => {
   const actual = await importOriginal();
   return {
@@ -64,6 +73,7 @@ const { getEnabledJourneyTools } = await import("@/lib/journey-tools-config");
 const { getEnabledComplianceTools } = await import("@/lib/compliance-tools-config");
 const { requireSession: mockRequireSession, getUserGuid: mockGetUserGuid } = await import("@/lib/auth-helpers");
 const { UserService: MockUserService } = await import("@/services/userService");
+const { redirect: mockRedirect } = await import("next/navigation");
 
 const mockConfig = {
   dashboard: {
@@ -484,6 +494,100 @@ describe("authorization", () => {
       } as never);
 
       await expect(requireFeatureAccess("dashboard")).rejects.toThrow("Forbidden: insufficient permissions");
+    });
+  });
+
+  describe("requireFeaturePageAccess", () => {
+    const session = { user: { id: "u1", userGuid: "abc-123" } };
+
+    beforeEach(() => {
+      process.env.ADMIN_USER_GROUP_IDS = "99";
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFileSync).mockReturnValue(
+        JSON.stringify({
+          ...mockConfig,
+          "journey:baptism": { label: "Baptism", description: "", allowedGroupIds: [45] },
+          "compliance:ushers": { label: "Ushers", description: "", allowedGroupIds: [46] },
+        }),
+      );
+      // A journey key exists only while its tool is enabled (loadFeatureAccess).
+      vi.mocked(getEnabledJourneyTools).mockReturnValue([
+        { slug: "baptism", journeyName: "Baptism", description: "" },
+      ] as never);
+      vi.mocked(getEnabledComplianceTools).mockReturnValue([
+        { slug: "ushers", toolName: "Ushers", description: "" },
+      ] as never);
+      vi.mocked(mockRequireSession).mockResolvedValue(session as never);
+      vi.mocked(mockGetUserGuid).mockReturnValue("abc-123");
+    });
+
+    afterEach(() => {
+      vi.mocked(getEnabledJourneyTools).mockReturnValue([]);
+      vi.mocked(getEnabledComplianceTools).mockReturnValue([]);
+    });
+
+    function withGroups(userGroupIds: number[] | null) {
+      vi.mocked(MockUserService.getInstance).mockResolvedValue({
+        getUserProfile: vi.fn().mockResolvedValue(userGroupIds ? { userGroupIds } : null),
+      } as never);
+    }
+
+    it("returns without redirecting when the user has the feature", async () => {
+      withGroups([45]);
+      await expect(requireFeaturePageAccess("journey:baptism")).resolves.toBeUndefined();
+      expect(mockRedirect).not.toHaveBeenCalled();
+    });
+
+    it("lets a compliance tool's group through", async () => {
+      withGroups([46]);
+      await expect(requireFeaturePageAccess("compliance:ushers")).resolves.toBeUndefined();
+    });
+
+    it("lets a super-admin through for any key, even an unknown slug", async () => {
+      withGroups([99]);
+      await expect(requireFeaturePageAccess("journey:no-such-tool")).resolves.toBeUndefined();
+      expect(mockRedirect).not.toHaveBeenCalled();
+    });
+
+    it("redirects home for a tool that is configured but disabled", async () => {
+      vi.mocked(getEnabledJourneyTools).mockReturnValue([]);
+      withGroups([45]);
+      await expect(requireFeaturePageAccess("journey:baptism")).rejects.toThrow("NEXT_REDIRECT:/");
+    });
+
+    it.each([
+      ["a forbidden feature", [888], "journey:baptism"],
+      ["an unknown slug", [45], "journey:no-such-tool"],
+      ["an enabled compliance tool the user lacks", [45], "compliance:ushers"],
+      ["admin for a non-admin", [45], "admin"],
+      ["a missing profile", null, "journey:baptism"],
+    ] as const)("redirects home for %s", async (_label, groups, feature) => {
+      withGroups(groups ? [...groups] : null);
+      await expect(requireFeaturePageAccess(feature as Feature)).rejects.toThrow("NEXT_REDIRECT:/");
+      expect(mockRedirect).toHaveBeenCalledExactlyOnceWith("/");
+    });
+
+    // The next two use a super-admin profile, so the redirect can only come from
+    // the session/GUID failure, not from a profile mock left by an earlier test.
+    it("redirects home when there is no session", async () => {
+      withGroups([99]);
+      vi.mocked(mockRequireSession).mockRejectedValue(new Error("Authentication required"));
+      await expect(requireFeaturePageAccess("dashboard")).rejects.toThrow("NEXT_REDIRECT:/");
+      expect(mockRedirect).toHaveBeenCalledExactlyOnceWith("/");
+    });
+
+    it("redirects home when the session has no user GUID", async () => {
+      withGroups([99]);
+      vi.mocked(mockGetUserGuid).mockReturnValue(undefined);
+      await expect(requireFeaturePageAccess("dashboard")).rejects.toThrow("NEXT_REDIRECT:/");
+    });
+
+    it("redirects home when the profile lookup fails (MP error)", async () => {
+      vi.mocked(MockUserService.getInstance).mockResolvedValue({
+        getUserProfile: vi.fn().mockRejectedValue(new Error("fetch failed")),
+      } as never);
+      await expect(requireFeaturePageAccess("dashboard")).rejects.toThrow("NEXT_REDIRECT:/");
+      expect(mockRedirect).toHaveBeenCalledExactlyOnceWith("/");
     });
   });
 });

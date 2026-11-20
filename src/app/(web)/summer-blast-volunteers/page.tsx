@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import { SummerBlastVolunteers } from "@/components/summer-blast-volunteers";
 import { getSummerBlastConfig } from "@/lib/summer-blast-config";
+import { requireFeaturePageAccess } from "@/lib/authorization";
 
 export default function SummerBlastVolunteersPage() {
   return (
@@ -17,6 +18,8 @@ export default function SummerBlastVolunteersPage() {
 
 async function SummerBlastVolunteersContent() {
   await connection();
+  // N10: the event and role IDs below reach the browser, so gate first.
+  await requireFeaturePageAccess("summer-blast-volunteers");
   const config = getSummerBlastConfig();
   return (
     <SummerBlastVolunteers

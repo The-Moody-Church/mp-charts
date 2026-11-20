@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
+import { requireFeaturePageAccess } from '@/lib/authorization';
 import { getJourneyToolBySlug } from '@/lib/journey-tools-config';
 import { JourneyProcessing } from '@/components/journey-processing';
 
@@ -22,6 +23,11 @@ export default function JourneyPage({ params, searchParams }: JourneyPageProps) 
 
 async function JourneyPageContent({ params, searchParams }: JourneyPageProps) {
   const { slug } = await params;
+  // N10: gate BEFORE the config lookup. The config (program, group, role,
+  // milestone IDs) is serialised to the browser, so only
+  // feature holders may load it. Unknown, disabled and forbidden slugs all
+  // redirect home alike; a super-admin still gets notFound() below.
+  await requireFeaturePageAccess(`journey:${slug}`);
   const sp = await searchParams;
 
   const config = getJourneyToolBySlug(slug);
