@@ -30,5 +30,5 @@ deployed; music-tools needed #213 (`effect` override) first.
 - **Soak plan:** a user without a tool's groups is sent home from `/journey/<slug>`, `/compliance/<slug>` and
   `/summer-blast-volunteers` (and the page source carries no config); a member sees the pages as before, including
   `?applicant=` deep links; a super-admin gets a 404 on an unknown slug.
-- **Soak:** `:dev` (`b632f5a`) on mptools from 17:01 UTC 2026-11-20; owner confirmed it passed. Merged as #326, then
-  `:latest` deployed.
+- **Soak:** `:dev` (`b632f5a`) on mptools from 17:01 UTC 2026-11-20; owner confirmed it passed. Merged as #326 (`5c8eafc`),
+  `:latest` deployed 18:31 UTC; cache warm complete, `/` 307, `/signin` 200.
