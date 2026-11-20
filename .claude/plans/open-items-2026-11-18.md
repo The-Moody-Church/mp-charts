@@ -8,7 +8,9 @@ Read-only analysis of audit LOW findings N9–N19, #297, and upstream MPNext `75
 - **ace4566:** keep the silent re-sign-in through `/signin`. Do not adopt `/signed-out`.
 - **N16:** yes to both, `cookieCache.strategy: "jwe"` and stripping token/ipAddress/userAgent from `/get-session`. Its own PR, mirrored to all four repos, pins and docs updated in the same commit, soaked on `:dev`.
 - **Public repo:** add an MIT LICENSE that keeps MPNext's notice. Future audits stay in the repo (no change).
-- Still open: #297 accept (recommended), the 5aa0b5e 401 retry and the dead user-token mode, deleting the dead contact code, the `CommunicationType` enum.
+- **Batch 8 (user, 2026-11-20):** take the 5aa0b5e 401 refresh-and-retry (one shared refresh, one retry per request, `token === rejectedToken` guard) in all four; **skip** the 5-30 s negative cache (batch 3's single-flight already removed the stampede, and the cache would make manual dashboard refreshes fail fast and still spend a `cacheRefresh` token); **delete** the dead user-token mode in all four (re-checked 2026-11-20: no caller passes a user token in any of the four).
+- **Batch 6 (user, 2026-11-20):** SessionGuard warns and waits while a page holds unsaved edits (shipped: mp-charts #327, event-manager #98, mp-senior-care #260, music-tools #214).
+- Still open: #297 accept (recommended), deleting the dead contact code (mostly done in batch 4), the `CommunicationType` enum.
 
 ## Critic: verification, conflicts, gaps, PR batches, decisions
 

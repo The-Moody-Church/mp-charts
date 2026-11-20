@@ -33,7 +33,9 @@ deployed; music-tools needed #213 (`effect` override) first.
 - **Soak:** `:dev` (`b632f5a`) on mptools from 17:01 UTC 2026-11-20; owner confirmed it passed. Merged as #326 (`5c8eafc`),
   `:latest` deployed 18:31 UTC; cache warm complete, `/` 307, `/signin` 200.
 
-## Batch 6: auth UI — IN PROGRESS
+## Batch 6: auth UI — COMPLETED (#327)
+
+Soaked on `:dev` 2026-11-20 from 20:58 UTC, all four apps together; an automated Edge run of the soak checklist passed 22/22 (session ended by clearing the app's cookies; tab visibility dispatched, since Playwright keeps pages visible) and no server errors were logged; owner approved. Merged and deployed to `:latest`.
 
 Branch `security/batch6-auth-ui`. Upstream f3cb739, 0670531, f1ad0c8 (#98's sidebar part), 02731d4 and 595ecab,
 adapted. ace4566 not adopted.
